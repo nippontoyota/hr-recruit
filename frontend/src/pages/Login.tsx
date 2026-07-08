@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth';
-import { Card, CardContent, CardHeader, CardTitle, Input, Button } from '../components/ui';
-import { Building2 } from 'lucide-react';
+import { Input, Button } from '../components/ui';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@nippon.test');
+  const [password, setPassword] = useState('password123');
   const [error, setError] = useState('');
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -21,25 +20,19 @@ export default function Login() {
       await login(email, password);
       navigate(from, { replace: true });
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please check credentials.');
+      setError(err.message || 'Login failed.');
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md shadow-xl border-0">
-        <CardHeader className="text-center pb-2 border-b-0">
-          <div className="mx-auto flex justify-center mb-4">
-            <div className="bg-red-50 p-3 rounded-full">
-              <Building2 className="w-10 h-10 text-primary" />
-            </div>
-          </div>
-          <CardTitle className="text-2xl font-bold tracking-tight text-gray-900">
+    <div className="min-h-screen flex items-center justify-center bg-white py-12 px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-md">
+        <div className="text-center pb-2 pt-6">
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">
             Nippon Toyota
-          </CardTitle>
-          <p className="text-sm text-gray-500 mt-2">Recruitment Portal</p>
-        </CardHeader>
-        <CardContent>
+          </h2>
+        </div>
+        <div className="mt-8">
           <form className="space-y-6" onSubmit={handleSubmit}>
             {error && (
               <div className="bg-red-50 text-red-600 text-sm p-3 rounded-md text-center border border-red-200">
@@ -80,17 +73,11 @@ export default function Login() {
               className="w-full py-2.5 text-base"
               isLoading={isLoading}
             >
-              Sign in to account
+              Sign in
             </Button>
-            
-            <div className="mt-6 border-t border-gray-200 pt-4 text-center">
-               <p className="text-xs text-gray-500">
-                 Dev Mode: Try local@nippon.test, hq@nippon.test, admin@nippon.test
-               </p>
-            </div>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
