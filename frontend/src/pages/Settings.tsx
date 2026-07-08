@@ -8,7 +8,7 @@ export default function Settings() {
       />
       
       <div className="flex h-64 items-center justify-center">
-        <p className="text-sm text-gray-500">Settings options will appear here</p>
+        <p className="text-sm text-text-secondary">Settings options will appear here</p>
       </div>
     </>
   );

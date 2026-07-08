@@ -16,7 +16,7 @@ export default function CandidatesList() {
       />
       
       <div className="flex h-64 items-center justify-center">
-        <p className="text-sm text-gray-500">Candidates list goes here</p>
+        <p className="text-sm text-text-secondary">Candidates list goes here</p>
       </div>
     </>
   );

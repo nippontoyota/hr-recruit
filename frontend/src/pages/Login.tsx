@@ -25,10 +25,10 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white py-12 px-4 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-[#E5E9F5] py-12 px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-md bg-surface p-8 rounded-md shadow-sm border border-border">
         <div className="text-center pb-2 pt-6">
-          <h2 className="text-2xl font-bold tracking-tight text-gray-900">
+          <h2 className="text-2xl font-bold tracking-tight text-text-primary">
             Nippon Toyota
           </h2>
         </div>
@@ -41,7 +41,7 @@ export default function Login() {
             )}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-text-secondary mb-1">
                   Email address
                 </label>
                 <Input
@@ -54,7 +54,7 @@ export default function Login() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-text-secondary mb-1">
                   Password
                 </label>
                 <Input

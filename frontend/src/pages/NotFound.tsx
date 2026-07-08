@@ -9,7 +9,7 @@ export default function NotFound() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="max-w-md w-full">
         <EmptyState 
-          icon={<FileQuestion className="w-16 h-16 text-gray-400" />}
+          icon={<FileQuestion className="w-16 h-16 text-text-secondary" />}
           title="Page Not Found"
           description="The page you are looking for doesn't exist or you don't have permission to view it."
           action={

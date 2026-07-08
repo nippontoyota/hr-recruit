@@ -29,8 +29,8 @@ export const stageColor = (stage: PipelineStage): string => {
     case 'SALARY_PENDING':
     case 'SALARY_APPROVED':
     case 'OFFER_DECLINED':
-      return 'bg-gray-100 text-gray-800 border-gray-200';
+      return 'bg-background text-text-secondary border border-border border-border';
     default:
-      return 'bg-gray-100 text-gray-800 border-gray-200';
+      return 'bg-background text-text-secondary border border-border border-border';
   }
 };

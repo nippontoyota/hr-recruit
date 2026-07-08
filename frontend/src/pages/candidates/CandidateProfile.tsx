@@ -36,7 +36,7 @@ export default function CandidateProfile() {
       />
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
+      <div className="border-b border-border mb-6">
         <nav className="-mb-px flex space-x-8 overflow-x-auto" aria-label="Tabs">
           {TABS.map((tab) => {
             const Icon = tab.icon;
@@ -48,13 +48,13 @@ export default function CandidateProfile() {
                 className={cn(
                   isActive
                     ? 'border-primary text-primary'
-                    : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700',
+                    : 'border-transparent text-text-secondary hover:border-border hover:text-text-secondary',
                   'group inline-flex items-center border-b-2 py-4 px-1 text-sm font-medium whitespace-nowrap'
                 )}
               >
                 <Icon
                   className={cn(
-                    isActive ? 'text-primary' : 'text-gray-400 group-hover:text-gray-500',
+                    isActive ? 'text-primary' : 'text-text-secondary group-hover:text-text-secondary',
                     'mr-2 h-5 w-5'
                   )}
                   aria-hidden="true"
