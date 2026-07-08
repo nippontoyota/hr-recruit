@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #C40000;
+  --color-primary-hover: #9b0000;
+  --color-background: #F7F8FA;
+  --color-text: #1F2937;
+  --color-border: #E5E7EB;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-text antialiased;
+  }
+}
