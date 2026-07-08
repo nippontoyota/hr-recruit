@@ -1,11 +1,13 @@
+from passlib.context import CryptContext
 from sqlalchemy import select
 
-from app.api.v1.candidates import change_stage, create_candidate
-from app.core.database import SessionLocal
-from app.core.security import hash_password
+from app.candidates import change_stage, create_candidate
+from app.database import SessionLocal
 from app.models.enums import PipelineStage, SourceChannel, UserRole
 from app.models.user import User
-from app.schemas.candidate import CandidateCreate
+from app.schemas import CandidateCreate, StageChange
+
+pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def seed():
@@ -16,14 +18,14 @@ def seed():
 
         admin = User(
             email="admin@nippon-toyota.in",
-            hashed_password=hash_password("admin123"),
+            hashed_password=pwd.hash("admin123"),
             full_name="Portal Admin",
             role=UserRole.ADMIN,
             branch_location="Head Office",
         )
         hr = User(
             email="hr.chennai@nippon-toyota.in",
-            hashed_password=hash_password("hr123456"),
+            hashed_password=pwd.hash("hr123456"),
             full_name="Priya Sharma",
             role=UserRole.LOCAL_HR,
             branch_location="Chennai",
@@ -33,27 +35,22 @@ def seed():
         db.refresh(admin)
         db.refresh(hr)
 
-        rows = [
-            ("Arjun Patel", "9876543210", "arjun@email.com", SourceChannel.INDEED, PipelineStage.NEW_APPLICATION),
-            ("Meera K", "9876543211", "meera@email.com", SourceChannel.REFERRAL, PipelineStage.AWAITING_LOCAL_INTERVIEW),
-            ("Vikram S", "9876543212", "vikram@email.com", SourceChannel.CAMPUS, PipelineStage.LOCAL_HR_REVIEW_COMPLETE),
-        ]
-
-        for name, phone, email, source, stage in rows:
-            c = create_candidate(
-                db,
-                CandidateCreate(
-                    full_name=name,
-                    phone=phone,
-                    email=email,
-                    source_channel=source,
-                    branch_location="Chennai",
-                    assigned_hr_user_id=hr.id,
-                ),
-                admin.id,
-            )
-            if stage != PipelineStage.NEW_APPLICATION:
-                change_stage(db, c, stage, admin.id)
+        row = create_candidate(
+            db,
+            CandidateCreate(
+                full_name="Arjun Patel",
+                phone="9876543210",
+                email="arjun@email.com",
+                source_channel=SourceChannel.INDEED,
+                assigned_hr_user_id=hr.id,
+            ),
+            admin.id,
+        )
+        change_stage(
+            db,
+            row,
+            StageChange(to_stage=PipelineStage.AWAITING_LOCAL_INTERVIEW, changed_by_user_id=admin.id),
+        )
     finally:
         db.close()
 

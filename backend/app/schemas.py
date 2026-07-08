@@ -2,29 +2,29 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import PipelineStage, SourceChannel
 
 
 class CandidateCreate(BaseModel):
-    full_name: str = Field(min_length=1, max_length=255)
-    phone: str = Field(min_length=10, max_length=20)
-    email: EmailStr | None = None
+    full_name: str
+    phone: str
+    email: str | None = None
     source_channel: SourceChannel
     branch_location: str | None = None
     application_data: dict[str, Any] | None = None
     assigned_hr_user_id: UUID | None = None
 
 
-class CandidateResponse(BaseModel):
+class CandidateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     candidate_id: str
     full_name: str
     phone: str
-    email: EmailStr | None
+    email: str | None
     source_channel: SourceChannel
     current_stage: PipelineStage
     branch_location: str | None
@@ -37,13 +37,13 @@ class CandidateResponse(BaseModel):
     updated_at: datetime
 
 
-class StageChangeRequest(BaseModel):
+class StageChange(BaseModel):
     to_stage: PipelineStage
     changed_by_user_id: UUID
     reason: str | None = None
 
 
-class StageHistoryResponse(BaseModel):
+class StageHistoryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID

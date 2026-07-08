@@ -3,9 +3,11 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from app.core.config import settings
-from app.core.database import Base
-from app.models import Candidate, StageHistory, User  # noqa: F401
+from app.config import settings
+from app.database import Base
+from app.models.candidate import Candidate  # noqa: F401
+from app.models.stage_history import StageHistory  # noqa: F401
+from app.models.user import User  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
@@ -18,12 +20,7 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
-    context.configure(
-        url=url,
-        target_metadata=target_metadata,
-        literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
-    )
+    context.configure(url=url, target_metadata=target_metadata, literal_binds=True)
     with context.begin_transaction():
         context.run_migrations()
 
