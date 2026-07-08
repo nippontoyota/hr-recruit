@@ -33,32 +33,3 @@ class SourceChannel(str, enum.Enum):
     REFERRAL = "REFERRAL"
     CAMPUS = "CAMPUS"
     OTHER = "OTHER"
-
-
-class RemarkStageContext(str, enum.Enum):
-    LOCAL_HR = "LOCAL_HR"
-    HEAD_OFFICE_HR = "HEAD_OFFICE_HR"
-    TECHNICAL_TEST = "TECHNICAL_TEST"
-    DEPT_HEAD = "DEPT_HEAD"
-
-
-class DocumentFileType(str, enum.Enum):
-    RESUME = "RESUME"
-    ID_PROOF = "ID_PROOF"
-    EDUCATION_CERT = "EDUCATION_CERT"
-    OFFER_LETTER = "OFFER_LETTER"
-    JOINING_FORM = "JOINING_FORM"
-    OTHER = "OTHER"
-
-
-class MessageChannel(str, enum.Enum):
-    WHATSAPP = "WHATSAPP"
-    EMAIL = "EMAIL"
-    SMS = "SMS"
-
-
-class MessageStatus(str, enum.Enum):
-    PENDING = "PENDING"
-    SENT = "SENT"
-    DELIVERED = "DELIVERED"
-    FAILED = "FAILED"
