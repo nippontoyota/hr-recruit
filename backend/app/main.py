@@ -1,16 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1.router import api_router
-from app.core.config import get_settings
+from app.api.v1.candidates import router as candidates_router
+from app.core.config import settings
 
-settings = get_settings()
-
-app = FastAPI(
-    title="Nippon Toyota Recruitment Portal",
-    description="Backend skeleton for candidate tracking.",
-    version="0.1.0",
-)
+app = FastAPI(title="Nippon Toyota Recruitment Portal")
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,9 +14,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(api_router, prefix=settings.api_v1_prefix)
+app.include_router(candidates_router, prefix="/api/v1")
 
 
 @app.get("/health")
-def health_check() -> dict[str, str]:
+def health():
     return {"status": "ok"}
