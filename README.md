@@ -1,4 +1,6 @@
-# Nippon Toyota Recruitment Portal — Entity Relationship Diagram
+# Nippon Toyota Recruitment Portal: Database Schema
+
+This diagram shows how the recruitment portal stores candidates, HR users, pipeline stages, and related records.
 
 ```mermaid
 erDiagram
@@ -113,10 +115,14 @@ erDiagram
 | **message_channel** | `WHATSAPP`, `EMAIL`, `SMS` |
 | **message_status** | `PENDING`, `SENT`, `DELIVERED`, `FAILED` |
 
-## Notes
+## A few things worth knowing
 
-- Primary keys are **UUID** across all entities.
-- `candidates.candidate_id` is the human-readable ID (`NT-{YEAR}-{5-digit}`), separate from internal `id`.
-- `candidates.application_data` stores structured fields from the recruitment application form.
-- Every pipeline stage change writes a row to `stage_history`.
-- Duplicate applications are flagged via `is_duplicate_flagged` and `duplicate_of_candidate_id` — records are never auto-merged.
+Every table uses a UUID as its primary key.
+
+HR sees candidate IDs like `NT-2026-00001`. That is separate from the internal `id` column the system uses behind the scenes.
+
+When someone fills out the application form, the extra fields land in `candidates.application_data` as JSON. That keeps the form flexible without needing a migration every time a field changes.
+
+Whenever a candidate moves to a new stage, we log it in `stage_history`. Nothing gets overwritten.
+
+If the same phone or email shows up again, we flag it with `is_duplicate_flagged` and point to the original record in `duplicate_of_candidate_id`. HR decides what to do. We do not merge records automatically.
