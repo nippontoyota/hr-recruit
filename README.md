@@ -58,15 +58,16 @@ erDiagram
 
 ## Database (Supabase)
 
-This API uses **Supabase Postgres**. Tables live in the `recruitment` schema so they do not collide with other apps on the same project.
+This API uses its **own Supabase project** (same org as other Nippon apps; not the payslip portal project). Tables live in the `recruitment` schema.
 
-1. Open [Supabase](https://supabase.com) → your project → **Project Settings** → **Database**.
-2. Copy the **URI** connection string into `backend/.env` as `DATABASE_URL`.
-3. Set a long random `SECRET_KEY`.
+1. Create a new Supabase project for Recruitment Portal (or open the existing dedicated one).
+2. Open **Project Settings** → **Database**.
+3. Copy the **URI** connection string into `backend/.env` as `DATABASE_URL`.
+4. Set a long random `SECRET_KEY`.
 
 ```bash
 cd backend
-cp .env.example .env   # then paste your Supabase URI
+cp .env.example .env   # then paste this project's Supabase URI (not payslip's)
 python -m venv venv
 # Windows: .\venv\Scripts\activate
 pip install -r requirements.txt

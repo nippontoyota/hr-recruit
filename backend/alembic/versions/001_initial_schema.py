@@ -1,4 +1,4 @@
-"""Initial schema: users, candidates, stage_history (recruitment schema for Supabase)"""
+"""Initial schema: users, candidates, stage_history (recruitment schema)"""
 
 from typing import Sequence, Union
 
