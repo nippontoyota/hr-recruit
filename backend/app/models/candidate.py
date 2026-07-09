@@ -5,7 +5,7 @@ from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.database import Base
+from app.core.database import Base
 from app.models.enums import PipelineStage, SourceChannel
 
 
@@ -17,9 +17,14 @@ class Candidate(Base):
     full_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     phone: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    source_channel: Mapped[SourceChannel] = mapped_column(Enum(SourceChannel, name="source_channel"), nullable=False)
+    source_channel: Mapped[SourceChannel] = mapped_column(
+        Enum(SourceChannel, name="source_channel", create_type=False), nullable=False
+    )
     current_stage: Mapped[PipelineStage] = mapped_column(
-        Enum(PipelineStage, name="pipeline_stage"), nullable=False, default=PipelineStage.NEW_APPLICATION, index=True
+        Enum(PipelineStage, name="pipeline_stage", create_type=False),
+        nullable=False,
+        default=PipelineStage.NEW_APPLICATION,
+        index=True,
     )
     branch_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     application_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)

@@ -16,6 +16,7 @@ def upgrade() -> None:
     user_role = postgresql.ENUM(
         "ADMIN", "LOCAL_HR", "HEAD_OFFICE_HR", "DEPARTMENT_HEAD", "SALARY_TEAM",
         name="user_role",
+        create_type=False,
     )
     pipeline_stage = postgresql.ENUM(
         "NEW_APPLICATION",
@@ -34,10 +35,12 @@ def upgrade() -> None:
         "REJECTED",
         "ON_HOLD",
         name="pipeline_stage",
+        create_type=False,
     )
     source_channel = postgresql.ENUM(
         "WALK_IN", "INDEED", "REFERRAL", "CAMPUS", "OTHER",
         name="source_channel",
+        create_type=False,
     )
 
     user_role.create(op.get_bind(), checkfirst=True)

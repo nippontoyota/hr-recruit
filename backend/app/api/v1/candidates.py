@@ -5,11 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.core.database import get_db
+from app.core.deps import get_current_active_user, require_roles
 from app.models.candidate import Candidate
-from app.models.enums import PipelineStage
+from app.models.enums import PipelineStage, UserRole
 from app.models.stage_history import StageHistory
-from app.schemas import CandidateCreate, CandidateOut, StageChange, StageHistoryOut
+from app.models.user import User
+from app.schemas.candidate import CandidateCreate, CandidateOut, StageChange, StageHistoryOut
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -67,7 +69,11 @@ def change_stage(db: Session, row: Candidate, body: StageChange) -> Candidate:
 
 
 @router.get("", response_model=list[CandidateOut])
-def list_candidates(stage: PipelineStage | None = None, db: Session = Depends(get_db)):
+def list_candidates(
+    stage: PipelineStage | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(UserRole.HEAD_OFFICE_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+):
     q = select(Candidate).order_by(Candidate.created_at.desc())
     if stage:
         q = q.where(Candidate.current_stage == stage)
@@ -75,14 +81,22 @@ def list_candidates(stage: PipelineStage | None = None, db: Session = Depends(ge
 
 
 @router.post("", response_model=CandidateOut, status_code=201)
-def create(body: CandidateCreate, db: Session = Depends(get_db)):
-    if not body.assigned_hr_user_id:
-        raise HTTPException(status_code=400, detail="assigned_hr_user_id required.")
-    return create_candidate(db, body, body.assigned_hr_user_id)
+def create(
+    body: CandidateCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_active_user),
+):
+    if body.assigned_hr_user_id is None:
+        body = body.model_copy(update={"assigned_hr_user_id": user.id})
+    return create_candidate(db, body, user.id)
 
 
 @router.get("/{id}", response_model=CandidateOut)
-def get_one(id: UUID, db: Session = Depends(get_db)):
+def get_one(
+    id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_active_user),
+):
     row = db.get(Candidate, id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
@@ -90,15 +104,25 @@ def get_one(id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/{id}/stage", response_model=CandidateOut)
-def move_stage(id: UUID, body: StageChange, db: Session = Depends(get_db)):
+def move_stage(
+    id: UUID,
+    body: StageChange,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_active_user),
+):
     row = db.get(Candidate, id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
-    return change_stage(db, row, body)
+    payload = body.model_copy(update={"changed_by_user_id": user.id})
+    return change_stage(db, row, payload)
 
 
 @router.get("/{id}/stage-history", response_model=list[StageHistoryOut])
-def history(id: UUID, db: Session = Depends(get_db)):
+def history(
+    id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_active_user),
+):
     if not db.get(Candidate, id):
         raise HTTPException(status_code=404, detail="Not found.")
     return list(db.scalars(select(StageHistory).where(StageHistory.candidate_id == id).order_by(StageHistory.created_at)))

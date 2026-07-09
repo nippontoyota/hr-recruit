@@ -1,39 +1,28 @@
-from passlib.context import CryptContext
 from sqlalchemy import select
 
-from app.candidates import change_stage, create_candidate
-from app.database import SessionLocal
-from app.models.enums import PipelineStage, SourceChannel, UserRole
+from app.api.v1.candidates import change_stage, create_candidate
+from app.core.database import SessionLocal
+from app.models.enums import PipelineStage, SourceChannel
 from app.models.user import User
-from app.schemas import CandidateCreate, StageChange
-
-pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from app.schemas.candidate import CandidateCreate, StageChange
+from scripts.seed_users import seed_users
 
 
 def seed():
+    seed_users()
     db = SessionLocal()
     try:
-        if db.scalar(select(User).limit(1)):
+        if db.scalar(select(User).where(User.email == "admin@nippon.test")) is None:
+            return
+        admin = db.scalar(select(User).where(User.email == "admin@nippon.test"))
+        hr = db.scalar(select(User).where(User.email == "local@nippon.test"))
+        if admin is None or hr is None:
             return
 
-        admin = User(
-            email="admin@nippon-toyota.in",
-            hashed_password=pwd.hash("admin123"),
-            full_name="Portal Admin",
-            role=UserRole.ADMIN,
-            branch_location="Head Office",
-        )
-        hr = User(
-            email="hr.chennai@nippon-toyota.in",
-            hashed_password=pwd.hash("hr123456"),
-            full_name="Priya Sharma",
-            role=UserRole.LOCAL_HR,
-            branch_location="Chennai",
-        )
-        db.add_all([admin, hr])
-        db.commit()
-        db.refresh(admin)
-        db.refresh(hr)
+        from app.models.candidate import Candidate
+
+        if db.scalar(select(Candidate).limit(1)):
+            return
 
         row = create_candidate(
             db,
