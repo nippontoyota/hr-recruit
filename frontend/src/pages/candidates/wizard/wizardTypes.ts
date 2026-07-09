@@ -30,6 +30,7 @@ export interface CandidateFormData {
   source: string;
   appliedDate: string;
   resumeFile: string | null; // Simulating file upload (filename)
+  resumeFileObject: File | null; // Actual file to be uploaded
   resumeUrl: string | null; // URL for previewing the document
   profilePicture: string | null; // Simulating image upload
 
@@ -129,6 +130,7 @@ export const initialCandidateData: CandidateFormData = {
   source: '',
   appliedDate: new Date().toISOString().split('T')[0],
   resumeFile: null,
+  resumeFileObject: null,
   resumeUrl: null,
   profilePicture: null,
 

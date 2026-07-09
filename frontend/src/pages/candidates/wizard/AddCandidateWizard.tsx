@@ -9,7 +9,7 @@ import { getSectionStatus } from './wizardUtils';
 import { SectionList } from './SectionList';
 import { SectionWrapper } from './SectionWrapper';
 import { Button } from '../../../components/ui';
-import { createCandidate } from '../../../api/candidates';
+import { createCandidate, uploadResume } from '../../../api/candidates';
 
 import { BasicInfoForm } from './sections/BasicInfoForm';
 import { PersonalInfoForm } from './sections/PersonalInfoForm';
@@ -74,12 +74,21 @@ export const AddCandidateWizard = ({ importMode = false, onSuccess, onCancel }: 
     setIsSubmitting(true);
     setError('');
     try {
-      await createCandidate({
+      const { resumeFile, resumeUrl, resumeFileObject, profilePicture, ...applicationData } = formData;
+      
+      const candidate = await createCandidate({
         full_name: formData.fullName,
         phone: formData.mobileNumber,
         email: formData.emailId,
         source_channel: formData.source,
-      });
+        branch_location: formData.branchName,
+        application_data: applicationData,
+      } as any);
+
+      if (formData.resumeFileObject) {
+        await uploadResume(candidate.id, formData.resumeFileObject);
+      }
+
       onSuccess();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create candidate');

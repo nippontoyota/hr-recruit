@@ -100,6 +100,7 @@ export const BasicInfoForm = ({ data, update }: BasicInfoFormProps) => {
                       if (e.target.files && e.target.files.length > 0) {
                         const file = e.target.files[0];
                         update('resumeFile', file.name);
+                        update('resumeFileObject', file);
                         if (file.type === 'application/pdf') {
                           update('resumeUrl', URL.createObjectURL(file));
                         } else {
@@ -133,6 +134,7 @@ export const BasicInfoForm = ({ data, update }: BasicInfoFormProps) => {
                       if (e.target.files && e.target.files.length > 0) {
                         const file = e.target.files[0];
                         update('resumeFile', file.name);
+                        update('resumeFileObject', file);
                         if (file.type === 'application/pdf') {
                           update('resumeUrl', URL.createObjectURL(file));
                         } else {
@@ -169,6 +171,7 @@ export const BasicInfoForm = ({ data, update }: BasicInfoFormProps) => {
                 if (e.target.files && e.target.files.length > 0) {
                   const file = e.target.files[0];
                   update('resumeFile', file.name);
+                  update('resumeFileObject', file);
                   if (file.type === 'application/pdf') {
                     update('resumeUrl', URL.createObjectURL(file));
                   } else {

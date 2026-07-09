@@ -87,3 +87,15 @@ export const createCandidate = async (candidateData: Partial<Candidate>): Promis
   const response = await api.post('/candidates', candidateData);
   return response.data;
 };
+
+export const uploadResume = async (candidateId: string, file: File): Promise<any> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await api.post(`/candidates/${candidateId}/resume`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};
