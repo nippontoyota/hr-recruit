@@ -64,3 +64,26 @@ export const getCandidateById = async (id: string): Promise<Candidate | undefine
   const response = await api.get(`/candidates/${id}`);
   return response.data;
 };
+
+export const createCandidate = async (candidateData: Partial<Candidate>): Promise<Candidate> => {
+  if (IS_MOCK) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const newCandidate: Candidate = {
+          ...candidateData,
+          id: Math.random().toString(36).substr(2, 9),
+          candidate_id: `CAND-00${MOCK_CANDIDATES.length + 1}`,
+          current_stage: 'NEW_APPLICATION',
+          is_duplicate_flagged: false,
+          is_rejoining: false,
+          applied_at: new Date().toISOString(),
+        } as Candidate;
+        MOCK_CANDIDATES.push(newCandidate);
+        resolve(newCandidate);
+      }, 500);
+    });
+  }
+
+  const response = await api.post('/candidates', candidateData);
+  return response.data;
+};
