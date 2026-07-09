@@ -32,6 +32,18 @@ erDiagram
         timestamptz updated_at
     }
 
+    documents {
+        uuid id PK
+        uuid candidate_id FK
+        document_type doc_type
+        string file_name
+        string content_type
+        text storage_path
+        int file_size_bytes
+        uuid uploaded_by_user_id FK
+        timestamptz created_at
+    }
+
     stage_history {
         uuid id PK
         uuid candidate_id FK
@@ -44,8 +56,10 @@ erDiagram
 
     users ||--o{ candidates : "assigned_hr_user_id"
     users ||--o{ stage_history : "changed_by_user_id"
+    users ||--o{ documents : "uploaded_by_user_id"
     candidates ||--o| candidates : "duplicate_of_candidate_id"
     candidates ||--o{ stage_history : "candidate_id"
+    candidates ||--o{ documents : "candidate_id"
 ```
 
 ## Enums
@@ -55,6 +69,7 @@ erDiagram
 | user_role | ADMIN, LOCAL_HR, HEAD_OFFICE_HR, DEPARTMENT_HEAD, SALARY_TEAM |
 | pipeline_stage | NEW_APPLICATION, AWAITING_LOCAL_INTERVIEW, LOCAL_HR_REVIEW_COMPLETE, AWAITING_HEAD_OFFICE_INTERVIEW, HEAD_OFFICE_INTERVIEW_COMPLETE, SUITABLE_FOR_HIRE, SALARY_PENDING, SALARY_APPROVED, OFFER_SENT, OFFER_ACCEPTED, OFFER_DECLINED, JOINING_SCHEDULED, JOINED, REJECTED, ON_HOLD |
 | source_channel | WALK_IN, INDEED, REFERRAL, CAMPUS, OTHER |
+| document_type | RESUME |
 
 ## Database (Supabase)
 
@@ -64,6 +79,8 @@ This API uses its **own Supabase project** (same org as other Nippon apps; not t
 2. Open **Project Settings** → **Database**.
 3. Copy the **URI** connection string into `backend/.env` as `DATABASE_URL`.
 4. Set a long random `SECRET_KEY`.
+5. Open **Project Settings** → **API** and set `SUPABASE_URL` plus `SUPABASE_SERVICE_ROLE_KEY` (server only).
+6. In **Storage**, create a private bucket named `candidate-documents` (or match `SUPABASE_STORAGE_BUCKET`).
 
 ```bash
 cd backend
@@ -98,6 +115,30 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 
 ```bash
 curl http://localhost:8000/api/v1/auth/me \
+  -H "Authorization: Bearer <access_token>"
+```
+
+### Create candidate
+
+```bash
+curl -X POST http://localhost:8000/api/v1/candidates \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"full_name":"Rahul Sharma","phone":"9876543210","email":"rahul@example.com","source_channel":"WALK_IN"}'
+```
+
+### Upload resume (optional, after create)
+
+```bash
+curl -X POST http://localhost:8000/api/v1/candidates/<candidate_uuid>/resume \
+  -H "Authorization: Bearer <access_token>" \
+  -F "file=@resume.pdf"
+```
+
+### Get resume signed URL
+
+```bash
+curl http://localhost:8000/api/v1/candidates/<candidate_uuid>/resume \
   -H "Authorization: Bearer <access_token>"
 ```
 

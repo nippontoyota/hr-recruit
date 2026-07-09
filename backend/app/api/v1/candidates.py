@@ -1,19 +1,31 @@
 from datetime import UTC, datetime
-from uuid import UUID
+from pathlib import PurePosixPath
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_active_user, require_roles
 from app.models.candidate import Candidate
-from app.models.enums import PipelineStage, UserRole
+from app.models.document import Document
+from app.models.enums import DocumentType, PipelineStage, UserRole
 from app.models.stage_history import StageHistory
 from app.models.user import User
-from app.schemas.candidate import CandidateCreate, CandidateOut, StageChange, StageHistoryOut
+from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, StageChange, StageHistoryOut
+from app.services import storage
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
+
+ALLOWED_RESUME_EXTENSIONS = {".pdf", ".doc", ".docx"}
+ALLOWED_RESUME_CONTENT_TYPES = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/octet-stream",
+}
 
 
 def next_candidate_id(db: Session) -> str:
@@ -22,6 +34,23 @@ def next_candidate_id(db: Session) -> str:
     last = db.scalar(select(func.max(Candidate.candidate_id)).where(Candidate.candidate_id.like(f"{prefix}%")))
     n = int(last.split("-")[-1]) + 1 if last else 1
     return f"{prefix}{n:05d}"
+
+
+def candidate_has_resume(db: Session, candidate_id: UUID) -> bool:
+    return (
+        db.scalar(
+            select(Document.id).where(
+                Document.candidate_id == candidate_id,
+                Document.doc_type == DocumentType.RESUME,
+            )
+        )
+        is not None
+    )
+
+
+def to_candidate_out(db: Session, row: Candidate) -> CandidateOut:
+    data = CandidateOut.model_validate(row)
+    return data.model_copy(update={"has_resume": candidate_has_resume(db, row.id)})
 
 
 def create_candidate(db: Session, body: CandidateCreate, user_id: UUID) -> Candidate:
@@ -68,6 +97,51 @@ def change_stage(db: Session, row: Candidate, body: StageChange) -> Candidate:
     return row
 
 
+def _resume_extension(filename: str | None) -> str:
+    if not filename:
+        raise HTTPException(status_code=400, detail="Filename is required.")
+    ext = PurePosixPath(filename).suffix.lower()
+    if ext not in ALLOWED_RESUME_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Resume must be a PDF, DOC, or DOCX file.")
+    return ext
+
+
+def _validate_resume_content_type(content_type: str | None, ext: str) -> str:
+    ct = (content_type or "").split(";")[0].strip().lower()
+    if ct and ct not in ALLOWED_RESUME_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported resume content type.")
+    if not ct or ct == "application/octet-stream":
+        return {
+            ".pdf": "application/pdf",
+            ".doc": "application/msword",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }[ext]
+    return ct
+
+
+def _get_resume_document(db: Session, candidate_id: UUID) -> Document | None:
+    return db.scalar(
+        select(Document).where(
+            Document.candidate_id == candidate_id,
+            Document.doc_type == DocumentType.RESUME,
+        )
+    )
+
+
+def _document_out(doc: Document) -> DocumentOut:
+    return DocumentOut(
+        id=doc.id,
+        candidate_id=doc.candidate_id,
+        doc_type=doc.doc_type,
+        file_name=doc.file_name,
+        content_type=doc.content_type,
+        file_size_bytes=doc.file_size_bytes,
+        uploaded_by_user_id=doc.uploaded_by_user_id,
+        created_at=doc.created_at,
+        download_url=storage.create_signed_url(doc.storage_path),
+    )
+
+
 @router.get("", response_model=list[CandidateOut])
 def list_candidates(
     stage: PipelineStage | None = None,
@@ -77,7 +151,8 @@ def list_candidates(
     q = select(Candidate).order_by(Candidate.created_at.desc())
     if stage:
         q = q.where(Candidate.current_stage == stage)
-    return list(db.scalars(q).all())
+    rows = list(db.scalars(q).all())
+    return [to_candidate_out(db, row) for row in rows]
 
 
 @router.post("", response_model=CandidateOut, status_code=201)
@@ -88,7 +163,8 @@ def create(
 ):
     if body.assigned_hr_user_id is None:
         body = body.model_copy(update={"assigned_hr_user_id": user.id})
-    return create_candidate(db, body, user.id)
+    row = create_candidate(db, body, user.id)
+    return to_candidate_out(db, row)
 
 
 @router.get("/{id}", response_model=CandidateOut)
@@ -100,7 +176,77 @@ def get_one(
     row = db.get(Candidate, id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
-    return row
+    return to_candidate_out(db, row)
+
+
+@router.post("/{id}/resume", response_model=DocumentOut, status_code=201)
+async def upload_resume(
+    id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_active_user),
+):
+    row = db.get(Candidate, id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Not found.")
+
+    ext = _resume_extension(file.filename)
+    content_type = _validate_resume_content_type(file.content_type, ext)
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    if len(data) > settings.resume_max_bytes:
+        raise HTTPException(status_code=400, detail="Resume must be 10 MB or smaller.")
+
+    existing = _get_resume_document(db, id)
+    old_path = existing.storage_path if existing else None
+    doc_id = existing.id if existing else uuid4()
+    storage_path = f"resumes/{id}/{doc_id}{ext}"
+    file_name = PurePosixPath(file.filename or f"resume{ext}").name
+
+    storage.upload_object(storage_path, data, content_type, upsert=True)
+
+    if existing:
+        existing.file_name = file_name
+        existing.content_type = content_type
+        existing.storage_path = storage_path
+        existing.file_size_bytes = len(data)
+        existing.uploaded_by_user_id = user.id
+        doc = existing
+    else:
+        doc = Document(
+            id=doc_id,
+            candidate_id=id,
+            doc_type=DocumentType.RESUME,
+            file_name=file_name,
+            content_type=content_type,
+            storage_path=storage_path,
+            file_size_bytes=len(data),
+            uploaded_by_user_id=user.id,
+        )
+        db.add(doc)
+
+    db.commit()
+    db.refresh(doc)
+
+    if old_path and old_path != storage_path:
+        storage.delete_object(old_path)
+
+    return _document_out(doc)
+
+
+@router.get("/{id}/resume", response_model=DocumentOut)
+def get_resume(
+    id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_active_user),
+):
+    if not db.get(Candidate, id):
+        raise HTTPException(status_code=404, detail="Not found.")
+    doc = _get_resume_document(db, id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Resume not found.")
+    return _document_out(doc)
 
 
 @router.post("/{id}/stage", response_model=CandidateOut)
@@ -114,7 +260,8 @@ def move_stage(
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
     payload = body.model_copy(update={"changed_by_user_id": user.id})
-    return change_stage(db, row, payload)
+    updated = change_stage(db, row, payload)
+    return to_candidate_out(db, updated)
 
 
 @router.get("/{id}/stage-history", response_model=list[StageHistoryOut])

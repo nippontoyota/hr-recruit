@@ -11,5 +11,11 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 480
 
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_storage_bucket: str = "candidate-documents"
+    resume_signed_url_expires_seconds: int = 3600
+    resume_max_bytes: int = 10 * 1024 * 1024
+
 
 settings = Settings()

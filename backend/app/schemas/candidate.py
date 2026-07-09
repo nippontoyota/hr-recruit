@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.enums import PipelineStage, SourceChannel
+from app.models.enums import DocumentType, PipelineStage, SourceChannel
 
 
 class CandidateCreate(BaseModel):
@@ -35,6 +35,7 @@ class CandidateOut(BaseModel):
     applied_at: datetime
     created_at: datetime
     updated_at: datetime
+    has_resume: bool = False
 
 
 class StageChange(BaseModel):
@@ -53,3 +54,17 @@ class StageHistoryOut(BaseModel):
     changed_by_user_id: UUID
     reason: str | None
     created_at: datetime
+
+
+class DocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    candidate_id: UUID
+    doc_type: DocumentType
+    file_name: str
+    content_type: str
+    file_size_bytes: int
+    uploaded_by_user_id: UUID | None
+    created_at: datetime
+    download_url: str
