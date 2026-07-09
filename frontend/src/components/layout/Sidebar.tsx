@@ -40,19 +40,21 @@ export const Sidebar = ({ isOpen, setOpen }: { isOpen: boolean; setOpen: (o: boo
         <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
           {allowedNavItems.map((item) => {
             const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
-            
+            const Icon = item.icon;
+
             return (
               <Link
                 key={item.name}
                 to={item.href}
                 className={cn(
-                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                  'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors',
                   isActive
                     ? 'bg-primary/10 text-primary'
                     : 'text-text-secondary hover:bg-gray-50 hover:text-text-primary'
                 )}
                 onClick={() => setOpen(false)}
               >
+                <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-primary' : 'text-text-secondary')} />
                 {item.name}
               </Link>
             );
