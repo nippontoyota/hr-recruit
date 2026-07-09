@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.compat import role_for_frontend
 from app.core.database import get_db
 from app.core.deps import get_current_active_user
 from app.core.security import create_access_token, verify_password
@@ -25,17 +26,19 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
             detail="Inactive user",
         )
 
+    frontend_role = role_for_frontend(user.role)
     token = create_access_token(
         user_id=user.id,
         email=user.email,
-        role=user.role.value,
+        role=frontend_role,
     )
-    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
+    user_out = UserOut.from_user(user)
+    return TokenResponse(access_token=token, token=token, user=user_out)
 
 
 @router.get("/me", response_model=UserOut)
-def me(user: User = Depends(get_current_active_user)) -> User:
-    return user
+def me(user: User = Depends(get_current_active_user)) -> UserOut:
+    return UserOut.from_user(user)
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)

@@ -54,7 +54,9 @@ def resume_candidate_ids(db: Session, candidate_ids: list[UUID]) -> set[UUID]:
 
 
 def to_candidate_out(row: Candidate, has_resume: bool) -> CandidateOut:
-    return CandidateOut.model_validate(row).model_copy(update={"has_resume": has_resume})
+    return CandidateOut.model_validate(row).model_copy(
+        update={"has_resume": has_resume, "is_rejoining": False}
+    )
 
 
 def create_candidate(db: Session, body: CandidateCreate, user_id: UUID) -> Candidate:

@@ -93,15 +93,17 @@ python -m scripts.seed_users
 uvicorn app.main:app --reload
 ```
 
-Seed users all use password `password123`:
+Seed users all use password `password123`. Login responses expose SPA role names (`SUPER_ADMIN`, `HR`, …); DB still stores backend roles.
 
-| Email | Role |
-|-------|------|
-| admin@nippon.test | ADMIN |
-| local@nippon.test | LOCAL_HR |
-| hq@nippon.test | HEAD_OFFICE_HR |
-| dept@nippon.test | DEPARTMENT_HEAD |
-| salary@nippon.test | SALARY_TEAM |
+| Email | DB role | SPA role |
+|-------|---------|----------|
+| admin@nippon.test | ADMIN | SUPER_ADMIN |
+| local@nippon.test / hr@nippon.test | LOCAL_HR | HR |
+| hq@nippon.test / hrexec@nippon.test | HEAD_OFFICE_HR | HR_EXECUTIVE |
+| dept@nippon.test | DEPARTMENT_HEAD | DEPARTMENT_MANAGER |
+| salary@nippon.test / gm@nippon.test | SALARY_TEAM | GM |
+
+Login JSON includes both `access_token` and `token` (same value) for the SPA AuthContext.
 
 ### Login
 

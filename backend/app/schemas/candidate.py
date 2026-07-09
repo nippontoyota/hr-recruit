@@ -2,19 +2,32 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
+from app.core.compat import parse_source_channel
 from app.models.enums import DocumentType, PipelineStage, SourceChannel
 
 
 class CandidateCreate(BaseModel):
+    """Accepts SPA field names; unknown extras are ignored."""
+
+    model_config = ConfigDict(extra="ignore")
+
     full_name: str
     phone: str
     email: str | None = None
     source_channel: SourceChannel
-    branch_location: str | None = None
+    branch_location: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("branch_location", "branch_name"),
+    )
     application_data: dict[str, Any] | None = None
     assigned_hr_user_id: UUID | None = None
+
+    @field_validator("source_channel", mode="before")
+    @classmethod
+    def _normalize_source(cls, value: object) -> SourceChannel:
+        return parse_source_channel(value)
 
 
 class CandidateOut(BaseModel):
@@ -36,6 +49,7 @@ class CandidateOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     has_resume: bool = False
+    is_rejoining: bool = False
 
 
 class StageChange(BaseModel):
