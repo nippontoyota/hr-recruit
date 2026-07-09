@@ -26,6 +26,11 @@ ALLOWED_RESUME_CONTENT_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/octet-stream",
 }
+EXT_CONTENT_TYPES = {
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
 
 
 def next_candidate_id(db: Session) -> str:
@@ -36,21 +41,20 @@ def next_candidate_id(db: Session) -> str:
     return f"{prefix}{n:05d}"
 
 
-def candidate_has_resume(db: Session, candidate_id: UUID) -> bool:
-    return (
-        db.scalar(
-            select(Document.id).where(
-                Document.candidate_id == candidate_id,
-                Document.doc_type == DocumentType.RESUME,
-            )
+def resume_candidate_ids(db: Session, candidate_ids: list[UUID]) -> set[UUID]:
+    if not candidate_ids:
+        return set()
+    rows = db.scalars(
+        select(Document.candidate_id).where(
+            Document.candidate_id.in_(candidate_ids),
+            Document.doc_type == DocumentType.RESUME,
         )
-        is not None
-    )
+    ).all()
+    return set(rows)
 
 
-def to_candidate_out(db: Session, row: Candidate) -> CandidateOut:
-    data = CandidateOut.model_validate(row)
-    return data.model_copy(update={"has_resume": candidate_has_resume(db, row.id)})
+def to_candidate_out(row: Candidate, has_resume: bool) -> CandidateOut:
+    return CandidateOut.model_validate(row).model_copy(update={"has_resume": has_resume})
 
 
 def create_candidate(db: Session, body: CandidateCreate, user_id: UUID) -> Candidate:
@@ -106,17 +110,31 @@ def _resume_extension(filename: str | None) -> str:
     return ext
 
 
+def _safe_filename(filename: str | None, ext: str) -> str:
+    name = PurePosixPath(filename or f"resume{ext}").name
+    name = name.replace("\x00", "").strip() or f"resume{ext}"
+    if len(name) > 255:
+        name = name[: 255 - len(ext)] + ext
+    return name
+
+
 def _validate_resume_content_type(content_type: str | None, ext: str) -> str:
     ct = (content_type or "").split(";")[0].strip().lower()
     if ct and ct not in ALLOWED_RESUME_CONTENT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported resume content type.")
     if not ct or ct == "application/octet-stream":
-        return {
-            ".pdf": "application/pdf",
-            ".doc": "application/msword",
-            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        }[ext]
+        return EXT_CONTENT_TYPES[ext]
     return ct
+
+
+async def _read_resume_bytes(file: UploadFile) -> bytes:
+    max_bytes = settings.resume_max_bytes
+    chunk = await file.read(max_bytes + 1)
+    if not chunk:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    if len(chunk) > max_bytes:
+        raise HTTPException(status_code=400, detail="Resume must be 10 MB or smaller.")
+    return chunk
 
 
 def _get_resume_document(db: Session, candidate_id: UUID) -> Document | None:
@@ -152,7 +170,8 @@ def list_candidates(
     if stage:
         q = q.where(Candidate.current_stage == stage)
     rows = list(db.scalars(q).all())
-    return [to_candidate_out(db, row) for row in rows]
+    with_resume = resume_candidate_ids(db, [row.id for row in rows])
+    return [to_candidate_out(row, row.id in with_resume) for row in rows]
 
 
 @router.post("", response_model=CandidateOut, status_code=201)
@@ -164,7 +183,7 @@ def create(
     if body.assigned_hr_user_id is None:
         body = body.model_copy(update={"assigned_hr_user_id": user.id})
     row = create_candidate(db, body, user.id)
-    return to_candidate_out(db, row)
+    return to_candidate_out(row, False)
 
 
 @router.get("/{id}", response_model=CandidateOut)
@@ -176,7 +195,7 @@ def get_one(
     row = db.get(Candidate, id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
-    return to_candidate_out(db, row)
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
 
 
 @router.post("/{id}/resume", response_model=DocumentOut, status_code=201)
@@ -192,17 +211,13 @@ async def upload_resume(
 
     ext = _resume_extension(file.filename)
     content_type = _validate_resume_content_type(file.content_type, ext)
-    data = await file.read()
-    if not data:
-        raise HTTPException(status_code=400, detail="Empty file.")
-    if len(data) > settings.resume_max_bytes:
-        raise HTTPException(status_code=400, detail="Resume must be 10 MB or smaller.")
+    data = await _read_resume_bytes(file)
 
     existing = _get_resume_document(db, id)
     old_path = existing.storage_path if existing else None
     doc_id = existing.id if existing else uuid4()
     storage_path = f"resumes/{id}/{doc_id}{ext}"
-    file_name = PurePosixPath(file.filename or f"resume{ext}").name
+    file_name = _safe_filename(file.filename, ext)
 
     storage.upload_object(storage_path, data, content_type, upsert=True)
 
@@ -226,8 +241,14 @@ async def upload_resume(
         )
         db.add(doc)
 
-    db.commit()
-    db.refresh(doc)
+    try:
+        db.commit()
+        db.refresh(doc)
+    except Exception:
+        db.rollback()
+        if not existing or old_path != storage_path:
+            storage.delete_object(storage_path)
+        raise HTTPException(status_code=502, detail="Failed to save resume metadata.")
 
     if old_path and old_path != storage_path:
         storage.delete_object(old_path)
@@ -261,7 +282,7 @@ def move_stage(
         raise HTTPException(status_code=404, detail="Not found.")
     payload = body.model_copy(update={"changed_by_user_id": user.id})
     updated = change_stage(db, row, payload)
-    return to_candidate_out(db, updated)
+    return to_candidate_out(updated, id in resume_candidate_ids(db, [id]))
 
 
 @router.get("/{id}/stage-history", response_model=list[StageHistoryOut])
