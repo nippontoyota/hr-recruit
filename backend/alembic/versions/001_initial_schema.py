@@ -1,4 +1,4 @@
-"""Initial schema: users, candidates, stage_history"""
+"""Initial schema: users, candidates, stage_history (recruitment schema for Supabase)"""
 
 from typing import Sequence, Union
 
@@ -11,11 +11,16 @@ down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+SCHEMA = "recruitment"
+
 
 def upgrade() -> None:
+    op.execute(sa.text(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}"))
+
     user_role = postgresql.ENUM(
         "ADMIN", "LOCAL_HR", "HEAD_OFFICE_HR", "DEPARTMENT_HEAD", "SALARY_TEAM",
         name="user_role",
+        schema=SCHEMA,
         create_type=False,
     )
     pipeline_stage = postgresql.ENUM(
@@ -35,11 +40,13 @@ def upgrade() -> None:
         "REJECTED",
         "ON_HOLD",
         name="pipeline_stage",
+        schema=SCHEMA,
         create_type=False,
     )
     source_channel = postgresql.ENUM(
         "WALK_IN", "INDEED", "REFERRAL", "CAMPUS", "OTHER",
         name="source_channel",
+        schema=SCHEMA,
         create_type=False,
     )
 
@@ -59,8 +66,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        schema=SCHEMA,
     )
-    op.create_index("ix_users_email", "users", ["email"], unique=True)
+    op.create_index("ix_users_email", "users", ["email"], unique=True, schema=SCHEMA)
 
     op.create_table(
         "candidates",
@@ -79,15 +87,16 @@ def upgrade() -> None:
         sa.Column("applied_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["assigned_hr_user_id"], ["users.id"]),
-        sa.ForeignKeyConstraint(["duplicate_of_candidate_id"], ["candidates.id"]),
+        sa.ForeignKeyConstraint(["assigned_hr_user_id"], [f"{SCHEMA}.users.id"]),
+        sa.ForeignKeyConstraint(["duplicate_of_candidate_id"], [f"{SCHEMA}.candidates.id"]),
         sa.PrimaryKeyConstraint("id"),
+        schema=SCHEMA,
     )
-    op.create_index("ix_candidates_candidate_id", "candidates", ["candidate_id"], unique=True)
-    op.create_index("ix_candidates_full_name", "candidates", ["full_name"])
-    op.create_index("ix_candidates_phone", "candidates", ["phone"])
-    op.create_index("ix_candidates_email", "candidates", ["email"])
-    op.create_index("ix_candidates_current_stage", "candidates", ["current_stage"])
+    op.create_index("ix_candidates_candidate_id", "candidates", ["candidate_id"], unique=True, schema=SCHEMA)
+    op.create_index("ix_candidates_full_name", "candidates", ["full_name"], schema=SCHEMA)
+    op.create_index("ix_candidates_phone", "candidates", ["phone"], schema=SCHEMA)
+    op.create_index("ix_candidates_email", "candidates", ["email"], schema=SCHEMA)
+    op.create_index("ix_candidates_current_stage", "candidates", ["current_stage"], schema=SCHEMA)
 
     op.create_table(
         "stage_history",
@@ -98,17 +107,20 @@ def upgrade() -> None:
         sa.Column("changed_by_user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("reason", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["candidate_id"], ["candidates.id"]),
-        sa.ForeignKeyConstraint(["changed_by_user_id"], ["users.id"]),
+        sa.ForeignKeyConstraint(["candidate_id"], [f"{SCHEMA}.candidates.id"]),
+        sa.ForeignKeyConstraint(["changed_by_user_id"], [f"{SCHEMA}.users.id"]),
         sa.PrimaryKeyConstraint("id"),
+        schema=SCHEMA,
     )
-    op.create_index("ix_stage_history_candidate_id", "stage_history", ["candidate_id"])
+    op.create_index("ix_stage_history_candidate_id", "stage_history", ["candidate_id"], schema=SCHEMA)
 
 
 def downgrade() -> None:
-    op.drop_table("stage_history")
-    op.drop_table("candidates")
-    op.drop_table("users")
+    op.drop_table("stage_history", schema=SCHEMA)
+    op.drop_table("candidates", schema=SCHEMA)
+    op.drop_table("users", schema=SCHEMA)
 
     for enum_name in ("source_channel", "pipeline_stage", "user_role"):
-        postgresql.ENUM(name=enum_name).drop(op.get_bind(), checkfirst=True)
+        postgresql.ENUM(name=enum_name, schema=SCHEMA).drop(op.get_bind(), checkfirst=True)
+
+    op.execute(sa.text(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE"))

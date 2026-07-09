@@ -56,12 +56,17 @@ erDiagram
 | pipeline_stage | NEW_APPLICATION, AWAITING_LOCAL_INTERVIEW, LOCAL_HR_REVIEW_COMPLETE, AWAITING_HEAD_OFFICE_INTERVIEW, HEAD_OFFICE_INTERVIEW_COMPLETE, SUITABLE_FOR_HIRE, SALARY_PENDING, SALARY_APPROVED, OFFER_SENT, OFFER_ACCEPTED, OFFER_DECLINED, JOINING_SCHEDULED, JOINED, REJECTED, ON_HOLD |
 | source_channel | WALK_IN, INDEED, REFERRAL, CAMPUS, OTHER |
 
-## Auth setup
+## Database (Supabase)
 
-Copy `backend/.env.example` to `backend/.env` and set a real `SECRET_KEY`.
+This API uses **Supabase Postgres**. Tables live in the `recruitment` schema so they do not collide with other apps on the same project.
+
+1. Open [Supabase](https://supabase.com) → your project → **Project Settings** → **Database**.
+2. Copy the **URI** connection string into `backend/.env` as `DATABASE_URL`.
+3. Set a long random `SECRET_KEY`.
 
 ```bash
 cd backend
+cp .env.example .env   # then paste your Supabase URI
 python -m venv venv
 # Windows: .\venv\Scripts\activate
 pip install -r requirements.txt
