@@ -12,21 +12,26 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * Custom event emitted on 401 responses. AuthContext listens for this
+ * to trigger a React-based redirect instead of a hard page reload.
+ */
+export const AUTH_EXPIRED_EVENT = 'auth:expired';
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Handle unauthorized (e.g., redirect to login)
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
     }
     return Promise.reject(error);
   }
 );
 
 // Stub for login api call
-export const login = async (email: string, password?: string) => {
+export const login = async (email: string, password: string) => {
   const response = await api.post('/auth/login', { email, password });
   return response.data;
 };

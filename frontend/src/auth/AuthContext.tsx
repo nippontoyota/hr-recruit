@@ -1,25 +1,27 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type { User, UserRole } from '../types';
-import { login as apiLogin } from '../api/client';
+import { login as apiLogin, AUTH_EXPIRED_EVENT } from '../api/client';
+
+import { IS_MOCK } from '../lib/env';
 
 interface AuthContextType {
   user: User | null;
   role: UserRole | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password?: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const MOCK_USERS: Record<string, User> = {
-  'local@nippon.test': { id: '1', email: 'local@nippon.test', full_name: 'Local HR', role: 'LOCAL_HR', branch_location: 'Kochi' },
-  'hq@nippon.test': { id: '2', email: 'hq@nippon.test', full_name: 'HQ HR', role: 'HEAD_OFFICE_HR' },
-  'salary@nippon.test': { id: '3', email: 'salary@nippon.test', full_name: 'Salary Team', role: 'SALARY_TEAM' },
-  'admin@nippon.test': { id: '4', email: 'admin@nippon.test', full_name: 'System Admin', role: 'ADMIN' },
-  'dept@nippon.test': { id: '5', email: 'dept@nippon.test', full_name: 'Service Head', role: 'DEPARTMENT_HEAD' },
+  'admin@nippon.test': { id: '1', email: 'admin@nippon.test', full_name: 'System Admin', role: 'SUPER_ADMIN' },
+  'hrexec@nippon.test': { id: '2', email: 'hrexec@nippon.test', full_name: 'HR Exec', role: 'HR_EXECUTIVE' },
+  'hr@nippon.test': { id: '3', email: 'hr@nippon.test', full_name: 'HR Rep', role: 'HR' },
+  'dept@nippon.test': { id: '4', email: 'dept@nippon.test', full_name: 'Dept Manager', role: 'DEPARTMENT_MANAGER' },
+  'gm@nippon.test': { id: '5', email: 'gm@nippon.test', full_name: 'General Manager', role: 'GM' },
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -28,23 +30,41 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check local storage for existing session
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
+    try {
+      const storedToken = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
 
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      if (storedToken && storedUser) {
+        const parsed: unknown = JSON.parse(storedUser);
+
+        // Validate the shape before trusting it
+        if (
+          parsed !== null &&
+          typeof parsed === 'object' &&
+          'id' in parsed &&
+          'email' in parsed &&
+          'role' in parsed
+        ) {
+          setToken(storedToken);
+          setUser(parsed as User);
+        } else {
+          // Invalid shape — clear corrupted session
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+        }
+      }
+    } catch {
+      // Corrupted localStorage — clear and continue
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
     }
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, password?: string) => {
+  const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const useMock = import.meta.env.VITE_USE_MOCK_AUTH === 'true';
-      
-      if (useMock) {
+      if (IS_MOCK) {
         // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 800));
         
@@ -60,7 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } else {
         // Real API call
-        const response = await apiLogin(email, password || '');
+        const response = await apiLogin(email, password);
         setUser(response.user);
         setToken(response.token);
         localStorage.setItem('token', response.token);
@@ -71,12 +91,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null);
     setToken(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-  };
+  }, []);
+
+  // Listen for 401 expired-auth events from the API interceptor
+  useEffect(() => {
+    const handleAuthExpired = () => logout();
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+  }, [logout]);
 
   return (
     <AuthContext.Provider value={{ user, role: user?.role || null, token, isLoading, login, logout }}>
