@@ -1,10 +1,12 @@
+import type { ElementType } from 'react';
 import type { UserRole } from '../types';
-import { LayoutDashboard, Users, Settings } from 'lucide-react';
+import { ALL_ROLES, ADMIN_ONLY } from '../types';
+import { LayoutDashboard, Users, Settings, Kanban, FileText, UserCog } from 'lucide-react';
 
 export interface NavItem {
   name: string;
   href: string;
-  icon: React.ElementType;
+  icon: ElementType;
   roles: UserRole[];
 }
 
@@ -13,18 +15,36 @@ export const NAV_ITEMS: NavItem[] = [
     name: 'Dashboard',
     href: '/',
     icon: LayoutDashboard,
-    roles: ['ADMIN', 'LOCAL_HR', 'HEAD_OFFICE_HR', 'SALARY_TEAM'],
+    roles: ALL_ROLES,
   },
   {
     name: 'Candidates',
     href: '/candidates',
     icon: Users,
-    roles: ['ADMIN', 'LOCAL_HR', 'HEAD_OFFICE_HR', 'DEPARTMENT_HEAD'],
+    roles: ALL_ROLES,
+  },
+  {
+    name: 'Pipeline',
+    href: '/pipeline',
+    icon: Kanban,
+    roles: ALL_ROLES,
+  },
+  {
+    name: 'Reports',
+    href: '/reports',
+    icon: FileText,
+    roles: ALL_ROLES,
+  },
+  {
+    name: 'Users',
+    href: '/users',
+    icon: UserCog,
+    roles: ADMIN_ONLY,
   },
   {
     name: 'Settings',
     href: '/settings',
     icon: Settings,
-    roles: ['ADMIN'],
+    roles: ADMIN_ONLY,
   },
 ];

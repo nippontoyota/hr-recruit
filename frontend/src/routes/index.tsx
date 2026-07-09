@@ -1,20 +1,40 @@
 import { createBrowserRouter } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { ProtectedRoute } from '../components/guards/ProtectedRoute';
 import { RoleRoute } from '../components/guards/RoleRoute';
+import { LoadingSpinner } from '../components/ui';
+import { ALL_ROLES, ADMIN_ONLY } from '../types';
 
-// Pages
-import Login from '../pages/Login';
-import Dashboard from '../pages/Dashboard';
-import CandidatesList from '../pages/candidates/CandidatesList';
-import CandidateProfile from '../pages/candidates/CandidateProfile';
-import Settings from '../pages/Settings';
-import NotFound from '../pages/NotFound';
+// Lazy-loaded pages for code splitting
+const Login = lazy(() => import('../pages/Login'));
+const Dashboard = lazy(() => import('../pages/Dashboard'));
+const CandidatesList = lazy(() => import('../pages/candidates/CandidatesList'));
+const CandidateProfile = lazy(() => import('../pages/candidates/CandidateProfile'));
+const Settings = lazy(() => import('../pages/Settings'));
+const NotFound = lazy(() => import('../pages/NotFound'));
+const Pipeline = lazy(() => import('../pages/Pipeline'));
+const Users = lazy(() => import('../pages/Users'));
+const Reports = lazy(() => import('../pages/Reports'));
+
+const SuspenseFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <LoadingSpinner size="lg" />
+  </div>
+);
+
+const PageSuspense = ({ children }: { children: React.ReactNode }) => (
+  <Suspense fallback={<SuspenseFallback />}>{children}</Suspense>
+);
 
 export const router = createBrowserRouter([
   {
     path: '/login',
-    element: <Login />,
+    element: (
+      <PageSuspense>
+        <Login />
+      </PageSuspense>
+    ),
   },
   {
     path: '/',
@@ -26,29 +46,69 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Dashboard />,
+        element: (
+          <PageSuspense>
+            <Dashboard />
+          </PageSuspense>
+        ),
       },
       {
         path: 'candidates',
         element: (
-          <RoleRoute allowed={['ADMIN', 'LOCAL_HR', 'HEAD_OFFICE_HR', 'DEPARTMENT_HEAD']}>
-            <CandidatesList />
+          <RoleRoute allowed={ALL_ROLES}>
+            <PageSuspense>
+              <CandidatesList />
+            </PageSuspense>
           </RoleRoute>
         ),
       },
       {
         path: 'candidates/:id',
         element: (
-          <RoleRoute allowed={['ADMIN', 'LOCAL_HR', 'HEAD_OFFICE_HR', 'DEPARTMENT_HEAD']}>
-            <CandidateProfile />
+          <RoleRoute allowed={ALL_ROLES}>
+            <PageSuspense>
+              <CandidateProfile />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'pipeline',
+        element: (
+          <RoleRoute allowed={ALL_ROLES}>
+            <PageSuspense>
+              <Pipeline />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'reports',
+        element: (
+          <RoleRoute allowed={ALL_ROLES}>
+            <PageSuspense>
+              <Reports />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'users',
+        element: (
+          <RoleRoute allowed={ADMIN_ONLY}>
+            <PageSuspense>
+              <Users />
+            </PageSuspense>
           </RoleRoute>
         ),
       },
       {
         path: 'settings',
         element: (
-          <RoleRoute allowed={['ADMIN']}>
-            <Settings />
+          <RoleRoute allowed={ADMIN_ONLY}>
+            <PageSuspense>
+              <Settings />
+            </PageSuspense>
           </RoleRoute>
         ),
       },
@@ -56,6 +116,10 @@ export const router = createBrowserRouter([
   },
   {
     path: '*',
-    element: <NotFound />,
+    element: (
+      <PageSuspense>
+        <NotFound />
+      </PageSuspense>
+    ),
   },
 ]);
