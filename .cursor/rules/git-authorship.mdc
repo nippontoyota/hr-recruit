@@ -1,7 +1,0 @@
----
-description: Keep git commits attributed only to the human developer
-alwaysApply: true
----
-
-Never add `Co-authored-by: Cursor` or any Cursor/agent co-author trailer to git commits.
-All commits must list only the human developer as author.
