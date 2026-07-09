@@ -48,7 +48,7 @@ export default function CandidateProfile() {
                 className={cn(
                   isActive
                     ? 'border-primary text-primary'
-                    : 'border-transparent text-text-secondary hover:border-border hover:text-text-secondary',
+                    : 'border-transparent text-text-secondary hover:border-border hover:text-text-primary',
                   'group inline-flex items-center border-b-2 py-4 px-1 text-sm font-medium whitespace-nowrap'
                 )}
               >

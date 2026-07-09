@@ -1,5 +1,6 @@
 import type { Candidate } from '../types';
 import api from './client';
+import { IS_MOCK } from '../lib/env';
 
 // Mock data until backend is ready
 const MOCK_CANDIDATES: Candidate[] = [
@@ -41,9 +42,7 @@ const MOCK_CANDIDATES: Candidate[] = [
 ];
 
 export const getCandidates = async (): Promise<Candidate[]> => {
-  const useMock = import.meta.env.VITE_USE_MOCK_AUTH === 'true';
-  
-  if (useMock) {
+  if (IS_MOCK) {
     return new Promise((resolve) => setTimeout(() => resolve(MOCK_CANDIDATES), 500));
   }
   

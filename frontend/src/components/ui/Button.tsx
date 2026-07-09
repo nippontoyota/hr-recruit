@@ -6,11 +6,12 @@ import { Loader2 } from 'lucide-react';
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'whatsapp';
   size?: 'sm' | 'md' | 'lg';
+  rounded?: 'md' | 'lg' | 'xl' | 'full';
   isLoading?: boolean;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'primary', size = 'md', isLoading, children, disabled, ...props }, ref) => {
+  ({ className, variant = 'primary', size = 'md', rounded = 'md', isLoading, children, disabled, ...props }, ref) => {
     const variants = {
       primary: 'bg-primary text-white hover:bg-primary-hover focus:ring-primary shadow-sm',
       secondary: 'bg-surface text-text-primary border border-border hover:bg-background focus:ring-border shadow-sm',
@@ -25,14 +26,22 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       lg: 'px-6 py-3 text-base',
     };
 
+    const roundedMap = {
+      md: 'rounded-md',
+      lg: 'rounded-lg',
+      xl: 'rounded-xl',
+      full: 'rounded-full',
+    };
+
     return (
       <button
         ref={ref}
         disabled={disabled || isLoading}
         className={cn(
-          'inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none',
+          'inline-flex items-center justify-center font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none',
           variants[variant],
           sizes[size],
+          roundedMap[rounded],
           className
         )}
         {...props}
