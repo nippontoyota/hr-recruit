@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -64,25 +65,39 @@ def create_candidate(db: Session, body: CandidateCreate, user_id: UUID) -> Candi
     if body.email:
         match.append(Candidate.email == body.email)
     dup = db.scalar(select(Candidate).where(or_(*match)).limit(1))
-
-    row = Candidate(
-        candidate_id=next_candidate_id(db),
-        full_name=body.full_name,
-        phone=body.phone,
-        email=body.email,
-        source_channel=body.source_channel,
-        branch_location=body.branch_location,
-        application_data=body.application_data or {},
-        assigned_hr_user_id=body.assigned_hr_user_id,
-        is_duplicate_flagged=dup is not None,
-        duplicate_of_candidate_id=dup.id if dup else None,
-    )
-    db.add(row)
-    db.flush()
-    db.add(StageHistory(candidate_id=row.id, to_stage=PipelineStage.NEW_APPLICATION, changed_by_user_id=user_id))
-    db.commit()
-    db.refresh(row)
-    return row
+    
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            row = Candidate(
+                candidate_id=next_candidate_id(db),
+                full_name=body.full_name,
+                phone=body.phone,
+                email=body.email,
+                source_channel=body.source_channel,
+                branch_location=body.branch_location,
+                application_data=body.application_data or {},
+                assigned_hr_user_id=body.assigned_hr_user_id,
+                is_duplicate_flagged=dup is not None,
+                duplicate_of_candidate_id=dup.id if dup else None,
+            )
+            db.add(row)
+            db.flush()
+            db.add(StageHistory(candidate_id=row.id, to_stage=PipelineStage.NEW_APPLICATION, changed_by_user_id=user_id))
+            db.commit()
+            db.refresh(row)
+            return row
+        except IntegrityError as e:
+            db.rollback()
+            # Check if the error is due to candidate_id unique constraint
+            if "ix_candidates_candidate_id" in str(e) or "candidate_id" in str(e):
+                if attempt < max_retries - 1:
+                    continue  # Retry
+                else:
+                    raise HTTPException(status_code=500, detail="Failed to generate unique candidate ID after multiple attempts.")
+            else:
+                # Re-raise other integrity errors (e.g., duplicate phone/email)
+                raise
 
 
 def change_stage(db: Session, row: Candidate, body: StageChange) -> Candidate:
