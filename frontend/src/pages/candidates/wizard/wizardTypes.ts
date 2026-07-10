@@ -15,12 +15,10 @@ export type WizardSectionId =
 export interface WizardSection {
   id: WizardSectionId;
   title: string;
-  icon: any; // LucideIcon type
+  icon: any;
 }
 
-// Full candidate schema based on the detailed requirements
 export interface CandidateFormData {
-  // 1. Basic Information
   candidateId: string;
   fullName: string;
   mobileNumber: string;
@@ -29,12 +27,11 @@ export interface CandidateFormData {
   branchName: string;
   source: string;
   appliedDate: string;
-  resumeFile: string | null; // Simulating file upload (filename)
-  resumeFileObject: File | null; // Actual file to be uploaded
-  resumeUrl: string | null; // URL for previewing the document
-  profilePicture: string | null; // Simulating image upload
+  resumeFile: string | null;
+  resumeFileObject: File | null;
+  resumeUrl: string | null;
+  profilePicture: string | null;
 
-  // 2. Personal Information
   nameAadhaar: string;
   gender: string;
   dateOfBirth: string;
@@ -45,7 +42,6 @@ export interface CandidateFormData {
   bloodGroup: string;
   religionCaste: string;
 
-  // 3. Address
   permHouseName: string;
   permPostOffice: string;
   permLandmark: string;
@@ -59,13 +55,11 @@ export interface CandidateFormData {
   presDistrict: string;
   presPinCode: string;
 
-  // 4. Identity Documents
   aadhaarNumber: string;
   panNumber: string;
   drivingLicenseNumber: string;
   passportNumber: string;
 
-  // 5. Education
   class10School: string;
   class10Board: string;
   class10Percentage: string;
@@ -88,31 +82,26 @@ export interface CandidateFormData {
   postGradPercentage: string;
   postGradPassingYear: string;
 
-  // 6. Languages
   languagesRead: string;
   languagesWrite: string;
   languagesSpeak: string;
 
-  // 7. Employment History
   previousExperience: boolean;
   prevCompanyName: string;
   prevPosition: string;
   totalExperience: string;
   expectedSalary: string;
 
-  // 8. Reference
   refRole: string;
   refName: string;
   refPanchayat: string;
   refContactNumber: string;
 
-  // 9. Recruitment Information
   sourceOfOpening: string;
   referredBy: string;
   preferredRegion: string;
   expectedJoiningDate: string;
 
-  // 10. Medical / Declaration
   prevTerminated: boolean;
   physicalDisability: boolean;
   nervousDisorder: boolean;
@@ -133,7 +122,6 @@ export const initialCandidateData: CandidateFormData = {
   resumeFileObject: null,
   resumeUrl: null,
   profilePicture: null,
-
   nameAadhaar: '',
   gender: '',
   dateOfBirth: '',
@@ -143,7 +131,6 @@ export const initialCandidateData: CandidateFormData = {
   weight: '',
   bloodGroup: '',
   religionCaste: '',
-
   permHouseName: '',
   permPostOffice: '',
   permLandmark: '',
@@ -155,12 +142,10 @@ export const initialCandidateData: CandidateFormData = {
   presLandmark: '',
   presDistrict: '',
   presPinCode: '',
-
   aadhaarNumber: '',
   panNumber: '',
   drivingLicenseNumber: '',
   passportNumber: '',
-
   class10School: '',
   class10Board: '',
   class10Percentage: '',
@@ -179,27 +164,22 @@ export const initialCandidateData: CandidateFormData = {
   postGradCollege: '',
   postGradPercentage: '',
   postGradPassingYear: '',
-
   languagesRead: '',
   languagesWrite: '',
   languagesSpeak: '',
-
   previousExperience: false,
   prevCompanyName: '',
   prevPosition: '',
   totalExperience: '',
   expectedSalary: '',
-
   refRole: '',
   refName: '',
   refPanchayat: '',
   refContactNumber: '',
-
   sourceOfOpening: '',
   referredBy: '',
   preferredRegion: '',
   expectedJoiningDate: '',
-
   prevTerminated: false,
   physicalDisability: false,
   nervousDisorder: false,

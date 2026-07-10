@@ -56,29 +56,7 @@ Design spec under `docs/superpowers/specs/`. README: Storage env, curl examples,
 - Real `.env`: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.  
 - Private bucket `candidate-documents` + `alembic upgrade head`.  
 - Frontend must call `POST /candidates/{id}/resume` after create if a file was chosen.  
-- SPA: `VITE_USE_MOCK_AUTH=false`, `VITE_API_BASE_URL` → this API. (Done in dev integration)
-
----
-
-## 2026-07-09 (Frontend Integration & Git Scrub)
-
-Branch: `dev` (pushed).
-
-### Shipped
-
-**Git history scrub**
-Rewrote three commits to strip Cursor co-author tags. Removed the `.cursor` directory from version control. Added `.cursor` to `.gitignore`. Deleted the remote feature branches that carried the tainted commits.
-
-**Frontend candidate integration**
-Created `frontend/.env` to point the client to the local backend. Disabled mock authentication. Expanded `CandidateFormData` to hold the raw `File` object for resumes. Updated `BasicInfoForm.tsx` to capture the `File` object from the input event. Added an `uploadResume` function to `api/candidates.ts`. The function posts `multipart/form-data` to `/candidates/{id}/resume`. Modified `AddCandidateWizard.tsx` to bundle extra form fields into the `application_data` JSON payload. The wizard awaits candidate creation and uploads the resume file.
-
-### Decisions
-
-| Choice | Why |
-|--------|-----|
-| Strip Cursor tags via `git filter-branch` | Maintain clean, human-only commit history. |
-| Delete remote feature branches | Prevent tainted commits from surviving on the remote server. |
-| Store extra fields in `application_data` | Avoid schema migrations for every wizard field. |
+- SPA: `VITE_USE_MOCK_AUTH=false`, `VITE_API_BASE_URL` → this API.
 
 ---
 
@@ -103,3 +81,4 @@ Branch: `feature/...` (local / pushed). Scope: backend / …
 
 -
 ```
++
