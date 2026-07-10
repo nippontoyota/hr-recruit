@@ -16,7 +16,7 @@ class CandidateCreate(BaseModel):
     full_name: str
     phone: str
     email: str | None = None
-    source_channel: SourceChannel
+    source_channel: SourceChannel = SourceChannel.OTHER
     branch_location: str | None = Field(
         default=None,
         validation_alias=AliasChoices("branch_location", "branch_name"),

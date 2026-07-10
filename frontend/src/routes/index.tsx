@@ -16,6 +16,8 @@ const NotFound = lazy(() => import('../pages/NotFound'));
 const Pipeline = lazy(() => import('../pages/Pipeline'));
 const Users = lazy(() => import('../pages/Users'));
 const Reports = lazy(() => import('../pages/Reports'));
+const ApplyForm = lazy(() => import('../pages/candidates/ApplyForm'));
+const ApplyFullForm = lazy(() => import('../pages/candidates/ApplyFullForm'));
 
 const SuspenseFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -33,6 +35,22 @@ export const router = createBrowserRouter([
     element: (
       <PageSuspense>
         <Login />
+      </PageSuspense>
+    ),
+  },
+  {
+    path: '/apply',
+    element: (
+      <PageSuspense>
+        <ApplyForm />
+      </PageSuspense>
+    ),
+  },
+  {
+    path: '/apply/full',
+    element: (
+      <PageSuspense>
+        <ApplyFullForm />
       </PageSuspense>
     ),
   },

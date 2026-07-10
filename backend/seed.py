@@ -15,7 +15,7 @@ def seed():
         if db.scalar(select(User).where(User.email == "admin@nippon.test")) is None:
             return
         admin = db.scalar(select(User).where(User.email == "admin@nippon.test"))
-        hr = db.scalar(select(User).where(User.email == "local@nippon.test"))
+        hr = db.scalar(select(User).where(User.email == "hr@nippon.test"))
         if admin is None or hr is None:
             return
 

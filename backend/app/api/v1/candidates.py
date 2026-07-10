@@ -177,15 +177,112 @@ def _document_out(doc: Document) -> DocumentOut:
     )
 
 
+@router.post("/public-apply", response_model=CandidateOut, status_code=201)
+def public_apply(
+    body: CandidateCreate,
+    hr_id: UUID,
+    db: Session = Depends(get_db),
+):
+    hr_user = db.get(User, hr_id)
+    if not hr_user or hr_user.role != UserRole.LOCAL_HR:
+        raise HTTPException(status_code=400, detail="Invalid HR recruiter ID.")
+    
+    body = body.model_copy(update={"assigned_hr_user_id": hr_id})
+    row = create_candidate(db, body, hr_id)
+    return to_candidate_out(row, False)
+
+
+@router.get("/public-basic/{candidate_id}", response_model=CandidateOut)
+def public_basic(
+    candidate_id: UUID,
+    db: Session = Depends(get_db),
+):
+    row = db.get(Candidate, candidate_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+    if row.current_stage != PipelineStage.NEW_APPLICATION:
+        raise HTTPException(status_code=400, detail="Candidate is not in basic phase.")
+    return to_candidate_out(row, candidate_id in resume_candidate_ids(db, [candidate_id]))
+
+
+@router.post("/public-update-basic/{candidate_id}", response_model=CandidateOut)
+def public_update_basic(
+    candidate_id: UUID,
+    body: CandidateCreate,
+    db: Session = Depends(get_db),
+):
+    row = db.get(Candidate, candidate_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+    if row.current_stage != PipelineStage.NEW_APPLICATION:
+        raise HTTPException(status_code=400, detail="Candidate basic details can only be updated in NEW_APPLICATION stage.")
+    
+    row.full_name = body.full_name
+    row.phone = body.phone
+    row.email = body.email
+    row.source_channel = body.source_channel
+    if body.branch_location:
+        row.branch_location = body.branch_location
+    
+    db.commit()
+    db.refresh(row)
+    return to_candidate_out(row, candidate_id in resume_candidate_ids(db, [candidate_id]))
+
+
+@router.get("/public-full-status/{candidate_id}", response_model=dict)
+def public_full_status(
+    candidate_id: UUID,
+    db: Session = Depends(get_db),
+):
+    row = db.get(Candidate, candidate_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+    return {
+        "full_name": row.full_name,
+        "is_awaiting_full_fill": row.current_stage == PipelineStage.AWAITING_PRE_INTERVIEW_FORM_FILL
+    }
+
+
+@router.post("/public-apply-full/{candidate_id}", response_model=CandidateOut)
+def public_apply_full(
+    candidate_id: UUID,
+    application_data: dict,
+    db: Session = Depends(get_db),
+):
+    row = db.get(Candidate, candidate_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+    if row.current_stage != PipelineStage.AWAITING_PRE_INTERVIEW_FORM_FILL:
+        raise HTTPException(status_code=400, detail="Candidate is not in AWAITING_PRE_INTERVIEW_FORM_FILL stage.")
+    
+    row.application_data = application_data
+    db.add(
+        StageHistory(
+            candidate_id=row.id,
+            from_stage=row.current_stage,
+            to_stage=PipelineStage.AWAITING_LOCAL_INTERVIEW,
+            changed_by_user_id=row.assigned_hr_user_id or row.id,
+            reason="Candidate submitted full pre-interview form",
+        )
+    )
+    row.current_stage = PipelineStage.AWAITING_LOCAL_INTERVIEW
+    db.commit()
+    db.refresh(row)
+    return to_candidate_out(row, candidate_id in resume_candidate_ids(db, [candidate_id]))
+
+
+
 @router.get("", response_model=list[CandidateOut])
 def list_candidates(
     stage: PipelineStage | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(UserRole.HEAD_OFFICE_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     q = select(Candidate).order_by(Candidate.created_at.desc())
     if stage:
         q = q.where(Candidate.current_stage == stage)
+    if user.role == UserRole.LOCAL_HR:
+        q = q.where(Candidate.assigned_hr_user_id == user.id)
     rows = list(db.scalars(q).all())
     with_resume = resume_candidate_ids(db, [row.id for row in rows])
     return [to_candidate_out(row, row.id in with_resume) for row in rows]
@@ -195,7 +292,7 @@ def list_candidates(
 def create(
     body: CandidateCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_active_user),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     if body.assigned_hr_user_id is None:
         body = body.model_copy(update={"assigned_hr_user_id": user.id})
@@ -207,11 +304,13 @@ def create(
 def get_one(
     id: UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_active_user),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     row = db.get(Candidate, id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
+    if user.role == UserRole.LOCAL_HR and row.assigned_hr_user_id != user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
 
 
@@ -220,11 +319,13 @@ async def upload_resume(
     id: UUID,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_active_user),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     row = db.get(Candidate, id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
+    if user.role == UserRole.LOCAL_HR and row.assigned_hr_user_id != user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
 
     ext = _resume_extension(file.filename)
     content_type = _validate_resume_content_type(file.content_type, ext)
@@ -277,10 +378,13 @@ async def upload_resume(
 def get_resume(
     id: UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_active_user),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
-    if not db.get(Candidate, id):
+    row = db.get(Candidate, id)
+    if not row:
         raise HTTPException(status_code=404, detail="Not found.")
+    if user.role == UserRole.LOCAL_HR and row.assigned_hr_user_id != user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
     doc = _get_resume_document(db, id)
     if not doc:
         raise HTTPException(status_code=404, detail="Resume not found.")
@@ -292,11 +396,13 @@ def move_stage(
     id: UUID,
     body: StageChange,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_active_user),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     row = db.get(Candidate, id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
+    if user.role == UserRole.LOCAL_HR and row.assigned_hr_user_id != user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
     payload = body.model_copy(update={"changed_by_user_id": user.id})
     updated = change_stage(db, row, payload)
     return to_candidate_out(updated, id in resume_candidate_ids(db, [id]))
@@ -306,8 +412,11 @@ def move_stage(
 def history(
     id: UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_active_user),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
-    if not db.get(Candidate, id):
+    row = db.get(Candidate, id)
+    if not row:
         raise HTTPException(status_code=404, detail="Not found.")
+    if user.role == UserRole.LOCAL_HR and row.assigned_hr_user_id != user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
     return list(db.scalars(select(StageHistory).where(StageHistory.candidate_id == id).order_by(StageHistory.created_at)))

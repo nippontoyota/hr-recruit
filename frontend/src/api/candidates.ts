@@ -99,3 +99,42 @@ export const uploadResume = async (candidateId: string, file: File): Promise<any
   });
   return response.data;
 };
+
+export const publicApplyCandidate = async (candidateData: any, hrId: string): Promise<Candidate> => {
+  const response = await api.post(`/candidates/public-apply?hr_id=${hrId}`, candidateData);
+  return response.data;
+};
+
+export const getRecruiterPublic = async (hrId: string): Promise<{ full_name: string; branch_location?: string }> => {
+  const response = await api.get(`/auth/users/${hrId}/public`);
+  return response.data;
+};
+
+export const publicGetBasicCandidate = async (candidateId: string): Promise<Candidate> => {
+  const response = await api.get(`/candidates/public-basic/${candidateId}`);
+  return response.data;
+};
+
+export const publicUpdateBasicCandidate = async (candidateId: string, data: any): Promise<Candidate> => {
+  const response = await api.post(`/candidates/public-update-basic/${candidateId}`, data);
+  return response.data;
+};
+
+export const publicGetFullStatus = async (candidateId: string): Promise<{ full_name: string; is_awaiting_full_fill: boolean }> => {
+  const response = await api.get(`/candidates/public-full-status/${candidateId}`);
+  return response.data;
+};
+
+export const publicApplyFullCandidate = async (candidateId: string, data: any): Promise<Candidate> => {
+  const response = await api.post(`/candidates/public-apply-full/${candidateId}`, data);
+  return response.data;
+};
+
+export const updateCandidateStage = async (candidateId: string, toStage: string, reason?: string): Promise<Candidate> => {
+  const response = await api.post(`/candidates/${candidateId}/stage`, { to_stage: toStage, reason });
+  return response.data;
+};
+
+
+
+

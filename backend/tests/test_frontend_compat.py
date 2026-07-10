@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_active_user
 from app.core.security import create_access_token, hash_password
 from app.main import app
-from app.models.enums import SourceChannel, UserRole
+from app.models.enums import PipelineStage, SourceChannel, UserRole
 from app.models.user import User
 from app.schemas.auth import TokenResponse, UserOut
 from app.schemas.candidate import CandidateCreate, CandidateOut
@@ -24,10 +24,7 @@ client = TestClient(app)
     ("role", "expected"),
     [
         (UserRole.ADMIN, "SUPER_ADMIN"),
-        (UserRole.HEAD_OFFICE_HR, "HR_EXECUTIVE"),
         (UserRole.LOCAL_HR, "HR"),
-        (UserRole.DEPARTMENT_HEAD, "DEPARTMENT_MANAGER"),
-        (UserRole.SALARY_TEAM, "GM"),
     ],
 )
 def test_role_for_frontend(role: UserRole, expected: str):
@@ -96,12 +93,12 @@ def test_user_out_maps_role():
         email="hq@nippon.test",
         hashed_password="x",
         full_name="HQ",
-        role=UserRole.HEAD_OFFICE_HR,
+        role=UserRole.LOCAL_HR,
         branch_location="Chennai",
         is_active=True,
     )
     out = UserOut.from_user(user)
-    assert out.role == "HR_EXECUTIVE"
+    assert out.role == "HR"
 
 
 def test_token_response_includes_token_alias():
@@ -109,7 +106,7 @@ def test_token_response_includes_token_alias():
         id=uuid4(),
         email="hq@nippon.test",
         full_name="HQ",
-        role="HR_EXECUTIVE",
+        role="HR",
         branch_location=None,
     )
     payload = TokenResponse(access_token="abc", token="abc", user=user)
@@ -124,7 +121,7 @@ def test_login_returns_frontend_role_and_token_alias():
         email="hq@nippon.test",
         hashed_password=hash_password("password123"),
         full_name="Head Office HR",
-        role=UserRole.HEAD_OFFICE_HR,
+        role=UserRole.LOCAL_HR,
         branch_location="Chennai HQ",
         is_active=True,
     )
@@ -140,7 +137,7 @@ def test_login_returns_frontend_role_and_token_alias():
         body = response.json()
         assert body["access_token"]
         assert body["token"] == body["access_token"]
-        assert body["user"]["role"] == "HR_EXECUTIVE"
+        assert body["user"]["role"] == "HR"
     finally:
         app.dependency_overrides.clear()
 
@@ -151,7 +148,7 @@ def test_create_candidate_accepts_linkedin_source():
         email="hq@nippon.test",
         hashed_password="x",
         full_name="HQ",
-        role=UserRole.HEAD_OFFICE_HR,
+        role=UserRole.LOCAL_HR,
         is_active=True,
     )
     created = MagicMock()
@@ -206,3 +203,121 @@ def test_jwt_embeds_frontend_role():
 
     payload = decode_token(token)
     assert payload["role"] == "SUPER_ADMIN"
+
+
+def test_public_apply():
+    hr_user = User(
+        id=uuid4(),
+        email="hr-recruiter@nippon.test",
+        hashed_password="x",
+        full_name="Recruiter",
+        role=UserRole.LOCAL_HR,
+        is_active=True,
+    )
+    created = MagicMock()
+    created.id = uuid4()
+    created.candidate_id = "NT-2026-00001"
+    created.full_name = "Public Candidate"
+    created.phone = "9999999999"
+    created.email = "candidate@example.com"
+    created.source_channel = SourceChannel.OTHER
+    created.current_stage = "NEW_APPLICATION"
+    created.branch_location = "Coimbatore"
+    created.application_data = {}
+    created.is_duplicate_flagged = False
+    created.duplicate_of_candidate_id = None
+    created.assigned_hr_user_id = hr_user.id
+    now = datetime.now(timezone.utc)
+    created.applied_at = now
+    created.created_at = now
+    created.updated_at = now
+
+    db = MagicMock()
+    def mock_get(model, id):
+        if model == User:
+            return hr_user
+        return None
+    db.get.side_effect = mock_get
+
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        with patch("app.api.v1.candidates.create_candidate", return_value=created) as create_mock:
+            response = client.post(
+                f"/api/v1/candidates/public-apply?hr_id={hr_user.id}",
+                json={
+                    "full_name": "Public Candidate",
+                    "phone": "9999999999",
+                    "email": "candidate@example.com",
+                    "source_channel": "Other",
+                    "branch_name": "Coimbatore",
+                },
+            )
+            assert response.status_code == 201, response.text
+            body = response.json()
+            assert body["candidate_id"] == "NT-2026-00001"
+            assert body["full_name"] == "Public Candidate"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_public_basic_endpoints():
+    from app.models.candidate import Candidate
+    candidate_id = uuid4()
+    now = datetime.now(timezone.utc)
+    candidate = Candidate(
+        id=candidate_id,
+        candidate_id="NT-2026-00002",
+        full_name="John Basic",
+        phone="1234567890",
+        email="john@example.com",
+        source_channel=SourceChannel.WALK_IN,
+        current_stage=PipelineStage.NEW_APPLICATION,
+        branch_location="Coimbatore",
+        application_data={},
+        is_duplicate_flagged=False,
+        applied_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+    
+    db = MagicMock()
+    db.get.return_value = candidate
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        # Test public_basic
+        response = client.get(f"/api/v1/candidates/public-basic/{candidate_id}")
+        assert response.status_code == 200
+        assert response.json()["full_name"] == "John Basic"
+
+        # Test public_update_basic
+        response = client.post(
+            f"/api/v1/candidates/public-update-basic/{candidate_id}",
+            json={
+                "full_name": "John Updated",
+                "phone": "9876543210",
+                "email": "john.upd@example.com",
+                "source_channel": "Indeed",
+            }
+        )
+        assert response.status_code == 200
+        assert candidate.full_name == "John Updated"
+        assert candidate.phone == "9876543210"
+        
+        # Test public_full_status
+        response = client.get(f"/api/v1/candidates/public-full-status/{candidate_id}")
+        assert response.status_code == 200
+        assert response.json()["is_awaiting_full_fill"] is False
+
+        # Transition candidate to AWAITING_PRE_INTERVIEW_FORM_FILL to test public_apply_full
+        candidate.current_stage = PipelineStage.AWAITING_PRE_INTERVIEW_FORM_FILL
+        response = client.post(
+            f"/api/v1/candidates/public-apply-full/{candidate_id}",
+            json={"education": "B.Tech"}
+        )
+        assert response.status_code == 200
+        assert candidate.current_stage == PipelineStage.AWAITING_LOCAL_INTERVIEW
+        assert candidate.application_data == {"education": "B.Tech"}
+    finally:
+        app.dependency_overrides.clear()
+
+

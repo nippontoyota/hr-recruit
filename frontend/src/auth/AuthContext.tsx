@@ -18,10 +18,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const MOCK_USERS: Record<string, User> = {
   'admin@nippon.test': { id: '1', email: 'admin@nippon.test', full_name: 'System Admin', role: 'SUPER_ADMIN' },
-  'hrexec@nippon.test': { id: '2', email: 'hrexec@nippon.test', full_name: 'HR Exec', role: 'HR_EXECUTIVE' },
   'hr@nippon.test': { id: '3', email: 'hr@nippon.test', full_name: 'HR Rep', role: 'HR' },
-  'dept@nippon.test': { id: '4', email: 'dept@nippon.test', full_name: 'Dept Manager', role: 'DEPARTMENT_MANAGER' },
-  'gm@nippon.test': { id: '5', email: 'gm@nippon.test', full_name: 'General Manager', role: 'GM' },
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {

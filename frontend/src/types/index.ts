@@ -1,18 +1,16 @@
 export type UserRole =
   | 'SUPER_ADMIN'
-  | 'HR_EXECUTIVE'
-  | 'HR'
-  | 'DEPARTMENT_MANAGER'
-  | 'GM';
+  | 'HR';
 
 /** Every role in the system — use when a route/nav item is accessible to all authenticated users. */
-export const ALL_ROLES: UserRole[] = ['SUPER_ADMIN', 'HR_EXECUTIVE', 'HR', 'DEPARTMENT_MANAGER', 'GM'];
+export const ALL_ROLES: UserRole[] = ['SUPER_ADMIN', 'HR'];
 
 /** Restricted to super-admins only. */
 export const ADMIN_ONLY: UserRole[] = ['SUPER_ADMIN'];
 
 export type PipelineStage =
   | 'NEW_APPLICATION'
+  | 'AWAITING_PRE_INTERVIEW_FORM_FILL'
   | 'AWAITING_LOCAL_INTERVIEW'
   | 'LOCAL_HR_REVIEW_COMPLETE'
   | 'AWAITING_HEAD_OFFICE_INTERVIEW'
