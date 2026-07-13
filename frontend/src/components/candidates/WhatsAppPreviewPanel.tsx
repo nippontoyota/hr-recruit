@@ -43,6 +43,16 @@ const EDITABLE_FIELDS: (keyof WhatsAppTemplateVars)[] = [
   'recruiterName',
 ];
 
+function renderWhatsAppFormatting(text: string) {
+  const parts = text.split(/\*(.*?)\*/g);
+  return parts.map((part, i) => {
+    if (i % 2 === 1) {
+      return <strong key={i} className="font-bold">{part}</strong>;
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
 function WhatsAppMessageBody({ text }: { text: string }) {
   const segments = splitMessageLinks(text);
 
@@ -63,7 +73,7 @@ function WhatsAppMessageBody({ text }: { text: string }) {
           );
         }
 
-        return <span key={`text-${index}`}>{segment}</span>;
+        return <span key={`text-${index}`}>{renderWhatsAppFormatting(segment)}</span>;
       })}
     </>
   );

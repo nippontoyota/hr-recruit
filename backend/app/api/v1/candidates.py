@@ -640,6 +640,10 @@ def submit_screening(
     screening.remarks = body.remarks
     screening.pending_reason = body.pending_reason
     screening.follow_up_date = body.follow_up_date
+    screening.visit_branch = body.visit_branch
+    screening.branch_visit_date = body.branch_visit_date
+    screening.maps_link = body.maps_link
+    screening.extra_instructions = body.extra_instructions
 
     log = ActivityLog(
         candidate_id=id,

@@ -10,18 +10,21 @@ export function stageLabel(stage: PipelineStage | string): string {
 export function stageColor(stage: PipelineStage): string {
   switch (stage) {
     case 'HIRED':
-      return 'bg-success/10 text-success border-success border-dashed';
+      return 'bg-emerald-100 text-emerald-700 border-emerald-300 border-dashed';
     case 'SCREENING':
+      return 'bg-sky-100 text-sky-700 border-sky-300 border-dashed';
     case 'CANDIDATE_FORM':
-      return 'bg-info/10 text-info border-info border-dashed';
+      return 'bg-purple-100 text-purple-700 border-purple-300 border-dashed';
     case 'HR_INTERVIEW':
+      return 'bg-indigo-100 text-indigo-700 border-indigo-300 border-dashed';
     case 'DEPARTMENT_INTERVIEW':
+      return 'bg-pink-100 text-pink-700 border-pink-300 border-dashed';
     case 'FINAL_APPROVAL':
-      return 'bg-primary/10 text-primary border-primary border-dashed';
+      return 'bg-teal-100 text-teal-700 border-teal-300 border-dashed';
     case 'REJECTED':
-      return 'bg-danger/10 text-danger border-danger border-dashed';
+      return 'bg-red-100 text-red-700 border-red-300 border-dashed';
     case 'ON_HOLD':
-      return 'bg-warning/10 text-warning border-warning border-dashed';
+      return 'bg-amber-100 text-amber-700 border-amber-300 border-dashed';
     default:
       return 'bg-background text-text-secondary border border-border';
   }
@@ -31,9 +34,10 @@ export function getStageBadgeVariant(stage: PipelineStage | string): BadgeProps[
   if (stage === 'REJECTED') return 'destructive';
   if (stage === 'HIRED') return 'success';
   if (stage === 'ON_HOLD') return 'warning';
-  if (stage === 'SCREENING' || stage === 'CANDIDATE_FORM') return 'info';
-  if (stage === 'HR_INTERVIEW' || stage === 'DEPARTMENT_INTERVIEW' || stage === 'FINAL_APPROVAL') {
-    return 'indigo';
-  }
+  if (stage === 'SCREENING') return 'sky';
+  if (stage === 'CANDIDATE_FORM') return 'purple';
+  if (stage === 'HR_INTERVIEW') return 'indigo';
+  if (stage === 'DEPARTMENT_INTERVIEW') return 'pink';
+  if (stage === 'FINAL_APPROVAL') return 'teal';
   return 'secondary';
 }

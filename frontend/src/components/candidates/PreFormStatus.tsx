@@ -21,9 +21,9 @@ function formatFieldKey(key: string): string {
 }
 
 function formatFieldValue(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '—';
+  if (value === null || value === undefined || value === '') return '-';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (Array.isArray(value)) return value.filter(Boolean).join(', ') || '—';
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ') || '-';
   return String(value);
 }
 
@@ -98,7 +98,7 @@ export function PreFormStatus({ candidate }: PreFormStatusProps) {
         <div className="hidden print-header mb-8 pb-4 border-b border-border">
           <h2 className="text-2xl font-bold mb-2">Application Form</h2>
           <p className="text-text-secondary">Candidate: {candidate.full_name}</p>
-          <p className="text-text-secondary text-sm">Submitted on: {candidate.pre_form_submitted_at ? new Date(candidate.pre_form_submitted_at).toLocaleDateString() : '—'}</p>
+          <p className="text-text-secondary text-sm">Submitted on: {candidate.pre_form_submitted_at ? new Date(candidate.pre_form_submitted_at).toLocaleDateString() : '-'}</p>
         </div>
 
         {formEntries.length > 0 ? (
