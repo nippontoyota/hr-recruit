@@ -20,25 +20,25 @@ export const PdfViewer = ({ url }: PdfViewerProps) => {
 
   return (
     <div className="w-full h-full bg-transparent overflow-y-auto custom-scrollbar flex flex-col items-center py-4 px-2 relative">
-      <Document 
-        file={url} 
+      <Document
+        file={url}
         onLoadSuccess={onDocumentLoadSuccess}
         loading={
           <div className="absolute inset-0 flex items-center justify-center bg-white z-10 rounded-xl">
-             <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
         }
         className="flex flex-col items-center max-w-full"
       >
         {Array.from(new Array(numPages), (_, index) => (
           <div key={`page_${index + 1}`} className="mb-6 shadow-md border border-border/30 max-w-full overflow-hidden">
-             <Page 
-               pageNumber={index + 1} 
-               renderTextLayer={true} 
-               renderAnnotationLayer={false}
-               width={480}
-               className="max-w-full h-auto"
-             />
+            <Page
+              pageNumber={index + 1}
+              renderTextLayer={true}
+              renderAnnotationLayer={false}
+              width={480}
+              className="max-w-full h-auto"
+            />
           </div>
         ))}
       </Document>

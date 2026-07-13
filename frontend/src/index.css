@@ -175,3 +175,33 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-header {
+    display: block !important;
+  }
+  .print-container {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .print-no-border {
+    border: none !important;
+    box-shadow: none !important;
+  }
+  .print-grid {
+    display: block !important;
+  }
+  .print-item {
+    margin-bottom: 1.5rem !important;
+    page-break-inside: avoid;
+  }
+}

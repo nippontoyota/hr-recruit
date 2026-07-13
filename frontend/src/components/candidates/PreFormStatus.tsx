@@ -1,9 +1,10 @@
-import { Button } from '../ui';
-import { Link2, CheckCircle2, Clock, Send } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Button, Input } from '../ui';
+import { CheckCircle2, Pencil, Printer, Save, X } from 'lucide-react';
 import type { Candidate } from '../../types';
 import { toast } from 'sonner';
 import { ResumeButton } from './ResumeButton';
-import { cn } from '../../lib/utils';
+import { updateCandidateRawData } from '../../api/candidates';
 
 interface PreFormStatusProps {
   candidate: Candidate;
@@ -27,16 +28,58 @@ function formatFieldValue(value: unknown): string {
 }
 
 export function PreFormStatus({ candidate }: PreFormStatusProps) {
+  const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<Record<string, any>>({});
+  const [isSaving, setIsSaving] = useState(false);
+
   const status = candidate.pre_form_status || 'NOT_SENT';
-  const rawData = candidate.profile?.raw_data ?? {};
-  const formEntries = Object.entries(rawData).filter(
-    ([key, value]) => !HIDDEN_RAW_KEYS.has(key) && value !== null && value !== undefined && value !== '' && typeof value !== 'object'
+  const [localRawData, setLocalRawData] = useState<Record<string, any>>(candidate.profile?.raw_data ?? {});
+  
+  useEffect(() => {
+    setLocalRawData(candidate.profile?.raw_data ?? {});
+  }, [candidate.profile?.raw_data]);
+
+  const formEntries = Object.entries(localRawData).filter(
+    ([key, value]) => !HIDDEN_RAW_KEYS.has(key) && value !== null && value !== undefined && typeof value !== 'object'
   );
+
+  const handleEditToggle = () => {
+    if (!isEditing) {
+      setEditData({ ...localRawData });
+    }
+    setIsEditing(!isEditing);
+  };
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      await updateCandidateRawData(candidate.id, editData);
+      toast.success('Application form updated successfully');
+      setLocalRawData({ ...editData });
+      setIsEditing(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to update application form');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleChange = (key: string, value: string) => {
+    setEditData((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
 
   if (status === 'SUBMITTED') {
     return (
-      <div className="py-8 w-full max-w-4xl mx-auto">
-        <div className="flex flex-col items-center mb-8">
+      <div className="py-8 w-full max-w-4xl mx-auto print-container">
+        <div className="flex flex-col items-center mb-8 no-print">
           <CheckCircle2 className="w-10 h-10 text-success mb-3" />
           <h3 className="text-2xl font-bold text-foreground">Form Submitted</h3>
           <p className="text-text-secondary mt-1">Pre-interview responses from the candidate</p>
@@ -51,18 +94,59 @@ export function PreFormStatus({ candidate }: PreFormStatusProps) {
           )}
         </div>
 
+        {/* Print Header Visible Only on Print */}
+        <div className="hidden print-header mb-8 pb-4 border-b border-border">
+          <h2 className="text-2xl font-bold mb-2">Application Form</h2>
+          <p className="text-text-secondary">Candidate: {candidate.full_name}</p>
+          <p className="text-text-secondary text-sm">Submitted on: {candidate.pre_form_submitted_at ? new Date(candidate.pre_form_submitted_at).toLocaleDateString() : '—'}</p>
+        </div>
+
         {formEntries.length > 0 ? (
-          <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-muted/30 border-b border-border">
+          <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden print-no-border">
+            <div className="px-6 py-4 bg-muted/30 border-b border-border flex items-center justify-between no-print">
               <h4 className="text-sm font-bold text-foreground uppercase tracking-wider">Application details</h4>
+              <div className="flex items-center gap-2">
+                {!isEditing ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={handlePrint} className="h-8">
+                      <Printer className="w-4 h-4 mr-1.5" />
+                      Print
+                    </Button>
+                    <Button variant="secondary" size="sm" onClick={handleEditToggle} className="h-8">
+                      <Pencil className="w-4 h-4 mr-1.5" />
+                      Edit
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={handleEditToggle} disabled={isSaving} className="h-8">
+                      <X className="w-4 h-4 mr-1.5" />
+                      Cancel
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={handleSave} disabled={isSaving} className="h-8">
+                      <Save className="w-4 h-4 mr-1.5" />
+                      {isSaving ? 'Saving...' : 'Save'}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6 p-6">
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6 p-6 print-grid">
               {formEntries.map(([key, value]) => (
-                <div key={key}>
+                <div key={key} className="print-item">
                   <p className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">
                     {formatFieldKey(key)}
                   </p>
-                  <p className="text-sm text-foreground font-medium break-words">{formatFieldValue(value)}</p>
+                  {isEditing ? (
+                    <Input 
+                      value={editData[key] !== undefined && editData[key] !== null ? String(editData[key]) : ''}
+                      onChange={(e) => handleChange(key, e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  ) : (
+                    <p className="text-sm text-foreground font-medium break-words">{formatFieldValue(value)}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -97,14 +181,8 @@ export function PreFormStatus({ candidate }: PreFormStatusProps) {
 
   return (
     <div className="py-8 max-w-2xl mx-auto w-full space-y-6">
-      <div className="page-card p-6">
-        <div className="flex items-start gap-3 mb-4">
-          <div className={cn(
-            'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
-            status === 'SENT' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-          )}>
-            {status === 'SENT' ? <Send className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
-          </div>
+      <div className="py-2">
+        <div className="mb-4">
           <div>
             <h3 className="text-lg font-bold text-foreground">Pre-interview form</h3>
             <p className="text-sm text-muted-foreground mt-0.5">
@@ -118,7 +196,7 @@ export function PreFormStatus({ candidate }: PreFormStatusProps) {
         {candidate.share_url ? (
           <div className="space-y-3">
             <label className="form-label flex items-center gap-1.5">
-              <Link2 className="w-3.5 h-3.5" />
+              <img src="/link-icon.png" alt="Link" className="w-4 h-4 object-contain" />
               Candidate form link
             </label>
             <div className="flex items-center gap-2 w-full bg-background border border-border p-1.5 rounded-xl">
@@ -132,11 +210,13 @@ export function PreFormStatus({ candidate }: PreFormStatusProps) {
                 variant="secondary"
                 onClick={() => {
                   navigator.clipboard.writeText(candidate.share_url!);
+                  setCopied(true);
                   toast.success('Link copied');
+                  setTimeout(() => setCopied(false), 2000);
                 }}
                 className="h-9 px-4 shrink-0"
               >
-                Copy
+                {copied ? 'Copied!' : 'Copy'}
               </Button>
             </div>
             {candidate.pre_form_sent_at && (

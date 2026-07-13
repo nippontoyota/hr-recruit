@@ -199,6 +199,9 @@ class PreFormApplicationData(BaseModel):
 
 
 
+class CandidateProfileRawDataUpdate(BaseModel):
+    raw_data: dict
+
 class CandidateProfileOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

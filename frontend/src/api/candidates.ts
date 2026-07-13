@@ -11,6 +11,11 @@ export const getCandidateById = async (id: string): Promise<Candidate | undefine
   return response.data;
 };
 
+export const updateCandidateRawData = async (id: string, rawData: Record<string, any>): Promise<Candidate> => {
+  const response = await api.patch(`/candidates/${id}/profile/raw_data`, { raw_data: rawData });
+  return response.data;
+};
+
 export const createCandidate = async (candidateData: Partial<Candidate>): Promise<Candidate> => {
   const response = await api.post('/candidates', candidateData);
   return response.data;

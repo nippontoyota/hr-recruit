@@ -67,8 +67,7 @@ function ResumeViewerModal({
     <Modal
       isOpen={!!target}
       onClose={onClose}
-      title={target ? `Resume — ${target.candidateName}` : 'Resume'}
-      description={doc?.file_name}
+      title="Resume"
       size="full"
     >
       <div className="h-full min-h-[70vh] flex flex-col">

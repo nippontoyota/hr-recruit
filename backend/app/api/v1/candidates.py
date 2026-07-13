@@ -19,7 +19,7 @@ from app.models.document import Document
 from app.models.enums import DocumentType, PipelineStage, UserRole, ActivityType, ScreeningStatus, FormStatus
 from app.models.stage_history import StageHistory
 from app.models.user import User
-from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, PreFormApplicationData, ScreeningSubmitResponse
+from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, PreFormApplicationData, ScreeningSubmitResponse, CandidateProfileRawDataUpdate
 from app.services import storage
 from app.services.workflow import WorkflowService
 
@@ -494,6 +494,39 @@ def get_one(
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
     assert_candidate_access(user, row)
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
+
+
+@router.patch("/{id}/profile/raw_data", response_model=CandidateOut)
+def update_profile_raw_data(
+    id: UUID,
+    body: CandidateProfileRawDataUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+):
+    row = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.id == id))
+    if not row:
+        raise HTTPException(status_code=404, detail="Not found.")
+    assert_candidate_access(user, row)
+
+    if not row.profile:
+        row.profile = CandidateProfile(candidate_id=row.id, raw_data=body.raw_data)
+        db.add(row.profile)
+    else:
+        # Merge dict or overwrite entirely? Since this is an edit of the whole form, overwrite.
+        row.profile.raw_data = body.raw_data
+
+    # Log the update
+    log = ActivityLog(
+        candidate_id=row.id,
+        activity_type=ActivityType.NOTE,
+        title="Application Form Updated",
+        description=f"Candidate's pre-interview application form was manually updated by HR.",
+        created_by_user_id=user.id,
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(row)
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
 
 

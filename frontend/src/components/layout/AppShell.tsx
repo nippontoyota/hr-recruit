@@ -15,7 +15,7 @@ export const AppShell = () => {
 
   return (
     <ResumeViewerProvider>
-      <div className="flex h-screen w-full bg-content overflow-hidden font-sans">
+      <div className="flex h-screen w-full bg-background overflow-hidden font-sans">
         <Sidebar
           isOpen={sidebarOpen}
           setOpen={setSidebarOpen}
@@ -63,7 +63,7 @@ export const AppShell = () => {
             </header>
           )}
 
-          <main className="flex-1 relative overflow-y-auto focus:outline-none bg-content">
+          <main className="flex-1 relative overflow-y-auto focus:outline-none bg-background">
             <div
               className={
                 isCandidateProfile

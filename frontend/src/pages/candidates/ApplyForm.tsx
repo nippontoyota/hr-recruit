@@ -4,6 +4,8 @@ import { getRecruiterPublic, publicApplyCandidate, publicGetBasicCandidate, publ
 import { LoadingSpinner, Button, Input, Select } from '../../components/ui';
 import { UploadCloud } from 'lucide-react';
 import { digitsOnly, validateResumeFile } from '../../lib/validation';
+import { CheckCircle2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { validateBasicCandidateForm } from '../../lib/validatePreForm';
 import { PublicShell } from '../../components/layout/PublicShell';
 
@@ -156,22 +158,51 @@ export default function ApplyForm() {
   if (submitSuccess) {
     return (
       <PublicShell>
-        <div className="text-center py-8">
-          <div className="status-icon-success">
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-            </svg>
+        <motion.div 
+          className="text-center py-16 sm:py-24 max-w-lg mx-auto px-6"
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="relative inline-flex items-center justify-center mb-6">
+            <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full w-24 h-24 mx-auto animate-pulse"></div>
+            <motion.div
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2, type: "spring", stiffness: 300, damping: 20 }}
+              className="relative z-10 w-20 h-20 bg-background rounded-full p-1.5 shadow-lg flex items-center justify-center"
+            >
+              <CheckCircle2 className="w-10 h-10 text-primary" strokeWidth={2.5} />
+            </motion.div>
           </div>
-          <h2 className="text-2xl font-semibold text-text-primary mb-2">Details submitted</h2>
-          <p className="text-text-secondary mb-8">
-            Thank you, <span className="font-medium text-text-primary">{submitSuccess.name}</span>. Your information has been saved.
-          </p>
-          <div className="py-5 border-y border-border mb-6 max-w-sm mx-auto">
-            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1">Candidate reference ID</p>
-            <p className="text-2xl font-semibold text-text-primary tabular-nums">{submitSuccess.candidateId}</p>
-          </div>
-          <p className="text-sm text-text-secondary">Keep this ID for your records. Your recruiter may contact you for next steps.</p>
-        </div>
+          
+          <motion.h2 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.4 }}
+            className="text-3xl font-bold tracking-tight text-text-primary mb-3"
+          >
+            Details submitted
+          </motion.h2>
+          
+          <motion.p 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4, duration: 0.4 }}
+            className="text-text-secondary text-lg leading-relaxed mb-8"
+          >
+            Thank you, <span className="font-semibold text-text-primary">{submitSuccess.name}</span>. Your information has been securely saved.
+          </motion.p>
+          
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6, duration: 0.4 }}
+            className="text-sm font-medium text-text-secondary px-4 py-3 bg-muted/50 rounded-xl"
+          >
+            Your recruiter will review your details and contact you for next steps.
+          </motion.p>
+        </motion.div>
       </PublicShell>
     );
   }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
-import { ArrowLeft, Mic, Pencil, Send } from 'lucide-react';
+import { ArrowLeft, Pencil, Send, Video, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCheck } from 'lucide-react';
 import type { Candidate } from '../../types';
 import { Button, Input, Modal } from '../ui';
 import {
@@ -141,49 +141,70 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col px-6 pb-3">
-          <div className="mx-auto flex min-h-0 w-full max-w-[400px] flex-1 flex-col">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[38px] border-[4px] border-[#343536] bg-[#efeae2] shadow-[0_18px_35px_rgba(17,24,39,0.18)]">
-              <div className="flex h-[58px] shrink-0 items-center gap-2 bg-[#08796b] px-3 text-white">
-                <ArrowLeft className="h-5 w-5 shrink-0" aria-hidden="true" />
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white">
-                  <img src="/favicon.svg" alt="" className="h-6 w-6 object-contain" />
+          <div className="mx-auto flex min-h-[640px] w-full max-w-[340px] flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[38px] border-[6px] border-[#18181b] bg-[#efeae2] shadow-[0_20px_40px_rgba(17,24,39,0.2)] relative">
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[20px] w-[110px] bg-[#18181b] rounded-b-[16px] z-20"></div>
+
+              <div className="flex h-[64px] shrink-0 items-center justify-between gap-1 bg-[#075E54] px-2 pt-4 text-white z-10 shadow-sm relative">
+                <div className="flex items-center gap-1 cursor-pointer">
+                  <div className="flex items-center text-white ml-0.5" aria-label="Back">
+                    <ArrowLeft className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  </div>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ml-0.5 border border-white/20">
+                    <img src="/toyota-HR-profile.jpeg" alt="" className="h-full w-full object-cover" />
+                  </div>
+                  <div className="min-w-0 text-left ml-2">
+                    <p className="truncate text-[15px] font-medium leading-tight">Nippon Toyota HR</p>
+                    <p className="text-[11px] leading-tight text-white/90">Official Business Account</p>
+                  </div>
                 </div>
-                <div className="min-w-0 text-left">
-                  <p className="truncate text-sm font-bold leading-tight">Nippon Toyota HR</p>
-                  <p className="text-[10px] leading-tight text-white/85">Official Business Account</p>
+                <div className="flex items-center gap-3.5 text-white mr-2">
+                  <Video className="h-5 w-5" fill="currentColor" strokeWidth={0} />
+                  <Phone className="h-[18px] w-[18px]" fill="currentColor" strokeWidth={0} />
+                  <MoreVertical className="h-5 w-5" />
                 </div>
               </div>
 
               <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#efeae2]">
                 <div
-                  className="pointer-events-none absolute inset-0 opacity-[0.12]"
+                  className="pointer-events-none absolute inset-0 opacity-[0.25]"
                   style={{
-                    backgroundImage:
-                      'radial-gradient(circle at 10px 10px, #6d665f 0 3px, transparent 3.5px)',
-                    backgroundSize: '28px 28px',
+                    backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")',
+                    backgroundSize: '300px',
+                    backgroundRepeat: 'repeat',
                   }}
                 />
 
-                <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 pb-3 pt-3">
-                  <div className="mx-auto mb-4 w-fit rounded-full border border-[#d3d9dc] bg-[#e5f4fb] px-4 py-1 text-[10px] font-medium text-[#53636b] shadow-sm">
+                <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-4 flex flex-col gap-3">
+                  <div className="mx-auto w-fit rounded-lg bg-[#E1F3FB] px-3 py-1.5 text-[11px] uppercase tracking-wide font-medium text-[#55656E] shadow-sm">
                     TODAY
                   </div>
 
-                  <div className="relative max-w-[94%] rounded-lg rounded-tl-none bg-white px-3 py-3 text-left text-[12px] leading-[1.55] text-[#111b21] shadow-sm">
-                    <span className="absolute -left-2 top-0 h-0 w-0 border-r-[9px] border-t-[9px] border-r-white border-t-transparent" />
-                    <div className="whitespace-pre-wrap break-words">
+                  <div className="mx-auto w-fit max-w-[85%] rounded-lg bg-[#FFF5C4] p-2 text-center text-[11.5px] leading-relaxed text-[#55656E] shadow-sm">
+                    <span className="opacity-90">Messages and calls are end-to-end encrypted. No one outside of this chat, not even WhatsApp, can read or listen to them.</span>
+                  </div>
+
+                  <div className="relative max-w-[88%] rounded-xl rounded-tl-sm bg-white px-2.5 py-2 text-left text-[14.5px] leading-[1.3] text-[#111b21] shadow-sm mt-1">
+                    <span className="absolute -left-2 top-0 h-0 w-0 border-r-[10px] border-t-[12px] border-r-white border-t-transparent" />
+                    <div className="whitespace-pre-wrap break-words pb-4">
                       <WhatsAppMessageBody text={message} />
                     </div>
-                    <p className="mt-1 text-right text-[9px] text-[#667781]">{format(new Date(), 'h:mm a')}</p>
+                    <div className="absolute bottom-1 right-2 flex items-center gap-1">
+                      <p className="text-[10px] text-[#667781] whitespace-nowrap">{format(new Date(), 'h:mm a')}</p>
+                      <CheckCheck className="h-[15px] w-[15px] text-[#34B7F1]" strokeWidth={2.5} />
+                    </div>
                   </div>
                 </div>
 
-                <div className="relative z-10 flex shrink-0 items-center gap-2 bg-[#f0f2f5] p-2">
-                  <div className="flex h-9 flex-1 items-center rounded-full bg-white px-4 text-left text-xs text-[#8b98a1]">
-                    Type a message
+                <div className="relative z-10 flex shrink-0 items-end gap-1.5 p-2 bg-transparent pb-3">
+                  <div className="flex min-h-[42px] flex-1 items-center gap-2 rounded-full bg-white px-2 py-1 shadow-sm">
+                    <div className="p-1.5 text-[#8696A0]"><Smile className="h-[22px] w-[22px]" /></div>
+                    <div className="flex-1 text-[15px] text-[#8696A0] px-1 py-1">Message</div>
+                    <div className="p-1.5 text-[#8696A0]"><Paperclip className="h-5 w-5" /></div>
+                    <div className="p-1.5 text-[#8696A0]"><Camera className="h-[22px] w-[22px]" /></div>
                   </div>
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#00a884] text-white">
-                    <Mic className="h-4 w-4" aria-hidden="true" />
+                  <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-[#00a884] text-white shadow-sm mb-[2px]">
+                    <Send className="h-[18px] w-[18px] mr-0.5" fill="currentColor" strokeWidth={0} />
                   </div>
                 </div>
               </div>
@@ -241,7 +262,10 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
             ))}
 
             <div className="sm:col-span-2">
-              <label className="form-label">Candidate form link</label>
+              <label className="form-label flex items-center gap-1.5">
+                <img src="/link-icon.png" alt="Link" className="w-4 h-4 object-contain" />
+                Candidate form link
+              </label>
               <Input value={candidate.share_url || draft.formLink} readOnly disabled />
               <p className="mt-1.5 text-xs text-muted-foreground">Uses this candidate&apos;s generated form link.</p>
             </div>
