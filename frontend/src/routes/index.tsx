@@ -1,21 +1,23 @@
-import { createBrowserRouter } from 'react-router-dom';
+/* eslint-disable react-refresh/only-export-components */
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { ProtectedRoute } from '../components/guards/ProtectedRoute';
 import { RoleRoute } from '../components/guards/RoleRoute';
 import { LoadingSpinner } from '../components/ui';
 import { ALL_ROLES, ADMIN_ONLY } from '../types';
+import { ErrorBoundary } from '../components/layout/ErrorBoundary';
 
 // Lazy-loaded pages for code splitting
 const Login = lazy(() => import('../pages/Login'));
-const Dashboard = lazy(() => import('../pages/Dashboard'));
 const CandidatesList = lazy(() => import('../pages/candidates/CandidatesList'));
 const CandidateProfile = lazy(() => import('../pages/candidates/CandidateProfile'));
 const Settings = lazy(() => import('../pages/Settings'));
 const NotFound = lazy(() => import('../pages/NotFound'));
-const Pipeline = lazy(() => import('../pages/Pipeline'));
 const Users = lazy(() => import('../pages/Users'));
 const Reports = lazy(() => import('../pages/Reports'));
+const ApplyForm = lazy(() => import('../pages/candidates/ApplyForm'));
+const PreFormPage = lazy(() => import('../pages/candidates/PreFormPage'));
 
 const SuspenseFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -30,6 +32,7 @@ const PageSuspense = ({ children }: { children: React.ReactNode }) => (
 export const router = createBrowserRouter([
   {
     path: '/login',
+    errorElement: <ErrorBoundary />,
     element: (
       <PageSuspense>
         <Login />
@@ -37,7 +40,26 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: '/apply',
+    errorElement: <ErrorBoundary />,
+    element: (
+      <PageSuspense>
+        <ApplyForm />
+      </PageSuspense>
+    ),
+  },
+  {
+    path: '/pre-form/:token',
+    errorElement: <ErrorBoundary />,
+    element: (
+      <PageSuspense>
+        <PreFormPage />
+      </PageSuspense>
+    ),
+  },
+  {
     path: '/',
+    errorElement: <ErrorBoundary />,
     element: (
       <ProtectedRoute>
         <AppShell />
@@ -46,11 +68,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: (
-          <PageSuspense>
-            <Dashboard />
-          </PageSuspense>
-        ),
+        element: <Navigate to="/candidates" replace />,
       },
       {
         path: 'candidates',
@@ -68,16 +86,6 @@ export const router = createBrowserRouter([
           <RoleRoute allowed={ALL_ROLES}>
             <PageSuspense>
               <CandidateProfile />
-            </PageSuspense>
-          </RoleRoute>
-        ),
-      },
-      {
-        path: 'pipeline',
-        element: (
-          <RoleRoute allowed={ALL_ROLES}>
-            <PageSuspense>
-              <Pipeline />
             </PageSuspense>
           </RoleRoute>
         ),

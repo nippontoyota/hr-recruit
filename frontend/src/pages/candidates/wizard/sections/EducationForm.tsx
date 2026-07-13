@@ -62,6 +62,45 @@ export const EducationForm = ({ data, update }: EducationFormProps) => {
           <Input type="number" placeholder="Passing Year" value={data.postGradPassingYear} onChange={(e) => update('postGradPassingYear', e.target.value)} />
         </div>
       </div>
+      {/* Languages */}
+      <div className="space-y-4">
+        <h4 className="text-md font-medium text-text-primary border-b border-border pb-2">Languages Known</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1">
+              Languages to Read <span className="text-danger">*</span>
+            </label>
+            <p className="text-xs text-text-secondary mb-3">Languages you can read.</p>
+            <Input
+              value={data.languagesRead}
+              onChange={(e) => update('languagesRead', e.target.value)}
+              placeholder="e.g. English, Malayalam"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1">
+              Languages to Write <span className="text-danger">*</span>
+            </label>
+            <p className="text-xs text-text-secondary mb-3">Languages you can write.</p>
+            <Input
+              value={data.languagesWrite}
+              onChange={(e) => update('languagesWrite', e.target.value)}
+              placeholder="e.g. English"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1">
+              Languages to Speak <span className="text-danger">*</span>
+            </label>
+            <p className="text-xs text-text-secondary mb-3">Languages you can speak fluently.</p>
+            <Input
+              value={data.languagesSpeak}
+              onChange={(e) => update('languagesSpeak', e.target.value)}
+              placeholder="e.g. English, Malayalam, Hindi"
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
