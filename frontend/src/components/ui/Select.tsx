@@ -66,7 +66,7 @@ export const Select = forwardRef<HTMLDivElement, SelectProps>(
         <div
           ref={ref as any}
           className={cn(
-            "flex h-10 w-full items-center justify-between rounded-[10px] border border-border bg-surface px-3 py-1 text-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent",
+            "flex h-10 w-full items-center justify-between rounded-lg border border-border bg-surface px-3 py-1 text-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary",
             error && "border-danger text-danger focus:ring-danger",
             disabled && "cursor-not-allowed opacity-50",
             className
@@ -78,7 +78,7 @@ export const Select = forwardRef<HTMLDivElement, SelectProps>(
         </div>
 
         {isOpen && !disabled && (
-          <div className="absolute z-[9999] mt-1 max-h-60 w-full overflow-auto rounded-[10px] border border-border bg-surface shadow-md">
+          <div className="absolute z-[var(--z-dropdown)] mt-1 max-h-60 w-full overflow-auto rounded-lg border border-border bg-surface shadow-md">
             {options.filter(opt => opt.value !== '').map((option, index) => (
               <div
                 key={index}

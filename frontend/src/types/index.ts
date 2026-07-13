@@ -7,9 +7,6 @@ export type UserRole =
 /** Every role in the system — use when a route/nav item is accessible to all authenticated users. */
 export const ALL_ROLES: UserRole[] = ['SUPER_ADMIN', 'HR', 'MANAGER', 'GM'];
 
-/** Restricted to super-admins only. */
-export const ADMIN_ONLY: UserRole[] = ['SUPER_ADMIN'];
-
 export type PipelineStage =
   | 'SCREENING'
   | 'CANDIDATE_FORM'
@@ -96,36 +93,4 @@ export interface CandidateProfile {
   raw_data?: Record<string, any>;
   created_at: string;
   updated_at: string;
-}
-
-export interface ActivityLog {
-  id: string;
-  candidate_id: string;
-  activity_type: string;
-  title: string;
-  description: string;
-  created_at: string;
-}
-
-export interface Communication {
-  id: string;
-  candidate_id: string;
-  type: 'WHATSAPP' | 'EMAIL' | 'PHONE_CALL';
-  direction: 'INCOMING' | 'OUTGOING';
-  status: 'PENDING' | 'SENT' | 'DELIVERED' | 'FAILED' | 'READ';
-  subject?: string;
-  content_preview: string;
-  created_at: string;
-}
-
-export interface FollowUp {
-  id: string;
-  candidate_id: string;
-  title: string;
-  description?: string;
-  due_at: string;
-  priority: 'LOW' | 'MEDIUM' | 'HIGH';
-  status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
-  assigned_to?: string;
-  created_at: string;
 }

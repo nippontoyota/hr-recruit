@@ -5,7 +5,7 @@ import { Button, Modal, LoadingSpinner, EmptyState, Badge } from '../../componen
 import { Plus, Link, RefreshCw, Trash } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { getCandidates, deleteCandidate } from '../../api/candidates';
-import { getStageBadgeVariant } from '../../lib/utils';
+import { getStageBadgeVariant, stageLabel } from '../../lib/stages';
 import type { Candidate } from '../../types';
 import { AddCandidateForm } from '../../components/candidates/AddCandidateForm';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
@@ -72,6 +72,7 @@ export default function CandidatesList() {
     <>
       <PageHeader
         title="Candidates"
+        description="All applicants linked to your recruiter profile. Click a row to open the full profile and manage pipeline stages."
         action={
           <div className="flex gap-3">
             <Button variant="secondary" onClick={handleCopyLink}>
@@ -104,23 +105,23 @@ export default function CandidatesList() {
           />
         </div>
       ) : (
-        <div className="bg-surface border border-border rounded-[12px] overflow-hidden shadow-sm">
+        <div className="page-card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse whitespace-nowrap">
-              <thead className="bg-muted/30">
-                <tr className="border-b border-border text-[11px] font-bold text-text-secondary uppercase tracking-wider">
-                  <th className="px-4 py-3 sticky top-0 bg-muted/30">Candidate</th>
-                  <th className="px-4 py-3 sticky top-0 bg-muted/30">Position</th>
-                  <th className="px-4 py-3 sticky top-0 bg-muted/30">Stage</th>
-                  <th className="px-4 py-3 sticky top-0 bg-muted/30">Source</th>
-                  <th className="px-4 py-3 sticky top-0 bg-muted/30 text-right">Actions</th>
+            <table className="data-table w-full text-left border-collapse whitespace-nowrap">
+              <thead>
+                <tr>
+                  <th>Candidate</th>
+                  <th>Position</th>
+                  <th>Stage</th>
+                  <th>Source</th>
+                  <th className="text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border bg-surface text-sm text-text-primary">
+              <tbody>
                 {candidates.map((candidate) => (
                   <tr
                     key={candidate.id}
-                    className="hover:bg-muted/50 transition-colors cursor-pointer group"
+                    className="cursor-pointer group"
                     onClick={() => navigate(`/candidates/${candidate.id}`)}
                   >
                     <td className="px-4 py-3">
@@ -133,8 +134,8 @@ export default function CandidatesList() {
                       {candidate.position_applied_for || '—'}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge variant={getStageBadgeVariant(candidate.current_stage) as any} className="font-semibold px-2.5 py-0.5 rounded-[10px]">
-                        {candidate.current_stage.replace(/_/g, ' ')}
+                      <Badge variant={getStageBadgeVariant(candidate.current_stage)} className="font-semibold px-2.5 py-0.5 rounded-lg">
+                        {stageLabel(candidate.current_stage)}
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-text-secondary">
@@ -151,7 +152,7 @@ export default function CandidatesList() {
                           variant="icon"
                           onClick={(e) => e.stopPropagation()}
                         />
-                        {['SUPER_ADMIN', 'ADMIN', 'HR'].includes(user?.role as string) ? (
+                        {['SUPER_ADMIN', 'HR'].includes(user?.role as string) ? (
                           <button
                             type="button"
                             className="p-1.5 text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors rounded-[10px] focus:outline-none"

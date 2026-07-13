@@ -25,6 +25,7 @@ import {
   STUDY_MODES,
   OPENING_SOURCES,
   REF_ROLES,
+  SOURCES,
 } from './validation';
 
 export function validateBasicCandidateForm(input: {
@@ -36,8 +37,6 @@ export function validateBasicCandidateForm(input: {
   source?: string;
   sourceRequired?: boolean;
 }): string | null {
-  const sources = ['WALK_IN', 'INDEED', 'REFERRAL', 'CAMPUS', 'OTHER'];
-
   const checks: ValidationResult[] = [
     validateFullName(input.fullName),
     validatePhone(input.phone),
@@ -46,9 +45,9 @@ export function validateBasicCandidateForm(input: {
   ];
 
   if (input.sourceRequired) {
-    checks.push(validateSelect(input.source ?? '', sources, 'Source'));
+    checks.push(validateSelect(input.source ?? '', [...SOURCES], 'Source'));
   } else if (input.source?.trim()) {
-    checks.push(validateSelect(input.source, sources, 'Source'));
+    checks.push(validateSelect(input.source, [...SOURCES], 'Source'));
   }
 
   return firstError(...checks);

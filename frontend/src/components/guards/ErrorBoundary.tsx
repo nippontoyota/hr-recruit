@@ -5,7 +5,6 @@ import { AlertTriangle } from 'lucide-react';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
-  fallback?: ReactNode;
 }
 
 interface ErrorBoundaryState {
@@ -13,10 +12,6 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-/**
- * Catches render-time errors and displays a recovery UI instead of white-screening.
- * Wrap around top-level routes or critical component subtrees.
- */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -28,8 +23,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log to an error reporting service in production
-    console.error('[ErrorBoundary] Uncaught error:', error, errorInfo);
+    console.error('[ErrorBoundary]', error, errorInfo);
   }
 
   private handleReset = () => {
@@ -38,10 +32,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render() {
     if (this.state.hasError) {
-      if (this.props.fallback) {
-        return this.props.fallback;
-      }
-
       return (
         <div className="min-h-[400px] flex items-center justify-center p-6">
           <EmptyState
@@ -53,7 +43,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             }
             action={
               <Button variant="secondary" onClick={this.handleReset}>
-                Try Again
+                Try again
               </Button>
             }
             className="max-w-md w-full"

@@ -1,42 +1,45 @@
-import { useState } from 'react';
 import { Button } from '../ui';
-import { sendPreForm } from '../../api/candidates';
-import { Send, CheckCircle2 } from 'lucide-react';
+import { Link2, CheckCircle2, Clock, Send } from 'lucide-react';
 import type { Candidate } from '../../types';
 import { toast } from 'sonner';
 import { ResumeButton } from './ResumeButton';
+import { cn } from '../../lib/utils';
 
 interface PreFormStatusProps {
   candidate: Candidate;
-  onUpdate: () => void;
 }
 
-export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
-  const [isSending, setIsSending] = useState(false);
+const HIDDEN_RAW_KEYS = new Set(['whatsapp_invite', 'resumeFileObject']);
 
-  const handleSendForm = async () => {
-    setIsSending(true);
-    try {
-      await sendPreForm(candidate.id);
-      toast.success('Pre-interview form link generated');
-      onUpdate();
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to generate link');
-    } finally {
-      setIsSending(false);
-    }
-  };
+function formatFieldKey(key: string): string {
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
+    .replace(/^./, (s) => s.toUpperCase())
+    .trim();
+}
 
+function formatFieldValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ') || '—';
+  return String(value);
+}
+
+export function PreFormStatus({ candidate }: PreFormStatusProps) {
   const status = candidate.pre_form_status || 'NOT_SENT';
+  const rawData = candidate.profile?.raw_data ?? {};
+  const formEntries = Object.entries(rawData).filter(
+    ([key, value]) => !HIDDEN_RAW_KEYS.has(key) && value !== null && value !== undefined && value !== '' && typeof value !== 'object'
+  );
 
   if (status === 'SUBMITTED') {
     return (
       <div className="py-8 w-full max-w-4xl mx-auto">
         <div className="flex flex-col items-center mb-8">
           <CheckCircle2 className="w-10 h-10 text-success mb-3" />
-          <h3 className="text-2xl font-bold text-foreground">Form Submitted Successfully</h3>
-          <p className="text-text-secondary mt-1">Candidate's pre-interview form responses</p>
+          <h3 className="text-2xl font-bold text-foreground">Form Submitted</h3>
+          <p className="text-text-secondary mt-1">Pre-interview responses from the candidate</p>
           {candidate.has_resume && (
             <div className="mt-4">
               <ResumeButton
@@ -47,97 +50,109 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
             </div>
           )}
         </div>
-        
-        {candidate.profile ? (
+
+        {formEntries.length > 0 ? (
           <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
             <div className="px-6 py-4 bg-muted/30 border-b border-border">
-              <h4 className="text-sm font-bold text-foreground uppercase tracking-wider">Candidate Details</h4>
+              <h4 className="text-sm font-bold text-foreground uppercase tracking-wider">Application details</h4>
             </div>
-            
-            {candidate.profile.raw_data && Object.keys(candidate.profile.raw_data).length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6 p-6">
-                {Object.entries(candidate.profile.raw_data).map(([key, value]) => {
-                  if (value === null || value === undefined || value === '' || typeof value === 'object' || key === 'resumeFileObject') return null;
-                  
-                  // Make keys readable: "permHouseName" -> "Perm House Name"
-                  const readableKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                  
-                  return (
-                    <div key={key}>
-                      <p className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">{readableKey}</p>
-                      <p className="text-sm text-foreground font-medium">{String(value)}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 p-6">
-                <div>
-                  <p className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">Current Location</p>
-                  <p className="text-sm text-foreground font-medium">{candidate.profile.current_location || '—'}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6 p-6">
+              {formEntries.map(([key, value]) => (
+                <div key={key}>
+                  <p className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">
+                    {formatFieldKey(key)}
+                  </p>
+                  <p className="text-sm text-foreground font-medium break-words">{formatFieldValue(value)}</p>
                 </div>
-                <div>
-                  <p className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">Experience Level</p>
-                  <p className="text-sm text-foreground font-medium">{candidate.profile.experience_level || '—'}</p>
+              ))}
+            </div>
+          </div>
+        ) : candidate.profile ? (
+          <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
+            <div className="px-6 py-4 bg-muted/30 border-b border-border">
+              <h4 className="text-sm font-bold text-foreground uppercase tracking-wider">Profile summary</h4>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 p-6">
+              {[
+                ['Current location', candidate.profile.current_location],
+                ['Experience level', candidate.profile.experience_level],
+                ['Total experience', candidate.profile.total_experience],
+                ['Current company', candidate.profile.current_company],
+                ['Expected salary', candidate.profile.expected_salary],
+                ['Joining date', candidate.profile.joining_date],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <p className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">{label}</p>
+                  <p className="text-sm text-foreground font-medium">{formatFieldValue(value)}</p>
                 </div>
-                <div>
-                  <p className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">Total Experience</p>
-                  <p className="text-sm text-foreground font-medium">{candidate.profile.total_experience || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">Current/Previous Company</p>
-                  <p className="text-sm text-foreground font-medium">{candidate.profile.current_company || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">Expected Salary</p>
-                  <p className="text-sm text-foreground font-medium">{candidate.profile.expected_salary || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">Expected Joining Date</p>
-                  <p className="text-sm text-foreground font-medium">{candidate.profile.joining_date || '—'}</p>
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         ) : (
-          <p className="text-text-secondary text-center">Candidate's pre-interview form responses are missing.</p>
+          <p className="text-text-secondary text-center">Form responses are not available yet.</p>
         )}
       </div>
     );
   }
 
   return (
-    <div className="py-12 max-w-2xl mx-auto flex flex-col items-center justify-center">
-      {(!candidate.pre_form_status || candidate.pre_form_status === 'NOT_SENT') && !candidate.share_url && (
-        <Button variant="primary" onClick={handleSendForm} isLoading={isSending} className="rounded-full px-8 shadow-md h-12 text-base font-bold">
-          <Send className="w-5 h-5 mr-2" />
-          Generate Form Link
-        </Button>
-      )}
-      
-      {candidate.share_url && (
-        <div className="w-full max-w-lg">
-          <label className="block text-sm font-bold text-foreground mb-4 text-center">Copy and share this link with the candidate</label>
-          <div className="flex items-center gap-2 w-full bg-background border-2 border-border p-1.5 rounded-xl shadow-sm">
-            <input 
-              type="text" 
-              readOnly 
-              value={candidate.share_url}
-              className="flex-1 bg-transparent border-none px-4 text-sm font-mono text-muted-foreground focus:outline-none min-w-0"
-            />
-            <Button 
-              variant="secondary" 
-              onClick={() => {
-                navigator.clipboard.writeText(candidate.share_url!);
-                toast.success('Copied to clipboard');
-              }}
-              className="h-10 px-6 rounded-lg font-bold shrink-0 bg-foreground text-background hover:bg-foreground/90 transition-all shadow-sm"
-            >
-              Copy Link
-            </Button>
+    <div className="py-8 max-w-2xl mx-auto w-full space-y-6">
+      <div className="page-card p-6">
+        <div className="flex items-start gap-3 mb-4">
+          <div className={cn(
+            'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
+            status === 'SENT' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+          )}>
+            {status === 'SENT' ? <Send className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-foreground">Pre-interview form</h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {status === 'SENT'
+                ? 'Link generated. Share via WhatsApp using the preview on the right.'
+                : 'Waiting for form link generation.'}
+            </p>
           </div>
         </div>
-      )}
+
+        {candidate.share_url ? (
+          <div className="space-y-3">
+            <label className="form-label flex items-center gap-1.5">
+              <Link2 className="w-3.5 h-3.5" />
+              Candidate form link
+            </label>
+            <div className="flex items-center gap-2 w-full bg-background border border-border p-1.5 rounded-xl">
+              <input
+                type="text"
+                readOnly
+                value={candidate.share_url}
+                className="flex-1 bg-transparent border-none px-3 text-sm font-mono text-muted-foreground focus:outline-none min-w-0"
+              />
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  navigator.clipboard.writeText(candidate.share_url!);
+                  toast.success('Link copied');
+                }}
+                className="h-9 px-4 shrink-0"
+              >
+                Copy
+              </Button>
+            </div>
+            {candidate.pre_form_sent_at && (
+              <p className="text-xs text-muted-foreground">
+                Sent {new Date(candidate.pre_form_sent_at).toLocaleString('en-IN')}
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Form link will appear here after screening acceptance.</p>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground text-center">
+        Responses will appear here automatically once the candidate submits the form.
+      </div>
     </div>
   );
 }

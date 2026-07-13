@@ -6,10 +6,11 @@ import { getCandidateById, updateCandidateStage } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { toast } from 'sonner';
 import { validateRejectRemarks } from '../../lib/validation';
-import { stageLabel, stageColor } from '../../lib/constants';
+import { stageLabel, stageColor } from '../../lib/stages';
 import { cn } from '../../lib/utils';
 import { ScreeningChecklist } from '../../components/candidates/ScreeningChecklist';
 import { PreFormStatus } from '../../components/candidates/PreFormStatus';
+import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPreviewPanel';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 
 
@@ -143,6 +144,7 @@ export default function CandidateProfile() {
 
 
   const stage = candidate.current_stage;
+  const showWhatsAppSidebar = stage === 'CANDIDATE_FORM' && candidate.pre_form_status !== 'SUBMITTED';
   const showPrev = stage !== 'REJECTED' && stage !== 'HIRED' && stage !== 'SCREENING';
   const showNext = stage !== 'REJECTED' && stage !== 'HIRED';
   const showStageNav = showPrev || showNext;
@@ -204,9 +206,9 @@ export default function CandidateProfile() {
                 {candidate.source && (
                   <div className="flex items-center gap-1.5 bg-muted/50 border border-border/50 px-2.5 py-1 rounded-md text-muted-foreground">
                     {candidate.source === 'INDEED' ? (
-                      <img src="/indeed.png" alt="Indeed" className="h-4 object-contain" />
+                      <img src="/indeed.png" alt="Indeed" className="source-brand-logo" />
                     ) : candidate.source === 'NAUKRI' ? (
-                      <img src="/naukri.png" alt="Naukri" className="h-4 object-contain" />
+                      <img src="/Naukri.png" alt="Naukri" className="source-brand-logo" />
                     ) : (
                       <>
                         <span className="font-medium">Source:</span>
@@ -225,25 +227,19 @@ export default function CandidateProfile() {
 
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <a
-                  href={`tel:+91${candidate.phone}`}
-                  className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-bold rounded-lg border border-border hover:bg-muted transition-colors text-foreground shadow-sm"
-                >
-                  <img src="/phone.png" className="w-4 h-4 opacity-80" alt="Call" /> Call
-                </a>
-                <a
                   href={`https://wa.me/91${candidate.phone}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-bold rounded-lg border border-border hover:bg-muted transition-colors text-foreground shadow-sm"
                 >
-                  <img src="/whatsapp.webp" className="w-4 h-4" alt="WhatsApp" /> WhatsApp
+                  <img src="/whatsapp.webp" className="action-brand-icon" alt="WhatsApp" /> WhatsApp
                 </a>
                 {candidate.email && (
                   <a
                     href={`mailto:${candidate.email}`}
                     className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-bold rounded-lg border border-border hover:bg-muted transition-colors text-foreground shadow-sm"
                   >
-                    <img src="/gmail.webp" className="w-4 h-4" alt="Email" /> Email
+                    <img src="/gmail.webp" className="action-brand-icon" alt="Email" /> Email
                   </a>
                 )}
                 {candidate.has_resume && (
@@ -261,20 +257,20 @@ export default function CandidateProfile() {
                 {showPrev && (
                   <Button
                     onClick={handlePreviousStage}
-                    variant="ghost"
-                    className="h-10 px-4 rounded-lg border border-border bg-background hover:bg-muted text-foreground transition-all flex items-center font-medium text-sm group shadow-sm"
+                    variant="secondary"
+                    className="h-10 px-4"
                   >
-                    <ArrowLeft className="w-4 h-4 mr-1.5 transition-transform group-hover:-translate-x-1" />
-                    Previous Stage
+                    <ArrowLeft className="w-4 h-4 mr-1.5" />
+                    Previous stage
                   </Button>
                 )}
                 {showNext && (
                   <Button
                     onClick={handleNextStage}
-                    className="h-10 px-5 rounded-lg bg-foreground text-background hover:bg-foreground/90 transition-all shadow-md hover:shadow-lg flex items-center font-semibold text-sm group"
+                    className="h-10 px-5"
                   >
-                    Next Stage
-                    <ChevronRight className="w-4 h-4 ml-1.5 transition-transform group-hover:translate-x-1" />
+                    Next stage
+                    <ChevronRight className="w-4 h-4 ml-1.5" />
                   </Button>
                 )}
               </div>
@@ -285,17 +281,28 @@ export default function CandidateProfile() {
         {/* ── DYNAMIC STAGE WORKSPACE ── */}
         <div>
           {stage === 'SCREENING' && (
-            <ScreeningChecklist candidateId={candidate.id} onUpdate={handleUpdate} />
+            <ScreeningChecklist
+              candidateId={candidate.id}
+              candidateBranch={candidate.branch_location}
+              onUpdate={handleUpdate}
+            />
           )}
 
           {stage === 'CANDIDATE_FORM' && (
-            <PreFormStatus candidate={candidate} onUpdate={handleUpdate} />
+            <PreFormStatus candidate={candidate} />
+          )}
+
+          {showWhatsAppSidebar && (
+            <WhatsAppPreviewPanel candidate={candidate} className="lg:hidden mt-6 rounded-xl border border-border overflow-hidden" />
           )}
 
 
         </div>
       </div>
 
+      {showWhatsAppSidebar && (
+        <WhatsAppPreviewPanel candidate={candidate} className="hidden lg:flex sticky top-0 h-screen" />
+      )}
 
       {/* ── REJECT MODAL ── */}
       <Modal isOpen={showRejectModal} onClose={() => setShowRejectModal(false)} title="Reject Candidate" size="sm">

@@ -18,11 +18,14 @@ export const createCandidate = async (candidateData: Partial<Candidate>): Promis
 
 
 
-export const uploadResume = async (candidateId: string, file: File): Promise<any> => {
+export const uploadResume = async (candidateId: string, file: File, options?: { public?: boolean }): Promise<any> => {
   const formData = new FormData();
   formData.append('file', file);
-  
-  const response = await api.post(`/candidates/${candidateId}/resume`, formData, {
+  const path = options?.public
+    ? `/candidates/public-resume/${candidateId}`
+    : `/candidates/${candidateId}/resume`;
+
+  const response = await api.post(path, formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
@@ -74,17 +77,17 @@ export const deleteCandidate = async (candidateId: string): Promise<void> => {
   await api.delete(`/candidates/${candidateId}`);
 };
 
-export const getActivityLogs = async (candidateId: string): Promise<any[]> => {
-  const response = await api.get(`/candidates/${candidateId}/activity-logs`);
-  return response.data;
-};
-
 export const getScreening = async (candidateId: string): Promise<any> => {
   const response = await api.get(`/candidates/${candidateId}/screening`);
   return response.data;
 };
 
-export const submitScreening = async (candidateId: string, data: any): Promise<any> => {
+export interface ScreeningSubmitResponse {
+  screening: Record<string, unknown>;
+  candidate?: Candidate;
+}
+
+export const submitScreening = async (candidateId: string, data: Record<string, unknown>): Promise<ScreeningSubmitResponse> => {
   const response = await api.post(`/candidates/${candidateId}/screening`, data);
   return response.data;
 };

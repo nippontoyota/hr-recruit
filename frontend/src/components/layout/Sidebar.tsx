@@ -6,13 +6,13 @@ import type { UserRole } from '../../types';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '../ui/Button';
 
-export const Sidebar = ({ 
-  isOpen, 
+export const Sidebar = ({
+  isOpen,
   setOpen,
   isCollapsed = false,
-  setIsCollapsed
-}: { 
-  isOpen: boolean; 
+  setIsCollapsed,
+}: {
+  isOpen: boolean;
   setOpen: (o: boolean) => void;
   isCollapsed?: boolean;
   setIsCollapsed?: (c: boolean) => void;
@@ -26,88 +26,124 @@ export const Sidebar = ({
 
   return (
     <>
-      {/* Mobile backdrop */}
       {isOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={() => setOpen(false)}
+          aria-hidden
         />
       )}
 
-      {/* Sidebar container */}
-      <div
+      <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 bg-surface border-r border-border transform transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col',
+          'fixed inset-y-0 left-0 z-50 bg-sidebar border-r border-border transform transition-[width,transform] duration-200 ease-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col',
           isOpen ? 'translate-x-0' : '-translate-x-full',
-          isCollapsed ? 'w-16' : 'w-56'
+          isCollapsed ? 'w-[4.5rem]' : 'w-60'
         )}
       >
-        {/* Logo & Toggle area */}
-        <div className={cn(
-          "flex items-center h-14 border-b border-border shrink-0 bg-background transition-all",
-          isCollapsed ? "justify-center" : "justify-between px-4"
-        )}>
-
-          
-          {setIsCollapsed && (
+        <div
+          className={cn(
+            'flex items-center h-14 border-b border-border shrink-0 bg-sidebar',
+            isCollapsed ? 'justify-center px-2' : 'justify-end px-3'
+          )}
+        >
+          {setIsCollapsed && !isCollapsed && (
             <Button
               variant="ghost"
               size="icon"
-              className="hidden lg:flex text-text-secondary h-8 w-8 shrink-0 hover:bg-border/50"
+              className="hidden lg:flex text-text-secondary h-8 w-8 shrink-0"
               onClick={() => setIsCollapsed(!isCollapsed)}
-              title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
             >
-              {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              <ChevronLeft className="h-4 w-4" />
             </Button>
           )}
         </div>
+        {setIsCollapsed && isCollapsed && (
+          <div className="hidden lg:flex justify-center pb-2 -mt-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-text-secondary h-7 w-7"
+              onClick={() => setIsCollapsed(false)}
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
-        {/* Navigation */}
-        <nav className="flex-1 py-6 space-y-1 overflow-y-auto overflow-x-hidden">
-          {allowedNavItems.map((item) => {
-            const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
-            const Icon = item.icon;
+        <nav className="flex-1 py-4 overflow-y-auto overflow-x-hidden" aria-label="Main navigation">
+          {!isCollapsed && (
+            <p className="px-4 mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+              Workspace
+            </p>
+          )}
+          <div className="space-y-0.5 px-2">
+            {allowedNavItems.map((item) => {
+              const isActive =
+                location.pathname === item.href ||
+                (item.href !== '/' && location.pathname.startsWith(item.href));
+              const Icon = item.icon;
 
-            return (
-              <Link
-                key={item.name}
-                to={item.href}
-                className={cn(
-                  'flex items-center text-sm font-semibold rounded-md transition-all mx-2',
-                  isCollapsed ? 'justify-center py-3' : 'gap-3 px-4 py-2',
-                  isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-text-secondary hover:bg-background hover:text-text-primary'
-                )}
-                onClick={() => setOpen(false)}
-                title={isCollapsed ? item.name : undefined}
-              >
-                <Icon className={cn('h-5 w-5 shrink-0', isActive ? 'text-primary' : 'text-text-secondary')} />
-                {!isCollapsed && <span>{item.name}</span>}
-              </Link>
-            );
-          })}
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={cn(
+                    'flex items-center text-sm font-medium rounded-lg transition-colors',
+                    isCollapsed ? 'justify-center py-2.5' : 'gap-3 px-3 py-2',
+                    isActive
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-text-secondary hover:bg-muted hover:text-text-primary'
+                  )}
+                  onClick={() => setOpen(false)}
+                  title={isCollapsed ? item.name : undefined}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive && 'text-primary')} />
+                  {!isCollapsed && <span>{item.name}</span>}
+                </Link>
+              );
+            })}
+          </div>
         </nav>
 
-        {/* User Info Bottom */}
-        <div className="border-t border-border shrink-0 flex flex-col bg-surface p-4">
+        <div className="border-t border-border shrink-0 p-3 bg-sidebar">
           {!isCollapsed ? (
             <>
-              <div className="flex flex-col space-y-1 mb-4">
-                <span className="text-sm font-semibold text-text-primary truncate tracking-tight">{user?.full_name}</span>
-                <span className="text-xs text-text-secondary truncate">{user?.email}</span>
+              <div className="px-2 py-2 mb-2 rounded-lg bg-surface border border-border">
+                <p className="text-sm font-medium text-text-primary truncate">{user?.full_name}</p>
+                <p className="text-xs text-text-secondary truncate mt-0.5">{user?.email}</p>
+                {role && (
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-primary mt-1.5">
+                    {role.replace(/_/g, ' ')}
+                  </p>
+                )}
               </div>
-              <Button variant="ghost" className="w-full justify-start text-danger hover:bg-danger/10 hover:text-danger" onClick={logout}>
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-danger hover:bg-danger/10 hover:text-danger h-9"
+                onClick={logout}
+              >
                 Log out
               </Button>
             </>
           ) : (
-            <div className="w-8 h-8 rounded-[10px] bg-primary/10 text-primary flex items-center justify-center font-bold text-xs cursor-pointer" onClick={logout} title="Log out">
+            <button
+              type="button"
+              className="w-9 h-9 mx-auto rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs"
+              onClick={logout}
+              title="Log out"
+              aria-label="Log out"
+            >
               {user?.full_name.charAt(0)}
-            </div>
+            </button>
           )}
         </div>
-      </div>
+      </aside>
     </>
   );
 };

@@ -5,17 +5,13 @@ import { AppShell } from '../components/layout/AppShell';
 import { ProtectedRoute } from '../components/guards/ProtectedRoute';
 import { RoleRoute } from '../components/guards/RoleRoute';
 import { LoadingSpinner } from '../components/ui';
-import { ALL_ROLES, ADMIN_ONLY } from '../types';
-import { ErrorBoundary } from '../components/layout/ErrorBoundary';
+import { ALL_ROLES } from '../types';
+import { RouteErrorPage } from '../components/layout/RouteErrorPage';
 
-// Lazy-loaded pages for code splitting
 const Login = lazy(() => import('../pages/Login'));
 const CandidatesList = lazy(() => import('../pages/candidates/CandidatesList'));
 const CandidateProfile = lazy(() => import('../pages/candidates/CandidateProfile'));
-const Settings = lazy(() => import('../pages/Settings'));
 const NotFound = lazy(() => import('../pages/NotFound'));
-const Users = lazy(() => import('../pages/Users'));
-const Reports = lazy(() => import('../pages/Reports'));
 const ApplyForm = lazy(() => import('../pages/candidates/ApplyForm'));
 const PreFormPage = lazy(() => import('../pages/candidates/PreFormPage'));
 
@@ -32,7 +28,7 @@ const PageSuspense = ({ children }: { children: React.ReactNode }) => (
 export const router = createBrowserRouter([
   {
     path: '/login',
-    errorElement: <ErrorBoundary />,
+    errorElement: <RouteErrorPage />,
     element: (
       <PageSuspense>
         <Login />
@@ -41,7 +37,7 @@ export const router = createBrowserRouter([
   },
   {
     path: '/apply',
-    errorElement: <ErrorBoundary />,
+    errorElement: <RouteErrorPage />,
     element: (
       <PageSuspense>
         <ApplyForm />
@@ -50,7 +46,7 @@ export const router = createBrowserRouter([
   },
   {
     path: '/pre-form/:token',
-    errorElement: <ErrorBoundary />,
+    errorElement: <RouteErrorPage />,
     element: (
       <PageSuspense>
         <PreFormPage />
@@ -59,7 +55,7 @@ export const router = createBrowserRouter([
   },
   {
     path: '/',
-    errorElement: <ErrorBoundary />,
+    errorElement: <RouteErrorPage />,
     element: (
       <ProtectedRoute>
         <AppShell />
@@ -86,36 +82,6 @@ export const router = createBrowserRouter([
           <RoleRoute allowed={ALL_ROLES}>
             <PageSuspense>
               <CandidateProfile />
-            </PageSuspense>
-          </RoleRoute>
-        ),
-      },
-      {
-        path: 'reports',
-        element: (
-          <RoleRoute allowed={ALL_ROLES}>
-            <PageSuspense>
-              <Reports />
-            </PageSuspense>
-          </RoleRoute>
-        ),
-      },
-      {
-        path: 'users',
-        element: (
-          <RoleRoute allowed={ADMIN_ONLY}>
-            <PageSuspense>
-              <Users />
-            </PageSuspense>
-          </RoleRoute>
-        ),
-      },
-      {
-        path: 'settings',
-        element: (
-          <RoleRoute allowed={ADMIN_ONLY}>
-            <PageSuspense>
-              <Settings />
             </PageSuspense>
           </RoleRoute>
         ),

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_active_user, require_roles
+from app.core.access import assert_candidate_access, get_candidate_for_user
 from app.models.candidate import Candidate
 from app.models.candidate_profile import CandidateProfile
 from app.models.candidate_screening import CandidateScreening
@@ -18,7 +19,7 @@ from app.models.document import Document
 from app.models.enums import DocumentType, PipelineStage, UserRole, ActivityType, ScreeningStatus, FormStatus
 from app.models.stage_history import StageHistory
 from app.models.user import User
-from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, PreFormApplicationData
+from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, PreFormApplicationData, ScreeningSubmitResponse
 from app.services import storage
 from app.services.workflow import WorkflowService
 
@@ -58,11 +59,76 @@ def resume_candidate_ids(db: Session, candidate_ids: list[UUID]) -> set[UUID]:
     return set(rows)
 
 
+def share_url_for_token(token: str | None) -> str | None:
+    if not token:
+        return None
+    base = settings.public_app_url.rstrip("/")
+    return f"{base}/pre-form/{token}"
+
+
 def to_candidate_out(row: Candidate, has_resume: bool) -> CandidateOut:
-    share_url = f"http://localhost:5173/pre-form/{row.pre_form_token}" if row.pre_form_token else None
+    share_url = share_url_for_token(row.pre_form_token)
     return CandidateOut.model_validate(row).model_copy(
         update={"has_resume": has_resume, "is_rejoining": False, "share_url": share_url}
     )
+
+
+def _issue_pre_form(db: Session, candidate: Candidate, user: User) -> None:
+    import secrets
+
+    if not candidate.pre_form_token:
+        candidate.pre_form_token = secrets.token_urlsafe(32)
+    candidate.pre_form_status = FormStatus.SENT
+    candidate.pre_form_sent_at = datetime.now(UTC)
+
+    if candidate.current_stage != PipelineStage.CANDIDATE_FORM:
+        WorkflowService.transition(
+            db=db,
+            candidate=candidate,
+            target_stage=PipelineStage.CANDIDATE_FORM,
+            user=user,
+            remarks="Screening accepted — pre-interview form issued",
+        )
+    else:
+        db.add(
+            ActivityLog(
+                candidate_id=candidate.id,
+                activity_type=ActivityType.FORM,
+                title="Pre Form Sent",
+                description="Pre-interview form link generated automatically.",
+                created_by_user_id=user.id,
+            )
+        )
+
+
+def _store_whatsapp_invite(
+    db: Session,
+    candidate: Candidate,
+    body: CandidateScreeningCreate,
+    user: User,
+) -> None:
+    profile = db.scalar(select(CandidateProfile).where(CandidateProfile.candidate_id == candidate.id))
+    if not profile:
+        profile = CandidateProfile(candidate_id=candidate.id)
+        db.add(profile)
+
+    visit_display = ""
+    if body.branch_visit_date:
+        visit_display = body.branch_visit_date.strftime("%A, %d %B %Y")
+
+    invite = {
+        "candidateName": candidate.full_name,
+        "position": candidate.position_applied_for or "",
+        "formLink": share_url_for_token(candidate.pre_form_token) or "",
+        "branchName": body.visit_branch or candidate.branch_location or "",
+        "visitDate": visit_display,
+        "mapsLink": body.maps_link or "",
+        "recruiterName": user.full_name,
+        "extraInstructions": body.extra_instructions or "",
+    }
+    raw = dict(profile.raw_data or {})
+    raw["whatsapp_invite"] = invite
+    profile.raw_data = raw
 
 
 def create_candidate(db: Session, body: CandidateCreate, user_id: UUID) -> Candidate:
@@ -167,6 +233,15 @@ async def _read_resume_bytes(file: UploadFile) -> bytes:
     return chunk
 
 
+def _validate_resume_magic(data: bytes, ext: str) -> None:
+    if ext == ".pdf" and not data.startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="File content does not match a PDF.")
+    if ext == ".doc" and not data.startswith(b"\xd0\xcf\x11\xe0"):
+        raise HTTPException(status_code=400, detail="File content does not match a Word document.")
+    if ext == ".docx" and not data.startswith(b"PK\x03\x04"):
+        raise HTTPException(status_code=400, detail="File content does not match a Word document.")
+
+
 def _get_resume_document(db: Session, candidate_id: UUID) -> Document | None:
     return db.scalar(
         select(Document).where(
@@ -188,6 +263,61 @@ def _document_out(doc: Document) -> DocumentOut:
         created_at=doc.created_at,
         download_url=storage.create_signed_url(doc.storage_path),
     )
+
+
+async def _save_resume_for_candidate(
+    db: Session,
+    candidate: Candidate,
+    file: UploadFile,
+    uploaded_by_user_id: UUID | None,
+) -> DocumentOut:
+    ext = _resume_extension(file.filename)
+    content_type = _validate_resume_content_type(file.content_type, ext)
+    data = await _read_resume_bytes(file)
+    _validate_resume_magic(data, ext)
+
+    candidate_id = candidate.id
+    existing = _get_resume_document(db, candidate_id)
+    old_path = existing.storage_path if existing else None
+    doc_id = existing.id if existing else uuid4()
+    storage_path = f"resumes/{candidate_id}/{doc_id}{ext}"
+    file_name = _safe_filename(file.filename, ext)
+
+    storage.upload_object(storage_path, data, content_type, upsert=True)
+
+    if existing:
+        existing.file_name = file_name
+        existing.content_type = content_type
+        existing.storage_path = storage_path
+        existing.file_size_bytes = len(data)
+        existing.uploaded_by_user_id = uploaded_by_user_id
+        doc = existing
+    else:
+        doc = Document(
+            id=doc_id,
+            candidate_id=candidate_id,
+            doc_type=DocumentType.RESUME,
+            file_name=file_name,
+            content_type=content_type,
+            storage_path=storage_path,
+            file_size_bytes=len(data),
+            uploaded_by_user_id=uploaded_by_user_id,
+        )
+        db.add(doc)
+
+    try:
+        db.commit()
+        db.refresh(doc)
+    except Exception:
+        db.rollback()
+        if not existing or old_path != storage_path:
+            storage.delete_object(storage_path)
+        raise HTTPException(status_code=502, detail="Failed to save resume metadata.")
+
+    if old_path and old_path != storage_path:
+        storage.delete_object(old_path)
+
+    return _document_out(doc)
 
 
 @router.post("/public-apply", response_model=CandidateOut, status_code=201)
@@ -286,8 +416,12 @@ def public_apply_full(
         profile.expected_salary = application_data["expectedSalary"]
     if application_data.get("expectedJoiningDate"):
         profile.joining_date = application_data["expectedJoiningDate"]
-        
-    profile.raw_data = application_data
+
+    existing_raw = dict(profile.raw_data or {})
+    whatsapp_invite = existing_raw.get("whatsapp_invite")
+    profile.raw_data = {**existing_raw, **application_data}
+    if whatsapp_invite:
+        profile.raw_data["whatsapp_invite"] = whatsapp_invite
     
     row.pre_form_status = FormStatus.SUBMITTED
     row.pre_form_submitted_at = datetime.now(UTC)
@@ -359,9 +493,22 @@ def get_one(
     row = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.id == id))
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
-    if user.role == UserRole.LOCAL_HR and row.assigned_hr_user_id != user.id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    assert_candidate_access(user, row)
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
+
+
+@router.post("/public-resume/{candidate_id}", response_model=DocumentOut, status_code=201)
+async def public_upload_resume(
+    candidate_id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    row = db.get(Candidate, candidate_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Not found.")
+    if row.current_stage != PipelineStage.SCREENING:
+        raise HTTPException(status_code=400, detail="Resume upload is only allowed during screening.")
+    return await _save_resume_for_candidate(db, row, file, uploaded_by_user_id=None)
 
 
 @router.post("/{id}/resume", response_model=DocumentOut, status_code=201)
@@ -371,57 +518,8 @@ async def upload_resume(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
-    row = db.get(Candidate, id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found.")
-    if user.role == UserRole.LOCAL_HR and row.assigned_hr_user_id != user.id:
-        raise HTTPException(status_code=403, detail="Forbidden")
-
-    ext = _resume_extension(file.filename)
-    content_type = _validate_resume_content_type(file.content_type, ext)
-    data = await _read_resume_bytes(file)
-
-    existing = _get_resume_document(db, id)
-    old_path = existing.storage_path if existing else None
-    doc_id = existing.id if existing else uuid4()
-    storage_path = f"resumes/{id}/{doc_id}{ext}"
-    file_name = _safe_filename(file.filename, ext)
-
-    storage.upload_object(storage_path, data, content_type, upsert=True)
-
-    if existing:
-        existing.file_name = file_name
-        existing.content_type = content_type
-        existing.storage_path = storage_path
-        existing.file_size_bytes = len(data)
-        existing.uploaded_by_user_id = user.id
-        doc = existing
-    else:
-        doc = Document(
-            id=doc_id,
-            candidate_id=id,
-            doc_type=DocumentType.RESUME,
-            file_name=file_name,
-            content_type=content_type,
-            storage_path=storage_path,
-            file_size_bytes=len(data),
-            uploaded_by_user_id=user.id,
-        )
-        db.add(doc)
-
-    try:
-        db.commit()
-        db.refresh(doc)
-    except Exception:
-        db.rollback()
-        if not existing or old_path != storage_path:
-            storage.delete_object(storage_path)
-        raise HTTPException(status_code=502, detail="Failed to save resume metadata.")
-
-    if old_path and old_path != storage_path:
-        storage.delete_object(old_path)
-
-    return _document_out(doc)
+    row = get_candidate_for_user(db, id, user)
+    return await _save_resume_for_candidate(db, row, file, uploaded_by_user_id=user.id)
 
 
 @router.get("/{id}/resume", response_model=DocumentOut)
@@ -430,11 +528,7 @@ def get_resume(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
-    row = db.get(Candidate, id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found.")
-    if user.role == UserRole.LOCAL_HR and row.assigned_hr_user_id != user.id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    get_candidate_for_user(db, id, user)
     doc = _get_resume_document(db, id)
     if not doc:
         raise HTTPException(status_code=404, detail="Resume not found.")
@@ -448,12 +542,7 @@ def transition_stage(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
-    row = db.get(Candidate, id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found.")
-    if user.role == UserRole.LOCAL_HR and row.assigned_hr_user_id != user.id:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    
+    row = get_candidate_for_user(db, id, user)
     updated = WorkflowService.transition(
         db=db,
         candidate=row,
@@ -472,11 +561,7 @@ def history(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
-    row = db.get(Candidate, id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found.")
-    if user.role == UserRole.LOCAL_HR and row.assigned_hr_user_id != user.id:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    get_candidate_for_user(db, id, user)
     return list(db.scalars(select(StageHistory).where(StageHistory.candidate_id == id).order_by(StageHistory.created_at)))
 
 @router.get("/{id}/activity-logs", response_model=list[ActivityLogOut])
@@ -485,6 +570,7 @@ def get_activity_logs(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
+    get_candidate_for_user(db, id, user)
     return list(db.scalars(select(ActivityLog).where(ActivityLog.candidate_id == id).order_by(ActivityLog.created_at.desc())))
 
 @router.get("/{id}/screening", response_model=CandidateScreeningOut)
@@ -493,27 +579,25 @@ def get_screening(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
+    get_candidate_for_user(db, id, user)
     row = db.scalar(select(CandidateScreening).where(CandidateScreening.candidate_id == id))
     if not row:
         raise HTTPException(status_code=404, detail="Screening data not found.")
     return row
 
-@router.post("/{id}/screening", response_model=CandidateScreeningOut)
+@router.post("/{id}/screening", response_model=ScreeningSubmitResponse)
 def submit_screening(
     id: UUID,
     body: CandidateScreeningCreate,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
-    row = db.get(Candidate, id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found.")
-    
+    candidate = get_candidate_for_user(db, id, user)
     screening = db.scalar(select(CandidateScreening).where(CandidateScreening.candidate_id == id))
     if not screening:
         screening = CandidateScreening(candidate_id=id)
         db.add(screening)
-        
+
     screening.status = body.status
     screening.call_completed = body.call_completed
     screening.interest_confirmed = body.interest_confirmed
@@ -523,18 +607,34 @@ def submit_screening(
     screening.remarks = body.remarks
     screening.pending_reason = body.pending_reason
     screening.follow_up_date = body.follow_up_date
-    
+
     log = ActivityLog(
         candidate_id=id,
         activity_type=ActivityType.CALL,
         title="Screening Updated",
         description=f"Status: {body.status.value}. Remarks: {body.remarks or 'None'}",
-        created_by_user_id=user.id
+        created_by_user_id=user.id,
     )
     db.add(log)
+
+    updated_candidate: Candidate | None = None
+    if body.status == ScreeningStatus.QUALIFIED:
+        _issue_pre_form(db, candidate, user)
+        _store_whatsapp_invite(db, candidate, body, user)
+        db.flush()
+        db.refresh(candidate)
+        updated_candidate = candidate
+
     db.commit()
     db.refresh(screening)
-    return screening
+    if updated_candidate:
+        db.refresh(updated_candidate)
+
+    candidate_out = None
+    if updated_candidate:
+        candidate_out = to_candidate_out(updated_candidate, id in resume_candidate_ids(db, [id]))
+
+    return ScreeningSubmitResponse(screening=screening, candidate=candidate_out)
 
 @router.post("/{id}/pre-form/send", response_model=CandidateOut)
 def send_pre_form(
@@ -542,34 +642,8 @@ def send_pre_form(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
-    row = db.get(Candidate, id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found.")
-        
-    import secrets
-    token = secrets.token_urlsafe(32)
-    
-    row.pre_form_token = token
-    row.pre_form_status = FormStatus.SENT
-    row.pre_form_sent_at = datetime.now(UTC)
-    
-    if row.current_stage != PipelineStage.CANDIDATE_FORM:
-        WorkflowService.transition(
-            db=db,
-            candidate=row,
-            target_stage=PipelineStage.CANDIDATE_FORM,
-            user=user,
-            remarks="Sent Pre Form"
-        )
-    else:
-        db.add(ActivityLog(
-            candidate_id=id,
-            activity_type=ActivityType.FORM,
-            title="Pre Form Sent",
-            description="Pre-form generated and marked as SENT.",
-            created_by_user_id=user.id
-        ))
-    
+    row = get_candidate_for_user(db, id, user)
+    _issue_pre_form(db, row, user)
     db.commit()
     db.refresh(row)
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
@@ -580,9 +654,7 @@ def delete_candidate_endpoint(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
-    row = db.get(Candidate, id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found.")
+    row = get_candidate_for_user(db, id, user)
     
     # Try to delete documents from storage and db
     docs = db.scalars(select(Document).where(Document.candidate_id == id)).all()

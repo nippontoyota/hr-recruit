@@ -5,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_active_user, require_roles
+from app.core.deps import require_roles
+from app.core.access import assert_candidate_access, get_candidate_for_user
 from app.models.candidate import Candidate
 from app.models.communication import Communication
 from app.models.enums import UserRole, CommunicationType, CommunicationDirection, CommunicationStatus, ActivityType
@@ -44,6 +45,7 @@ def create_communication(
     row = db.get(Candidate, body.candidate_id)
     if not row:
         raise HTTPException(status_code=404, detail="Candidate not found.")
+    assert_candidate_access(user, row)
         
     comm = Communication(
         candidate_id=body.candidate_id,
@@ -75,6 +77,7 @@ def list_candidate_communications(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
+    get_candidate_for_user(db, candidate_id, user)
     return list(db.scalars(
         select(Communication)
         .where(Communication.candidate_id == candidate_id)

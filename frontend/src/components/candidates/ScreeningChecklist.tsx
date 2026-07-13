@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button } from '../ui';
+import { Button, Select } from '../ui';
 import { getScreening, submitScreening } from '../../api/candidates';
 import { AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,14 +9,16 @@ import { format } from 'date-fns';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '../ui/Popover';
 import { Calendar } from '../ui/Calendar';
+import { BRANCH_LOCATIONS, defaultBranchName } from '../../lib/branchLocations';
 
 
 interface ScreeningChecklistProps {
   candidateId: string;
+  candidateBranch?: string;
   onUpdate: () => void;
 }
 
-export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklistProps) {
+export function ScreeningChecklist({ candidateId, candidateBranch, onUpdate }: ScreeningChecklistProps) {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -27,6 +29,15 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
   // New Follow up fields
   const [pendingReason, setPendingReason] = useState<string>('');
   const [followUpDate, setFollowUpDate] = useState<Date | undefined>();
+  const [visitBranch, setVisitBranch] = useState(() => defaultBranchName(candidateBranch));
+  const [branchVisitDate, setBranchVisitDate] = useState<Date | undefined>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    return d;
+  });
+  const [extraInstructions, setExtraInstructions] = useState(
+    'Bring a copy of your resume and valid ID proof when you visit the branch.'
+  );
 
   useEffect(() => {
     fetchScreening();
@@ -74,17 +85,43 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
       toast.error('Remarks must be 2000 characters or fewer.');
       return;
     }
+    if (status === 'QUALIFIED') {
+      if (!visitBranch.trim()) {
+        toast.error('Select a branch office for the visit.');
+        return;
+      }
+      if (!branchVisitDate) {
+        toast.error('Pick a branch visit date.');
+        return;
+      }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (branchVisitDate < today) {
+        toast.error('Branch visit date cannot be in the past.');
+        return;
+      }
+    }
+
+    const branch = BRANCH_LOCATIONS.find((b) => b.name === visitBranch);
 
     setIsSubmitting(true);
     try {
-      await submitScreening(candidateId, {
+      const res = await submitScreening(candidateId, {
         status,
         remarks: remarks || undefined,
         pending_reason: status === 'PENDING' && pendingReason ? pendingReason : undefined,
         follow_up_date: status === 'PENDING' && followUpDate ? followUpDate.toISOString() : undefined,
+        visit_branch: status === 'QUALIFIED' ? visitBranch : undefined,
+        branch_visit_date: status === 'QUALIFIED' && branchVisitDate ? branchVisitDate.toISOString() : undefined,
+        maps_link: status === 'QUALIFIED' ? branch?.mapsUrl : undefined,
+        extra_instructions: status === 'QUALIFIED' ? extraInstructions : undefined,
       });
       onUpdate();
-      toast.success('Screening checklist updated');
+      if (res?.candidate) {
+        toast.success('Candidate accepted — form link ready. Send WhatsApp invite from the sidebar.');
+      } else {
+        toast.success('Screening checklist updated');
+      }
     } catch (err) {
       console.error(err);
       toast.error('Failed to save screening data');
@@ -102,10 +139,9 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
   ];
 
   const PENDING_REASONS = [
-    "Will call back",
-    "Waiting for documents",
-    "Not reachable",
-    "Needs more time"
+    "Ring heard, no response",
+    "Phone switched off",
+    "Candidate will call back"
   ];
   
   const handlePendingReasonToggle = (reason: string) => {
@@ -199,6 +235,62 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
                         </PopoverContent>
                       </Popover>
                     </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {status === 'QUALIFIED' && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="mb-6 overflow-hidden"
+                >
+                  <div className="space-y-4 rounded-xl border border-success/20 bg-success/5 p-4">
+                    <p className="text-xs font-bold text-success uppercase tracking-wider">
+                      Branch visit & WhatsApp invite
+                    </p>
+                    <div>
+                      <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">Branch office</label>
+                      <Select value={visitBranch} onChange={(e) => setVisitBranch(e.target.value)} className="w-full">
+                        {BRANCH_LOCATIONS.map((b) => (
+                          <option key={b.name} value={b.name}>{b.name}</option>
+                        ))}
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">Visit date</label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className={cn(
+                              "w-full h-11 px-4 justify-start text-left font-normal rounded-xl border border-border bg-background shadow-sm hover:bg-muted text-sm",
+                              !branchVisitDate && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {branchVisitDate ? format(branchVisitDate, "PPP") : <span>Pick a date</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar mode="single" selected={branchVisitDate} onSelect={setBranchVisitDate} />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">Extra instructions (WhatsApp)</label>
+                      <textarea
+                        value={extraInstructions}
+                        onChange={(e) => setExtraInstructions(e.target.value)}
+                        className="w-full min-h-[72px] bg-background border border-border rounded-xl p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Saving will generate the form link and move this candidate to the Candidate Form stage.
+                    </p>
                   </div>
                 </motion.div>
               )}

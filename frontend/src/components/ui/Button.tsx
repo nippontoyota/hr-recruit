@@ -4,9 +4,8 @@ import { cn } from '../../lib/utils';
 import { Loader2 } from 'lucide-react';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'whatsapp';
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   size?: 'sm' | 'md' | 'lg' | 'icon';
-  rounded?: 'md' | 'lg' | 'xl' | 'full' | 'none';
   isLoading?: boolean;
 }
 
@@ -17,7 +16,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       secondary: 'border border-border bg-surface hover:bg-muted text-foreground shadow-sm',
       danger: 'bg-danger text-white hover:brightness-90 shadow-sm',
       ghost: 'hover:bg-muted hover:text-foreground text-muted-foreground',
-      whatsapp: 'bg-success text-white hover:brightness-90 shadow-sm',
     };
 
     const sizes = {
@@ -32,7 +30,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || isLoading}
         className={cn(
-          'inline-flex items-center justify-center whitespace-nowrap font-medium rounded-[10px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
+          'inline-flex items-center justify-center whitespace-nowrap font-medium rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
           variants[variant],
           sizes[size],
           className

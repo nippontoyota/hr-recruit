@@ -293,6 +293,10 @@ class CandidateScreeningCreate(BaseModel):
     remarks: str | None = None
     pending_reason: str | None = None
     follow_up_date: datetime | None = None
+    visit_branch: str | None = None
+    branch_visit_date: datetime | None = None
+    maps_link: str | None = None
+    extra_instructions: str | None = None
 
     @model_validator(mode="after")
     def check_pending_fields(self) -> "CandidateScreeningCreate":
@@ -305,6 +309,13 @@ class CandidateScreeningCreate(BaseModel):
                 raise ValueError("Follow-up date is required when status is PENDING.")
             if self.follow_up_date.date() < date.today():
                 raise ValueError("Follow-up date cannot be in the past.")
+        if self.status == ScreeningStatus.QUALIFIED:
+            if not self.visit_branch or not self.visit_branch.strip():
+                raise ValueError("Branch office is required when accepting a candidate.")
+            if self.branch_visit_date is None:
+                raise ValueError("Branch visit date is required when accepting a candidate.")
+            if self.branch_visit_date.date() < date.today():
+                raise ValueError("Branch visit date cannot be in the past.")
         if self.remarks and len(self.remarks) > 2000:
             raise ValueError("Remarks must be at most 2000 characters.")
         return self
@@ -315,6 +326,11 @@ class CandidateScreeningOut(CandidateScreeningCreate):
     candidate_id: UUID
     created_at: datetime
     updated_at: datetime
+
+
+class ScreeningSubmitResponse(BaseModel):
+    screening: CandidateScreeningOut
+    candidate: CandidateOut | None = None
 
 class ActivityLogCreate(BaseModel):
     activity_type: ActivityType

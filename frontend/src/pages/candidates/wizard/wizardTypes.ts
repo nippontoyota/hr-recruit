@@ -1,21 +1,3 @@
-export type SectionStatus = 'Complete' | 'Partial' | 'Pending';
-
-export type WizardSectionId =
-  | 'basic'
-  | 'personal'
-  | 'address'
-  | 'identity'
-  | 'education'
-  | 'employment'
-  | 'recruitment'
-  | 'medical';
-
-export interface WizardSection {
-  id: WizardSectionId;
-  title: string;
-  icon: any;
-}
-
 export interface CandidateFormData {
   candidateId: string;
   fullName: string;

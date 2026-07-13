@@ -4,6 +4,8 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
+  --color-content: var(--content);
+  --color-sidebar: var(--sidebar);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary-hover: var(--primary-hover);
@@ -14,62 +16,162 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
-  
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 12px;
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-ring: var(--ring);
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
 
-  --font-sans: "Geist", "Inter", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
-  --font-heading: "Geist", "Inter", sans-serif;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 4px 16px rgba(16, 24, 40, 0.08);
+
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-heading: "Inter", system-ui, -apple-system, sans-serif;
+
+  --z-dropdown: 40;
+  --z-sticky: 30;
+  --z-modal: 50;
 }
 
 :root {
-  /* Light Mode Enterprise Theme */
-  --background: #FFFFFF;
+  --background: #ffffff;
   --foreground: #111827;
-  --surface: #FFFFFF;
-  --primary: #2563EB;
-  --primary-foreground: #FFFFFF;
-  --primary-hover: #1D4ED8;
-  --success: #16A34A;
-  --warning: #D97706;
-  --danger: #DC2626;
-  --info: #0EA5E9;
-  --muted: #F3F4F6;
-  --muted-foreground: #6B7280;
-  --border: #E5E7EB;
+  --surface: #ffffff;
+  --content: #f3f4f6;
+  --sidebar: #ffffff;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --primary-hover: #1d4ed8;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #0ea5e9;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --border: #e5e7eb;
+  --ring: #2563eb;
 }
 
-/* Remove dark mode override to enforce light theme for enterprise layout */
 .dark {
-  --background: #FFFFFF;
+  --background: #ffffff;
   --foreground: #111827;
-  --surface: #FFFFFF;
-  --primary: #2563EB;
-  --primary-foreground: #FFFFFF;
-  --primary-hover: #1D4ED8;
-  --success: #16A34A;
-  --warning: #D97706;
-  --danger: #DC2626;
-  --info: #0EA5E9;
-  --muted: #F3F4F6;
-  --muted-foreground: #6B7280;
-  --border: #E5E7EB;
+  --surface: #ffffff;
+  --content: #f3f4f6;
+  --sidebar: #ffffff;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --primary-hover: #1d4ed8;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #0ea5e9;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --border: #e5e7eb;
+  --ring: #2563eb;
 }
 
 @layer base {
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground font-sans antialiased; }
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-heading text-text-primary;
+    text-wrap: balance;
+  }
+
+  ::placeholder {
+    color: var(--text-secondary);
+    opacity: 1;
+  }
+}
+
+@layer components {
+  .form-label {
+    @apply block text-sm font-medium text-text-primary mb-1.5;
+  }
+
+  .form-label-required::after {
+    content: " *";
+    @apply text-primary;
+  }
+
+  .section-heading {
+    @apply text-lg font-semibold text-text-primary tracking-tight;
+  }
+
+  .page-card {
+    @apply bg-surface border border-border rounded-xl shadow-sm;
+  }
+
+  .data-table thead {
+    @apply bg-muted/60;
+  }
+
+  .data-table th {
+    @apply px-4 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wide border-b border-border;
+  }
+
+  .data-table td {
+    @apply px-4 py-3 text-sm text-text-primary border-b border-border;
+  }
+
+  .data-table tbody tr {
+    @apply transition-colors hover:bg-muted/40;
+  }
+
+  .status-icon {
+    @apply w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5;
+  }
+
+  .status-icon-success {
+    @apply w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5 bg-primary text-primary-foreground;
+  }
+
+  .status-icon-error {
+    @apply w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-5 bg-muted text-text-secondary border border-border;
+  }
+
+  .action-brand-icon {
+    @apply block h-4 w-4 shrink-0 object-contain;
+  }
+
+  .source-brand-logo {
+    @apply block h-4 w-auto max-w-20 shrink-0 object-contain;
+  }
 }
 
 @keyframes spinner-fade {
   0% { opacity: 1; }
   100% { opacity: 0.15; }
 }
+
 .animate-spinner-fade {
   animation: spinner-fade 1.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -5,6 +5,7 @@ import { LoadingSpinner, Button, Input, Select } from '../../components/ui';
 import { UploadCloud } from 'lucide-react';
 import { digitsOnly, validateResumeFile } from '../../lib/validation';
 import { validateBasicCandidateForm } from '../../lib/validatePreForm';
+import { PublicShell } from '../../components/layout/PublicShell';
 
 export default function ApplyForm() {
   const [searchParams] = useSearchParams();
@@ -97,7 +98,7 @@ export default function ApplyForm() {
           position_applied_for: position.trim(),
         });
         if (resumeFile) {
-          await uploadResume(candidateId, resumeFile);
+          await uploadResume(candidateId, resumeFile, { public: true });
         }
       } else if (hrId) {
         // Create new candidate
@@ -109,7 +110,7 @@ export default function ApplyForm() {
           position_applied_for: position.trim(),
         }, hrId);
         if (resumeFile) {
-          await uploadResume(candidateObj.id, resumeFile);
+          await uploadResume(candidateObj.id, resumeFile, { public: true });
         }
       }
 
@@ -128,72 +129,70 @@ export default function ApplyForm() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
+      <PublicShell>
+        <div className="flex justify-center py-16">
           <LoadingSpinner size="lg" />
         </div>
-      </div>
+      </PublicShell>
     );
   }
 
   if (errorText) {
     return (
-      <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-xl mx-auto w-full text-center mt-10">
-          <div className="w-16 h-16 bg-muted text-foreground border border-border rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <PublicShell>
+        <div className="text-center py-8">
+          <div className="status-icon-error">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
-          <h2 className="text-2xl font-extrabold text-text-primary mb-3 tracking-tight">Link Error</h2>
-          <p className="text-text-secondary leading-relaxed mb-6">{errorText}</p>
+          <h2 className="text-2xl font-semibold text-text-primary mb-2">Invalid link</h2>
+          <p className="text-text-secondary max-w-md mx-auto">{errorText}</p>
         </div>
-      </div>
+      </PublicShell>
     );
   }
 
   if (submitSuccess) {
     return (
-      <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-xl mx-auto w-full text-center mt-10">
-          <div className="w-16 h-16 bg-foreground text-background rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <PublicShell>
+        <div className="text-center py-8">
+          <div className="status-icon-success">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-3xl font-extrabold text-text-primary mb-3 tracking-tight">Details Submitted!</h2>
-          <p className="text-text-secondary leading-relaxed mb-8">
-            Thank you, <span className="font-semibold text-foreground">{submitSuccess.name}</span>. Your basic details have been updated successfully.
+          <h2 className="text-2xl font-semibold text-text-primary mb-2">Details submitted</h2>
+          <p className="text-text-secondary mb-8">
+            Thank you, <span className="font-medium text-text-primary">{submitSuccess.name}</span>. Your information has been saved.
           </p>
-          <div className="py-6 border-y border-border mb-8">
-            <p className="text-xs text-text-secondary uppercase tracking-widest font-bold mb-2">Candidate reference ID</p>
-            <p className="text-3xl font-extrabold text-foreground">{submitSuccess.candidateId}</p>
+          <div className="py-5 border-y border-border mb-6 max-w-sm mx-auto">
+            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1">Candidate reference ID</p>
+            <p className="text-2xl font-semibold text-text-primary tabular-nums">{submitSuccess.candidateId}</p>
           </div>
-          <p className="text-sm text-text-secondary">Please retain this ID for your onboarding records.</p>
+          <p className="text-sm text-text-secondary">Keep this ID for your records. Your recruiter may contact you for next steps.</p>
         </div>
-      </div>
+      </PublicShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-xl mx-auto w-full">
-        <div className="mb-10 pb-6 border-b border-border">
-          <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">Candidate Registration</h1>
+    <PublicShell>
+      <div className="page-card p-6 sm:p-8">
+        <div className="mb-8 pb-6 border-b border-border">
+          <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Candidate registration</h1>
           {recruiterName ? (
             <p className="mt-2 text-sm text-text-secondary">
-              Applying via recruiter: <span className="font-semibold text-foreground">{recruiterName}</span>
+              Referred by <span className="font-medium text-text-primary">{recruiterName}</span>
             </p>
           ) : (
-            <p className="mt-2 text-sm text-text-secondary">Update your candidate application profile details</p>
+            <p className="mt-2 text-sm text-text-secondary">Update your application details below.</p>
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1">
-              Full Name <span className="text-foreground">*</span>
-            </label>
+            <label className="form-label form-label-required">Full name</label>
             <Input
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -203,9 +202,7 @@ export default function ApplyForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1">
-              Phone Number <span className="text-foreground">*</span>
-            </label>
+            <label className="form-label form-label-required">Phone number</label>
             <Input
               value={phone}
               onChange={(e) => setPhone(digitsOnly(e.target.value, 10))}
@@ -216,9 +213,7 @@ export default function ApplyForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1">
-              Email Address <span className="text-foreground">*</span>
-            </label>
+            <label className="form-label form-label-required">Email address</label>
             <Input
               type="email"
               value={email}
@@ -228,9 +223,7 @@ export default function ApplyForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1">
-              Position Applied For <span className="text-foreground">*</span>
-            </label>
+            <label className="form-label form-label-required">Position applied for</label>
             <Input
               value={position}
               onChange={(e) => setPosition(e.target.value)}
@@ -240,9 +233,7 @@ export default function ApplyForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1">
-              Source <span className="text-foreground">*</span>
-            </label>
+            <label className="form-label form-label-required">How did you hear about this role?</label>
             <Select
               value={source}
               onChange={(e) => setSource(e.target.value)}
@@ -257,10 +248,8 @@ export default function ApplyForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">
-              Resume Document
-            </label>
-            <div className="border-2 border-dashed border-border/80 rounded-xl p-4 bg-background text-center relative hover:border-foreground transition-colors">
+            <label className="form-label">Resume (PDF or Word)</label>
+            <div className="border border-dashed border-border rounded-lg p-5 bg-content text-center relative hover:border-primary/40 transition-colors">
               <input
                 type="file"
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -281,18 +270,14 @@ export default function ApplyForm() {
           </div>
 
           {formError && (
-            <p className="text-xs text-foreground text-center font-bold bg-muted p-2 rounded-lg border border-border">{formError}</p>
+            <p role="alert" className="text-sm text-danger bg-danger/5 p-3 rounded-lg border border-danger/20">{formError}</p>
           )}
 
-          <Button
-            type="submit"
-            className="w-full py-3 bg-foreground text-background hover:bg-foreground/90 font-bold transition-all"
-            isLoading={isSubmitting}
-          >
-            Submit Details
+          <Button type="submit" className="w-full h-10" isLoading={isSubmitting}>
+            Submit details
           </Button>
         </form>
       </div>
-    </div>
+    </PublicShell>
   );
 }
