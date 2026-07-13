@@ -4,6 +4,8 @@ import { Button, Input, Select, Modal } from '../ui';
 import { UploadCloud, AlertTriangle, ArrowRight } from 'lucide-react';
 import { createCandidate, uploadResume } from '../../api/candidates';
 import { NIPPON_BRANCHES } from '../../types';
+import { digitsOnly, validateResumeFile } from '../../lib/validation';
+import { validateBasicCandidateForm } from '../../lib/validatePreForm';
 
 interface AddCandidateFormProps {
   isOpen: boolean;
@@ -46,8 +48,24 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !phone.trim() || !position.trim()) {
-      setFormError('Name, Phone, and Position are required.');
+
+    const validationError = validateBasicCandidateForm({
+      fullName,
+      phone,
+      email,
+      emailRequired: false,
+      position,
+      source: source || undefined,
+      sourceRequired: false,
+    });
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+
+    const resumeError = validateResumeFile(resumeFile);
+    if (resumeError.ok === false) {
+      setFormError(resumeError.message);
       return;
     }
 
@@ -55,13 +73,14 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
     setFormError('');
 
     try {
+      const normalizedPhone = digitsOnly(phone);
       const newCandidate = await createCandidate({
-        full_name: fullName,
-        phone: phone,
-        email: email || undefined,
+        full_name: fullName.trim(),
+        phone: normalizedPhone,
+        email: email.trim() || undefined,
         source: source || 'Unknown',
-        source_reference: sourceDetails || undefined,
-        position_applied_for: position,
+        source_reference: sourceDetails.trim() || undefined,
+        position_applied_for: position.trim(),
         branch_location: branchLocation || undefined,
       } as any);
 
@@ -143,6 +162,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               required
+              maxLength={100}
             />
           </div>
           <div className="col-span-2 sm:col-span-1">
@@ -151,8 +171,10 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
             </label>
             <Input
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => setPhone(digitsOnly(e.target.value, 10))}
               required
+              inputMode="numeric"
+              maxLength={10}
             />
           </div>
           
@@ -160,18 +182,13 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
             <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
               Position Applied For <span className="text-text-primary">*</span>
             </label>
-            <Select
+            <Input
               value={position}
               onChange={(e) => setPosition(e.target.value)}
+              placeholder="e.g. Sales Executive"
               required
-            >
-              <option value="">Select position</option>
-              <option value="Sales">Sales</option>
-              <option value="Accounts">Accounts</option>
-              <option value="Marketing">Marketing</option>
-              <option value="Service">Service</option>
-              <option value="Insurance">Insurance</option>
-            </Select>
+              maxLength={100}
+            />
           </div>
 
           <div className="col-span-2 sm:col-span-1">
@@ -224,6 +241,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
             <Input
               value={sourceDetails}
               onChange={(e) => setSourceDetails(e.target.value)}
+              maxLength={255}
             />
           </div>
 

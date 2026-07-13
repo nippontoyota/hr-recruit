@@ -4,6 +4,7 @@ import { initialCandidateData } from './wizard/wizardTypes';
 import type { CandidateFormData } from './wizard/wizardTypes';
 import { publicGetFullStatus, publicApplyFullCandidate } from '../../api/candidates';
 import { LoadingSpinner, Button } from '../../components/ui';
+import { validatePreForm } from '../../lib/validatePreForm';
 
 import { PersonalInfoForm } from './wizard/sections/PersonalInfoForm';
 import { AddressForm } from './wizard/sections/AddressForm';
@@ -55,6 +56,12 @@ export default function PreFormPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
+
+    const validationError = validatePreForm(formData);
+    if (validationError) {
+      setErrorText(validationError);
+      return;
+    }
 
     setIsSubmitting(true);
     setErrorText('');

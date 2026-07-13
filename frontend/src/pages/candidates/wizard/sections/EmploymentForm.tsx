@@ -1,5 +1,6 @@
 import type { CandidateFormData } from '../wizardTypes';
 import { Input } from '../../../../components/ui';
+import { digitsOnly } from '../../../../lib/validation';
 
 interface EmploymentFormProps {
   data: CandidateFormData;
@@ -62,8 +63,10 @@ export const EmploymentForm = ({ data, update }: EmploymentFormProps) => {
           </label>
           <Input
             value={data.expectedSalary}
-            onChange={(e) => update('expectedSalary', e.target.value)}
+            onChange={(e) => update('expectedSalary', digitsOnly(e.target.value, 8))}
             placeholder="₹"
+            inputMode="numeric"
+            maxLength={8}
           />
         </div>
       </div>

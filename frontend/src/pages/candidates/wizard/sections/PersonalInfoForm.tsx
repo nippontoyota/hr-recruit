@@ -1,6 +1,5 @@
 import type { CandidateFormData } from '../wizardTypes';
 import { Input, Select } from '../../../../components/ui';
-
 interface PersonalInfoFormProps {
   data: CandidateFormData;
   update: (field: keyof CandidateFormData, value: any) => void;
@@ -17,6 +16,7 @@ export const PersonalInfoForm = ({ data, update }: PersonalInfoFormProps) => {
           <Input
             value={data.nameAadhaar}
             onChange={(e) => update('nameAadhaar', e.target.value)}
+            maxLength={100}
           />
         </div>
 
@@ -43,6 +43,8 @@ export const PersonalInfoForm = ({ data, update }: PersonalInfoFormProps) => {
             type="date"
             value={data.dateOfBirth}
             onChange={(e) => update('dateOfBirth', e.target.value)}
+            max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
+            min={new Date(new Date().setFullYear(new Date().getFullYear() - 65)).toISOString().split('T')[0]}
           />
         </div>
 
@@ -54,6 +56,8 @@ export const PersonalInfoForm = ({ data, update }: PersonalInfoFormProps) => {
             type="number"
             value={data.age}
             onChange={(e) => update('age', e.target.value)}
+            min={18}
+            max={65}
           />
         </div>
 
@@ -101,6 +105,8 @@ export const PersonalInfoForm = ({ data, update }: PersonalInfoFormProps) => {
             type="number"
             value={data.height}
             onChange={(e) => update('height', e.target.value)}
+            min={100}
+            max={250}
           />
         </div>
 
@@ -112,6 +118,8 @@ export const PersonalInfoForm = ({ data, update }: PersonalInfoFormProps) => {
             type="number"
             value={data.weight}
             onChange={(e) => update('weight', e.target.value)}
+            min={30}
+            max={200}
           />
         </div>
 

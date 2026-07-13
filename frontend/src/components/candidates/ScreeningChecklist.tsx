@@ -54,6 +54,27 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
   };
 
   const handleSave = async () => {
+    if (status === 'PENDING') {
+      if (!pendingReason.trim()) {
+        toast.error('Select a pending reason.');
+        return;
+      }
+      if (!followUpDate) {
+        toast.error('Pick a follow-up date.');
+        return;
+      }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (followUpDate < today) {
+        toast.error('Follow-up date cannot be in the past.');
+        return;
+      }
+    }
+    if (remarks.length > 2000) {
+      toast.error('Remarks must be 2000 characters or fewer.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await submitScreening(candidateId, {
@@ -188,6 +209,7 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
               <textarea 
                 value={remarks} 
                 onChange={(e) => setRemarks(e.target.value)} 
+                maxLength={2000}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();

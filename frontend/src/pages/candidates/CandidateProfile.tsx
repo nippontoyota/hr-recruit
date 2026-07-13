@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, LoadingSpinner, EmptyState, Modal } from '../../components/ui';
-import { ArrowLeft, X, FileText, ChevronRight, XCircle, MapPin, Phone, Mail } from 'lucide-react';
+import { ArrowLeft, X, ChevronRight, XCircle, MapPin, Phone, Mail } from 'lucide-react';
 import { getCandidateById, updateCandidateStage } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { toast } from 'sonner';
+import { validateRejectRemarks } from '../../lib/validation';
+import { stageLabel, stageColor } from '../../lib/constants';
+import { cn } from '../../lib/utils';
 import { ScreeningChecklist } from '../../components/candidates/ScreeningChecklist';
 import { PreFormStatus } from '../../components/candidates/PreFormStatus';
+import { ResumeButton } from '../../components/candidates/ResumeButton';
 
 
 const LINEAR_STAGES: PipelineStage[] = [
@@ -93,8 +97,9 @@ export default function CandidateProfile() {
 
   const handleReject = async () => {
     if (!candidate) return;
-    if (!rejectRemarks.trim()) {
-      toast.error('Remarks are required to reject a candidate.');
+    const validation = validateRejectRemarks(rejectRemarks);
+    if (!validation.ok) {
+      toast.error(validation.message);
       return;
     }
     setIsRejecting(true);
@@ -138,6 +143,9 @@ export default function CandidateProfile() {
 
 
   const stage = candidate.current_stage;
+  const showPrev = stage !== 'REJECTED' && stage !== 'HIRED' && stage !== 'SCREENING';
+  const showNext = stage !== 'REJECTED' && stage !== 'HIRED';
+  const showStageNav = showPrev || showNext;
 
   return (
     <div className="flex items-start w-full min-h-screen">
@@ -145,37 +153,27 @@ export default function CandidateProfile() {
       {/* ── LEFT: Main Workspace ── */}
       <div className="flex-1 flex flex-col pl-4 sm:pl-6 lg:pl-8 pt-4 lg:pt-6 pr-0 lg:pr-8 pb-4 min-w-0 transition-all duration-300 ease-in-out">
 
-        {/* ── TOP NAVIGATION ROW ── */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-2">
-            <Button onClick={() => navigate('/candidates')} variant="ghost" className="h-10 px-4 rounded-lg border border-border bg-background hover:bg-muted text-foreground transition-all flex items-center font-medium text-sm group shadow-sm">
-              <ArrowLeft className="w-4 h-4 mr-1.5 transition-transform group-hover:-translate-x-1" /> Back to Candidates
-            </Button>
-            {stage !== 'REJECTED' && stage !== 'HIRED' && stage !== 'SCREENING' && (
-              <Button onClick={handlePreviousStage} variant="ghost" className="h-10 px-4 rounded-lg border border-border bg-background hover:bg-muted text-foreground transition-all flex items-center font-medium text-sm group shadow-sm">
-                <ArrowLeft className="w-4 h-4 mr-1.5 transition-transform group-hover:-translate-x-1" /> Previous Stage
-              </Button>
-            )}
-          </div>
-          <div>
-            {stage !== 'REJECTED' && stage !== 'HIRED' && (
-              <Button onClick={handleNextStage} className="h-10 px-5 rounded-lg bg-foreground text-background hover:bg-foreground/90 transition-all shadow-md hover:shadow-lg flex items-center font-semibold text-sm group">
-                Next Stage <ChevronRight className="w-4 h-4 ml-1.5 transition-transform group-hover:translate-x-1" />
-              </Button>
-            )}
-          </div>
-        </div>
-
         {/* ── CANDIDATE HEADER ── */}
         <div className="pb-8 mb-6 border-b border-border">
-          <div className="flex flex-col items-center justify-center text-center gap-5">
-            
-            {/* Info */}
-            <div className="flex flex-col items-center space-y-4">
-              {/* Name & Position */}
+          <div className="max-w-2xl mx-auto w-full">
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <button
+                type="button"
+                onClick={() => navigate('/candidates')}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
+              >
+                <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+                Back to Candidates
+              </button>
+              <span className={cn('shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border', stageColor(stage))}>
+                {stageLabel(stage)}
+              </span>
+            </div>
+
+            <div className="flex flex-col items-center text-center gap-4">
               <div>
                 <div className="flex flex-wrap items-center justify-center gap-3 mb-1">
-                  <h1 className="text-3xl font-bold tracking-tight text-foreground">{candidate.full_name}</h1>
+                  <h1 className="text-3xl font-bold tracking-tight text-foreground text-balance">{candidate.full_name}</h1>
                   {candidate.is_duplicate_flagged && (
                     <span className="text-[10px] font-semibold text-warning bg-warning/10 border border-warning/20 px-1.5 py-0.5 rounded-[4px]">
                       Duplicate
@@ -189,22 +187,20 @@ export default function CandidateProfile() {
                 )}
               </div>
 
-              {/* Contact Info */}
               <div className="flex flex-wrap justify-center items-center gap-4 sm:gap-6 text-sm">
                 <span className="flex items-center gap-2 font-medium text-foreground">
                   <Phone className="w-4 h-4 text-muted-foreground" />
                   +91 {candidate.phone}
                 </span>
                 {candidate.email && (
-                  <span className="flex items-center gap-2 font-medium text-foreground">
-                    <Mail className="w-4 h-4 text-muted-foreground" />
+                  <span className="flex items-center gap-2 font-medium text-foreground break-all">
+                    <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
                     {candidate.email}
                   </span>
                 )}
               </div>
 
-              {/* Metadata Badges */}
-              <div className="flex flex-wrap items-center justify-center gap-2 text-xs pt-1">
+              <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
                 {candidate.source && (
                   <div className="flex items-center gap-1.5 bg-muted/50 border border-border/50 px-2.5 py-1 rounded-md text-muted-foreground">
                     {candidate.source === 'INDEED' ? (
@@ -226,42 +222,63 @@ export default function CandidateProfile() {
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Actions */}
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
-              <a
-                href={`tel:+91${candidate.phone}`}
-                className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-bold rounded-lg border border-border hover:bg-muted transition-colors text-foreground shadow-sm"
-              >
-                <img src="/phone.png" className="w-4 h-4 opacity-80" alt="Call" /> Call
-              </a>
-              <a
-                href={`https://wa.me/91${candidate.phone}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-bold rounded-lg border border-border hover:bg-muted transition-colors text-foreground shadow-sm"
-              >
-                <img src="/whatsapp.webp" className="w-4 h-4" alt="WhatsApp" /> WhatsApp
-              </a>
-              {candidate.email && (
+              <div className="flex flex-wrap items-center justify-center gap-2">
                 <a
-                  href={`mailto:${candidate.email}`}
+                  href={`tel:+91${candidate.phone}`}
                   className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-bold rounded-lg border border-border hover:bg-muted transition-colors text-foreground shadow-sm"
                 >
-                  <img src="/gmail.webp" className="w-4 h-4" alt="Email" /> Email
+                  <img src="/phone.png" className="w-4 h-4 opacity-80" alt="Call" /> Call
                 </a>
-              )}
-              {candidate.has_resume && (
-                <button
-                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-border hover:bg-muted transition-colors text-foreground cursor-pointer shadow-sm h-9"
-                  onClick={() => toast.info('Resume viewer coming soon')}
+                <a
+                  href={`https://wa.me/91${candidate.phone}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-bold rounded-lg border border-border hover:bg-muted transition-colors text-foreground shadow-sm"
                 >
-                  <FileText className="w-4 h-4" /> Resume
-                </button>
-              )}
+                  <img src="/whatsapp.webp" className="w-4 h-4" alt="WhatsApp" /> WhatsApp
+                </a>
+                {candidate.email && (
+                  <a
+                    href={`mailto:${candidate.email}`}
+                    className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-bold rounded-lg border border-border hover:bg-muted transition-colors text-foreground shadow-sm"
+                  >
+                    <img src="/gmail.webp" className="w-4 h-4" alt="Email" /> Email
+                  </a>
+                )}
+                {candidate.has_resume && (
+                  <ResumeButton
+                    candidateId={candidate.id}
+                    candidateName={candidate.full_name}
+                    hasResume={candidate.has_resume}
+                  />
+                )}
+              </div>
             </div>
-            
+
+            {showStageNav && (
+              <div className="mt-6 pt-6 border-t border-border/60 flex flex-wrap items-center justify-center gap-3">
+                {showPrev && (
+                  <Button
+                    onClick={handlePreviousStage}
+                    variant="ghost"
+                    className="h-10 px-4 rounded-lg border border-border bg-background hover:bg-muted text-foreground transition-all flex items-center font-medium text-sm group shadow-sm"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-1.5 transition-transform group-hover:-translate-x-1" />
+                    Previous Stage
+                  </Button>
+                )}
+                {showNext && (
+                  <Button
+                    onClick={handleNextStage}
+                    className="h-10 px-5 rounded-lg bg-foreground text-background hover:bg-foreground/90 transition-all shadow-md hover:shadow-lg flex items-center font-semibold text-sm group"
+                  >
+                    Next Stage
+                    <ChevronRight className="w-4 h-4 ml-1.5 transition-transform group-hover:translate-x-1" />
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

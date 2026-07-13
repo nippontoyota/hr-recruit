@@ -4,6 +4,7 @@ import { sendPreForm } from '../../api/candidates';
 import { Send, CheckCircle2 } from 'lucide-react';
 import type { Candidate } from '../../types';
 import { toast } from 'sonner';
+import { ResumeButton } from './ResumeButton';
 
 interface PreFormStatusProps {
   candidate: Candidate;
@@ -36,6 +37,15 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
           <CheckCircle2 className="w-10 h-10 text-success mb-3" />
           <h3 className="text-2xl font-bold text-foreground">Form Submitted Successfully</h3>
           <p className="text-text-secondary mt-1">Candidate's pre-interview form responses</p>
+          {candidate.has_resume && (
+            <div className="mt-4">
+              <ResumeButton
+                candidateId={candidate.id}
+                candidateName={candidate.full_name}
+                hasResume={candidate.has_resume}
+              />
+            </div>
+          )}
         </div>
         
         {candidate.profile ? (

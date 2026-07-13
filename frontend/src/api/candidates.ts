@@ -1,4 +1,4 @@
-import type { Candidate } from '../types';
+import type { Candidate, ResumeDocument } from '../types';
 import api from './client';
 
 export const getCandidates = async (): Promise<Candidate[]> => {
@@ -27,6 +27,11 @@ export const uploadResume = async (candidateId: string, file: File): Promise<any
       'Content-Type': 'multipart/form-data',
     },
   });
+  return response.data;
+};
+
+export const getCandidateResume = async (candidateId: string): Promise<ResumeDocument> => {
+  const response = await api.get(`/candidates/${candidateId}/resume`);
   return response.data;
 };
 

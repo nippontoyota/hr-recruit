@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { getRecruiterPublic, publicApplyCandidate, publicGetBasicCandidate, publicUpdateBasicCandidate, uploadResume } from '../../api/candidates';
 import { LoadingSpinner, Button, Input, Select } from '../../components/ui';
 import { UploadCloud } from 'lucide-react';
+import { digitsOnly, validateResumeFile } from '../../lib/validation';
+import { validateBasicCandidateForm } from '../../lib/validatePreForm';
 
 export default function ApplyForm() {
   const [searchParams] = useSearchParams();
@@ -58,8 +60,24 @@ export default function ApplyForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !phone.trim() || !email.trim() || !source.trim() || !position.trim()) {
-      setFormError('All fields (Name, Phone, Email, Source, and Position) are required.');
+
+    const validationError = validateBasicCandidateForm({
+      fullName,
+      phone,
+      email,
+      emailRequired: true,
+      position,
+      source,
+      sourceRequired: true,
+    });
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+
+    const resumeError = validateResumeFile(resumeFile);
+    if (resumeError.ok === false) {
+      setFormError(resumeError.message);
       return;
     }
 
@@ -68,14 +86,15 @@ export default function ApplyForm() {
 
     try {
       let candidateObj;
+      const normalizedPhone = digitsOnly(phone);
       if (candidateId) {
         // Update basic info
         candidateObj = await publicUpdateBasicCandidate(candidateId, {
-          full_name: fullName,
-          phone: phone,
-          email: email,
+          full_name: fullName.trim(),
+          phone: normalizedPhone,
+          email: email.trim(),
           source: source,
-          position_applied_for: position,
+          position_applied_for: position.trim(),
         });
         if (resumeFile) {
           await uploadResume(candidateId, resumeFile);
@@ -83,11 +102,11 @@ export default function ApplyForm() {
       } else if (hrId) {
         // Create new candidate
         candidateObj = await publicApplyCandidate({
-          full_name: fullName,
-          phone: phone,
-          email: email,
+          full_name: fullName.trim(),
+          phone: normalizedPhone,
+          email: email.trim(),
           source: source,
-          position_applied_for: position,
+          position_applied_for: position.trim(),
         }, hrId);
         if (resumeFile) {
           await uploadResume(candidateObj.id, resumeFile);
@@ -179,6 +198,7 @@ export default function ApplyForm() {
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Enter your full name"
+              maxLength={100}
             />
           </div>
 
@@ -188,8 +208,10 @@ export default function ApplyForm() {
             </label>
             <Input
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => setPhone(digitsOnly(e.target.value, 10))}
               placeholder="e.g. 9876543210"
+              inputMode="numeric"
+              maxLength={10}
             />
           </div>
 
@@ -209,17 +231,12 @@ export default function ApplyForm() {
             <label className="block text-sm font-medium text-text-primary mb-1">
               Position Applied For <span className="text-foreground">*</span>
             </label>
-            <Select
+            <Input
               value={position}
               onChange={(e) => setPosition(e.target.value)}
-            >
-              <option value="">Select position</option>
-              <option value="Sales">Sales</option>
-              <option value="Accounts">Accounts</option>
-              <option value="Marketing">Marketing</option>
-              <option value="Service">Service</option>
-              <option value="Insurance">Insurance</option>
-            </Select>
+              placeholder="e.g. Sales Executive"
+              maxLength={100}
+            />
           </div>
 
           <div>

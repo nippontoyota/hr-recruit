@@ -1,5 +1,6 @@
 import type { CandidateFormData } from '../wizardTypes';
 import { Input, Select } from '../../../../components/ui';
+import { digitsOnly } from '../../../../lib/validation';
 
 interface RecruitmentFormProps {
   data: CandidateFormData;
@@ -57,6 +58,7 @@ export const RecruitmentForm = ({ data, update }: RecruitmentFormProps) => {
             type="date"
             value={data.expectedJoiningDate}
             onChange={(e) => update('expectedJoiningDate', e.target.value)}
+            min={new Date().toISOString().split('T')[0]}
           />
         </div>
       </div>
@@ -108,8 +110,10 @@ export const RecruitmentForm = ({ data, update }: RecruitmentFormProps) => {
             <Input
               type="tel"
               value={data.refContactNumber}
-              onChange={(e) => update('refContactNumber', e.target.value)}
-              placeholder="+91 "
+              onChange={(e) => update('refContactNumber', digitsOnly(e.target.value, 10))}
+              placeholder="9876543210"
+              inputMode="numeric"
+              maxLength={10}
             />
           </div>
         </div>

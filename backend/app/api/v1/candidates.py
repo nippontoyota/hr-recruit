@@ -18,7 +18,7 @@ from app.models.document import Document
 from app.models.enums import DocumentType, PipelineStage, UserRole, ActivityType, ScreeningStatus, FormStatus
 from app.models.stage_history import StageHistory
 from app.models.user import User
-from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate
+from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, PreFormApplicationData
 from app.services import storage
 from app.services.workflow import WorkflowService
 
@@ -258,9 +258,10 @@ def public_full_status(
 @router.post("/public-apply-full/{token}", response_model=CandidateOut)
 def public_apply_full(
     token: str,
-    application_data: dict,
+    body: PreFormApplicationData,
     db: Session = Depends(get_db),
 ):
+    application_data = body.model_dump()
     row = db.scalar(select(Candidate).where(Candidate.pre_form_token == token))
     if not row:
         raise HTTPException(status_code=404, detail="Invalid token or candidate not found.")

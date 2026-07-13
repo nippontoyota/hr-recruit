@@ -8,6 +8,7 @@ import { getCandidates, deleteCandidate } from '../../api/candidates';
 import { getStageBadgeVariant } from '../../lib/utils';
 import type { Candidate } from '../../types';
 import { AddCandidateForm } from '../../components/candidates/AddCandidateForm';
+import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { toast } from 'sonner';
 
 export default function CandidatesList() {
@@ -142,18 +143,25 @@ export default function CandidatesList() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {['SUPER_ADMIN', 'ADMIN', 'HR'].includes(user?.role as string) ? (
-                        <button
-                          type="button"
-                          className="p-1.5 text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors rounded-[10px] focus:outline-none"
-                          onClick={(e) => { e.stopPropagation(); setCandidateToDelete(candidate); }}
-                          title="Delete Candidate"
-                        >
-                          <Trash className="w-4 h-4" strokeWidth={2} />
-                        </button>
-                      ) : (
-                        <span className="text-text-secondary/50 text-xs">—</span>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        <ResumeButton
+                          candidateId={candidate.id}
+                          candidateName={candidate.full_name}
+                          hasResume={candidate.has_resume}
+                          variant="icon"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        {['SUPER_ADMIN', 'ADMIN', 'HR'].includes(user?.role as string) ? (
+                          <button
+                            type="button"
+                            className="p-1.5 text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors rounded-[10px] focus:outline-none"
+                            onClick={(e) => { e.stopPropagation(); setCandidateToDelete(candidate); }}
+                            title="Delete Candidate"
+                          >
+                            <Trash className="w-4 h-4" strokeWidth={2} />
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}

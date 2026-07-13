@@ -70,6 +70,17 @@ export interface Candidate {
   has_resume?: boolean;
 }
 
+export interface ResumeDocument {
+  id: string;
+  candidate_id: string;
+  doc_type: string;
+  file_name: string;
+  content_type: string;
+  file_size_bytes: number;
+  download_url: string;
+  created_at: string;
+}
+
 export interface CandidateProfile {
   id: string;
   candidate_id: string;

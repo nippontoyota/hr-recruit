@@ -1,5 +1,6 @@
 import type { CandidateFormData } from '../wizardTypes';
 import { Input } from '../../../../components/ui';
+import { digitsOnly } from '../../../../lib/validation';
 
 interface AddressFormProps {
   data: CandidateFormData;
@@ -31,7 +32,7 @@ export const AddressForm = ({ data, update }: AddressFormProps) => {
           </div>
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1">PIN Code <span className="text-danger">*</span></label>
-            <Input value={data.permPinCode} onChange={(e) => update('permPinCode', e.target.value)} />
+            <Input value={data.permPinCode} onChange={(e) => update('permPinCode', digitsOnly(e.target.value, 6))} inputMode="numeric" maxLength={6} />
           </div>
         </div>
       </div>
@@ -71,7 +72,7 @@ export const AddressForm = ({ data, update }: AddressFormProps) => {
             </div>
             <div>
               <label className="block text-sm font-medium text-text-primary mb-1">PIN Code <span className="text-danger">*</span></label>
-              <Input value={data.presPinCode} onChange={(e) => update('presPinCode', e.target.value)} />
+              <Input value={data.presPinCode} onChange={(e) => update('presPinCode', digitsOnly(e.target.value, 6))} inputMode="numeric" maxLength={6} />
             </div>
           </div>
         )}

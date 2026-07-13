@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { Menu, Search, Bell } from 'lucide-react';
 import { useAuth } from '../../auth';
 import { AddCandidateForm } from '../candidates/AddCandidateForm';
+import { ResumeViewerProvider } from '../candidates/ResumeViewer';
 
 export const AppShell = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -16,6 +17,7 @@ export const AppShell = () => {
   const isCandidateProfile = location.pathname.match(/^\/candidates\/[a-zA-Z0-9_-]+$/);
 
   return (
+    <ResumeViewerProvider>
     <div className="flex h-screen w-full bg-background overflow-hidden font-sans">
       {/* Sidebar */}
       <Sidebar 
@@ -83,5 +85,6 @@ export const AppShell = () => {
         onSuccess={() => setShowAddCandidate(false)} 
       />
     </div>
+    </ResumeViewerProvider>
   );
 };
