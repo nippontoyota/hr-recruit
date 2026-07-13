@@ -8,6 +8,12 @@ from app.core.database import Base
 from app.models.candidate import Candidate  # noqa: F401
 from app.models.stage_history import StageHistory  # noqa: F401
 from app.models.user import User  # noqa: F401
+from app.models.candidate_screening import CandidateScreening  # noqa: F401
+from app.models.candidate_profile import CandidateProfile  # noqa: F401
+from app.models.activity_log import ActivityLog  # noqa: F401
+from app.models.document import Document  # noqa: F401
+from app.models.communication import Communication  # noqa: F401
+from app.models.followup import FollowUp  # noqa: F401
 
 config = context.config
 # Escape % so ConfigParser does not treat password URL-encoding as interpolation.
@@ -39,6 +45,13 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def include_name(name, type_, parent_names):
+    if type_ == "schema":
+        # Note this will not include the default schema
+        return name in [SCHEMA]
+    else:
+        return True
+
 def run_migrations_online() -> None:
     connectable = create_engine(
         settings.database_url,
@@ -53,6 +66,7 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             version_table_schema=SCHEMA,
             include_schemas=True,
+            include_name=include_name,
         )
         with context.begin_transaction():
             context.run_migrations()

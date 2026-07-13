@@ -9,10 +9,7 @@ from app.models.enums import SourceChannel, UserRole
 # DB role → values the SPA RoleRoute / AuthContext expect
 ROLE_TO_FRONTEND: dict[UserRole, str] = {
     UserRole.ADMIN: "SUPER_ADMIN",
-    UserRole.HEAD_OFFICE_HR: "HR_EXECUTIVE",
     UserRole.LOCAL_HR: "HR",
-    UserRole.DEPARTMENT_HEAD: "DEPARTMENT_MANAGER",
-    UserRole.SALARY_TEAM: "GM",
 }
 
 # Common UI / mock labels → SourceChannel

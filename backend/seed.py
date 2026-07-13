@@ -15,7 +15,7 @@ def seed():
         if db.scalar(select(User).where(User.email == "admin@nippon.test")) is None:
             return
         admin = db.scalar(select(User).where(User.email == "admin@nippon.test"))
-        hr = db.scalar(select(User).where(User.email == "local@nippon.test"))
+        hr = db.scalar(select(User).where(User.email == "hr@nippon.test"))
         if admin is None or hr is None:
             return
 
@@ -38,7 +38,7 @@ def seed():
         change_stage(
             db,
             row,
-            StageChange(to_stage=PipelineStage.AWAITING_LOCAL_INTERVIEW, changed_by_user_id=admin.id),
+            StageChange(to_stage=PipelineStage.HR_INTERVIEW, changed_by_user_id=admin.id),
         )
     finally:
         db.close()

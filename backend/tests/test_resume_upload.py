@@ -25,7 +25,7 @@ def _hr_user() -> User:
         email="hq@nippon.test",
         hashed_password="x",
         full_name="HQ",
-        role=UserRole.HEAD_OFFICE_HR,
+        role=UserRole.LOCAL_HR,
         is_active=True,
     )
 
@@ -65,6 +65,7 @@ def test_upload_rejects_bad_extension_when_authenticated():
     user = _hr_user()
     candidate = MagicMock()
     candidate.id = uuid4()
+    candidate.assigned_hr_user_id = user.id
     db = MagicMock()
     db.get.return_value = candidate
 
@@ -86,6 +87,7 @@ def test_upload_rejects_oversized_file():
     candidate_id = uuid4()
     candidate = MagicMock()
     candidate.id = candidate_id
+    candidate.assigned_hr_user_id = user.id
     db = MagicMock()
     db.get.return_value = candidate
 
@@ -108,7 +110,7 @@ def test_upload_success_mocked_storage():
     candidate_id = uuid4()
     candidate = MagicMock()
     candidate.id = candidate_id
-
+    candidate.assigned_hr_user_id = user.id
     db = MagicMock()
     db.get.return_value = candidate
     db.scalar.return_value = None
@@ -152,7 +154,7 @@ def test_upload_rolls_back_storage_when_db_commit_fails():
     candidate_id = uuid4()
     candidate = MagicMock()
     candidate.id = candidate_id
-
+    candidate.assigned_hr_user_id = user.id
     db = MagicMock()
     db.get.return_value = candidate
     db.scalar.return_value = None

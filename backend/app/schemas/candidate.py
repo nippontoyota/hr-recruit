@@ -1,11 +1,11 @@
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.models.enums import DocumentType, PipelineStage, FormStatus, ScreeningStatus, ActivityType
 from app.core.compat import parse_source_channel
-from app.models.enums import DocumentType, PipelineStage, SourceChannel
+from app.utils import validators as v
 
 
 class CandidateCreate(BaseModel):
@@ -16,19 +16,206 @@ class CandidateCreate(BaseModel):
     full_name: str
     phone: str
     email: str | None = None
-    source_channel: SourceChannel
+    source: str = "Unknown"
+    source_reference: str | None = None
+    position_applied_for: str = "Unknown"
     branch_location: str | None = Field(
         default=None,
         validation_alias=AliasChoices("branch_location", "branch_name"),
     )
-    application_data: dict[str, Any] | None = None
     assigned_hr_user_id: UUID | None = None
 
-    @field_validator("source_channel", mode="before")
+    @field_validator("full_name")
     @classmethod
-    def _normalize_source(cls, value: object) -> SourceChannel:
-        return parse_source_channel(value)
+    def check_full_name(cls, value: str) -> str:
+        return v.validate_full_name(value)
 
+    @field_validator("phone")
+    @classmethod
+    def check_phone(cls, value: str) -> str:
+        return v.validate_phone(value)
+
+    @field_validator("email")
+    @classmethod
+    def check_email(cls, value: str | None) -> str | None:
+        return v.validate_email(value, required=False)
+
+    @field_validator("position_applied_for")
+    @classmethod
+    def check_position(cls, value: str) -> str:
+        if value == "Unknown":
+            return value
+        return v.validate_text_field(value, "Position applied for", 2, 100)
+
+    @field_validator("source")
+    @classmethod
+    def check_source(cls, value: str) -> str:
+        if value in ("Unknown", ""):
+            return "Unknown"
+        try:
+            return parse_source_channel(value).value
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @field_validator("source_reference")
+    @classmethod
+    def check_source_reference(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        if len(value.strip()) > 255:
+            raise ValueError("Source reference must be at most 255 characters.")
+        return value.strip()
+
+
+class PreFormApplicationData(BaseModel):
+    """Validated payload for public pre-interview form submission."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    nameAadhaar: str
+    gender: str
+    dateOfBirth: str
+    age: str
+    maritalStatus: str
+    height: str
+    weight: str
+    bloodGroup: str
+    religionCaste: str
+
+    permHouseName: str
+    permPostOffice: str
+    permLandmark: str
+    permDistrict: str
+    permPinCode: str
+
+    sameAsPermanent: bool = True
+    presHouseName: str = ""
+    presPostOffice: str = ""
+    presLandmark: str = ""
+    presDistrict: str = ""
+    presPinCode: str = ""
+
+    aadhaarNumber: str
+    panNumber: str
+    drivingLicenseNumber: str
+    passportNumber: str = ""
+
+    class10School: str
+    class10Board: str
+    class10Percentage: str
+    class10PassingYear: str
+    class10Mode: str
+
+    languagesRead: str
+    languagesWrite: str
+    languagesSpeak: str
+
+    previousExperience: bool = False
+    prevCompanyName: str = ""
+    prevPosition: str = ""
+    totalExperience: str
+    expectedSalary: str
+
+    sourceOfOpening: str
+    referredBy: str = ""
+    preferredRegion: str
+    expectedJoiningDate: str
+
+    refRole: str
+    refName: str
+    refPanchayat: str
+    refContactNumber: str
+
+    prevTerminated: bool = False
+    physicalDisability: bool = False
+    nervousDisorder: bool = False
+    eyeVision: bool = False
+    criminalConviction: bool = False
+
+    @model_validator(mode="after")
+    def validate_all(self) -> "PreFormApplicationData":
+        v.validate_full_name(self.nameAadhaar, "Name (as per Aadhaar)")
+        v.validate_select(self.gender, v.GENDERS, "Gender")
+        v.validate_dob(self.dateOfBirth, self.age)
+        v.validate_select(self.maritalStatus, v.MARITAL_STATUSES, "Marital status")
+        v.validate_select(self.bloodGroup, v.BLOOD_GROUPS, "Blood group")
+        v.validate_number_range(self.height, "Height", 100, 250)
+        v.validate_number_range(self.weight, "Weight", 30, 200)
+        v.validate_text_field(self.religionCaste, "Religion & caste", 2, 100)
+
+        for prefix, label in (
+            ("perm", "Permanent"),
+        ):
+            v.validate_text_field(getattr(self, f"{prefix}HouseName"), f"{label} house name", 2, 200)
+            v.validate_text_field(getattr(self, f"{prefix}PostOffice"), f"{label} post office", 2, 100)
+            v.validate_text_field(getattr(self, f"{prefix}Landmark"), f"{label} landmark", 2, 100)
+            v.validate_text_field(getattr(self, f"{prefix}District"), f"{label} district", 2, 100)
+            v.validate_pin_code(getattr(self, f"{prefix}PinCode"), f"{label} PIN code")
+
+        if not self.sameAsPermanent:
+            for prefix, label in (("pres", "Present"),):
+                v.validate_text_field(getattr(self, f"{prefix}HouseName"), f"{label} house name", 2, 200)
+                v.validate_text_field(getattr(self, f"{prefix}PostOffice"), f"{label} post office", 2, 100)
+                v.validate_text_field(getattr(self, f"{prefix}Landmark"), f"{label} landmark", 2, 100)
+                v.validate_text_field(getattr(self, f"{prefix}District"), f"{label} district", 2, 100)
+                v.validate_pin_code(getattr(self, f"{prefix}PinCode"), f"{label} PIN code")
+
+        v.validate_aadhaar(self.aadhaarNumber)
+        v.validate_pan(self.panNumber)
+        v.validate_driving_license(self.drivingLicenseNumber)
+        v.validate_passport(self.passportNumber)
+
+        v.validate_text_field(self.class10School, "10th school name", 2, 150)
+        v.validate_text_field(self.class10Board, "10th board", 2, 100)
+        v.validate_percentage(self.class10Percentage, "10th percentage")
+        v.validate_passing_year(self.class10PassingYear, "10th passing year")
+        v.validate_select(self.class10Mode, v.STUDY_MODES, "10th mode of study")
+
+        v.validate_text_field(self.languagesRead, "Languages to read", 2, 200)
+        v.validate_text_field(self.languagesWrite, "Languages to write", 2, 200)
+        v.validate_text_field(self.languagesSpeak, "Languages to speak", 2, 200)
+
+        v.validate_experience_text(self.totalExperience)
+        v.validate_salary(self.expectedSalary)
+
+        if self.previousExperience:
+            v.validate_text_field(self.prevCompanyName, "Previous company name", 2, 150)
+            v.validate_text_field(self.prevPosition, "Previous position", 2, 100)
+
+        v.validate_select(self.sourceOfOpening, v.OPENING_SOURCES, "Source of opening")
+        if self.sourceOfOpening == "Employee Referral" or self.referredBy.strip():
+            v.validate_text_field(self.referredBy, "Referred by", 2, 100)
+
+        v.validate_text_field(self.preferredRegion, "Preferred region", 2, 100)
+        v.validate_future_date(self.expectedJoiningDate, "Expected joining date")
+
+        v.validate_select(self.refRole, v.REF_ROLES, "Reference role")
+        v.validate_text_field(self.refName, "Reference name", 2, 100)
+        v.validate_text_field(self.refPanchayat, "Reference panchayat / location", 2, 100)
+        v.validate_phone(self.refContactNumber, "Reference contact number")
+
+        return self
+
+
+
+
+class CandidateProfileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    candidate_id: UUID
+    version: int
+    current_location: str | None
+    experience_level: str | None
+    total_experience: str | None
+    current_company: str | None
+    expected_salary: str | None
+    joining_date: str | None
+    email: str | None
+    resume_url: str | None
+    raw_data: dict | None = None
+    created_at: datetime
+    updated_at: datetime
 
 class CandidateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -38,13 +225,21 @@ class CandidateOut(BaseModel):
     full_name: str
     phone: str
     email: str | None
-    source_channel: SourceChannel
+    source: str
+    source_reference: str | None
+    position_applied_for: str
+    share_url: str | None = None
+    pre_form_status: FormStatus
+    pre_form_sent_at: datetime | None
+    pre_form_submitted_at: datetime | None
     current_stage: PipelineStage
     branch_location: str | None
-    application_data: dict[str, Any] | None
+    profile: CandidateProfileOut | None = None
     is_duplicate_flagged: bool
     duplicate_of_candidate_id: UUID | None
     assigned_hr_user_id: UUID | None
+    assigned_manager_id: UUID | None
+    assigned_gm_id: UUID | None
     applied_at: datetime
     created_at: datetime
     updated_at: datetime
@@ -54,8 +249,13 @@ class CandidateOut(BaseModel):
 
 class StageChange(BaseModel):
     to_stage: PipelineStage
-    changed_by_user_id: UUID
-    reason: str | None = None
+    remarks: str | None = None
+
+    @model_validator(mode="after")
+    def check_reject_remarks(self) -> "StageChange":
+        if self.to_stage == PipelineStage.REJECTED:
+            v.validate_reject_remarks(self.remarks)
+        return self
 
 
 class StageHistoryOut(BaseModel):
@@ -82,3 +282,48 @@ class DocumentOut(BaseModel):
     uploaded_by_user_id: UUID | None
     created_at: datetime
     download_url: str
+
+class CandidateScreeningCreate(BaseModel):
+    status: ScreeningStatus
+    call_completed: bool = False
+    interest_confirmed: bool = False
+    salary_discussed: bool = False
+    notice_period_discussed: bool = False
+    basic_eligibility_checked: bool = False
+    remarks: str | None = None
+    pending_reason: str | None = None
+    follow_up_date: datetime | None = None
+
+    @model_validator(mode="after")
+    def check_pending_fields(self) -> "CandidateScreeningCreate":
+        from datetime import date
+
+        if self.status == ScreeningStatus.PENDING:
+            if not self.pending_reason or not self.pending_reason.strip():
+                raise ValueError("Pending reason is required when status is PENDING.")
+            if self.follow_up_date is None:
+                raise ValueError("Follow-up date is required when status is PENDING.")
+            if self.follow_up_date.date() < date.today():
+                raise ValueError("Follow-up date cannot be in the past.")
+        if self.remarks and len(self.remarks) > 2000:
+            raise ValueError("Remarks must be at most 2000 characters.")
+        return self
+
+class CandidateScreeningOut(CandidateScreeningCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    candidate_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+class ActivityLogCreate(BaseModel):
+    activity_type: ActivityType
+    title: str
+    description: str
+
+class ActivityLogOut(ActivityLogCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    candidate_id: UUID
+    created_by_user_id: UUID | None
+    created_at: datetime

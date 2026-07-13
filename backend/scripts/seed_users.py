@@ -18,46 +18,10 @@ SEED_USERS = [
         "branch_location": None,
     },
     {
-        "email": "local@nippon.test",
-        "full_name": "Local HR Coimbatore",
-        "role": UserRole.LOCAL_HR,
-        "branch_location": "Coimbatore",
-    },
-    {
         "email": "hr@nippon.test",
         "full_name": "Local HR",
         "role": UserRole.LOCAL_HR,
         "branch_location": "Coimbatore",
-    },
-    {
-        "email": "hq@nippon.test",
-        "full_name": "Head Office HR",
-        "role": UserRole.HEAD_OFFICE_HR,
-        "branch_location": "Chennai HQ",
-    },
-    {
-        "email": "hrexec@nippon.test",
-        "full_name": "HR Executive",
-        "role": UserRole.HEAD_OFFICE_HR,
-        "branch_location": "Chennai HQ",
-    },
-    {
-        "email": "dept@nippon.test",
-        "full_name": "Department Head",
-        "role": UserRole.DEPARTMENT_HEAD,
-        "branch_location": None,
-    },
-    {
-        "email": "salary@nippon.test",
-        "full_name": "Salary Team",
-        "role": UserRole.SALARY_TEAM,
-        "branch_location": None,
-    },
-    {
-        "email": "gm@nippon.test",
-        "full_name": "General Manager",
-        "role": UserRole.SALARY_TEAM,
-        "branch_location": None,
     },
 ]
 

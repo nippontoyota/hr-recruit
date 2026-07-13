@@ -32,3 +32,12 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Documentation
+docs/
+
+# AI Agents & IDE
+.agents/
+.gemini/
+skills-lock.json
+*.scratch.*

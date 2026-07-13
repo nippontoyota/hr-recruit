@@ -47,7 +47,6 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@nippon.test"
                 error={!!error}
-                rounded="xl"
               />
             </div>
             <div>
@@ -61,7 +60,6 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 error={!!error}
-                rounded="xl"
                 rightElement={
                   <button
                     type="button"

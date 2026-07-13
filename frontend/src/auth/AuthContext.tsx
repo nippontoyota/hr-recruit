@@ -1,9 +1,8 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type { User, UserRole } from '../types';
 import { login as apiLogin, AUTH_EXPIRED_EVENT } from '../api/client';
-
-import { IS_MOCK } from '../lib/env';
 
 interface AuthContextType {
   user: User | null;
@@ -15,14 +14,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const MOCK_USERS: Record<string, User> = {
-  'admin@nippon.test': { id: '1', email: 'admin@nippon.test', full_name: 'System Admin', role: 'SUPER_ADMIN' },
-  'hrexec@nippon.test': { id: '2', email: 'hrexec@nippon.test', full_name: 'HR Exec', role: 'HR_EXECUTIVE' },
-  'hr@nippon.test': { id: '3', email: 'hr@nippon.test', full_name: 'HR Rep', role: 'HR' },
-  'dept@nippon.test': { id: '4', email: 'dept@nippon.test', full_name: 'Dept Manager', role: 'DEPARTMENT_MANAGER' },
-  'gm@nippon.test': { id: '5', email: 'gm@nippon.test', full_name: 'General Manager', role: 'GM' },
-};
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -64,28 +55,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      if (IS_MOCK) {
-        // Simulate network delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        const mockUser = MOCK_USERS[email];
-        if (mockUser) {
-          const mockToken = `mock-jwt-token-${mockUser.id}`;
-          setUser(mockUser);
-          setToken(mockToken);
-          localStorage.setItem('token', mockToken);
-          localStorage.setItem('user', JSON.stringify(mockUser));
-        } else {
-          throw new Error('Invalid mock credentials');
-        }
-      } else {
-        // Real API call
-        const response = await apiLogin(email, password);
-        setUser(response.user);
-        setToken(response.token);
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
-      }
+      const response = await apiLogin(email, password);
+      setUser(response.user);
+      setToken(response.token);
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('user', JSON.stringify(response.user));
     } finally {
       setIsLoading(false);
     }

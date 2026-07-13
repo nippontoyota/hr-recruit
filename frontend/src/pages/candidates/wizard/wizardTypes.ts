@@ -6,9 +6,7 @@ export type WizardSectionId =
   | 'address'
   | 'identity'
   | 'education'
-  | 'languages'
   | 'employment'
-  | 'reference'
   | 'recruitment'
   | 'medical';
 

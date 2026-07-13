@@ -1,6 +1,8 @@
 import type { CandidateFormData } from '../wizardTypes';
 import { Camera, UploadCloud, FileText } from 'lucide-react';
 import { PdfViewer } from '../../../../components/ui/PdfViewer';
+import { Select } from '../../../../components/ui/Select';
+import { NIPPON_BRANCHES } from '../../../../types';
 
 interface BasicInfoFormProps {
   data: CandidateFormData;
@@ -46,12 +48,16 @@ export const BasicInfoForm = ({ data, update }: BasicInfoFormProps) => {
           />
           
           <div className="flex flex-col w-full space-y-1 mb-8">
-            <input
-              className="text-lg font-bold text-primary text-center bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-primary/30 rounded w-full placeholder:text-primary/40"
+            <Select
+              className="text-lg font-bold text-primary text-center bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-primary/30 rounded w-full placeholder:text-primary/40 appearance-none text-center-last h-auto px-0 py-0"
               value={data.branchName}
               onChange={(e) => update('branchName', e.target.value)}
-              placeholder="Branch Name"
-            />
+            >
+              <option value="" disabled>Select Branch</option>
+              {NIPPON_BRANCHES.map(branch => (
+                <option key={branch} value={branch}>{branch}</option>
+              ))}
+            </Select>
             <input
               className="text-base font-medium text-text-secondary text-center bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-primary/30 rounded w-full placeholder:text-text-secondary/40"
               value={data.positionAppliedFor}
