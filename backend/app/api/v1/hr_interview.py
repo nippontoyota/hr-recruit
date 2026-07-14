@@ -9,12 +9,16 @@ from app.core.database import get_db
 from app.core.deps import get_current_active_user
 from app.models.hr_interview import HRInterview
 from app.models.candidate import Candidate
-from app.models.enums import InterviewVerdict, PipelineStage
+from app.models.enums import InterviewVerdict, PipelineStage, InterviewMode, InterviewStatus
 
 router = APIRouter(prefix="/candidates/{candidate_id}/hr-interview", tags=["HR Interview"])
 
 
 class HRInterviewUpdate(BaseModel):
+    interview_mode: InterviewMode | None = None
+    scheduled_time: datetime | None = None
+    location_or_link: str | None = None
+    status: InterviewStatus | None = None
     communication_score: int | None = None
     technical_score: int | None = None
     experience_score: int | None = None
@@ -69,17 +73,21 @@ def submit_hr_interview(
     for key, value in data.dict(exclude_unset=True).items():
         setattr(interview, key, value)
         
-    db.commit()
-    db.refresh(interview)
-    
+    if data.interview_mode or data.scheduled_time or data.location_or_link:
+        if not interview.status or interview.status == InterviewStatus.PENDING_SCHEDULE:
+            interview.status = InterviewStatus.SCHEDULED
+            
     # Update candidate stage based on final verdict if present
     if data.verdict:
+        interview.status = InterviewStatus.EVALUATED
         if data.verdict == InterviewVerdict.SELECTED:
             candidate.current_stage = PipelineStage.DEPARTMENT_INTERVIEW
         elif data.verdict == InterviewVerdict.REJECTED:
             candidate.current_stage = PipelineStage.REJECTED
         elif data.verdict == InterviewVerdict.ON_HOLD:
             candidate.current_stage = PipelineStage.ON_HOLD
-        db.commit()
+            
+    db.commit()
+    db.refresh(interview)
         
     return interview

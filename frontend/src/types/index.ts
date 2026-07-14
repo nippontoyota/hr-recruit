@@ -94,3 +94,24 @@ export interface CandidateProfile {
   created_at: string;
   updated_at: string;
 }
+
+export type InterviewMode = 'PHYSICAL' | 'ONLINE';
+export type InterviewStatus = 'PENDING_SCHEDULE' | 'SCHEDULED' | 'EVALUATED';
+
+export interface HRInterviewData {
+  id?: string;
+  candidate_id?: string;
+  interview_mode?: InterviewMode;
+  scheduled_time?: string;
+  location_or_link?: string;
+  status?: InterviewStatus;
+  communication_score?: number;
+  technical_score?: number;
+  experience_score?: number;
+  cultural_fit_score?: number;
+  current_salary?: string;
+  expected_salary?: string;
+  notice_period?: string;
+  verdict?: 'SELECTED' | 'REJECTED' | 'ON_HOLD';
+  remarks?: string;
+}
