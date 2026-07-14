@@ -83,3 +83,9 @@ class FollowUpStatus(str, enum.Enum):
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
 
+
+class InterviewVerdict(str, enum.Enum):
+    SELECTED = "SELECTED"
+    REJECTED = "REJECTED"
+    ON_HOLD = "ON_HOLD"
+

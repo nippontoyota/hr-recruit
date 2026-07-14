@@ -12,10 +12,12 @@ import { ScreeningChecklist } from '../../components/candidates/ScreeningCheckli
 import { PreFormStatus } from '../../components/candidates/PreFormStatus';
 import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPreviewPanel';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
+import { HRInterviewDashboard } from '../../components/candidates/HRInterviewDashboard';
+import { extractError } from '../../lib/utils';
 
 
 const LINEAR_STAGES: PipelineStage[] = [
-  'SCREENING', 'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD'
+  'SCREENING', 'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW', 'FINAL_APPROVAL', 'HIRED'
 ];
 
 
@@ -43,7 +45,7 @@ export default function CandidateProfile() {
         setError('Candidate not found.');
       }
     } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Failed to fetch candidate details.');
+      setError(extractError(err, 'Failed to fetch candidate details.'));
     } finally {
       setLoading(false);
     }
@@ -77,7 +79,7 @@ export default function CandidateProfile() {
       await updateCandidateStage(candidate.id, nextStage, '');
       handleUpdate();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Failed to update stage.');
+      toast.error(extractError(err, 'Failed to update stage.'));
     }
   };
 
@@ -92,7 +94,7 @@ export default function CandidateProfile() {
       await updateCandidateStage(candidate.id, prevStage, '');
       handleUpdate();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Failed to update stage.');
+      toast.error(extractError(err, 'Failed to update stage.'));
     }
   };
 
@@ -111,7 +113,7 @@ export default function CandidateProfile() {
       setRejectRemarks('');
       toast.success('Candidate rejected');
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Failed to reject candidate.');
+      toast.error(extractError(err, 'Failed to reject candidate.'));
     } finally {
       setIsRejecting(false);
     }
@@ -145,8 +147,9 @@ export default function CandidateProfile() {
 
   const stage = candidate.current_stage;
   const showWhatsAppSidebar = stage === 'CANDIDATE_FORM' && candidate.pre_form_status !== 'SUBMITTED';
-  const showPrev = stage !== 'REJECTED' && stage !== 'HIRED' && stage !== 'SCREENING';
-  const showNext = stage !== 'REJECTED' && stage !== 'HIRED';
+  const stageIndex = LINEAR_STAGES.indexOf(stage);
+  const showPrev = stageIndex > 0;
+  const showNext = stageIndex !== -1 && stageIndex < LINEAR_STAGES.length - 1;
   const showStageNav = showPrev || showNext;
 
   return (
@@ -296,6 +299,13 @@ export default function CandidateProfile() {
             <WhatsAppPreviewPanel candidate={candidate} className="lg:hidden mt-6 rounded-xl border border-border overflow-hidden" />
           )}
 
+
+          {stage === 'HR_INTERVIEW' && (
+            <HRInterviewDashboard
+              candidate={candidate}
+              onUpdate={handleUpdate}
+            />
+          )}
 
         </div>
       </div>

@@ -44,9 +44,14 @@ export const Sidebar = ({
         <div
           className={cn(
             'flex items-center h-14 border-b border-border shrink-0 bg-sidebar',
-            isCollapsed ? 'justify-center px-2' : 'justify-end px-3'
+            isCollapsed ? 'justify-center' : 'justify-between px-4'
           )}
         >
+          {!isCollapsed && (
+            <span className="font-bold text-text-primary whitespace-nowrap overflow-hidden text-ellipsis">
+              Recruitment CRM
+            </span>
+          )}
           {setIsCollapsed && !isCollapsed && (
             <Button
               variant="ghost"
@@ -59,21 +64,19 @@ export const Sidebar = ({
               <ChevronLeft className="h-4 w-4" />
             </Button>
           )}
-        </div>
-        {setIsCollapsed && isCollapsed && (
-          <div className="hidden lg:flex justify-center pb-2 -mt-1">
+          {setIsCollapsed && isCollapsed && (
             <Button
               variant="ghost"
               size="icon"
-              className="text-text-secondary h-7 w-7"
+              className="hidden lg:flex text-text-secondary h-8 w-8 shrink-0"
               onClick={() => setIsCollapsed(false)}
               title="Expand sidebar"
               aria-label="Expand sidebar"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
-          </div>
-        )}
+          )}
+        </div>
 
         <nav className="flex-1 py-4 overflow-y-auto overflow-x-hidden" aria-label="Main navigation">
           {!isCollapsed && (

@@ -108,7 +108,7 @@ export function PreFormStatus({ candidate }: PreFormStatusProps) {
               <div className="flex items-center gap-2">
                 {!isEditing ? (
                   <>
-                    <Button variant="outline" size="sm" onClick={handlePrint} className="h-8">
+                    <Button variant="secondary" size="sm" onClick={handlePrint} className="h-8">
                       <Printer className="w-4 h-4 mr-1.5" />
                       Print
                     </Button>

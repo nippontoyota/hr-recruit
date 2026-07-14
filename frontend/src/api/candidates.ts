@@ -101,3 +101,13 @@ export const sendPreForm = async (candidateId: string): Promise<any> => {
   const response = await api.post(`/candidates/${candidateId}/pre-form/send`);
   return response.data;
 };
+
+export const getHRInterview = async (candidateId: string): Promise<any> => {
+  const response = await api.get(`/candidates/${candidateId}/hr-interview`);
+  return response.data;
+};
+
+export const submitHRInterview = async (candidateId: string, data: Record<string, unknown>): Promise<any> => {
+  const response = await api.post(`/candidates/${candidateId}/hr-interview`, data);
+  return response.data;
+};
