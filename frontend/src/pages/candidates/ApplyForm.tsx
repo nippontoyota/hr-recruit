@@ -31,6 +31,17 @@ export default function ApplyForm() {
   const [submitSuccess, setSubmitSuccess] = useState<{ candidateId: string; name: string } | null>(null);
   const [formError, setFormError] = useState('');
 
+  const handleAutofill = () => {
+    setFullName('Rahul Sharma');
+    setPhone('9876543210');
+    setEmail('rahul.sharma@example.test');
+    setSource('WALK_IN');
+    setPosition('Sales Executive');
+    const blob = new Blob(['%PDF-1.4 ... dummy pdf content ...'], { type: 'application/pdf' });
+    const dummyFile = new File([blob], 'dummy_resume.pdf', { type: 'application/pdf' });
+    setResumeFile(dummyFile);
+  };
+
   useEffect(() => {
     const initPage = async () => {
       try {
@@ -210,15 +221,26 @@ export default function ApplyForm() {
   return (
     <PublicShell>
       <div className="page-card p-6 sm:p-8">
-        <div className="mb-8 pb-6 border-b border-border">
-          <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Candidate registration</h1>
-          {recruiterName ? (
-            <p className="mt-2 text-sm text-text-secondary">
-              Referred by <span className="font-medium text-text-primary">{recruiterName}</span>
-            </p>
-          ) : (
-            <p className="mt-2 text-sm text-text-secondary">Update your application details below.</p>
-          )}
+        <div className="mb-8 pb-6 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Candidate registration</h1>
+            {recruiterName ? (
+              <p className="mt-2 text-sm text-text-secondary">
+                Referred by <span className="font-medium text-text-primary">{recruiterName}</span>
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-text-secondary">Update your application details below.</p>
+            )}
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleAutofill}
+            className="self-start sm:self-center"
+          >
+            Autofill Dummy Data
+          </Button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">

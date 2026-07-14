@@ -56,6 +56,101 @@ export default function PreFormPage() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleAutofill = () => {
+    const birthYear = 2000;
+    const today = new Date();
+    const dob = `${birthYear}-05-15`;
+    let age = today.getFullYear() - birthYear;
+    const monthDiff = today.getMonth() - 4; // May
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < 15)) {
+      age -= 1;
+    }
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const expectedJoining = tomorrow.toISOString().split('T')[0];
+
+    setFormData(prev => ({
+      ...prev,
+      nameAadhaar: prev.fullName || 'Rahul Sharma',
+      gender: 'Male',
+      dateOfBirth: dob,
+      age: age.toString(),
+      maritalStatus: 'Single',
+      height: '175',
+      weight: '70',
+      bloodGroup: 'O+',
+      religionCaste: 'Hindu / General',
+
+      permHouseName: 'Villa 10',
+      permPostOffice: 'Kochi H.O.',
+      permLandmark: 'Near Metro Pillar 340',
+      permDistrict: 'Ernakulam',
+      permPinCode: '682024',
+
+      sameAsPermanent: true,
+      presHouseName: '',
+      presPostOffice: '',
+      presLandmark: '',
+      presDistrict: '',
+      presPinCode: '',
+
+      aadhaarNumber: '999988887777',
+      panNumber: 'ABCDE1234F',
+      drivingLicenseNumber: 'KL0720230001234',
+      passportNumber: 'Z1234567',
+
+      class10School: 'St. Marys High School',
+      class10Board: 'CBSE',
+      class10Percentage: '85',
+      class10PassingYear: '2016',
+      class10Mode: 'Regular',
+
+      class12School: 'St. Marys HSS',
+      class12Stream: 'Science',
+      class12Percentage: '82',
+      class12PassingYear: '2018',
+      class12Mode: 'Regular',
+
+      gradCourse: 'B.Sc. Computer Science',
+      gradCollege: 'Sacred Heart College',
+      gradPercentage: '78',
+      gradPassingYear: '2021',
+
+      postGradCourse: '',
+      postGradCollege: '',
+      postGradPercentage: '',
+      postGradPassingYear: '',
+
+      languagesRead: 'English, Malayalam',
+      languagesWrite: 'English, Malayalam',
+      languagesSpeak: 'English, Hindi, Malayalam',
+
+      previousExperience: true,
+      prevCompanyName: 'Tata Consultancy Services',
+      prevPosition: 'Junior Associate',
+      totalExperience: '2 Years',
+      expectedSalary: '25000',
+
+      hasReference: true,
+      refRole: 'Colleague',
+      refName: 'Amit Patel',
+      refPanchayat: 'Kochi',
+      refContactNumber: '9876543211',
+
+      sourceOfOpening: 'Walk-in',
+      referredBy: '',
+      preferredRegion: 'Ernakulam',
+      expectedJoiningDate: expectedJoining,
+
+      prevTerminated: false,
+      physicalDisability: false,
+      nervousDisorder: false,
+      eyeVision: false,
+      criminalConviction: false,
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
@@ -161,11 +256,22 @@ export default function PreFormPage() {
   return (
     <PublicShell maxWidth="2xl">
       <div className="page-card p-6 sm:p-8">
-        <div className="mb-8 pb-6 border-b border-border">
-          <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Pre-interview form</h1>
-          <p className="mt-2 text-sm text-text-secondary">
-            Welcome, <span className="font-medium text-text-primary">{candidateName}</span>. Complete every section before submitting.
-          </p>
+        <div className="mb-8 pb-6 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Pre-interview form</h1>
+            <p className="mt-2 text-sm text-text-secondary">
+              Welcome, <span className="font-medium text-text-primary">{candidateName}</span>. Complete every section before submitting.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleAutofill}
+            className="self-start sm:self-center"
+          >
+            Autofill Dummy Data
+          </Button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-10">

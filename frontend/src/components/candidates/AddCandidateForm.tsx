@@ -28,6 +28,19 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
   const [formError, setFormError] = useState('');
   const [duplicateWarning, setDuplicateWarning] = useState<{ id: string, originalId: string | null } | null>(null);
 
+  const handleAutofill = () => {
+    setFullName('Amit Patel');
+    setPhone('9876543211');
+    setEmail('amit.patel@example.test');
+    setSource('WALK_IN');
+    setSourceDetails('Walk-in candidate');
+    setPosition('Sales Executive');
+    setBranchLocation('Kalamassery');
+    const blob = new Blob(['%PDF-1.4 ... dummy pdf content ...'], { type: 'application/pdf' });
+    const dummyFile = new File([blob], 'dummy_resume.pdf', { type: 'application/pdf' });
+    setResumeFile(dummyFile);
+  };
+
   const resetForm = () => {
     setFullName('');
     setPhone('');
@@ -153,6 +166,17 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Add Candidate" size="md">
       <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <div className="flex justify-between items-center bg-muted/45 p-3 rounded-xl border border-border">
+          <span className="text-xs text-text-secondary font-medium">Testing tools:</span>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleAutofill}
+          >
+            Autofill Dummy Data
+          </Button>
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2 sm:col-span-1">
             <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
