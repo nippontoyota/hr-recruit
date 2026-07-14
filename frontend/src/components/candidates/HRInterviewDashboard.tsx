@@ -5,7 +5,6 @@ import { Button, PdfViewer, LoadingSpinner } from '../ui';
 import { toast } from 'sonner';
 import { cn, extractError } from '../../lib/utils';
 import { Star, AlertCircle, FileText, ExternalLink } from 'lucide-react';
-import { motion } from 'framer-motion';
 
 interface HRInterviewDashboardProps {
   candidate: Candidate;
@@ -253,7 +252,7 @@ export function HRInterviewDashboard({ candidate, onUpdate }: HRInterviewDashboa
             <p className="text-xs font-bold text-foreground uppercase tracking-wider text-center">Final Verdict</p>
             <div className="grid grid-cols-3 gap-3">
               <Button
-                variant={verdict === 'SELECTED' ? 'success' : 'ghost'}
+                variant="ghost"
                 onClick={() => handleSave('SELECTED')}
                 className={cn(
                   "border border-border",
@@ -263,7 +262,7 @@ export function HRInterviewDashboard({ candidate, onUpdate }: HRInterviewDashboa
                 Selected
               </Button>
               <Button
-                variant={verdict === 'ON_HOLD' ? 'warning' : 'ghost'}
+                variant="ghost"
                 onClick={() => handleSave('ON_HOLD')}
                 className={cn(
                   "border border-border",

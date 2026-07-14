@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { FileText, ExternalLink } from 'lucide-react';
+import { FileText, ExternalLink, Download } from 'lucide-react';
 import { getCandidateResume } from '../../api/candidates';
 import type { ResumeDocument } from '../../types';
 import { Modal, LoadingSpinner, Button, PdfViewer } from '../ui';
@@ -84,8 +84,23 @@ function ResumeViewerModal({
         )}
 
         {!loading && !error && doc && isPdfDocument(doc) && (
-          <div className="flex-1 overflow-hidden">
-            <PdfViewer url={doc.download_url} />
+          <div className="flex-1 flex flex-col overflow-hidden bg-muted/30">
+            <div className="flex items-center justify-between px-4 py-3 bg-surface border-b border-border shrink-0">
+              <span className="text-sm font-medium text-text-primary">
+                Resume Document
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => window.open(doc.download_url, '_blank')}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download PDF
+              </Button>
+            </div>
+            <div className="flex-1 overflow-hidden relative">
+              <PdfViewer url={doc.download_url} />
+            </div>
           </div>
         )}
 

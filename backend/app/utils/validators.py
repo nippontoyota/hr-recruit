@@ -181,7 +181,7 @@ def validate_percentage(value: str, label: str, required: bool = True) -> float 
     return num
 
 
-def validate_passing_year(value: str, label: str, required: bool = True) -> int | None:
+def validate_passing_year(value: str, label: str, required: bool = True, max_year: int | None = None) -> int | None:
     if not (value or "").strip():
         if required:
             raise ValueError(f"{label} is required.")
@@ -191,8 +191,9 @@ def validate_passing_year(value: str, label: str, required: bool = True) -> int 
         raise ValueError(f"{label} must be a 4-digit year.")
     year = int(raw)
     current = datetime.now(timezone.utc).year
-    if year < MIN_YEAR or year > current:
-        raise ValueError(f"{label} must be between {MIN_YEAR} and {current}.")
+    limit = max_year if max_year is not None else current
+    if year < MIN_YEAR or year > limit:
+        raise ValueError(f"{label} must be between {MIN_YEAR} and {limit}.")
     return year
 
 

@@ -76,6 +76,7 @@ export interface CandidateFormData {
   refName: string;
   refPanchayat: string;
   refContactNumber: string;
+  hasReference: boolean;
 
   sourceOfOpening: string;
   referredBy: string;
@@ -152,6 +153,7 @@ export const initialCandidateData: CandidateFormData = {
   prevPosition: '',
   totalExperience: '',
   expectedSalary: '',
+  hasReference: false,
   refRole: '',
   refName: '',
   refPanchayat: '',

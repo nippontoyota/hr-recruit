@@ -8,7 +8,7 @@ import { ResumeViewerProvider } from '../candidates/ResumeViewer';
 export const AppShell = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { user, logout, role } = useAuth();
+  const { user, role } = useAuth();
 
   const location = useLocation();
   const isCandidateProfile = location.pathname.match(/^\/candidates\/[a-zA-Z0-9_-]+$/);
@@ -39,11 +39,8 @@ export const AppShell = () => {
               </div>
 
               <div className="flex items-center justify-end gap-2 ml-auto">
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted transition-colors text-left"
-                  title="Log out"
+                <div
+                  className="flex items-center gap-2 p-1.5 rounded-lg text-left"
                 >
                   <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-semibold text-xs uppercase shrink-0">
                     {user?.full_name.charAt(0) || 'U'}
@@ -58,7 +55,7 @@ export const AppShell = () => {
                       </p>
                     )}
                   </div>
-                </button>
+                </div>
               </div>
             </header>
           )}

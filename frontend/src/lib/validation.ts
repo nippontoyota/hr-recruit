@@ -185,7 +185,16 @@ export function validatePercentage(value: string, label: string, required = true
   return { ok: true };
 }
 
-export function validatePassingYear(value: string, label: string, required = true): ValidationResult {
+export function formatAadhaar(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 12);
+  const parts = [];
+  for (let i = 0; i < digits.length; i += 4) {
+    parts.push(digits.slice(i, i + 4));
+  }
+  return parts.join(' ');
+}
+
+export function validatePassingYear(value: string, label: string, required = true, maxYear?: number): ValidationResult {
   if (!value.trim()) {
     if (required) return { ok: false, message: `${label} is required.` };
     return { ok: true };
@@ -193,8 +202,9 @@ export function validatePassingYear(value: string, label: string, required = tru
   if (!YEAR.test(value.trim())) return { ok: false, message: `${label} must be a 4-digit year.` };
   const year = Number.parseInt(value, 10);
   const current = new Date().getFullYear();
-  if (year < MIN_YEAR || year > current) {
-    return { ok: false, message: `${label} must be between ${MIN_YEAR} and ${current}.` };
+  const limit = maxYear ?? current;
+  if (year < MIN_YEAR || year > limit) {
+    return { ok: false, message: `${label} must be between ${MIN_YEAR} and ${limit}.` };
   }
   return { ok: true };
 }

@@ -106,6 +106,22 @@ class PreFormApplicationData(BaseModel):
     class10PassingYear: str
     class10Mode: str
 
+    class12School: str
+    class12Stream: str
+    class12Percentage: str
+    class12PassingYear: str
+    class12Mode: str
+
+    gradCourse: str = ""
+    gradCollege: str = ""
+    gradPercentage: str = ""
+    gradPassingYear: str = ""
+
+    postGradCourse: str = ""
+    postGradCollege: str = ""
+    postGradPercentage: str = ""
+    postGradPassingYear: str = ""
+
     languagesRead: str
     languagesWrite: str
     languagesSpeak: str
@@ -113,7 +129,7 @@ class PreFormApplicationData(BaseModel):
     previousExperience: bool = False
     prevCompanyName: str = ""
     prevPosition: str = ""
-    totalExperience: str
+    totalExperience: str = "Fresher"
     expectedSalary: str
 
     sourceOfOpening: str
@@ -121,10 +137,11 @@ class PreFormApplicationData(BaseModel):
     preferredRegion: str
     expectedJoiningDate: str
 
-    refRole: str
-    refName: str
-    refPanchayat: str
-    refContactNumber: str
+    hasReference: bool = False
+    refRole: str = ""
+    refName: str = ""
+    refPanchayat: str = ""
+    refContactNumber: str = ""
 
     prevTerminated: bool = False
     physicalDisability: bool = False
@@ -171,16 +188,39 @@ class PreFormApplicationData(BaseModel):
         v.validate_passing_year(self.class10PassingYear, "10th passing year")
         v.validate_select(self.class10Mode, v.STUDY_MODES, "10th mode of study")
 
+        v.validate_text_field(self.class12School, "12th school name", 2, 150)
+        v.validate_text_field(self.class12Stream, "12th stream", 2, 100)
+        v.validate_percentage(self.class12Percentage, "12th percentage")
+        v.validate_passing_year(self.class12PassingYear, "12th passing year")
+        v.validate_select(self.class12Mode, v.STUDY_MODES, "12th mode of study")
+
+        if self.gradCourse.strip() or self.gradCollege.strip() or self.gradPercentage.strip() or self.gradPassingYear.strip():
+            v.validate_text_field(self.gradCourse, "Graduation course", 2, 100)
+            v.validate_text_field(self.gradCollege, "Graduation college", 2, 100)
+            v.validate_percentage(self.gradPercentage, "Graduation percentage")
+            current_year = datetime.now(timezone.utc).year
+            v.validate_passing_year(self.gradPassingYear, "Graduation passing year", max_year=current_year + 4)
+
+        if self.postGradCourse.strip() or self.postGradCollege.strip() or self.postGradPercentage.strip() or self.postGradPassingYear.strip():
+            v.validate_text_field(self.postGradCourse, "Post graduation course", 2, 100)
+            v.validate_text_field(self.postGradCollege, "Post graduation college", 2, 100)
+            v.validate_percentage(self.postGradPercentage, "Post graduation percentage")
+            current_year = datetime.now(timezone.utc).year
+            v.validate_passing_year(self.postGradPassingYear, "Post graduation passing year", max_year=current_year + 4)
+
         v.validate_text_field(self.languagesRead, "Languages to read", 2, 200)
         v.validate_text_field(self.languagesWrite, "Languages to write", 2, 200)
         v.validate_text_field(self.languagesSpeak, "Languages to speak", 2, 200)
 
-        v.validate_experience_text(self.totalExperience)
         v.validate_salary(self.expectedSalary)
 
         if self.previousExperience:
+            v.validate_experience_text(self.totalExperience)
             v.validate_text_field(self.prevCompanyName, "Previous company name", 2, 150)
             v.validate_text_field(self.prevPosition, "Previous position", 2, 100)
+        else:
+            if not self.totalExperience.strip():
+                self.totalExperience = "Fresher"
 
         v.validate_select(self.sourceOfOpening, v.OPENING_SOURCES, "Source of opening")
         if self.sourceOfOpening == "Employee Referral" or self.referredBy.strip():
@@ -189,10 +229,11 @@ class PreFormApplicationData(BaseModel):
         v.validate_text_field(self.preferredRegion, "Preferred region", 2, 100)
         v.validate_future_date(self.expectedJoiningDate, "Expected joining date")
 
-        v.validate_select(self.refRole, v.REF_ROLES, "Reference role")
-        v.validate_text_field(self.refName, "Reference name", 2, 100)
-        v.validate_text_field(self.refPanchayat, "Reference panchayat / location", 2, 100)
-        v.validate_phone(self.refContactNumber, "Reference contact number")
+        if self.hasReference:
+            v.validate_select(self.refRole, v.REF_ROLES, "Reference role")
+            v.validate_text_field(self.refName, "Reference name", 2, 100)
+            v.validate_text_field(self.refPanchayat, "Reference panchayat / location", 2, 100)
+            v.validate_phone(self.refContactNumber, "Reference contact number")
 
         return self
 
