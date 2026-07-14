@@ -89,3 +89,14 @@ class InterviewVerdict(str, enum.Enum):
     REJECTED = "REJECTED"
     ON_HOLD = "ON_HOLD"
 
+
+class InterviewMode(str, enum.Enum):
+    PHYSICAL = "PHYSICAL"
+    ONLINE = "ONLINE"
+
+
+class InterviewStatus(str, enum.Enum):
+    PENDING_SCHEDULE = "PENDING_SCHEDULE"
+    SCHEDULED = "SCHEDULED"
+    EVALUATED = "EVALUATED"
+

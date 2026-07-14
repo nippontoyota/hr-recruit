@@ -7,7 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.config import settings
 from app.core.database import Base
-from app.models.enums import InterviewVerdict
+from app.models.enums import InterviewMode, InterviewStatus, InterviewVerdict
 
 SCHEMA = settings.db_schema
 
@@ -18,6 +18,17 @@ class HRInterview(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     candidate_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.candidates.id", ondelete="CASCADE"), index=True, unique=True
+    )
+    
+    interview_mode: Mapped[InterviewMode | None] = mapped_column(
+        Enum(InterviewMode, name="interview_mode", schema=SCHEMA, create_type=False),
+        nullable=True
+    )
+    scheduled_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    location_or_link: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[InterviewStatus] = mapped_column(
+        Enum(InterviewStatus, name="interview_status", schema=SCHEMA, create_type=False),
+        default=InterviewStatus.PENDING_SCHEDULE, nullable=False
     )
     
     communication_score: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, LoadingSpinner, EmptyState, Modal } from '../../components/ui';
-import { ArrowLeft, X, ChevronRight, XCircle, MapPin, Phone, Mail } from 'lucide-react';
+import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
+import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy } from 'lucide-react';
 import { getCandidateById, updateCandidateStage } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { toast } from 'sonner';
@@ -25,7 +25,8 @@ export default function CandidateProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [candidate, setCandidate] = useState<Candidate | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
 
@@ -37,20 +38,24 @@ export default function CandidateProfile() {
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (candidate && !loading) {
+    if (candidate && !initialLoading) {
       const timer = setTimeout(() => {
         workspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [candidate?.id, candidate?.current_stage, loading]);
+  }, [candidate?.id, candidate?.current_stage, initialLoading]);
 
 
   const fetchCandidate = async (showLoading = true) => {
     if (!id) return;
     try {
       if (showLoading) {
-        setLoading(true);
+        if (!candidate) {
+          setInitialLoading(true);
+        } else {
+          setIsUpdating(true);
+        }
       }
       const res = await getCandidateById(id);
       if (res) {
@@ -61,9 +66,8 @@ export default function CandidateProfile() {
     } catch (err: any) {
       setError(extractError(err, 'Failed to fetch candidate details.'));
     } finally {
-      if (showLoading) {
-        setLoading(false);
-      }
+      setInitialLoading(false);
+      setIsUpdating(false);
     }
   };
 
@@ -94,40 +98,16 @@ export default function CandidateProfile() {
     fetchCandidate(true);
   };
 
-  const handleNextStage = async () => {
-    if (!candidate) return;
-    const currentIndex = LINEAR_STAGES.indexOf(candidate.current_stage);
-    if (currentIndex === -1) return;
+  const handleStageClick = async (clickedStage: PipelineStage) => {
+    if (!candidate || candidate.current_stage === clickedStage) return;
     
-    // Stop progression if they are at or past the end of linear progression (HIRED)
-    const hiredIndex = LINEAR_STAGES.indexOf('HIRED');
-    if (currentIndex >= hiredIndex) {
-      toast.info('Cannot advance stage further.');
-      return;
-    }
-
-    const nextStage = LINEAR_STAGES[currentIndex + 1];
-    setLoading(true);
+    setIsUpdating(true);
     try {
-      await updateCandidateStage(candidate.id, nextStage, '');
+      await updateCandidateStage(candidate.id, clickedStage, '');
       handleUpdate();
     } catch (err: any) {
       toast.error(extractError(err, 'Failed to update stage.'));
-    }
-  };
-
-  const handlePreviousStage = async () => {
-    if (!candidate) return;
-    const currentIndex = LINEAR_STAGES.indexOf(candidate.current_stage);
-    if (currentIndex <= 0) return;
-    
-    const prevStage = LINEAR_STAGES[currentIndex - 1];
-    setLoading(true);
-    try {
-      await updateCandidateStage(candidate.id, prevStage, '');
-      handleUpdate();
-    } catch (err: any) {
-      toast.error(extractError(err, 'Failed to update stage.'));
+      setIsUpdating(false);
     }
   };
 
@@ -152,7 +132,7 @@ export default function CandidateProfile() {
     }
   };
 
-  if (loading) {
+  if (initialLoading) {
     return (
       <div className="w-full min-h-[60vh] flex items-center justify-center">
         <LoadingSpinner size="lg" />
@@ -180,10 +160,6 @@ export default function CandidateProfile() {
 
   const stage = candidate.current_stage;
   const showWhatsAppSidebar = stage === 'CANDIDATE_FORM' && candidate.pre_form_status !== 'SUBMITTED';
-  const stageIndex = LINEAR_STAGES.indexOf(stage);
-  const showPrev = stageIndex > 0;
-  const showNext = stageIndex !== -1 && stageIndex < LINEAR_STAGES.length - 1;
-  const showStageNav = showPrev || showNext;
 
   return (
     <div className="flex items-start w-full min-h-screen">
@@ -288,57 +264,86 @@ export default function CandidateProfile() {
               </div>
             </div>
 
-            {showStageNav && (
-              <div className="mt-6 pt-6 border-t border-border/60 flex flex-wrap items-center justify-center gap-3">
-                {showPrev && (
-                  <Button
-                    onClick={handlePreviousStage}
-                    variant="secondary"
-                    className="h-10 px-4"
-                  >
-                    <ArrowLeft className="w-4 h-4 mr-1.5" />
-                    Previous stage
-                  </Button>
-                )}
-                {showNext && (
-                  <Button
-                    onClick={handleNextStage}
-                    className="h-10 px-5"
-                  >
-                    Next stage
-                    <ChevronRight className="w-4 h-4 ml-1.5" />
-                  </Button>
-                )}
-              </div>
-            )}
+            <div className="mt-8">
+              <PipelineStepper 
+                stages={LINEAR_STAGES.filter(s => s !== 'HIRED')} 
+                currentStage={candidate.current_stage} 
+                onStageClick={handleStageClick}
+                isLoading={isUpdating}
+              />
+            </div>
           </div>
         </div>
 
         {/* ── DYNAMIC STAGE WORKSPACE ── */}
-        <div ref={workspaceRef} className="scroll-mt-8">
-          {stage === 'SCREENING' && (
-            <ScreeningChecklist
-              candidateId={candidate.id}
-              onUpdate={handleUpdate}
-            />
+        <div ref={workspaceRef} className="relative min-h-[400px] scroll-mt-8">
+          {isUpdating && (
+            <div className="absolute inset-0 z-50 bg-background/40 backdrop-blur-sm flex items-center justify-center rounded-xl transition-all duration-300">
+              <LoadingSpinner size="md" className="text-primary/70" />
+            </div>
           )}
 
-          {stage === 'CANDIDATE_FORM' && (
-            <PreFormStatus candidate={candidate} />
-          )}
+          <div className={cn("transition-opacity duration-300", isUpdating ? "opacity-50 pointer-events-none" : "opacity-100")}>
+            {stage === 'SCREENING' && (
+              <ScreeningChecklist
+                candidateId={candidate.id}
+                onUpdate={handleUpdate}
+              />
+            )}
 
-          {showWhatsAppSidebar && (
-            <WhatsAppPreviewPanel candidate={candidate} className="lg:hidden mt-6 rounded-xl border border-border overflow-hidden" />
-          )}
+            {stage === 'CANDIDATE_FORM' && (
+              <PreFormStatus candidate={candidate} />
+            )}
 
+            {showWhatsAppSidebar && (
+              <WhatsAppPreviewPanel candidate={candidate} className="lg:hidden mt-6 rounded-xl border border-border overflow-hidden" />
+            )}
 
-          {stage === 'HR_INTERVIEW' && (
-            <HRInterviewDashboard
-              candidate={candidate}
-              onUpdate={handleUpdate}
-            />
-          )}
+            {stage === 'HR_INTERVIEW' && (
+              <HRInterviewDashboard
+                candidate={candidate}
+                onUpdate={handleUpdate}
+              />
+            )}
 
+            {stage === 'DEPARTMENT_INTERVIEW' && (
+              <div className="bg-surface/50 border border-border p-8 rounded-xl text-center mt-6">
+                <h3 className="text-lg font-bold text-foreground">Department Interview</h3>
+                <p className="text-muted-foreground mt-2 max-w-md mx-auto">
+                  The candidate is currently undergoing departmental review. Use the stepper above to advance them to Final Approval once completed.
+                </p>
+              </div>
+            )}
+
+            {stage === 'FINAL_APPROVAL' && (
+              <div className="bg-surface/50 border border-border p-8 rounded-xl text-center mt-6 flex flex-col items-center">
+                <h3 className="text-lg font-bold text-foreground">Final Approval</h3>
+                <p className="text-muted-foreground mt-2 mb-6 max-w-md mx-auto">
+                  All interviews and background checks are complete. If you are ready to extend an offer and onboard the candidate, click below to mark them as Hired.
+                </p>
+                <Button 
+                  variant="primary" 
+                  className="bg-success text-white hover:bg-success/90 border-transparent shadow-sm"
+                  onClick={() => handleStageClick('HIRED')}
+                  isLoading={isUpdating}
+                >
+                  Approve & Hire Candidate
+                </Button>
+              </div>
+            )}
+
+            {stage === 'HIRED' && (
+              <div className="bg-success/5 border border-success/20 p-8 rounded-xl text-center mt-6 flex flex-col items-center">
+                <div className="w-16 h-16 bg-success rounded-full flex items-center justify-center shadow-lg mb-4">
+                  <Trophy className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-success">Candidate Hired!</h3>
+                <p className="text-success/80 mt-2 max-w-md mx-auto font-medium">
+                  Congratulations! The recruitment pipeline is complete and the candidate has been successfully hired.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
