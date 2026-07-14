@@ -19,9 +19,12 @@ from app.models.document import Document
 from app.models.enums import DocumentType, PipelineStage, UserRole, ActivityType, ScreeningStatus, FormStatus
 from app.models.stage_history import StageHistory
 from app.models.user import User
-from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, PreFormApplicationData, ScreeningSubmitResponse, CandidateProfileRawDataUpdate
+from app.models.communication import Communication
+from app.models.enums import CommunicationType, CommunicationDirection, CommunicationStatus
+from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, PreFormApplicationData, ScreeningSubmitResponse, CandidateProfileRawDataUpdate, WhatsAppInviteCreate
 from app.services import storage
 from app.services.workflow import WorkflowService
+from app.services.doubletick import DoubleTickClient
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -720,4 +723,105 @@ def delete_candidate_endpoint(
     except IntegrityError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail="Cannot delete candidate due to existing references.")
+
+
+@router.post("/{id}/whatsapp-invite")
+def send_whatsapp_invite(
+    id: UUID,
+    body: WhatsAppInviteCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+):
+    candidate = get_candidate_for_user(db, id, user)
+    
+    # Map variables in the correct order for the template nippon_pre_interview_invite
+    DOUBLETICK_VARIABLE_KEYS = [
+        "candidateName",
+        "position",
+        "formLink",
+        "branchName",
+        "visitDate",
+        "arrivalTime",
+        "mapsLink",
+        "recruiterName",
+        "extraInstructions",
+    ]
+    
+    placeholders = []
+    for key in DOUBLETICK_VARIABLE_KEYS:
+        val = body.variables.get(key, "")
+        placeholders.append(val)
+        
+    client = DoubleTickClient()
+    
+    try:
+        res = client.send_template(
+            to_phone=candidate.phone,
+            template_name="nippon_pre_interview_invite",
+            placeholders=placeholders,
+        )
+        external_message_id = None
+        messages = res.get("messages", [])
+        if messages:
+            external_message_id = messages[0].get("id")
+            
+        status = CommunicationStatus.SENT
+        err_msg = None
+    except Exception as e:
+        status = CommunicationStatus.FAILED
+        err_msg = str(e)
+        
+    # Construct content preview
+    content_lines = [
+        f"Hello {body.variables.get('candidateName', '')},",
+        "",
+        f"Thank you for your interest in the *{body.variables.get('position', '')}* role at Nippon Toyota.",
+        "",
+        "Please complete your pre-interview form using the link below:",
+        body.variables.get('formLink', ''),
+        "",
+        body.variables.get('extraInstructions', '').strip() or "Fill all sections carefully. Incomplete forms may delay your application.",
+        "",
+        f"Date: *{body.variables.get('visitDate', '')}*",
+        f"Arrival time: *{body.variables.get('arrivalTime', '')}*",
+        f"Location: *{body.variables.get('branchName', '')}*",
+        "",
+        "Google Maps:",
+        body.variables.get('mapsLink', ''),
+        "",
+        "Regards,",
+        body.variables.get('recruiterName', ''),
+        "Nippon Toyota — HR Team"
+    ]
+    full_content = "\n".join(content_lines)
+    
+    comm = Communication(
+        candidate_id=id,
+        type=CommunicationType.WHATSAPP,
+        direction=CommunicationDirection.OUTGOING,
+        status=status,
+        content_preview=full_content[:255],
+        external_message_id=external_message_id,
+        created_by=user.id
+    )
+    db.add(comm)
+    
+    activity_desc = f"Template: nippon_pre_interview_invite. Status: {status.value}."
+    if err_msg:
+        activity_desc += f" Error: {err_msg}"
+        
+    log = ActivityLog(
+        candidate_id=id,
+        activity_type=ActivityType.WHATSAPP,
+        title="WhatsApp Invite Sent" if status == CommunicationStatus.SENT else "WhatsApp Invite Failed",
+        description=activity_desc,
+        created_by_user_id=user.id,
+    )
+    db.add(log)
+    db.commit()
+    
+    if status == CommunicationStatus.FAILED:
+        raise HTTPException(status_code=400, detail=f"Failed to send WhatsApp invite: {err_msg}")
+        
+    return {"status": "success", "message_id": external_message_id}
 

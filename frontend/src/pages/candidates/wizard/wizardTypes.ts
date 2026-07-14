@@ -83,11 +83,7 @@ export interface CandidateFormData {
   preferredRegion: string;
   expectedJoiningDate: string;
 
-  prevTerminated: boolean;
-  physicalDisability: boolean;
-  nervousDisorder: boolean;
-  eyeVision: boolean;
-  criminalConviction: boolean;
+  medicalRemarks: string;
 }
 
 export const initialCandidateData: CandidateFormData = {
@@ -162,9 +158,5 @@ export const initialCandidateData: CandidateFormData = {
   referredBy: '',
   preferredRegion: '',
   expectedJoiningDate: '',
-  prevTerminated: false,
-  physicalDisability: false,
-  nervousDisorder: false,
-  eyeVision: false,
-  criminalConviction: false,
+  medicalRemarks: '',
 };

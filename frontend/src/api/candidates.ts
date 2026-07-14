@@ -111,3 +111,11 @@ export const submitHRInterview = async (candidateId: string, data: Record<string
   const response = await api.post(`/candidates/${candidateId}/hr-interview`, data);
   return response.data;
 };
+
+export const sendWhatsAppInvite = async (
+  candidateId: string,
+  variables: Record<string, string>
+): Promise<any> => {
+  const response = await api.post(`/candidates/${candidateId}/whatsapp-invite`, { variables });
+  return response.data;
+};

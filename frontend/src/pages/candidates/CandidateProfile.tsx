@@ -319,7 +319,6 @@ export default function CandidateProfile() {
           {stage === 'SCREENING' && (
             <ScreeningChecklist
               candidateId={candidate.id}
-              candidateBranch={candidate.branch_location}
               onUpdate={handleUpdate}
             />
           )}

@@ -143,11 +143,7 @@ export default function PreFormPage() {
       preferredRegion: 'Ernakulam',
       expectedJoiningDate: expectedJoining,
 
-      prevTerminated: false,
-      physicalDisability: false,
-      nervousDisorder: false,
-      eyeVision: false,
-      criminalConviction: false,
+      medicalRemarks: 'None',
     }));
   };
 

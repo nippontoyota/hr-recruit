@@ -15,6 +15,7 @@ import {
 import { useAuth } from '../../auth';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import { sendWhatsAppInvite } from '../../api/candidates';
 
 interface WhatsAppPreviewPanelProps {
   candidate: Candidate;
@@ -83,6 +84,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
   const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const [vars, setVars] = useState<WhatsAppTemplateVars>(() => {
     const defaults = defaultTemplateVars({
@@ -96,8 +98,6 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
 
     return {
       ...defaults,
-      visitDate: '18 July 2026',
-      arrivalTime: '10:30 AM',
       ...loadStoredTemplateVars(candidate.id),
       formLink: candidate.share_url || defaults.formLink,
     };
@@ -130,9 +130,18 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
     toast.success('Preview updated');
   };
 
-  const confirmSend = () => {
+  const confirmSend = async () => {
     setIsConfirming(false);
-    toast.info('Send backend is not connected yet.');
+    setIsSending(true);
+    try {
+      await sendWhatsAppInvite(candidate.id, vars);
+      toast.success('WhatsApp invitation sent successfully!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.response?.data?.detail || 'Failed to send WhatsApp invitation.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -190,10 +199,6 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
                     TODAY
                   </div>
 
-                  <div className="mx-auto w-fit max-w-[85%] rounded-lg bg-[#FFF5C4] p-2 text-center text-[11.5px] leading-relaxed text-[#55656E] shadow-sm">
-                    <span className="opacity-90">Messages and calls are end-to-end encrypted. No one outside of this chat, not even WhatsApp, can read or listen to them.</span>
-                  </div>
-
                   <div className="relative max-w-[88%] rounded-xl rounded-tl-sm bg-white px-2.5 py-2 text-left text-[14.5px] leading-[1.3] text-[#111b21] shadow-sm mt-1">
                     <span className="absolute -left-2 top-0 h-0 w-0 border-r-[10px] border-t-[12px] border-r-white border-t-transparent" />
                     <div className="whitespace-pre-wrap break-words pb-4">
@@ -237,6 +242,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
           <Button
             className="w-full !bg-[#08796b] hover:!bg-[#06685c]"
             onClick={() => setIsConfirming(true)}
+            isLoading={isSending}
           >
             <Send className="mr-2 h-4 w-4" />
             Send to candidate
@@ -248,7 +254,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
         isOpen={isEditing}
         onClose={() => setIsEditing(false)}
         title="Edit WhatsApp content"
-        description="Changes update this preview only. Sending remains disconnected."
+        description="Changes update this preview only."
         size="md"
       >
         <div className="max-h-[72vh] overflow-y-auto p-6">
@@ -297,7 +303,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
       >
         <div className="p-6">
           <p className="text-sm leading-6 text-muted-foreground">
-            Review the preview before confirming. The messaging backend is not connected yet.
+            Review the preview before confirming.
           </p>
           <div className="mt-6 flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="ghost" onClick={() => setIsConfirming(false)}>No, go back</Button>

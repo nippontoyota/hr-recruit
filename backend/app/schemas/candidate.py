@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -148,6 +148,7 @@ class PreFormApplicationData(BaseModel):
     nervousDisorder: bool = False
     eyeVision: bool = False
     criminalConviction: bool = False
+    medicalRemarks: str = ""
 
     @model_validator(mode="after")
     def validate_all(self) -> "PreFormApplicationData":
@@ -353,13 +354,7 @@ class CandidateScreeningCreate(BaseModel):
                 raise ValueError("Follow-up date is required when status is PENDING.")
             if self.follow_up_date.date() < date.today():
                 raise ValueError("Follow-up date cannot be in the past.")
-        if self.status == ScreeningStatus.QUALIFIED:
-            if not self.visit_branch or not self.visit_branch.strip():
-                raise ValueError("Branch office is required when accepting a candidate.")
-            if self.branch_visit_date is None:
-                raise ValueError("Branch visit date is required when accepting a candidate.")
-            if self.branch_visit_date.date() < date.today():
-                raise ValueError("Branch visit date cannot be in the past.")
+
         if self.remarks and len(self.remarks) > 2000:
             raise ValueError("Remarks must be at most 2000 characters.")
         return self
@@ -387,3 +382,7 @@ class ActivityLogOut(ActivityLogCreate):
     candidate_id: UUID
     created_by_user_id: UUID | None
     created_at: datetime
+
+
+class WhatsAppInviteCreate(BaseModel):
+    variables: dict[str, str]

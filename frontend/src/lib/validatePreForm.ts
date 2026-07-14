@@ -298,7 +298,8 @@ export function validatePreForm(data: CandidateFormData): string | null {
     'languagesRead', 'languagesWrite', 'languagesSpeak',
     'prevCompanyName', 'prevPosition', 'totalExperience', 'expectedSalary',
     'sourceOfOpening', 'referredBy', 'preferredRegion', 'expectedJoiningDate',
-    'refRole', 'refName', 'refPanchayat', 'refContactNumber'
+    'refRole', 'refName', 'refPanchayat', 'refContactNumber',
+    'medicalRemarks'
   ];
 
   for (const f of fields) {

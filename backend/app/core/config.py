@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     supabase_storage_bucket: str = "candidate-documents"
     resume_signed_url_expires_seconds: int = 3600
     resume_max_bytes: int = 10 * 1024 * 1024
+
+    doubletick_api_key: str = ""
+    waba_phone_number_id: str = ""
     # Comma-separated origins for the SPA (Vite default included)
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     public_app_url: str = "http://localhost:5173"
