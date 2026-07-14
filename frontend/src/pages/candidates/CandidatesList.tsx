@@ -23,15 +23,19 @@ export default function CandidatesList() {
   // Form Modal State
   const [isAddOpen, setIsAddOpen] = useState(false);
 
-  const fetchCandidatesList = async () => {
+  const fetchCandidatesList = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       const list = await getCandidates();
       setCandidates(list);
     } catch (err) {
       console.error('Failed to load candidates', err);
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -51,7 +55,25 @@ export default function CandidatesList() {
   };
 
   useEffect(() => {
-    fetchCandidatesList();
+    fetchCandidatesList(true);
+
+    const intervalId = setInterval(() => {
+      fetchCandidatesList(false);
+    }, 10000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchCandidatesList(false);
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
   }, []);
 
   const handleCopyLink = () => {

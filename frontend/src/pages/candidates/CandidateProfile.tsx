@@ -35,9 +35,12 @@ export default function CandidateProfile() {
   const [isRejecting, setIsRejecting] = useState(false);
 
 
-  const fetchCandidate = async () => {
+  const fetchCandidate = async (showLoading = true) => {
     if (!id) return;
     try {
+      if (showLoading) {
+        setLoading(true);
+      }
       const res = await getCandidateById(id);
       if (res) {
         setCandidate(res);
@@ -47,18 +50,37 @@ export default function CandidateProfile() {
     } catch (err: any) {
       setError(extractError(err, 'Failed to fetch candidate details.'));
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    setLoading(true);
-    fetchCandidate();
+    fetchCandidate(true);
+
+    const intervalId = setInterval(() => {
+      fetchCandidate(false);
+    }, 10000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchCandidate(false);
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleUpdate = () => {
-    fetchCandidate();
+    fetchCandidate(true);
   };
 
   const handleNextStage = async () => {
