@@ -78,7 +78,7 @@ export default function CandidatesList() {
 
   const handleCopyLink = () => {
     if (!user) return;
-    const url = `${window.location.origin}/apply?hr=${user.id}`;
+    const url = `${window.location.origin}/#/apply?hr=${user.id}`;
     navigator.clipboard.writeText(url);
     setCopied(true);
     toast.success('Recruiter link copied to clipboard');

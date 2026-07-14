@@ -3,9 +3,9 @@ from pathlib import PurePosixPath
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
+import os
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -65,8 +65,13 @@ def resume_candidate_ids(db: Session, candidate_ids: list[UUID]) -> set[UUID]:
 def share_url_for_token(token: str | None) -> str | None:
     if not token:
         return None
-    base = settings.public_app_url.rstrip("/")
-    return f"{base}/pre-form/{token}"
+    
+    if os.environ.get("VERCEL"):
+        base = "https://hr-recruit-demo.vercel.app"
+    else:
+        base = settings.public_app_url.rstrip("/")
+        
+    return f"{base}/#/pre-form/{token}"
 
 
 def to_candidate_out(row: Candidate, has_resume: bool) -> CandidateOut:

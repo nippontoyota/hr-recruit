@@ -90,7 +90,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
     const defaults = defaultTemplateVars({
       candidateName: candidate.full_name,
       position: candidate.position_applied_for,
-      formLink: candidate.share_url || `${window.location.origin}/pre-form/pending`,
+      formLink: candidate.share_url || `${window.location.origin}/#/pre-form/pending`,
       branchName: 'Nippon Toyota Kochi - Edappally',
       mapsLink: 'https://maps.google.com/?q=Nippon+Toyota+Kochi+Edappally',
       recruiterName: user?.full_name,
@@ -134,7 +134,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
     setIsConfirming(false);
     setIsSending(true);
     try {
-      await sendWhatsAppInvite(candidate.id, vars);
+      await sendWhatsAppInvite(candidate.id, vars as unknown as Record<string, string>);
       toast.success('WhatsApp invitation sent successfully!');
     } catch (err: any) {
       console.error(err);

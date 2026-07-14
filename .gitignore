@@ -41,3 +41,8 @@ docs/
 .gemini/
 skills-lock.json
 *.scratch.*
+
+# Local Scripts & Hooks
+.githooks/
+PRODUCT.md
+run.bat
