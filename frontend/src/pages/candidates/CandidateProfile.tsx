@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, LoadingSpinner, EmptyState, Modal } from '../../components/ui';
 import { ArrowLeft, X, ChevronRight, XCircle, MapPin, Phone, Mail } from 'lucide-react';
@@ -33,6 +33,17 @@ export default function CandidateProfile() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
+
+  const workspaceRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (candidate && !loading) {
+      const timer = setTimeout(() => {
+        workspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [candidate?.id, candidate?.current_stage, loading]);
 
 
   const fetchCandidate = async (showLoading = true) => {
@@ -304,7 +315,7 @@ export default function CandidateProfile() {
         </div>
 
         {/* ── DYNAMIC STAGE WORKSPACE ── */}
-        <div>
+        <div ref={workspaceRef} className="scroll-mt-8">
           {stage === 'SCREENING' && (
             <ScreeningChecklist
               candidateId={candidate.id}
