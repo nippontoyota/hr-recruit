@@ -4,6 +4,7 @@ import { PageHeader } from '../../components/layout/PageHeader';
 import { Button, Modal, LoadingSpinner, EmptyState, Badge } from '../../components/ui';
 import { Plus, Link, RefreshCw, Trash } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
+import { copyToClipboard } from '../../lib/clipboard';
 import { getCandidates, deleteCandidate } from '../../api/candidates';
 import { getStageBadgeVariant, stageLabel } from '../../lib/stages';
 import type { Candidate } from '../../types';
@@ -76,13 +77,17 @@ export default function CandidatesList() {
     };
   }, []);
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     if (!user) return;
     const url = `${window.location.origin}/#/apply?hr=${user.id}`;
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    toast.success('Recruiter link copied to clipboard');
-    setTimeout(() => setCopied(false), 2000);
+    const success = await copyToClipboard(url);
+    if (success) {
+      setCopied(true);
+      toast.success('Recruiter link copied to clipboard');
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      toast.error('Failed to copy link. Please select and copy manually.');
+    }
   };
 
   const handleOpenAddModal = () => {
