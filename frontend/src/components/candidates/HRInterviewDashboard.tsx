@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { getHRInterview, submitHRInterview, getCandidateResume } from '../../api/candidates';
+import { motion } from 'framer-motion';import { getHRInterview, submitHRInterview, getCandidateResume } from '../../api/candidates';
 import type { Candidate, ResumeDocument, InterviewMode, InterviewStatus } from '../../types';
 import { Button, PdfViewer, LoadingSpinner } from '../ui';
 import { toast } from 'sonner';
 import { cn, extractError } from '../../lib/utils';
-import { Star, AlertCircle, FileText, ExternalLink, Calendar, MapPin, Video } from 'lucide-react';
+import { Star, AlertCircle, FileText, ExternalLink } from 'lucide-react';
+import { HRInterviewWhatsAppPreview } from './HRInterviewWhatsAppPreview';
 
 function toLocalDatetimeString(dateString?: string) {
   if (!dateString) return '';
@@ -51,6 +51,8 @@ export function HRInterviewDashboard({ candidate, onUpdate }: HRInterviewDashboa
   
   const [verdict, setVerdict] = useState<string | null>(null);
   const [remarks, setRemarks] = useState('');
+  
+  const [leftPanelTab, setLeftPanelTab] = useState<'CONTEXT' | 'SCHEDULE'>('SCHEDULE');
 
   useEffect(() => {
     fetchData();
@@ -175,153 +177,109 @@ export function HRInterviewDashboard({ candidate, onUpdate }: HRInterviewDashboa
   }
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 min-h-[800px]">
+    <div className="grid grid-cols-1 xl:grid-cols-2 xl:divide-x divide-border min-h-[800px] border-y border-border">
       
-      {/* LEFT PANEL: Context / Resume */}
-      <div className="flex flex-col border border-border rounded-2xl bg-surface/50 overflow-hidden shadow-sm">
-        <div className="h-14 border-b border-border bg-sidebar flex items-center px-4 shrink-0">
-          <h3 className="font-bold text-sm text-foreground">Candidate Context</h3>
+      {/* LEFT PANEL: Context & Scheduling */}
+      <div className="flex flex-col overflow-hidden">
+        <div className="h-14 border-b border-border bg-sidebar flex items-center justify-center px-4 shrink-0">
+          <div className="flex bg-muted/40 p-1 rounded-full w-48 border border-border relative shadow-inner">
+            <button
+              onClick={() => setLeftPanelTab('SCHEDULE')}
+              className={cn(
+                "flex-1 py-1 text-[11px] font-bold rounded-full transition-colors uppercase tracking-wider relative z-10",
+                leftPanelTab === 'SCHEDULE' ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {leftPanelTab === 'SCHEDULE' && (
+                <motion.div
+                  layoutId="dashboard-tab-indicator"
+                  className="absolute inset-0 bg-primary rounded-full shadow-sm -z-10"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              Send Invite
+            </button>
+            <button
+              onClick={() => setLeftPanelTab('CONTEXT')}
+              className={cn(
+                "flex-1 py-1 text-[11px] font-bold rounded-full transition-colors uppercase tracking-wider relative z-10",
+                leftPanelTab === 'CONTEXT' ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {leftPanelTab === 'CONTEXT' && (
+                <motion.div
+                  layoutId="dashboard-tab-indicator"
+                  className="absolute inset-0 bg-primary rounded-full shadow-sm -z-10"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              Biodata
+            </button>
+          </div>
         </div>
         
         <div className="flex-1 overflow-y-auto bg-background p-4 flex flex-col items-center">
-          {candidate.has_resume ? (
-            resumeLoading ? (
-              <div className="flex-1 flex items-center justify-center">
-                <LoadingSpinner />
-              </div>
-            ) : resumeDoc ? (
-              isPdfDocument(resumeDoc) ? (
-                <div className="w-full h-full min-h-[600px] bg-muted/20 rounded-xl overflow-hidden border border-border">
-                  <PdfViewer url={resumeDoc.download_url} />
-                </div>
-              ) : (
-                <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center mt-20">
-                  <FileText className="w-12 h-12 text-primary" />
-                  <div>
-                    <p className="text-lg font-semibold text-text-primary">{resumeDoc.file_name}</p>
-                    <p className="text-sm text-text-secondary mt-1">Word documents open in a new tab for preview.</p>
+          {leftPanelTab === 'CONTEXT' && (
+            <div className="w-full h-full flex flex-col items-center">
+              {candidate.has_resume ? (
+                resumeLoading ? (
+                  <div className="flex-1 flex items-center justify-center">
+                    <LoadingSpinner />
                   </div>
-                  <Button variant="primary" onClick={() => window.open(resumeDoc.download_url, '_blank')}>
-                    <ExternalLink className="w-4 h-4 mr-2" /> Open Resume
-                  </Button>
+                ) : resumeDoc ? (
+                  isPdfDocument(resumeDoc) ? (
+                    <div className="w-full h-full min-h-[600px] overflow-hidden flex flex-col">
+                      <PdfViewer url={resumeDoc.download_url} />
+                    </div>
+                  ) : (
+                    <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center mt-20">
+                      <FileText className="w-12 h-12 text-primary" />
+                      <div>
+                        <p className="text-lg font-semibold text-text-primary">{resumeDoc.file_name}</p>
+                        <p className="text-sm text-text-secondary mt-1">Word documents open in a new tab for preview.</p>
+                      </div>
+                      <Button variant="primary" onClick={() => window.open(resumeDoc.download_url, '_blank')}>
+                        <ExternalLink className="w-4 h-4 mr-2" /> Open Biodata
+                      </Button>
+                    </div>
+                  )
+                ) : (
+                  <p className="text-muted-foreground mt-20">Biodata could not be loaded.</p>
+                )
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 mt-20 opacity-60">
+                  <AlertCircle className="w-12 h-12 text-muted-foreground mb-4" />
+                  <p className="text-lg font-medium text-foreground">No Biodata Uploaded</p>
+                  <p className="text-sm text-muted-foreground mt-2 max-w-sm">
+                    This candidate did not provide a biodata. Rely on the details submitted in the candidate form.
+                  </p>
                 </div>
-              )
-            ) : (
-              <p className="text-muted-foreground mt-20">Resume could not be loaded.</p>
-            )
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 mt-20 opacity-60">
-              <AlertCircle className="w-12 h-12 text-muted-foreground mb-4" />
-              <p className="text-lg font-medium text-foreground">No Resume Uploaded</p>
-              <p className="text-sm text-muted-foreground mt-2 max-w-sm">
-                This candidate did not provide a resume. Rely on the details submitted in the candidate form.
-              </p>
+              )}
+            </div>
+          )}
+
+          {leftPanelTab === 'SCHEDULE' && (
+            <div className="w-full flex justify-center py-4">
+              <HRInterviewWhatsAppPreview 
+                candidate={candidate}
+                scheduledTime={scheduledTime}
+                setScheduledTime={setScheduledTime}
+                interviewMode={interviewMode}
+                setInterviewMode={setInterviewMode}
+                locationOrLink={locationOrLink}
+                setLocationOrLink={setLocationOrLink}
+                onSaveSchedule={handleSaveSchedule}
+                isSavingSchedule={isSubmitting}
+              />
             </div>
           )}
         </div>
       </div>
 
-      {/* RIGHT PANEL: Schedule & Scorecard */}
+      {/* RIGHT PANEL: Scorecard */}
       <div className="flex flex-col gap-6 h-full">
-        
-        {/* 1. Scheduling Card */}
-        <div className="flex flex-col border border-border rounded-2xl bg-surface/50 overflow-hidden shadow-sm shrink-0">
-          <div className="h-14 border-b border-border bg-sidebar flex items-center px-4 justify-between shrink-0">
-            <h3 className="font-bold text-sm text-foreground">1. Schedule Interview</h3>
-            <Button variant="primary" size="sm" onClick={handleSaveSchedule} isLoading={isSubmitting}>
-              Save Schedule
-            </Button>
-          </div>
-          <div className="p-6 bg-background space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              {/* Mode Toggle */}
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">Interview Mode</label>
-                <div className="flex bg-muted/30 p-1 rounded-xl border border-border relative">
-                  {['PHYSICAL', 'ONLINE'].map((mode) => {
-                    const isSelected = interviewMode === mode;
-                    return (
-                      <button
-                        key={mode}
-                        onClick={() => setInterviewMode(mode as InterviewMode)}
-                        className={cn(
-                          "flex-1 py-2 text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors relative z-10",
-                          isSelected ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        {isSelected && (
-                          <motion.div
-                            layoutId="mode-indicator"
-                            className="absolute inset-0 bg-primary rounded-lg shadow-sm -z-10"
-                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                          />
-                        )}
-                        {mode === 'PHYSICAL' ? <MapPin className="w-4 h-4" /> : <Video className="w-4 h-4" />}
-                        {mode === 'PHYSICAL' ? 'Physical' : 'Online'}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              
-              {/* Date / Time */}
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">Date & Time</label>
-                <div className="relative">
-                  <Calendar className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="datetime-local"
-                    value={scheduledTime}
-                    onChange={(e) => setScheduledTime(e.target.value)}
-                    className="w-full bg-background border border-border rounded-xl py-2.5 pl-9 pr-3 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
-                  />
-                </div>
-              </div>
-
-              {/* Location or Link */}
-              <div className="col-span-2 overflow-hidden">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={interviewMode || 'empty'}
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 5 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-xs font-bold text-foreground uppercase tracking-wider">
-                        {interviewMode === 'ONLINE' ? 'Meeting Link' : 'Branch / Location'}
-                      </label>
-                      {interviewMode === 'ONLINE' && (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => window.open('https://meet.google.com/new', '_blank')}
-                            className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors bg-muted/40 hover:bg-muted/80 px-2 py-1 rounded-md border border-border shadow-sm"
-                            title="Create New Google Meet"
-                          >
-                            <img src="/gmeet.png" alt="Google Meet" className="w-4 h-4 object-contain" />
-                            GMeet
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      value={locationOrLink}
-                      onChange={(e) => setLocationOrLink(e.target.value)}
-                      placeholder={interviewMode === 'ONLINE' ? 'e.g. https://meet.google.com/...' : 'e.g. Enchakkal Branch, 2nd Floor'}
-                      className="w-full bg-background border border-border rounded-xl p-3 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
-                    />
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 2. Evaluation Scorecard */}
         <div className={cn(
-          "flex flex-col border border-border rounded-2xl bg-surface/50 overflow-hidden shadow-sm flex-1 relative transition-all duration-300",
+          "flex flex-col overflow-hidden flex-1 relative transition-all duration-300",
           status === 'PENDING_SCHEDULE' && "opacity-60 pointer-events-none grayscale-[0.2]"
         )}>
           {status === 'PENDING_SCHEDULE' && (
@@ -335,14 +293,13 @@ export function HRInterviewDashboard({ candidate, onUpdate }: HRInterviewDashboa
           )}
           
           <div className="h-14 border-b border-border bg-sidebar flex items-center px-4 shrink-0 justify-between">
-            <h3 className="font-bold text-sm text-foreground">2. Interview Scorecard</h3>
+            <h3 className="font-bold text-sm text-foreground">Interview Scorecard</h3>
             <Button variant="ghost" size="sm" onClick={() => handleSave()} isLoading={isSubmitting}>
               Save Draft
             </Button>
           </div>
           
           <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-background">
-            
             <div className="grid grid-cols-2 gap-6">
               <StarRating label="Communication" value={communicationScore} onChange={setCommunicationScore} />
               <StarRating label="Technical Skills" value={technicalScore} onChange={setTechnicalScore} />
@@ -436,7 +393,6 @@ export function HRInterviewDashboard({ candidate, onUpdate }: HRInterviewDashboa
           </div>
         </div>
       </div>
-      
     </div>
   );
 }
