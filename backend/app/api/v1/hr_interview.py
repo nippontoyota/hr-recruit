@@ -9,7 +9,10 @@ from app.core.database import get_db
 from app.core.deps import get_current_active_user
 from app.models.hr_interview import HRInterview
 from app.models.candidate import Candidate
-from app.models.enums import InterviewVerdict, PipelineStage, InterviewMode, InterviewStatus
+from app.models.activity_log import ActivityLog
+from app.models.enums import InterviewVerdict, PipelineStage, InterviewMode, InterviewStatus, ActivityType, CommunicationStatus
+from app.schemas.candidate import WhatsAppInviteCreate
+from app.services.doubletick import DoubleTickClient
 
 router = APIRouter(prefix="/candidates/{candidate_id}/hr-interview", tags=["HR Interview"])
 
@@ -91,3 +94,58 @@ def submit_hr_interview(
     db.refresh(interview)
         
     return interview
+
+
+@router.post("/send-invite")
+def send_hr_interview_invite(
+    candidate_id: UUID,
+    body: WhatsAppInviteCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user),
+):
+    candidate = db.scalars(select(Candidate).where(Candidate.id == candidate_id)).first()
+    if not candidate:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
+        
+    interview = db.scalars(select(HRInterview).where(HRInterview.candidate_id == candidate_id)).first()
+    if not interview or interview.status == InterviewStatus.PENDING_SCHEDULE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Interview is not scheduled yet")
+
+    # Map variables in the correct order for the template nippon_hr_interview_invite
+    DOUBLETICK_VARIABLE_KEYS = [
+        "candidateName",
+        "position",
+        "date",
+        "time",
+        "mode",
+        "locationOrLink",
+        "recruiterName",
+    ]
+    
+    placeholders = []
+    for key in DOUBLETICK_VARIABLE_KEYS:
+        val = body.variables.get(key, "")
+        placeholders.append(val)
+        
+    client = DoubleTickClient()
+    
+    try:
+        res = client.send_template(
+            to_phone=candidate.phone,
+            template_name="nippon_hr_interview_invite",
+            placeholders=placeholders,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Failed to send invite: {str(e)}")
+        
+    log = ActivityLog(
+        candidate_id=candidate.id,
+        activity_type=ActivityType.CALL,
+        title="HR Interview Invite Sent",
+        description="WhatsApp invite for HR interview sent to candidate.",
+        created_by_user_id=current_user.id,
+    )
+    db.add(log)
+    db.commit()
+    
+    return {"status": "success", "message": "WhatsApp invite sent successfully"}

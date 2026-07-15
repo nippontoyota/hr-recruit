@@ -3,6 +3,7 @@ from pathlib import PurePosixPath
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 import os
@@ -442,18 +443,6 @@ def public_apply_full(
         created_by_user_id=None
     ))
     
-    # Delegate to WorkflowService
-    # In a fully public unauthenticated endpoint, user is None.
-    # The workflow service can handle user=None or we pass a dummy.
-    # We will just transition it directly since it's a public endpoint.
-    row.current_stage = PipelineStage.HR_INTERVIEW
-    db.add(StageHistory(
-        candidate_id=row.id,
-        from_stage=PipelineStage.CANDIDATE_FORM,
-        to_stage=PipelineStage.HR_INTERVIEW,
-        changed_by_user_id=row.assigned_hr_user_id,
-        reason="Candidate submitted full pre-interview form",
-    ))
     db.commit()
     db.refresh(row)
     return to_candidate_out(row, row.id in resume_candidate_ids(db, [row.id]))
@@ -744,12 +733,12 @@ def send_whatsapp_invite(
         "candidateName",
         "position",
         "formLink",
-        "branchName",
+        "extraInstructions",
         "visitDate",
         "arrivalTime",
+        "branchName",
         "mapsLink",
         "recruiterName",
-        "extraInstructions",
     ]
     
     placeholders = []
