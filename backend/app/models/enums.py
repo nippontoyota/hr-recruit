@@ -2,12 +2,11 @@ import enum
 
 
 class UserRole(str, enum.Enum):
-    SUPER_ADMIN = "SUPER_ADMIN"
-    ADMIN = "SUPER_ADMIN"
-    HR = "HR"
-    LOCAL_HR = "HR"
-    MANAGER = "MANAGER"
-    GM = "GM"
+    ADMIN = "ADMIN"
+    SUPER_ADMIN = "ADMIN"
+    LOCAL_HR = "LOCAL_HR"
+    HR = "LOCAL_HR"
+    HQ_HR = "HQ_HR"
 
 
 class PipelineStage(str, enum.Enum):
