@@ -12,6 +12,7 @@ export type PipelineStage =
   | 'CANDIDATE_FORM'
   | 'HR_INTERVIEW'
   | 'DEPARTMENT_INTERVIEW'
+  | 'BRANCH_EVALUATION'
   | 'FINAL_APPROVAL'
   | 'HIRED'
   | 'REJECTED'
