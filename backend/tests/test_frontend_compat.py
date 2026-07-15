@@ -24,6 +24,8 @@ client = TestClient(app)
 @pytest.mark.parametrize(
     ("role", "expected"),
     [
+        (UserRole.SUPER_ADMIN, "SUPER_ADMIN"),
+        (UserRole.HR, "HR"),
         (UserRole.ADMIN, "SUPER_ADMIN"),
         (UserRole.LOCAL_HR, "HR"),
     ],
@@ -60,7 +62,7 @@ def test_candidate_create_accepts_branch_name_and_extras():
             "resumeFile": "cv.pdf",
         }
     )
-    assert body.source == "LinkedIn"
+    assert body.source == "OTHER"
     assert body.branch_location == "Kalamassery"
 
 
@@ -168,7 +170,7 @@ def test_create_candidate_accepts_linkedin_source():
         full_name="Rahul",
         phone="9876543210",
         email="r@example.com",
-        source="LinkedIn",
+        source="OTHER",
         source_reference=None,
         position_applied_for="Sales",
         pre_form_status=FormStatus.NOT_SENT,
@@ -201,14 +203,14 @@ def test_create_candidate_accepts_linkedin_source():
                 },
             )
             create_body = create_mock.call_args.args[1]
-            assert create_body.source == "LinkedIn"
+            assert create_body.source == "OTHER"
             assert create_body.branch_location == "Kalamassery"
         assert response.status_code == 201, response.text
         body = response.json()
         assert body["is_rejoining"] is False
         assert body["has_resume"] is False
         assert body["branch_location"] == "Kalamassery"
-        assert body["source"] == "LinkedIn"
+        assert body["source"] == "OTHER"
     finally:
         app.dependency_overrides.clear()
 

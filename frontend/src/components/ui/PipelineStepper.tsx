@@ -32,11 +32,30 @@ export function PipelineStepper({ stages, currentStage, onStageClick, isLoading 
   
   const isTerminalStage = currentIndex === -1;
   const activeIndex = isTerminalStage ? stages.length : currentIndex;
+  const safeStageCount = stages.length || 1;
+  const progressPercentage = Math.min(100, Math.max(0, ((activeIndex + 1) / safeStageCount) * 100));
 
   return (
-    <div className="w-full py-4 overflow-x-auto no-scrollbar">
-      <div className="flex items-start justify-between min-w-[600px] relative px-4">
-        
+    <div className="w-full py-2">
+      {/* Mobile view: simple text-based progress */}
+      <div className="flex flex-col items-center gap-1 md:hidden py-1 select-none">
+        <span className="text-[10px] font-extrabold uppercase tracking-widest text-success">
+          Step {activeIndex + 1} of {stages.length}
+        </span>
+        <span className="text-sm font-bold text-foreground text-center">
+          {isTerminalStage ? 'Completed' : stageLabel(currentStage)}
+        </span>
+        {/* Compact progress bar */}
+        <div className="w-24 bg-muted h-1 rounded-full overflow-hidden mt-1.5">
+          <div 
+            className="bg-success h-full transition-all duration-300"
+            style={{ width: `${progressPercentage}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Desktop view: full horizontal stepper */}
+      <div className="hidden md:flex items-start justify-between relative px-4 w-full">
         {/* Background connecting line */}
         <div className="absolute top-5 left-12 right-12 h-[2px] bg-muted/60 -z-10" />
 
@@ -137,3 +156,4 @@ export function PipelineStepper({ stages, currentStage, onStageClick, isLoading 
     </div>
   );
 }
+

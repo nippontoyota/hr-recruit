@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
-import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy } from 'lucide-react';
+import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCandidateById, updateCandidateStage } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { toast } from 'sonner';
@@ -13,11 +13,12 @@ import { PreFormStatus } from '../../components/candidates/PreFormStatus';
 import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPreviewPanel';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { HRInterviewDashboard } from '../../components/candidates/HRInterviewDashboard';
+import { EvaluationStageWidget } from '../../components/candidates/EvaluationStageWidget';
 import { extractError } from '../../lib/utils';
 
 
 const LINEAR_STAGES: PipelineStage[] = [
-  'SCREENING', 'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW', 'FINAL_APPROVAL', 'HIRED'
+  'SCREENING', 'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW', 'BRANCH_EVALUATION', 'FINAL_APPROVAL', 'HIRED'
 ];
 
 
@@ -161,6 +162,23 @@ export default function CandidateProfile() {
   const stage = candidate.current_stage;
   const showWhatsAppSidebar = stage === 'CANDIDATE_FORM' && candidate.pre_form_status !== 'SUBMITTED';
 
+  const stepperStages = LINEAR_STAGES.filter((s): s is Exclude<PipelineStage, 'HIRED'> => s !== 'HIRED');
+  const currentIdx = stepperStages.findIndex((s) => s === stage);
+  const isPrevDisabled = currentIdx <= 0 || isUpdating;
+  const isNextDisabled = currentIdx === -1 || currentIdx >= stepperStages.length - 1 || isUpdating;
+
+  const handlePrevStep = () => {
+    if (!isPrevDisabled && currentIdx > 0) {
+      handleStageClick(stepperStages[currentIdx - 1]);
+    }
+  };
+
+  const handleNextStep = () => {
+    if (!isNextDisabled && currentIdx >= 0 && currentIdx < stepperStages.length - 1) {
+      handleStageClick(stepperStages[currentIdx + 1]);
+    }
+  };
+
   return (
     <div className="flex items-start w-full min-h-screen">
 
@@ -264,13 +282,45 @@ export default function CandidateProfile() {
               </div>
             </div>
 
-            <div className="mt-8">
-              <PipelineStepper 
-                stages={LINEAR_STAGES.filter(s => s !== 'HIRED')} 
-                currentStage={candidate.current_stage} 
-                onStageClick={handleStageClick}
-                isLoading={isUpdating}
-              />
+            <div className="mt-8 flex items-center justify-between gap-4">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                disabled={isPrevDisabled}
+                onClick={handlePrevStep}
+                className={cn(
+                  "h-10 w-10 rounded-full border border-border bg-background shadow-xs shrink-0 flex items-center justify-center transition-all duration-200",
+                  !isPrevDisabled ? "hover:bg-muted hover:border-success/30 hover:text-success text-foreground" : "opacity-40 cursor-not-allowed"
+                )}
+                title="Previous Step"
+              >
+                <ChevronLeft className="w-5 h-5 text-muted-foreground" />
+              </Button>
+
+              <div className="flex-1 min-w-0">
+                <PipelineStepper 
+                  stages={stepperStages} 
+                  currentStage={stage} 
+                  onStageClick={handleStageClick}
+                  isLoading={isUpdating}
+                />
+              </div>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                disabled={isNextDisabled}
+                onClick={handleNextStep}
+                className={cn(
+                  "h-10 w-10 rounded-full border border-border bg-background shadow-xs shrink-0 flex items-center justify-center transition-all duration-200",
+                  !isNextDisabled ? "hover:bg-muted hover:border-success/30 hover:text-success text-foreground" : "opacity-40 cursor-not-allowed"
+                )}
+                title="Next Step"
+              >
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </Button>
             </div>
           </div>
         </div>
@@ -307,30 +357,38 @@ export default function CandidateProfile() {
             )}
 
             {stage === 'DEPARTMENT_INTERVIEW' && (
-              <div className="bg-surface/50 border border-border p-8 rounded-xl text-center mt-6">
-                <h3 className="text-lg font-bold text-foreground">Department Interview</h3>
-                <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-                  The candidate is currently undergoing departmental review. Use the stepper above to advance them to Final Approval once completed.
-                </p>
-              </div>
+              <EvaluationStageWidget
+                candidate={candidate}
+                evalTypes={['DEPT_HEAD']}
+                title="Department Head Evaluation"
+                nextStage="BRANCH_EVALUATION"
+                nextStageRemarks="Department Head approved the candidate. Transition to Branch Evaluation."
+                onUpdate={handleUpdate}
+              />
+            )}
+
+            {stage === 'BRANCH_EVALUATION' && (
+              <EvaluationStageWidget
+                candidate={candidate}
+                evalTypes={['GM_LEVEL', 'TECHNICAL_TEST']}
+                title="Branch General Manager Evaluation"
+                nextStage="FINAL_APPROVAL"
+                nextStageRemarks="General Manager evaluation and Technical Test completed. Transition to Final HQ Approval."
+                onUpdate={handleUpdate}
+              />
             )}
 
             {stage === 'FINAL_APPROVAL' && (
-              <div className="bg-surface/50 border border-border p-8 rounded-xl text-center mt-6 flex flex-col items-center">
-                <h3 className="text-lg font-bold text-foreground">Final Approval</h3>
-                <p className="text-muted-foreground mt-2 mb-6 max-w-md mx-auto">
-                  All interviews and background checks are complete. If you are ready to extend an offer and onboard the candidate, click below to mark them as Hired.
-                </p>
-                <Button 
-                  variant="primary" 
-                  className="bg-success text-white hover:bg-success/90 border-transparent shadow-sm"
-                  onClick={() => handleStageClick('HIRED')}
-                  isLoading={isUpdating}
-                >
-                  Approve & Hire Candidate
-                </Button>
-              </div>
+              <EvaluationStageWidget
+                candidate={candidate}
+                evalTypes={['HQ_INTERVIEW']}
+                title="HQ Online Interview"
+                nextStage="HIRED"
+                nextStageRemarks="HQ Online Interview completed. Recommend hiring candidate."
+                onUpdate={handleUpdate}
+              />
             )}
+
 
             {stage === 'HIRED' && (
               <div className="bg-success/5 border border-success/20 p-8 rounded-xl text-center mt-6 flex flex-col items-center">

@@ -1,24 +1,31 @@
-import secrets
 import random
-from datetime import datetime, timedelta, UTC
-from uuid import UUID
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_active_user, require_roles
-from app.models.enums import UserRole, PipelineStage, InterviewStatus, EvaluationType, EvaluationVerdict, ActivityType
+from app.core.deps import require_roles
+from app.core.security import generate_secure_token
+from app.models.activity_log import ActivityLog
 from app.models.candidate import Candidate
+from app.models.document import Document
+from app.models.enums import (
+    ActivityType,
+    DocumentType,
+    EvaluationType,
+    EvaluationVerdict,
+    InterviewStatus,
+    PipelineStage,
+    UserRole,
+)
 from app.models.evaluation import Evaluation
 from app.models.evaluation_token import EvaluationToken
-from app.models.document import Document
-from app.models.enums import DocumentType
-from app.models.activity_log import ActivityLog
-from app.models.user import User
 from app.models.technical_question import TechnicalQuestion
+from app.models.user import User
 from app.schemas.evaluation import (
     EvaluationOut,
     EvaluationSchedule,
@@ -108,8 +115,7 @@ def generate_evaluation_token(
     ).all()
     for t in old_tokens:
         t.is_used = True
-        
-    from app.core.security import generate_secure_token
+
     token_str = generate_secure_token()
     
     test_data = None

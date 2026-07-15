@@ -116,3 +116,42 @@ export interface HRInterviewData {
   verdict?: 'SELECTED' | 'REJECTED' | 'ON_HOLD';
   remarks?: string;
 }
+
+export type EvaluationType = 'BRANCH_HR' | 'DEPT_HEAD' | 'GM_LEVEL' | 'TECHNICAL_TEST' | 'HQ_INTERVIEW';
+export type EvaluationVerdict = 'SELECTED' | 'REJECTED' | 'ON_HOLD' | 'PASS' | 'FAIL';
+
+export interface Evaluation {
+  id: string;
+  candidate_id: string;
+  type: EvaluationType;
+  status: InterviewStatus;
+  interview_mode?: InterviewMode;
+  scheduled_time?: string;
+  location_or_link?: string;
+  verdict?: EvaluationVerdict;
+  remarks?: string;
+  scores?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EvaluationToken {
+  token: string;
+  expires_at: string;
+}
+
+export interface EvaluationPublicDetails {
+  id: string;
+  type: EvaluationType;
+  candidate_name: string;
+  candidate_position: string;
+  candidate_resume_url?: string;
+  candidate_experience?: string;
+  candidate_education?: string;
+  previous_remarks: Array<{
+    type: string;
+    verdict?: string;
+    remarks: string;
+  }>;
+}
+

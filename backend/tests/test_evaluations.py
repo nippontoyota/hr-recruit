@@ -1,3 +1,5 @@
+import importlib
+import sys
 from uuid import uuid4
 from datetime import datetime, timedelta, UTC
 from unittest.mock import MagicMock, patch
@@ -58,6 +60,51 @@ def test_evaluations_initialized_on_department_stage():
     assert len(added_evaluations) == 1
     assert added_evaluations[0].type == EvaluationType.DEPT_HEAD
     assert added_evaluations[0].status == InterviewStatus.PENDING_SCHEDULE
+
+
+def test_transition_flushes_new_evaluations_into_session():
+    from app.services.workflow import WorkflowService
+
+    candidate = Candidate(
+        id=uuid4(),
+        candidate_id="NT-2026-00005",
+        full_name="Session Candidate",
+        phone="9876543210",
+        current_stage=PipelineStage.HR_INTERVIEW,
+    )
+
+    created_evaluations = []
+    flushed = False
+
+    class DummySession:
+        def add(self, obj):
+            if isinstance(obj, Evaluation):
+                created_evaluations.append(obj)
+
+        def scalar(self, query):
+            return None
+
+        def flush(self):
+            nonlocal flushed
+            flushed = True
+
+    db = DummySession()
+    user = _admin_user()
+
+    WorkflowService.transition(db, candidate, PipelineStage.DEPARTMENT_INTERVIEW, user, remarks="Start dept review")
+
+    assert flushed is True
+    assert len(created_evaluations) == 1
+    assert created_evaluations[0].type == EvaluationType.DEPT_HEAD
+    assert created_evaluations[0].status == InterviewStatus.PENDING_SCHEDULE
+
+
+def test_candidate_evaluations_relationship_maps_to_evaluation():
+    candidate_module = importlib.import_module("app.models.candidate")
+    candidate_cls = candidate_module.Candidate
+
+    relationship = candidate_cls.__mapper__.relationships["evaluations"]
+    assert relationship.entity.class_.__name__ == "Evaluation"
 
 
 def test_public_rejected_submission_uses_assigned_hr_user():

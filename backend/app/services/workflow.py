@@ -165,8 +165,9 @@ class WorkflowService:
         )
         db.add(log)
         
-        # db.commit() is intentionally left to the API layer so multiple operations can be transactionally bound.
-        # But we flush to get IDs.
+        # The caller typically commits the surrounding transaction, but we flush here so
+        # any newly created evaluations and history rows are persisted in the current session
+        # before control returns.
         db.flush()
         
         return candidate

@@ -9,6 +9,7 @@ from typing import List
 from app.core.config import settings
 from app.core.database import Base
 from app.models.enums import PipelineStage, FormStatus
+from app.models.evaluation import Evaluation
 
 SCHEMA = settings.db_schema
 

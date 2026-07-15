@@ -47,5 +47,7 @@ def decode_token(token: str) -> dict[str, Any]:
 
 
 def generate_secure_token() -> str:
+    """Create a URL-safe token with 32 bytes of entropy."""
     import secrets
+
     return secrets.token_urlsafe(32)

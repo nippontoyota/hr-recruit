@@ -347,18 +347,10 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
                 value={remarks} 
                 onChange={(e) => setRemarks(e.target.value)} 
                 maxLength={2000}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSave();
-                  } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                    e.preventDefault();
-                    handleSave();
-                  }
-                }}
                 className="w-full flex-1 bg-background border border-border rounded-xl p-4 text-base md:text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all min-h-[160px] resize-none placeholder:text-muted-foreground/50 shadow-inner shadow-black/[0.02]"
-                placeholder="Document key findings... (Press Enter to save, Shift+Enter for new line)" 
+                placeholder="Document key findings..." 
               />
+
             </div>
             
             <div className="pt-2 flex justify-end gap-3 mt-auto">
