@@ -119,3 +119,11 @@ export const sendWhatsAppInvite = async (
   const response = await api.post(`/candidates/${candidateId}/whatsapp-invite`, { variables });
   return response.data;
 };
+
+export const sendHRInterviewInvite = async (
+  candidateId: string,
+  variables: Record<string, string>
+): Promise<any> => {
+  const response = await api.post(`/candidates/${candidateId}/hr-interview/send-invite`, { variables });
+  return response.data;
+};

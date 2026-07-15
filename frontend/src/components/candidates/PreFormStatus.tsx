@@ -5,6 +5,7 @@ import type { Candidate } from '../../types';
 import { toast } from 'sonner';
 import { ResumeButton } from './ResumeButton';
 import { updateCandidateRawData } from '../../api/candidates';
+import { copyToClipboard } from '../../lib/clipboard';
 
 interface PreFormStatusProps {
   candidate: Candidate;
@@ -208,11 +209,14 @@ export function PreFormStatus({ candidate }: PreFormStatusProps) {
               />
               <Button
                 variant="secondary"
-                onClick={() => {
-                  navigator.clipboard.writeText(candidate.share_url!);
-                  setCopied(true);
-                  toast.success('Link copied');
-                  setTimeout(() => setCopied(false), 2000);
+                onClick={async () => {
+                  const success = await copyToClipboard(candidate.share_url || '');
+                  if (success) {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  } else {
+                    toast.error('Failed to copy link.');
+                  }
                 }}
                 className="h-9 px-4 shrink-0"
               >
