@@ -83,12 +83,31 @@ def submit_hr_interview(
     # Update candidate stage based on final verdict if present
     if data.verdict:
         interview.status = InterviewStatus.EVALUATED
+        from app.services.workflow import WorkflowService
         if data.verdict == InterviewVerdict.SELECTED:
-            candidate.current_stage = PipelineStage.DEPARTMENT_INTERVIEW
+            WorkflowService.transition(
+                db=db,
+                candidate=candidate,
+                target_stage=PipelineStage.DEPARTMENT_INTERVIEW,
+                user=current_user,
+                remarks=data.remarks or "HR Interview approved. Transitioning to Department Head Interview."
+            )
         elif data.verdict == InterviewVerdict.REJECTED:
-            candidate.current_stage = PipelineStage.REJECTED
+            WorkflowService.transition(
+                db=db,
+                candidate=candidate,
+                target_stage=PipelineStage.REJECTED,
+                user=current_user,
+                remarks=data.remarks or "Rejected during HR Interview."
+            )
         elif data.verdict == InterviewVerdict.ON_HOLD:
-            candidate.current_stage = PipelineStage.ON_HOLD
+            WorkflowService.transition(
+                db=db,
+                candidate=candidate,
+                target_stage=PipelineStage.ON_HOLD,
+                user=current_user,
+                remarks=data.remarks or "Placed on hold during HR Interview."
+            )
             
     db.commit()
     db.refresh(interview)

@@ -78,6 +78,11 @@ export const updateCandidateStage = async (candidateId: string, toStage: string,
   return response.data;
 };
 
+export const unholdCandidate = async (candidateId: string, remarks?: string): Promise<Candidate> => {
+  const response = await api.post(`/candidates/${candidateId}/unhold`, { remarks });
+  return response.data;
+};
+
 export const deleteCandidate = async (candidateId: string): Promise<void> => {
   await api.delete(`/candidates/${candidateId}`);
 };

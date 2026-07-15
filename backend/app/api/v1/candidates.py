@@ -3,6 +3,7 @@ from pathlib import PurePosixPath
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -83,10 +84,10 @@ def to_candidate_out(row: Candidate, has_resume: bool) -> CandidateOut:
 
 
 def _issue_pre_form(db: Session, candidate: Candidate, user: User) -> None:
-    import secrets
+    from app.core.security import generate_secure_token
 
     if not candidate.pre_form_token:
-        candidate.pre_form_token = secrets.token_urlsafe(32)
+        candidate.pre_form_token = generate_secure_token()
     candidate.pre_form_status = FormStatus.SENT
     candidate.pre_form_sent_at = datetime.now(UTC)
 
@@ -580,6 +581,46 @@ def transition_stage(
         user=user,
         remarks=body.remarks
     )
+    db.commit()
+    db.refresh(updated)
+    return to_candidate_out(updated, id in resume_candidate_ids(db, [id]))
+
+
+class UnholdRequest(BaseModel):
+    remarks: str | None = None
+
+
+@router.post("/{id}/unhold", response_model=CandidateOut)
+def unhold_candidate(
+    id: UUID,
+    body: UnholdRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+):
+    """Resume a candidate from ON_HOLD back to the previous stage recorded in stage history.
+
+    This convenience endpoint finds the most recent StageHistory entry that moved the
+    candidate to ON_HOLD and attempts to transition them back to the stage they were
+    in previously. Requires ADMIN or LOCAL_HR role.
+    """
+    candidate = get_candidate_for_user(db, id, user)
+    # Find most recent history where to_stage == ON_HOLD
+    last_hold = db.scalars(
+        select(StageHistory)
+        .where(StageHistory.candidate_id == id, StageHistory.to_stage == PipelineStage.ON_HOLD)
+        .order_by(StageHistory.created_at.desc())
+    ).first()
+
+    if not last_hold:
+        raise HTTPException(status_code=400, detail="No previous ON_HOLD transition found for candidate.")
+
+    target_stage = last_hold.from_stage
+    if not target_stage:
+        raise HTTPException(status_code=400, detail="Cannot determine previous stage to resume to.")
+
+    remarks = body.remarks or "Resumed from On Hold"
+
+    updated = WorkflowService.transition(db=db, candidate=candidate, target_stage=target_stage, user=user, remarks=remarks)
     db.commit()
     db.refresh(updated)
     return to_candidate_out(updated, id in resume_candidate_ids(db, [id]))

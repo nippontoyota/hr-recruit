@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
-import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getCandidateById, updateCandidateStage } from '../../api/candidates';
+import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
+import { getCandidateById, updateCandidateStage, unholdCandidate } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { toast } from 'sonner';
 import { validateRejectRemarks } from '../../lib/validation';
@@ -35,6 +35,8 @@ export default function CandidateProfile() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
+  const [resumeStage, setResumeStage] = useState<PipelineStage>('SCREENING');
+  const [isResuming, setIsResuming] = useState(false);
 
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -206,6 +208,29 @@ export default function CandidateProfile() {
               <div>
                 <div className="flex flex-wrap items-center justify-center gap-3 mb-1">
                   <h1 className="text-3xl font-bold tracking-tight text-foreground text-balance">{candidate.full_name}</h1>
+                <div className="flex items-center gap-2">
+                  {stage === 'ON_HOLD' && (
+                    <Button
+                      onClick={async () => {
+                        if (!candidate) return;
+                        setIsResuming(true);
+                        try {
+                          await unholdCandidate(candidate.id, 'Resumed from On Hold');
+                          toast.success('Candidate resumed to previous stage');
+                          handleUpdate();
+                        } catch (err: any) {
+                          toast.error(extractError(err, 'Failed to resume candidate.'));
+                        } finally {
+                          setIsResuming(false);
+                        }
+                      }}
+                      isLoading={isResuming}
+                      className="gap-2 bg-warning/90 hover:bg-warning text-white"
+                    >
+                      <Play className="w-4 h-4" /> Resume to previous
+                    </Button>
+                  )}
+                </div>
                   {candidate.is_duplicate_flagged && (
                     <span className="text-[10px] font-semibold text-warning bg-warning/10 border border-warning/20 px-1.5 py-0.5 rounded-[4px]">
                       Duplicate
@@ -389,6 +414,47 @@ export default function CandidateProfile() {
               />
             )}
 
+
+            {stage === 'ON_HOLD' && (
+              <div className="bg-warning/5 border border-warning/20 p-8 rounded-xl mt-6 flex flex-col items-center">
+                <div className="w-16 h-16 bg-warning rounded-full flex items-center justify-center shadow-lg mb-4">
+                  <Pause className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-warning">Candidate On Hold</h3>
+                <p className="text-warning/80 mt-2 max-w-md mx-auto font-medium text-center">
+                  This candidate has been placed on hold. Select a stage below to resume their pipeline.
+                </p>
+                <div className="mt-6 flex flex-col sm:flex-row items-center gap-3 w-full max-w-sm">
+                  <select
+                    value={resumeStage}
+                    onChange={(e) => setResumeStage(e.target.value as PipelineStage)}
+                    className="flex-1 w-full sm:w-auto bg-background border border-border rounded-lg px-3 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-warning/40"
+                  >
+                    {LINEAR_STAGES.filter(s => s !== 'HIRED').map(s => (
+                      <option key={s} value={s}>{stageLabel(s)}</option>
+                    ))}
+                  </select>
+                  <Button
+                    onClick={async () => {
+                      setIsResuming(true);
+                      try {
+                        await updateCandidateStage(candidate.id, resumeStage, 'Resumed from On Hold');
+                        toast.success(`Candidate resumed to ${stageLabel(resumeStage)}`);
+                        handleUpdate();
+                      } catch (err: any) {
+                        toast.error(extractError(err, 'Failed to resume candidate.'));
+                      } finally {
+                        setIsResuming(false);
+                      }
+                    }}
+                    isLoading={isResuming}
+                    className="gap-2 bg-warning hover:bg-warning/90 text-white shrink-0"
+                  >
+                    <Play className="w-4 h-4" /> Resume
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {stage === 'HIRED' && (
               <div className="bg-success/5 border border-success/20 p-8 rounded-xl text-center mt-6 flex flex-col items-center">

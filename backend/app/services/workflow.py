@@ -61,6 +61,13 @@ class WorkflowService:
                 detail="Remarks are required when rejecting a candidate."
             )
 
+        # Require a reason when placing a candidate On Hold to avoid accidental holds
+        if target_stage == PipelineStage.ON_HOLD and not remarks:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Remarks are required when placing a candidate On Hold."
+            )
+
         # Validate preceding evaluations before stage changes
         from app.models.evaluation import Evaluation
         from app.models.enums import EvaluationType, InterviewStatus
