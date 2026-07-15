@@ -62,3 +62,5 @@ class Candidate(Base):
     profile: Mapped["CandidateProfile"] = relationship("CandidateProfile", back_populates="candidate", uselist=False, cascade="all, delete-orphan")
     communications: Mapped[List["Communication"]] = relationship("Communication", back_populates="candidate", cascade="all, delete-orphan")
     followups: Mapped[List["FollowUp"]] = relationship("FollowUp", back_populates="candidate", cascade="all, delete-orphan")
+    evaluations: Mapped[List["Evaluation"]] = relationship("Evaluation", back_populates="candidate", cascade="all, delete-orphan")
+

@@ -2,8 +2,12 @@ import enum
 
 
 class UserRole(str, enum.Enum):
-    ADMIN = "ADMIN"
-    LOCAL_HR = "LOCAL_HR"
+    SUPER_ADMIN = "SUPER_ADMIN"
+    ADMIN = "SUPER_ADMIN"
+    HR = "HR"
+    LOCAL_HR = "HR"
+    MANAGER = "MANAGER"
+    GM = "GM"
 
 
 class PipelineStage(str, enum.Enum):
@@ -100,4 +104,20 @@ class InterviewStatus(str, enum.Enum):
     PENDING_SCHEDULE = "PENDING_SCHEDULE"
     SCHEDULED = "SCHEDULED"
     EVALUATED = "EVALUATED"
+
+
+class EvaluationType(str, enum.Enum):
+    BRANCH_HR = "BRANCH_HR"
+    DEPT_HEAD = "DEPT_HEAD"
+    GM_LEVEL = "GM_LEVEL"
+    TECHNICAL_TEST = "TECHNICAL_TEST"
+    HQ_INTERVIEW = "HQ_INTERVIEW"
+
+
+class EvaluationVerdict(str, enum.Enum):
+    SELECTED = "SELECTED"
+    REJECTED = "REJECTED"
+    ON_HOLD = "ON_HOLD"
+    PASS = "PASS"
+    FAIL = "FAIL"
 
