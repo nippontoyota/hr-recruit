@@ -12,12 +12,13 @@ import { ScreeningChecklist } from '../../components/candidates/ScreeningCheckli
 import { PreFormStatus } from '../../components/candidates/PreFormStatus';
 import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPreviewPanel';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
-import { HRInterviewDashboard } from '../../components/candidates/HRInterviewDashboard';
+import { BranchEvaluationDashboard } from '../../components/candidates/BranchEvaluationDashboard';
+import { HQEvaluationDashboard } from '../../components/candidates/HQEvaluationDashboard';
 import { extractError } from '../../lib/utils';
 
 
 const LINEAR_STAGES: PipelineStage[] = [
-  'SCREENING', 'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW', 'FINAL_APPROVAL', 'HIRED'
+  'SCREENING', 'CANDIDATE_FORM', 'BRANCH_EVALUATION', 'HQ_EVALUATION', 'HIRED'
 ];
 
 
@@ -299,37 +300,18 @@ export default function CandidateProfile() {
               <WhatsAppPreviewPanel candidate={candidate} className="lg:hidden mt-6 rounded-xl border border-border overflow-hidden" />
             )}
 
-            {stage === 'HR_INTERVIEW' && (
-              <HRInterviewDashboard
+            {stage === 'BRANCH_EVALUATION' && (
+              <BranchEvaluationDashboard
                 candidate={candidate}
                 onUpdate={handleUpdate}
               />
             )}
 
-            {stage === 'DEPARTMENT_INTERVIEW' && (
-              <div className="bg-surface/50 border border-border p-8 rounded-xl text-center mt-6">
-                <h3 className="text-lg font-bold text-foreground">Department Interview</h3>
-                <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-                  The candidate is currently undergoing departmental review. Use the stepper above to advance them to Final Approval once completed.
-                </p>
-              </div>
-            )}
-
-            {stage === 'FINAL_APPROVAL' && (
-              <div className="bg-surface/50 border border-border p-8 rounded-xl text-center mt-6 flex flex-col items-center">
-                <h3 className="text-lg font-bold text-foreground">Final Approval</h3>
-                <p className="text-muted-foreground mt-2 mb-6 max-w-md mx-auto">
-                  All interviews and background checks are complete. If you are ready to extend an offer and onboard the candidate, click below to mark them as Hired.
-                </p>
-                <Button 
-                  variant="primary" 
-                  className="bg-success text-white hover:bg-success/90 border-transparent shadow-sm"
-                  onClick={() => handleStageClick('HIRED')}
-                  isLoading={isUpdating}
-                >
-                  Approve & Hire Candidate
-                </Button>
-              </div>
+            {stage === 'HQ_EVALUATION' && (
+              <HQEvaluationDashboard
+                candidate={candidate}
+                onUpdate={handleUpdate}
+              />
             )}
 
             {stage === 'HIRED' && (

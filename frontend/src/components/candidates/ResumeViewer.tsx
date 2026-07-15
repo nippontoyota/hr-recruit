@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { FileText, ExternalLink, Download } from 'lucide-react';
 import { getCandidateResume } from '../../api/candidates';
 import type { ResumeDocument } from '../../types';
-import { Modal, LoadingSpinner, Button, PdfViewer } from '../ui';
+import { Modal, LoadingSpinner, Button } from '../ui';
+import { PdfViewer } from '../ui/PdfViewer';
 
 interface ResumeTarget {
   candidateId: string;

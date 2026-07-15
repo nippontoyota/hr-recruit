@@ -1,18 +1,18 @@
 export type UserRole =
   | 'SUPER_ADMIN'
   | 'HR'
+  | 'HQ_HR'
   | 'MANAGER'
   | 'GM';
 
 /** Every role in the system — use when a route/nav item is accessible to all authenticated users. */
-export const ALL_ROLES: UserRole[] = ['SUPER_ADMIN', 'HR', 'MANAGER', 'GM'];
+export const ALL_ROLES: UserRole[] = ['SUPER_ADMIN', 'HR', 'HQ_HR', 'MANAGER', 'GM'];
 
 export type PipelineStage =
   | 'SCREENING'
   | 'CANDIDATE_FORM'
-  | 'HR_INTERVIEW'
-  | 'DEPARTMENT_INTERVIEW'
-  | 'FINAL_APPROVAL'
+  | 'BRANCH_EVALUATION'
+  | 'HQ_EVALUATION'
   | 'HIRED'
   | 'REJECTED'
   | 'ON_HOLD';
@@ -98,20 +98,40 @@ export interface CandidateProfile {
 export type InterviewMode = 'PHYSICAL' | 'ONLINE';
 export type InterviewStatus = 'PENDING_SCHEDULE' | 'SCHEDULED' | 'EVALUATED';
 
-export interface HRInterviewData {
-  id?: string;
-  candidate_id?: string;
+export type EvaluationType = 'BRANCH_HR' | 'DEPT_HEAD' | 'GM_LEVEL' | 'TECHNICAL_TEST' | 'HQ_INTERVIEW';
+export type EvaluationVerdict = 'SELECTED' | 'REJECTED' | 'ON_HOLD' | 'PASS' | 'FAIL';
+
+export interface Evaluation {
+  id: string;
+  candidate_id: string;
+  type: EvaluationType;
+  status: InterviewStatus;
   interview_mode?: InterviewMode;
   scheduled_time?: string;
   location_or_link?: string;
-  status?: InterviewStatus;
-  communication_score?: number;
-  technical_score?: number;
-  experience_score?: number;
-  cultural_fit_score?: number;
-  current_salary?: string;
-  expected_salary?: string;
-  notice_period?: string;
-  verdict?: 'SELECTED' | 'REJECTED' | 'ON_HOLD';
+  verdict?: EvaluationVerdict;
   remarks?: string;
+  scores?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EvaluationToken {
+  token: string;
+  expires_at: string;
+}
+
+export interface EvaluationPublicDetails {
+  id: string;
+  type: EvaluationType;
+  candidate_name: string;
+  candidate_position: string;
+  candidate_resume_url?: string;
+  candidate_experience?: string;
+  candidate_education?: string;
+  previous_remarks: Array<{
+    type: string;
+    verdict?: string;
+    remarks: string;
+  }>;
 }

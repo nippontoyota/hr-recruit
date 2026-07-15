@@ -55,7 +55,7 @@ def test_hr_cannot_read_other_candidates_screening():
 
 def test_public_resume_rejects_non_screening_candidate():
     candidate = _other_candidate()
-    candidate.current_stage = PipelineStage.HR_INTERVIEW
+    candidate.current_stage = PipelineStage.BRANCH_EVALUATION
     db = type("DB", (), {})()
     db.get = lambda model, pk: candidate if model is Candidate and pk == candidate.id else None
 

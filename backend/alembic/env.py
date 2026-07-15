@@ -14,7 +14,8 @@ from app.models.activity_log import ActivityLog  # noqa: F401
 from app.models.document import Document  # noqa: F401
 from app.models.communication import Communication  # noqa: F401
 from app.models.followup import FollowUp  # noqa: F401
-from app.models.hr_interview import HRInterview  # noqa: F401
+from app.models.evaluation import Evaluation  # noqa: F401
+from app.models.evaluation_token import EvaluationToken  # noqa: F401
 
 config = context.config
 # Escape % so ConfigParser does not treat password URL-encoding as interpolation.

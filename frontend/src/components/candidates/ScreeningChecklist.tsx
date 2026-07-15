@@ -18,7 +18,7 @@ interface ScreeningChecklistProps {
 export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklistProps) {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(true);
   const [hasSavedData, setHasSavedData] = useState(false);
 
   // Local state for editing
@@ -60,6 +60,8 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
       setIsEditing(!isFilled);
     } catch (err) {
       console.error(err);
+      setHasSavedData(false);
+      setIsEditing(true);
     } finally {
       setLoading(false);
     }

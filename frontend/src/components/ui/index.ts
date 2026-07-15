@@ -5,6 +5,5 @@ export * from './Popover';
 export * from './Select';
 export * from './PipelineStepper';
 export * from './Modal';
-export * from './PdfViewer';
 export * from './Badge';
 export * from './LoadingSpinner';

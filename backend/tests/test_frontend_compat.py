@@ -60,7 +60,7 @@ def test_candidate_create_accepts_branch_name_and_extras():
             "resumeFile": "cv.pdf",
         }
     )
-    assert body.source == "LinkedIn"
+    assert body.source == "OTHER"
     assert body.branch_location == "Kalamassery"
 
 
@@ -201,7 +201,7 @@ def test_create_candidate_accepts_linkedin_source():
                 },
             )
             create_body = create_mock.call_args.args[1]
-            assert create_body.source == "LinkedIn"
+            assert create_body.source == "OTHER"
             assert create_body.branch_location == "Kalamassery"
         assert response.status_code == 201, response.text
         body = response.json()

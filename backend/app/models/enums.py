@@ -4,17 +4,33 @@ import enum
 class UserRole(str, enum.Enum):
     ADMIN = "ADMIN"
     LOCAL_HR = "LOCAL_HR"
+    HQ_HR = "HQ_HR"
 
 
 class PipelineStage(str, enum.Enum):
     SCREENING = "SCREENING"
     CANDIDATE_FORM = "CANDIDATE_FORM"
-    HR_INTERVIEW = "HR_INTERVIEW"
-    DEPARTMENT_INTERVIEW = "DEPARTMENT_INTERVIEW"
-    FINAL_APPROVAL = "FINAL_APPROVAL"
+    BRANCH_EVALUATION = "BRANCH_EVALUATION"
+    HQ_EVALUATION = "HQ_EVALUATION"
     HIRED = "HIRED"
     REJECTED = "REJECTED"
     ON_HOLD = "ON_HOLD"
+
+
+class EvaluationType(str, enum.Enum):
+    BRANCH_HR = "BRANCH_HR"
+    DEPT_HEAD = "DEPT_HEAD"
+    GM_LEVEL = "GM_LEVEL"
+    TECHNICAL_TEST = "TECHNICAL_TEST"
+    HQ_INTERVIEW = "HQ_INTERVIEW"
+
+
+class EvaluationVerdict(str, enum.Enum):
+    SELECTED = "SELECTED"
+    REJECTED = "REJECTED"
+    ON_HOLD = "ON_HOLD"
+    PASS = "PASS"
+    FAIL = "FAIL"
 
 
 class FormStatus(str, enum.Enum):

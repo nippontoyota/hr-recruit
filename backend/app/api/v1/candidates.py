@@ -77,10 +77,10 @@ def to_candidate_out(row: Candidate, has_resume: bool) -> CandidateOut:
 
 
 def _issue_pre_form(db: Session, candidate: Candidate, user: User) -> None:
-    import secrets
+    from app.core.security import generate_secure_token
 
     if not candidate.pre_form_token:
-        candidate.pre_form_token = secrets.token_urlsafe(32)
+        candidate.pre_form_token = generate_secure_token()
     candidate.pre_form_status = FormStatus.SENT
     candidate.pre_form_sent_at = datetime.now(UTC)
 
@@ -438,17 +438,17 @@ def public_apply_full(
     ))
     
     # Delegate to WorkflowService
-    # In a fully public unauthenticated endpoint, user is None.
-    # The workflow service can handle user=None or we pass a dummy.
-    # We will just transition it directly since it's a public endpoint.
-    row.current_stage = PipelineStage.HR_INTERVIEW
-    db.add(StageHistory(
-        candidate_id=row.id,
-        from_stage=PipelineStage.CANDIDATE_FORM,
-        to_stage=PipelineStage.HR_INTERVIEW,
-        changed_by_user_id=row.assigned_hr_user_id,
-        reason="Candidate submitted full pre-interview form",
-    ))
+    system_user = db.get(User, row.assigned_hr_user_id) if row.assigned_hr_user_id else None
+    if system_user:
+        WorkflowService.transition(
+            db=db,
+            candidate=row,
+            target_stage=PipelineStage.BRANCH_EVALUATION,
+            user=system_user,
+            remarks="Candidate submitted full pre-interview form"
+        )
+    else:
+        row.current_stage = PipelineStage.BRANCH_EVALUATION
     db.commit()
     db.refresh(row)
     return to_candidate_out(row, row.id in resume_candidate_ids(db, [row.id]))
@@ -618,7 +618,10 @@ def get_screening(
     get_candidate_for_user(db, id, user)
     row = db.scalar(select(CandidateScreening).where(CandidateScreening.candidate_id == id))
     if not row:
-        raise HTTPException(status_code=404, detail="Screening data not found.")
+        row = CandidateScreening(candidate_id=id, status=ScreeningStatus.PENDING)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
     return row
 
 @router.post("/{id}/screening", response_model=ScreeningSubmitResponse)

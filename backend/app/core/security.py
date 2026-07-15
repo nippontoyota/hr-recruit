@@ -44,3 +44,12 @@ def decode_token(token: str) -> dict[str, Any]:
         return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
     except JWTError as exc:
         raise ValueError("Invalid token") from exc
+
+
+def generate_secure_token(nbytes: int = 32) -> str:
+    import secrets
+    while True:
+        token = secrets.token_urlsafe(nbytes)
+        if not token.startswith(("-", "_")):
+            return token
+

@@ -14,6 +14,8 @@ const CandidateProfile = lazy(() => import('../pages/candidates/CandidateProfile
 const NotFound = lazy(() => import('../pages/NotFound'));
 const ApplyForm = lazy(() => import('../pages/candidates/ApplyForm'));
 const PreFormPage = lazy(() => import('../pages/candidates/PreFormPage'));
+const PublicInterviewerPage = lazy(() => import('../pages/candidates/PublicInterviewerPage'));
+const PublicTestPage = lazy(() => import('../pages/candidates/PublicTestPage'));
 
 const SuspenseFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -50,6 +52,24 @@ export const router = createBrowserRouter([
     element: (
       <PageSuspense>
         <PreFormPage />
+      </PageSuspense>
+    ),
+  },
+  {
+    path: '/eval/:token',
+    errorElement: <RouteErrorPage />,
+    element: (
+      <PageSuspense>
+        <PublicInterviewerPage />
+      </PageSuspense>
+    ),
+  },
+  {
+    path: '/test/:token',
+    errorElement: <RouteErrorPage />,
+    element: (
+      <PageSuspense>
+        <PublicTestPage />
       </PageSuspense>
     ),
   },

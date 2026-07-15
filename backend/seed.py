@@ -1,11 +1,24 @@
 from sqlalchemy import select
 
-from app.api.v1.candidates import change_stage, create_candidate
+from app.api.v1.candidates import create_candidate
 from app.core.database import SessionLocal
 from app.models.enums import PipelineStage, SourceChannel
 from app.models.user import User
 from app.schemas.candidate import CandidateCreate, StageChange
+from app.services.workflow import WorkflowService
 from scripts.seed_users import seed_users
+
+# Register all models for SQLAlchemy registry
+from app.models.candidate import Candidate
+from app.models.candidate_profile import CandidateProfile
+from app.models.candidate_screening import CandidateScreening
+from app.models.stage_history import StageHistory
+from app.models.followup import FollowUp
+from app.models.evaluation import Evaluation
+from app.models.evaluation_token import EvaluationToken
+from app.models.document import Document
+from app.models.communication import Communication
+from app.models.activity_log import ActivityLog
 
 
 def seed():
@@ -35,10 +48,12 @@ def seed():
             ),
             admin.id,
         )
-        change_stage(
+        WorkflowService.transition(
             db,
             row,
-            StageChange(to_stage=PipelineStage.HR_INTERVIEW, changed_by_user_id=admin.id),
+            PipelineStage.BRANCH_EVALUATION,
+            admin,
+            remarks="Seeding stage transition to branch evaluation"
         )
     finally:
         db.close()
