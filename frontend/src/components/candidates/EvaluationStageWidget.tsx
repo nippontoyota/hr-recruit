@@ -1,22 +1,19 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Link, Clipboard, UserCheck, Award, FileText, CheckCircle, Star, Send, Share2, MapPin, Video, Clock, CheckCheck, ArrowLeft, Phone, MoreVertical, Smile, Paperclip, Camera } from 'lucide-react';
+import { Calendar, Link, Clipboard, UserCheck, FileText, CheckCircle, Star, Send, Video, Clock, CheckCheck, ArrowLeft, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, LoadingSpinner, Modal, Input } from '../ui';
 import { getCandidateEvaluations, scheduleEvaluation, generateEvaluationToken, submitScorecardDirect, sendEvaluationWhatsAppInvite } from '../../api/evaluations';
-import { updateCandidateStage } from '../../api/candidates';
-import type { Candidate, Evaluation, EvaluationVerdict, PipelineStage } from '../../types';
+import type { Candidate, Evaluation, EvaluationVerdict } from '../../types';
 import { cn, extractError } from '../../lib/utils';
 import { useAuth } from '../../auth/AuthContext';
-import { format, parseISO } from 'date-fns';
+import { format, addDays } from 'date-fns';
 
 
 interface EvaluationStageWidgetProps {
   candidate: Candidate;
   evalTypes: string[];
   title: string;
-  nextStage: PipelineStage;
-  nextStageRemarks: string;
   onUpdate: () => void;
 }
 
@@ -24,8 +21,6 @@ export function EvaluationStageWidget({
   candidate,
   evalTypes,
   title,
-  nextStage,
-  nextStageRemarks,
   onUpdate
 }: EvaluationStageWidgetProps) {
   const { user } = useAuth();
@@ -38,12 +33,17 @@ export function EvaluationStageWidget({
   // WhatsApp Share Modal State
   const [shareEval, setShareEval] = useState<Evaluation | null>(null);
   const [recipientType, setRecipientType] = useState<'INTERVIEWER' | 'CANDIDATE'>('INTERVIEWER');
-  
+
+  // Cancel Schedule Confirm State
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
   // Share form states
   const [interviewerPhone, setInterviewerPhone] = useState('');
   const [interviewerName, setInterviewerName] = useState('');
   const [recruiterName, setRecruiterName] = useState('');
-  
+
   const [shareDate, setShareDate] = useState('');
   const [shareTime, setShareTime] = useState('');
   const [shareMode, setShareMode] = useState<'PHYSICAL' | 'ONLINE'>('PHYSICAL');
@@ -56,7 +56,7 @@ export function EvaluationStageWidget({
     setInterviewerPhone('');
     setInterviewerName('');
     setRecruiterName(user?.full_name || '');
-    
+
     if (ev.scheduled_time) {
       const parts = ev.scheduled_time.split('T');
       if (parts.length === 2) {
@@ -66,7 +66,7 @@ export function EvaluationStageWidget({
         try {
           const d = new Date(ev.scheduled_time);
           const pad = (n: number) => n.toString().padStart(2, '0');
-          setShareDate(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`);
+          setShareDate(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
           setShareTime(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
         } catch {
           setShareDate('');
@@ -98,6 +98,14 @@ export function EvaluationStageWidget({
   const [mode, setMode] = useState<'PHYSICAL' | 'ONLINE'>('PHYSICAL');
   const [time, setTime] = useState('');
   const [location, setLocation] = useState('');
+
+  const handleOpenSchedule = (id: string) => {
+    setSchedulingId(id);
+    setLocation('Training room');
+    const tomorrow = addDays(new Date(), 1);
+    tomorrow.setHours(9, 0, 0, 0);
+    setTime(format(tomorrow, "yyyy-MM-dd'T'HH:mm"));
+  };
 
   // Remarks form state
   const [verdict, setVerdict] = useState<EvaluationVerdict>('SELECTED');
@@ -156,6 +164,23 @@ export function EvaluationStageWidget({
     }
   };
 
+  const handleRemoveSchedule = async (id: string) => {
+    try {
+      await scheduleEvaluation(id, {
+        interview_mode: null,
+        scheduled_time: null,
+        location_or_link: null
+      });
+      toast.success('Schedule cancelled successfully');
+      setCancelConfirmId(null);
+      fetchEvaluations();
+      onUpdate();
+    } catch (err: any) {
+      toast.error(extractError(err, 'Failed to cancel schedule'));
+    }
+  };
+
+
   const handleCopyLink = async (evalId: string, isTest = false) => {
     try {
       const tokenData = await generateEvaluationToken(evalId);
@@ -163,6 +188,8 @@ export function EvaluationStageWidget({
       const url = `${window.location.origin}/#/${path}/${tokenData.token}`;
       await navigator.clipboard.writeText(url);
       toast.success('Link generated and copied to clipboard!');
+      setCopiedId(evalId);
+      setTimeout(() => setCopiedId(null), 2000);
     } catch (err) {
       toast.error('Failed to generate secure link');
     }
@@ -170,7 +197,7 @@ export function EvaluationStageWidget({
 
   const handleSendWhatsApp = async () => {
     if (!shareEval) return;
-    
+
     let toPhone = '';
     if (recipientType === 'INTERVIEWER') {
       if (!interviewerPhone.trim()) {
@@ -185,7 +212,7 @@ export function EvaluationStageWidget({
     setSendingInvite(true);
     try {
       let finalLink = shareLocation;
-      
+
       if (recipientType === 'INTERVIEWER') {
         const tokenData = await generateEvaluationToken(shareEval.id);
         finalLink = `${window.location.origin}/#/eval/${tokenData.token}`;
@@ -267,40 +294,25 @@ export function EvaluationStageWidget({
     }
   };
 
-  const handleTransitionStage = async () => {
-    setSubmitting(true);
-    try {
-      await updateCandidateStage(candidate.id, nextStage, nextStageRemarks);
-      toast.success(`Candidate recommended for ${nextStage.replace(/_/g, ' ')}!`);
-      onUpdate();
-    } catch (err) {
-      toast.error(extractError(err, `Failed to move candidate to ${nextStage}`));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const isAllEvaluationsDone = () => {
-    if (evaluations.length === 0) return false;
-    const completed = evaluations.filter(e => e.status === 'EVALUATED');
-    return completed.length === evaluations.length;
-  };
 
   const StarInput = ({ label, val, setVal }: { label: string; val: number; setVal: (v: number) => void }) => (
-    <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-bold text-foreground uppercase tracking-wider">{label}</span>
-      <div className="flex items-center gap-0.5">
+    <div className="flex flex-col p-3 bg-background border border-border rounded-lg shadow-sm">
+      <div className="flex justify-between items-center mb-2">
+        <span className="text-[10px] font-bold text-foreground uppercase tracking-wider">{label}</span>
+        <span className="text-xs font-semibold text-muted-foreground">{val}/5</span>
+      </div>
+      <div className="flex items-center justify-between">
         {[1, 2, 3, 4, 5].map((star) => (
           <button
             type="button"
             key={star}
             onClick={() => setVal(star)}
-            className="p-0.5 transition-transform hover:scale-110 focus:outline-none"
+            className="p-1 transition-transform hover:scale-110 focus:outline-none"
           >
             <Star
               className={cn(
-                "w-4 h-4 transition-all duration-200",
-                star <= val ? "fill-yellow-400 text-yellow-400" : "fill-muted text-muted-foreground/30"
+                "w-5 h-5 transition-all duration-200",
+                star <= val ? "fill-primary text-primary drop-shadow-sm" : "fill-muted text-muted-foreground/30"
               )}
             />
           </button>
@@ -318,24 +330,61 @@ export function EvaluationStageWidget({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="border border-border bg-surface/50 rounded-2xl p-6 shadow-sm">
-        <h2 className="text-lg font-bold text-foreground mb-4">{title}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-base font-bold text-foreground mb-3">{title}</h2>
+        <div className={cn(
+          "grid gap-4",
+          evaluations.length === 1 ? "grid-cols-1" : "grid-cols-1 xl:grid-cols-2"
+        )}>
           {evaluations.map((ev) => {
             const isCompleted = ev.status === 'EVALUATED';
             return (
-              <div key={ev.id} className="border border-border/80 bg-background/50 rounded-xl p-4 flex flex-col justify-between shadow-xs">
+              <div key={ev.id} className="flex flex-col justify-between py-2">
                 <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-xs uppercase tracking-wider text-muted-foreground">
-                      {ev.type.replace(/_/g, ' ')}
-                    </h3>
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border uppercase",
-                      isCompleted ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/20"
-                    )}>
-                      {isCompleted ? 'Evaluated' : 'Pending'}
-                    </span>
+                  <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 gap-3">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-bold text-sm uppercase tracking-wider text-foreground">
+                        {ev.type.replace(/_/g, ' ')}
+                      </h3>
+                      <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm whitespace-nowrap",
+                        isCompleted ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/30"
+                      )}>
+                        {isCompleted ? 'Evaluated' : 'Pending'}
+                      </span>
+                    </div>
+
+                    {!isCompleted && !schedulingId && !remarksId && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {ev.type === 'TECHNICAL_TEST' ? (
+                          <div className="flex items-center gap-2">
+                            <div className="flex bg-muted/40 p-0.5 rounded-md border border-border text-[11px]">
+                              <button type="button" onClick={() => setTestMode('ONLINE')} className={cn("px-2 py-1 rounded font-semibold transition-all", testMode === 'ONLINE' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>Online</button>
+                              <button type="button" onClick={() => setTestMode('PAPER')} className={cn("px-2 py-1 rounded font-semibold transition-all", testMode === 'PAPER' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>Paper</button>
+                            </div>
+                            {testMode === 'ONLINE' ? (
+                              <button type="button" onClick={() => handleCopyLink(ev.id, true)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-md transition-colors shadow-xs">
+                                {copiedId === ev.id ? <CheckCircle className="w-4 h-4 text-success" /> : <Clipboard className="w-4 h-4" />}
+                                {copiedId === ev.id ? 'Copied!' : 'Copy Link'}
+                              </button>
+                            ) : (
+                              <button type="button" onClick={() => setRemarksId(ev.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-white bg-primary hover:bg-primary/90 rounded-md transition-colors shadow-xs">
+                                <FileText className="w-4 h-4" /> Enter Score
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <button type="button" onClick={() => handleOpenSchedule(ev.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-md transition-colors shadow-xs whitespace-nowrap">
+                              <Calendar className="w-4 h-4" /> Schedule
+                            </button>
+                            <button type="button" onClick={() => setRemarksId(ev.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-white bg-primary hover:bg-primary/90 rounded-md transition-colors shadow-xs whitespace-nowrap">
+                              <UserCheck className="w-4 h-4" /> Direct Remarks
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {isCompleted ? (
@@ -344,8 +393,8 @@ export function EvaluationStageWidget({
                         <span>Verdict:</span>
                         <span className={cn("px-1.5 py-0.5 rounded text-[10px] border uppercase",
                           ev.verdict === 'SELECTED' || ev.verdict === 'PASS' ? "bg-success/10 text-success border-success/20" :
-                          ev.verdict === 'ON_HOLD' ? "bg-warning/10 text-warning border-warning/20" :
-                          "bg-danger/10 text-danger border-danger/20"
+                            ev.verdict === 'ON_HOLD' ? "bg-warning/10 text-warning border-warning/20" :
+                              "bg-danger/10 text-danger border-danger/20"
                         )}>
                           {ev.verdict}
                         </span>
@@ -362,30 +411,75 @@ export function EvaluationStageWidget({
                       )}
                     </div>
                   ) : (
-                    <div className="text-xs text-muted-foreground space-y-1.5 mt-2">
-                      {ev.scheduled_time ? (
-                        <>
-                          <div className="flex justify-between">
-                            <span>Scheduled:</span>
-                            <strong className="text-foreground">{new Date(ev.scheduled_time).toLocaleString()}</strong>
+                    <>
+                      {ev.scheduled_time && !schedulingId && !remarksId ? (
+                        <div className="mt-4 w-full relative flex justify-between items-end">
+                          <div className="absolute top-0 right-0">
+                            <button type="button" onClick={() => setCancelConfirmId(ev.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-danger/80 hover:text-danger hover:bg-danger/10 rounded-md transition-colors shadow-xs">
+                              <XCircle className="w-4 h-4" /> Cancel Schedule
+                            </button>
                           </div>
-                          <div className="flex justify-between">
-                            <span>Mode:</span>
-                            <strong className="text-foreground uppercase">{ev.interview_mode}</strong>
-                          </div>
-                          {ev.location_or_link && (
-                            <div className="flex justify-between truncate max-w-full">
-                              <span>Link/Place:</span>
-                              <a href={ev.location_or_link} target="_blank" rel="noreferrer" className="text-primary hover:underline font-bold max-w-[180px] truncate">
-                                {ev.location_or_link}
-                              </a>
+
+                          <div className="flex flex-col gap-4">
+                            {/* Date */}
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-muted-foreground mb-0.5">Scheduled Date</span>
+                              <div className="text-base font-bold text-foreground">
+                                {format(new Date(ev.scheduled_time), 'MMM dd, yyyy')}
+                              </div>
                             </div>
-                          )}
-                        </>
+
+                            {/* Time */}
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-muted-foreground mb-0.5">Time</span>
+                              <div className="text-base font-bold text-foreground">
+                                {format(new Date(ev.scheduled_time), 'hh:mm a')}
+                              </div>
+                            </div>
+
+                            {/* Location */}
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-muted-foreground mb-0.5">
+                                {ev.interview_mode === 'ONLINE' ? 'Meeting Link' : 'Location'}
+                              </span>
+                              <div className="text-base font-bold text-foreground">
+                                {ev.location_or_link ? (
+                                  ev.interview_mode === 'ONLINE' ? (
+                                    <a href={ev.location_or_link} target="_blank" rel="noopener noreferrer" className="hover:underline transition-colors truncate inline-block align-bottom max-w-full">
+                                      {ev.location_or_link}
+                                    </a>
+                                  ) : (
+                                    ev.location_or_link
+                                  )
+                                ) : (
+                                  <span className="text-muted-foreground/50 font-medium">TBD</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => handleCopyLink(ev.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-border/50 bg-background shadow-xs whitespace-nowrap">
+                              {copiedId === ev.id ? <CheckCircle className="w-4 h-4 text-success" /> : <Link className="w-4 h-4" />}
+                              {copiedId === ev.id ? 'Copied!' : 'Copy Link'}
+                            </button>
+                            <button type="button" onClick={() => openShareModal(ev)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#128C7E] bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 rounded-md transition-colors shadow-xs whitespace-nowrap">
+                              <img src="/whatsapp.webp" alt="WhatsApp" className="w-4 h-4 object-contain" /> Share
+                            </button>
+                          </div>
+                        </div>
                       ) : (
-                        <p className="italic text-[11px] py-1">Not scheduled yet.</p>
+                        !schedulingId && !remarksId && (
+                          <div className="flex flex-col items-center justify-center py-10 px-4 mt-6 bg-muted/20 border border-dashed border-border/60 rounded-2xl">
+                            <Calendar className="w-10 h-10 text-muted-foreground/30 mb-3" />
+                            <h3 className="text-base font-bold text-muted-foreground mb-1">Not scheduled yet</h3>
+                            <p className="text-sm text-muted-foreground/60 text-center max-w-sm">
+                              Click the "Schedule" button above to set the date, time, and location for this evaluation.
+                            </p>
+                          </div>
+                        )
                       )}
-                    </div>
+                    </>
                   )}
                 </div>
 
@@ -393,41 +487,65 @@ export function EvaluationStageWidget({
                 <div className="mt-3">
                   <AnimatePresence mode="wait">
                     {schedulingId === ev.id && (
-                      <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="space-y-3 pt-3 border-t border-border mt-3">
-                        <h4 className="font-bold text-[10px] uppercase text-foreground">Schedule Details</h4>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
+                      <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="space-y-4 pt-4 border-t border-border mt-4">
+                        <h4 className="font-bold text-sm uppercase tracking-wider text-foreground">Schedule Details</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                           <div>
-                            <label className="block text-[9px] font-bold uppercase text-muted-foreground mb-1">Mode</label>
-                            <select value={mode} onChange={(e) => setMode(e.target.value as 'PHYSICAL' | 'ONLINE')} className="w-full bg-background border border-border rounded-lg p-2">
-                              <option value="PHYSICAL">Physical</option>
-                              <option value="ONLINE">Online Meeting</option>
-                            </select>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Mode</label>
+                            <div className="flex bg-muted/40 p-1 rounded-xl border border-border/50 relative">
+                              <button
+                                type="button"
+                                onClick={() => setMode('PHYSICAL')}
+                                className={cn(
+                                  "flex-1 py-2 px-3 text-sm font-bold rounded-lg transition-colors relative z-10",
+                                  mode === 'PHYSICAL' ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                                )}
+                              >
+                                {mode === 'PHYSICAL' && (
+                                  <motion.div layoutId={`mode-bg-${ev.id}`} className="absolute inset-0 bg-background rounded-lg shadow-sm border border-border/50" style={{ zIndex: -1 }} />
+                                )}
+                                Physical / Walk-in
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setMode('ONLINE')}
+                                className={cn(
+                                  "flex-1 py-2 px-3 text-sm font-bold rounded-lg transition-colors relative z-10",
+                                  mode === 'ONLINE' ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                                )}
+                              >
+                                {mode === 'ONLINE' && (
+                                  <motion.div layoutId={`mode-bg-${ev.id}`} className="absolute inset-0 bg-background rounded-lg shadow-sm border border-border/50" style={{ zIndex: -1 }} />
+                                )}
+                                Online Meeting
+                              </button>
+                            </div>
                           </div>
                           <div>
-                            <label className="block text-[9px] font-bold uppercase text-muted-foreground mb-1">Date & Time</label>
-                            <input type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-background border border-border rounded-lg p-1.5" />
+                            <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Date & Time</label>
+                            <input type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-background border border-border rounded-xl p-3 focus:ring-2 focus:ring-primary/20 transition-all text-foreground font-medium" />
                           </div>
-                          <div className="col-span-2">
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="block text-[9px] font-bold uppercase text-muted-foreground">
+                          <div className="sm:col-span-2">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                 {mode === 'ONLINE' ? 'Google Meet / Zoom Link' : 'Location Room/Cabin'}
                               </label>
                               {mode === 'ONLINE' && (
                                 <button
                                   type="button"
                                   onClick={() => generateRandomMeetLink('schedule')}
-                                  className="text-[9px] font-bold text-primary hover:underline cursor-pointer"
+                                  className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary/80 transition-colors bg-primary/5 hover:bg-primary/10 px-2 py-1 rounded-md"
                                 >
-                                  Auto-generate Meet
+                                  <Video className="w-3.5 h-3.5" /> Auto-generate Meet
                                 </button>
                               )}
                             </div>
-                            <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder={mode === 'ONLINE' ? 'https://meet.google.com/...' : 'Conference Room A'} className="w-full bg-background border border-border rounded-lg p-2" />
+                            <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder={mode === 'ONLINE' ? 'https://meet.google.com/...' : 'Conference Room A'} className="w-full bg-background border border-border rounded-xl p-3 focus:ring-2 focus:ring-primary/20 transition-all text-foreground" />
                           </div>
                         </div>
-                        <div className="flex gap-2 justify-end pt-1">
-                          <Button variant="ghost" size="sm" onClick={() => setSchedulingId(null)}>Cancel</Button>
-                          <Button variant="primary" size="sm" onClick={() => handleSchedule(ev.id)} isLoading={submitting}>Save</Button>
+                        <div className="flex gap-3 justify-end pt-2 border-t border-border/50">
+                          <Button variant="ghost" onClick={() => setSchedulingId(null)} className="font-semibold">Cancel</Button>
+                          <Button variant="primary" onClick={() => handleSchedule(ev.id)} isLoading={submitting} className="font-bold shadow-sm px-6">Save Schedule</Button>
                         </div>
                       </motion.div>
                     )}
@@ -454,26 +572,58 @@ export function EvaluationStageWidget({
                             </div>
                           </div>
                         ) : (
-                          <div className="space-y-3">
+                          <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-3">
-                              <StarInput label="Technical" val={techScore} setVal={setTechScore} />
                               <StarInput label="Communication" val={commScore} setVal={setCommScore} />
+                              <StarInput label="Technical" val={techScore} setVal={setTechScore} />
                               <StarInput label="Experience" val={expScore} setVal={setExpScore} />
                               <StarInput label="Culture Fit" val={fitScore} setVal={setFitScore} />
                             </div>
-                            <div className="grid grid-cols-3 gap-2">
-                              <div className="col-span-2">
-                                <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Verdict</label>
-                                <select value={verdict} onChange={(e) => setVerdict(e.target.value as EvaluationVerdict)} className="w-full bg-background border border-border rounded-lg p-2">
-                                  <option value="SELECTED">Selected / Recommended</option>
-                                  <option value="ON_HOLD">On Hold</option>
-                                  <option value="REJECTED">Reject Candidate</option>
-                                </select>
-                              </div>
-                            </div>
+
+                            <div className="h-px w-full bg-border" />
+
                             <div>
-                              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Remarks</label>
-                              <textarea value={remarksText} onChange={(e) => setRemarksText(e.target.value)} placeholder="Summary of interview..." className="w-full min-h-[60px] bg-background border border-border rounded-lg p-2 resize-y" />
+                              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-2">Remarks & Key Takeaways</label>
+                              <textarea value={remarksText} onChange={(e) => setRemarksText(e.target.value)} placeholder="Summary of interview..." className="w-full min-h-[80px] bg-background border border-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary/20 resize-y transition-all" />
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-3 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => setVerdict('SELECTED')}
+                                className={cn(
+                                  "flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg font-bold text-xs transition-all border",
+                                  verdict === 'SELECTED'
+                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-600/30"
+                                    : "bg-background text-foreground border-border hover:bg-emerald-50 hover:border-emerald-200 dark:hover:bg-emerald-900/20"
+                                )}
+                              >
+                                <CheckCircle2 className="w-4 h-4" /> Selected
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setVerdict('ON_HOLD')}
+                                className={cn(
+                                  "flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg font-bold text-xs transition-all border",
+                                  verdict === 'ON_HOLD'
+                                    ? "bg-amber-500 text-white border-amber-500 shadow-md ring-2 ring-amber-500/30"
+                                    : "bg-background text-foreground border-border hover:bg-amber-50 hover:border-amber-200 dark:hover:bg-amber-900/20"
+                                )}
+                              >
+                                <Clock className="w-4 h-4" /> Hold
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setVerdict('REJECTED')}
+                                className={cn(
+                                  "flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg font-bold text-xs transition-all border",
+                                  verdict === 'REJECTED'
+                                    ? "bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-600/30"
+                                    : "bg-background text-foreground border-border hover:bg-rose-50 hover:border-rose-200 dark:hover:bg-rose-900/20"
+                                )}
+                              >
+                                <XCircle className="w-4 h-4" /> Reject
+                              </button>
                             </div>
                           </div>
                         )}
@@ -484,44 +634,7 @@ export function EvaluationStageWidget({
                       </motion.div>
                     )}
 
-                    {!isCompleted && !schedulingId && !remarksId && (
-                      <div className="flex flex-wrap gap-2 pt-3 border-t border-border mt-3 justify-end">
-                        {ev.type === 'TECHNICAL_TEST' ? (
-                          <div className="w-full flex flex-col gap-2">
-                            <div className="flex bg-muted/40 p-0.5 rounded-lg border border-border w-fit text-[11px] self-end mb-1">
-                              <button type="button" onClick={() => setTestMode('ONLINE')} className={cn("px-2.5 py-1 rounded font-semibold", testMode === 'ONLINE' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>Online</button>
-                              <button type="button" onClick={() => setTestMode('PAPER')} className={cn("px-2.5 py-1 rounded font-semibold", testMode === 'PAPER' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>Paper</button>
-                            </div>
-                            <div className="flex justify-end gap-2">
-                              {testMode === 'ONLINE' ? (
-                                <Button variant="ghost" size="sm" className="border border-border text-xs" onClick={() => handleCopyLink(ev.id, true)}>
-                                  <Clipboard className="w-3.5 h-3.5 mr-1.5" /> Copy Test Link
-                                </Button>
-                              ) : (
-                                <Button variant="ghost" size="sm" className="border border-border text-xs" onClick={() => setRemarksId(ev.id)}>
-                                  <FileText className="w-3.5 h-3.5 mr-1.5" /> Enter Paper Score
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <Button variant="ghost" size="sm" className="border border-border text-xs" onClick={() => setSchedulingId(ev.id)}>
-                              <Calendar className="w-3.5 h-3.5 mr-1.5" /> Schedule
-                            </Button>
-                            <Button variant="ghost" size="sm" className="border border-border text-xs" onClick={() => handleCopyLink(ev.id)}>
-                              <Link className="w-3.5 h-3.5 mr-1.5" /> Get Copy Link
-                            </Button>
-                            <Button variant="ghost" size="sm" className="border border-border text-xs" onClick={() => openShareModal(ev)}>
-                              <Share2 className="w-3.5 h-3.5 mr-1.5" /> Share
-                            </Button>
-                            <Button variant="ghost" size="sm" className="border border-border text-xs" onClick={() => setRemarksId(ev.id)}>
-                              <UserCheck className="w-3.5 h-3.5 mr-1.5" /> Direct Remarks
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    )}
+
                   </AnimatePresence>
                 </div>
               </div>
@@ -530,36 +643,21 @@ export function EvaluationStageWidget({
         </div>
       </div>
 
-      {/* Action Recommendation panel */}
-      <div className={cn("border rounded-2xl bg-surface/50 p-6 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all duration-300",
-        isAllEvaluationsDone() ? "border-primary bg-primary/5" : "border-border opacity-70"
-      )}>
-        <div className="flex items-start gap-3">
-          <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm",
-            isAllEvaluationsDone() ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
-          )}>
-            <Award className="w-5 h-5" />
-          </div>
-          <div>
-            <h4 className="font-bold text-foreground text-sm sm:text-base">Recommend Candidate to Next Stage</h4>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-              {isAllEvaluationsDone()
-                ? `Ready to transition the candidate to ${nextStage.replace(/_/g, ' ')}.`
-                : `Complete all evaluations for this stage to unlock stage recommendation.`
-              }
-            </p>
+      {/* Cancel Schedule Confirm Modal */}
+      <Modal
+        isOpen={!!cancelConfirmId}
+        onClose={() => setCancelConfirmId(null)}
+        title="Cancel Schedule"
+        size="sm"
+      >
+        <div className="p-6 flex flex-col gap-5">
+          <p className="text-sm text-foreground font-medium">Are you sure you want to cancel this interview schedule? This action cannot be undone.</p>
+          <div className="flex gap-3 justify-end mt-2">
+            <Button variant="ghost" onClick={() => setCancelConfirmId(null)} className="font-semibold">No, Keep it</Button>
+            <Button variant="primary" onClick={() => cancelConfirmId && handleRemoveSchedule(cancelConfirmId)} className="font-bold bg-danger hover:bg-danger/90 text-white border-transparent">Yes, Cancel</Button>
           </div>
         </div>
-        <Button
-          variant="primary"
-          disabled={!isAllEvaluationsDone()}
-          onClick={handleTransitionStage}
-          isLoading={submitting}
-          className="w-full sm:w-auto shadow-sm shrink-0"
-        >
-          <CheckCircle className="w-4 h-4 mr-2" /> Transition Stage
-        </Button>
-      </div>
+      </Modal>
 
       {/* WhatsApp Share Modal */}
       <Modal
@@ -796,7 +894,7 @@ export function EvaluationStageWidget({
                               dStr = format(parsedDate, 'dd MMM yyyy');
                               tStr = format(parsedDate, 'h:mm a');
                             }
-                          } catch (e) {}
+                          } catch (e) { }
                         }
                         const displayMode = shareMode === 'PHYSICAL' ? 'Walk-in' : 'Online';
                         const targetName = recipientType === 'INTERVIEWER' ? (interviewerName || 'Interviewer') : candidate.full_name;
@@ -819,7 +917,7 @@ Nippon Toyota`;
 
                         return previewMessage.split('\n').map((line, i) => (
                           <span key={i}>
-                            {line.split(/\*(.*?)\*/g).map((part, j) => 
+                            {line.split(/\*(.*?)\*/g).map((part, j) =>
                               j % 2 === 1 ? <strong key={j} className="font-bold">{part}</strong> : (
                                 part.startsWith('http') ? (
                                   <a key={j} href={part} target="_blank" rel="noreferrer" className="text-[#027eb5] underline hover:text-[#026aa3] break-all">{part}</a>

@@ -9,9 +9,9 @@ export const getCandidateEvaluations = async (candidateId: string): Promise<Eval
 export const scheduleEvaluation = async (
   evalId: string,
   data: {
-    interview_mode?: 'PHYSICAL' | 'ONLINE';
-    scheduled_time?: string;
-    location_or_link?: string;
+    interview_mode?: 'PHYSICAL' | 'ONLINE' | null;
+    scheduled_time?: string | null;
+    location_or_link?: string | null;
   }
 ): Promise<Evaluation> => {
   const response = await api.post(`/evaluations/${evalId}/schedule`, data);

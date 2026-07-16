@@ -125,6 +125,8 @@ def schedule_evaluation(
     
     if body.interview_mode or body.scheduled_time or body.location_or_link:
         evaluation.status = InterviewStatus.SCHEDULED
+    elif evaluation.status == InterviewStatus.SCHEDULED:
+        evaluation.status = InterviewStatus.PENDING_SCHEDULE
         
     db.commit()
     db.refresh(evaluation)

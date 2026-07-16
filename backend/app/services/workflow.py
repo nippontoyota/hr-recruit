@@ -68,56 +68,9 @@ class WorkflowService:
                 detail="Remarks are required when placing a candidate On Hold."
             )
 
-        # Validate preceding evaluations before stage changes
+        # Ensure evaluation imports are available for auto-initialization
         from app.models.evaluation import Evaluation
         from app.models.enums import EvaluationType, InterviewStatus
-
-        # To move from HR_INTERVIEW ➔ DEPARTMENT_INTERVIEW, BRANCH_HR evaluation must be completed
-        if target_stage == PipelineStage.DEPARTMENT_INTERVIEW:
-            hr_eval = db.scalar(sa.select(Evaluation).where(
-                Evaluation.candidate_id == candidate.id,
-                Evaluation.type == EvaluationType.BRANCH_HR
-            ))
-            if not hr_eval or hr_eval.status != InterviewStatus.EVALUATED or hr_eval.verdict is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot transition. HR Interview evaluation must be completed."
-                )
-
-        # To move from DEPARTMENT_INTERVIEW ➔ BRANCH_EVALUATION, DEPT_HEAD evaluation must be completed
-        elif target_stage == PipelineStage.BRANCH_EVALUATION:
-            dept_eval = db.scalar(sa.select(Evaluation).where(
-                Evaluation.candidate_id == candidate.id,
-                Evaluation.type == EvaluationType.DEPT_HEAD
-            ))
-            if not dept_eval or dept_eval.status != InterviewStatus.EVALUATED or dept_eval.verdict is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot transition. Department Head evaluation must be completed."
-                )
-
-        # To move from BRANCH_EVALUATION ➔ FINAL_APPROVAL, both GM_LEVEL and TECHNICAL_TEST evaluations must be completed
-        elif target_stage == PipelineStage.FINAL_APPROVAL:
-            evals = db.scalars(sa.select(Evaluation).where(Evaluation.candidate_id == candidate.id)).all()
-            completed_types = {e.type for e in evals if e.status == InterviewStatus.EVALUATED and e.verdict is not None}
-            required = {EvaluationType.GM_LEVEL, EvaluationType.TECHNICAL_TEST}
-            if not required.issubset(completed_types):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot transition. Both GM level evaluation and technical test must be completed."
-                )
-
-        # To move from FINAL_APPROVAL ➔ HIRED, HQ_INTERVIEW evaluation must be completed
-        elif target_stage == PipelineStage.HIRED:
-            hq_eval = db.scalar(sa.select(Evaluation).where(
-                Evaluation.candidate_id == candidate.id,
-                Evaluation.type == EvaluationType.HQ_INTERVIEW
-            ))
-            if not hq_eval or hq_eval.status != InterviewStatus.EVALUATED or hq_eval.verdict is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot transition. HQ online interview must be completed."
-                )
 
         # Auto-initialize Evaluations upon stage entry
         if target_stage == PipelineStage.HR_INTERVIEW:

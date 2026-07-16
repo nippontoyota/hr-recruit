@@ -391,8 +391,6 @@ export default function CandidateProfile() {
                 candidate={candidate}
                 evalTypes={['BRANCH_HR']}
                 title="HR Interview Evaluation"
-                nextStage="DEPARTMENT_INTERVIEW"
-                nextStageRemarks="HR Interview complete. Transition to Department Head Interview."
                 onUpdate={handleUpdate}
               />
             )}
@@ -402,8 +400,6 @@ export default function CandidateProfile() {
                 candidate={candidate}
                 evalTypes={['DEPT_HEAD']}
                 title="Department Head Evaluation"
-                nextStage="BRANCH_EVALUATION"
-                nextStageRemarks="Department Head approved the candidate. Transition to Branch Evaluation."
                 onUpdate={handleUpdate}
               />
             )}
@@ -413,8 +409,6 @@ export default function CandidateProfile() {
                 candidate={candidate}
                 evalTypes={['GM_LEVEL', 'TECHNICAL_TEST']}
                 title="Branch General Manager Evaluation"
-                nextStage="FINAL_APPROVAL"
-                nextStageRemarks="General Manager evaluation and Technical Test completed. Transition to Final HQ Approval."
                 onUpdate={handleUpdate}
               />
             )}
@@ -424,8 +418,6 @@ export default function CandidateProfile() {
                 candidate={candidate}
                 evalTypes={['HQ_INTERVIEW']}
                 title="HQ Online Interview"
-                nextStage="HIRED"
-                nextStageRemarks="HQ Online Interview completed. Recommend hiring candidate."
                 onUpdate={handleUpdate}
               />
             )}

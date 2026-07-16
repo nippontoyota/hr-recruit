@@ -4,7 +4,7 @@ import { CheckCircle2, Pencil, Printer, Save, X, RefreshCw } from 'lucide-react'
 import type { Candidate } from '../../types';
 import { toast } from 'sonner';
 import { ResumeButton } from './ResumeButton';
-import { updateCandidateRawData, resendPreForm } from '../../api/candidates';
+import { updateCandidateRawData } from '../../api/candidates';
 import { copyToClipboard } from '../../lib/clipboard';
 import { WhatsAppPreviewPanel } from './WhatsAppPreviewPanel';
 
@@ -30,12 +30,11 @@ function formatFieldValue(value: unknown): string {
   return String(value);
 }
 
-export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
+export function PreFormStatus({ candidate }: PreFormStatusProps) {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, any>>({});
   const [isSaving, setIsSaving] = useState(false);
-  const [isResending, setIsResending] = useState(false);
   const [showResendModal, setShowResendModal] = useState(false);
 
   const status = candidate.pre_form_status || 'NOT_SENT';
@@ -70,18 +69,6 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
     }
   };
 
-  const handleResend = async () => {
-    setIsResending(true);
-    try {
-      await resendPreForm(candidate.id);
-      toast.success('Form link resent successfully');
-      onUpdate?.();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Failed to resend form link');
-    } finally {
-      setIsResending(false);
-    }
-  };
 
   const handleChange = (key: string, value: string) => {
     setEditData((prev) => ({

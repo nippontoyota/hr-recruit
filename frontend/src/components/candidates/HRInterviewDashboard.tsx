@@ -4,7 +4,7 @@ import type { Candidate, ResumeDocument, InterviewMode, InterviewStatus } from '
 import { Button, PdfViewer, LoadingSpinner } from '../ui';
 import { toast } from 'sonner';
 import { cn, extractError } from '../../lib/utils';
-import { Star, AlertCircle, FileText, ExternalLink } from 'lucide-react';
+import { Star, AlertCircle, FileText, ExternalLink, IndianRupee, Calendar, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { HRInterviewWhatsAppPreview } from './HRInterviewWhatsAppPreview';
 
 function toLocalDatetimeString(dateString?: string) {
@@ -155,19 +155,22 @@ export function HRInterviewDashboard({ candidate, onUpdate }: HRInterviewDashboa
   };
 
   const StarRating = ({ label, value, onChange }: { label: string, value: number, onChange: (v: number) => void }) => (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-bold text-foreground uppercase tracking-wider">{label}</span>
-      <div className="flex items-center gap-1">
+    <div className="flex flex-col p-4 bg-background border border-border rounded-lg shadow-sm">
+      <div className="flex justify-between items-center mb-3">
+        <span className="text-xs font-bold text-foreground uppercase tracking-wider">{label}</span>
+        <span className="text-sm font-semibold text-muted-foreground">{value}/5</span>
+      </div>
+      <div className="flex items-center justify-between">
         {[1, 2, 3, 4, 5].map((star) => (
           <button
             key={star}
             onClick={() => onChange(star)}
-            className="p-1 transition-transform hover:scale-110 focus:outline-none"
+            className="p-1.5 transition-transform hover:scale-110 focus:outline-none"
           >
             <Star
               className={cn(
-                "w-6 h-6 transition-all duration-200",
-                star <= value ? "fill-yellow-400 text-yellow-400 drop-shadow-sm" : "fill-muted text-muted-foreground/30"
+                "w-7 h-7 transition-all duration-200",
+                star <= value ? "fill-primary text-primary drop-shadow-sm" : "fill-muted text-muted-foreground/30"
               )}
             />
           </button>
@@ -304,7 +307,7 @@ export function HRInterviewDashboard({ candidate, onUpdate }: HRInterviewDashboa
           </div>
           
           <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-background">
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-4">
               <StarRating label="Communication" value={communicationScore} onChange={setCommunicationScore} />
               <StarRating label="Technical Skills" value={technicalScore} onChange={setTechnicalScore} />
               <StarRating label="Experience" value={experienceScore} onChange={setExperienceScore} />
@@ -316,81 +319,102 @@ export function HRInterviewDashboard({ candidate, onUpdate }: HRInterviewDashboa
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">Current Salary</label>
-                <input
-                  type="text"
-                  value={currentSalary}
-                  onChange={(e) => setCurrentSalary(e.target.value)}
-                  placeholder="e.g. 5 LPA"
-                  className="w-full bg-background border border-border rounded-xl p-3 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <IndianRupee className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <input
+                    type="text"
+                    value={currentSalary}
+                    onChange={(e) => setCurrentSalary(e.target.value)}
+                    placeholder="e.g. 5 LPA"
+                    className="w-full bg-background border border-border rounded-lg pl-10 p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">Expected Salary</label>
-                <input
-                  type="text"
-                  value={expectedSalary}
-                  onChange={(e) => setExpectedSalary(e.target.value)}
-                  placeholder="e.g. 7 LPA"
-                  className="w-full bg-background border border-border rounded-xl p-3 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <IndianRupee className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <input
+                    type="text"
+                    value={expectedSalary}
+                    onChange={(e) => setExpectedSalary(e.target.value)}
+                    placeholder="e.g. 7 LPA"
+                    className="w-full bg-background border border-border rounded-lg pl-10 p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
               </div>
               <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">Notice Period</label>
-                <input
-                  type="text"
-                  value={noticePeriod}
-                  onChange={(e) => setNoticePeriod(e.target.value)}
-                  placeholder="e.g. 30 Days (Negotiable)"
-                  className="w-full bg-background border border-border rounded-xl p-3 text-sm text-foreground focus:ring-2 focus:ring-primary/20"
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <input
+                    type="text"
+                    value={noticePeriod}
+                    onChange={(e) => setNoticePeriod(e.target.value)}
+                    placeholder="e.g. 30 Days (Negotiable)"
+                    className="w-full bg-background border border-border rounded-lg pl-10 p-2.5 text-sm text-foreground focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="h-px w-full bg-border" />
-
             <div>
-              <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">Interview Remarks</label>
+              <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">Remarks & Key Takeaways</label>
               <textarea
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 placeholder="Detailed feedback and notes from the interview..."
-                className="w-full min-h-[120px] bg-background border border-border rounded-xl p-4 text-sm text-foreground focus:ring-2 focus:ring-primary/20 resize-y"
+                className="w-full min-h-[120px] bg-background border border-border rounded-lg p-3 text-sm text-foreground focus:ring-2 focus:ring-primary/20 resize-y transition-all"
               />
             </div>
 
-            <div className="bg-muted/30 p-4 rounded-xl border border-border space-y-3">
-              <p className="text-xs font-bold text-foreground uppercase tracking-wider text-center">Final Verdict</p>
+            <div className="pt-2">
               <div className="grid grid-cols-3 gap-3">
-                <Button
-                  variant="ghost"
+                <button
                   onClick={() => handleSave('SELECTED')}
+                  disabled={isSubmitting}
                   className={cn(
-                    "border border-border",
-                    verdict === 'SELECTED' ? "!bg-success !text-white border-transparent" : "hover:bg-success/10"
+                    "flex items-center justify-center gap-2 py-3 rounded-lg font-bold text-sm transition-all border",
+                    verdict === 'SELECTED' 
+                      ? "bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-600/30 ring-offset-2 ring-offset-background" 
+                      : "bg-background text-foreground border-border hover:bg-emerald-50 hover:border-emerald-200 dark:hover:bg-emerald-900/20"
                   )}
                 >
+                  <CheckCircle2 className="w-5 h-5" />
                   Selected
-                </Button>
-                <Button
-                  variant="ghost"
+                </button>
+                <button
                   onClick={() => handleSave('ON_HOLD')}
+                  disabled={isSubmitting}
                   className={cn(
-                    "border border-border",
-                    verdict === 'ON_HOLD' ? "!bg-warning !text-warning-foreground border-transparent" : "hover:bg-warning/10"
+                    "flex items-center justify-center gap-2 py-3 rounded-lg font-bold text-sm transition-all border",
+                    verdict === 'ON_HOLD' 
+                      ? "bg-amber-500 text-white border-amber-500 shadow-md ring-2 ring-amber-500/30 ring-offset-2 ring-offset-background" 
+                      : "bg-background text-foreground border-border hover:bg-amber-50 hover:border-amber-200 dark:hover:bg-amber-900/20"
                   )}
                 >
+                  <Clock className="w-5 h-5" />
                   Hold
-                </Button>
-                <Button
-                  variant={verdict === 'REJECTED' ? 'danger' : 'ghost'}
+                </button>
+                <button
                   onClick={() => handleSave('REJECTED')}
+                  disabled={isSubmitting}
                   className={cn(
-                    "border border-border",
-                    verdict === 'REJECTED' ? "!bg-danger !text-white border-transparent" : "hover:bg-danger/10"
+                    "flex items-center justify-center gap-2 py-3 rounded-lg font-bold text-sm transition-all border",
+                    verdict === 'REJECTED' 
+                      ? "bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-600/30 ring-offset-2 ring-offset-background" 
+                      : "bg-background text-foreground border-border hover:bg-rose-50 hover:border-rose-200 dark:hover:bg-rose-900/20"
                   )}
                 >
+                  <XCircle className="w-5 h-5" />
                   Reject
-                </Button>
+                </button>
               </div>
             </div>
             
