@@ -214,8 +214,10 @@ def test_transition_validation_department_to_branch():
         current_stage=PipelineStage.DEPARTMENT_INTERVIEW
     )
     
-    # 1. No evaluation exists ➔ should raise HTTPException
+    # 1. No evaluation exists -> should raise HTTPException (Wait, actually auto-initialize handles it now)
+    # Since we auto-initialize, the validation requirement for existing evaluation was changed/removed.
     db.scalar = lambda q: None
+    db.add = lambda obj: None
     user = _admin_user()
     
     with pytest.raises(HTTPException) as exc:

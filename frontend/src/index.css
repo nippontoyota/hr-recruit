@@ -115,11 +115,23 @@
   }
 
   .section-heading {
-    @apply text-lg font-semibold text-text-primary tracking-tight;
+    @apply text-xl font-semibold text-text-primary tracking-tight;
   }
 
   .page-card {
-    @apply bg-surface border border-border rounded-xl shadow-sm;
+    @apply bg-surface/90 backdrop-blur-md border border-border/80 rounded-2xl shadow-sm transition-all duration-300 hover:shadow-md;
+  }
+
+  .glass-panel {
+    @apply bg-white/70 dark:bg-black/70 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-lg;
+  }
+
+  .glass-card {
+    @apply bg-surface/60 backdrop-blur-sm border border-border shadow-sm transition-all duration-300 hover:shadow-md hover:bg-surface/80;
+  }
+  
+  .hover-lift {
+    @apply transition-transform duration-300 hover:-translate-y-1 hover:shadow-lg;
   }
 
   .data-table thead {

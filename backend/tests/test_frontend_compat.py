@@ -190,7 +190,7 @@ def test_create_candidate_accepts_linkedin_source():
 
     app.dependency_overrides[get_current_active_user] = lambda: user
     try:
-        with patch("app.api.v1.candidates.create_candidate", return_value=created) as create_mock:
+        with patch("app.api.v1.candidates_core.create_candidate", return_value=created) as create_mock:
             response = client.post(
                 "/api/v1/candidates",
                 json={
@@ -258,7 +258,7 @@ def test_public_apply():
 
     app.dependency_overrides[get_db] = lambda: db
     try:
-        with patch("app.api.v1.candidates.create_candidate", return_value=created) as create_mock:
+        with patch("app.api.v1.candidates_public.create_candidate", return_value=created) as create_mock:
             response = client.post(
                 f"/api/v1/candidates/public-apply?hr_id={hr_user.id}",
                 json={

@@ -94,7 +94,7 @@ def test_upload_rejects_oversized_file():
     app.dependency_overrides[get_current_active_user] = lambda: user
     app.dependency_overrides[get_db] = lambda: db
     try:
-        with patch("app.api.v1.candidates.settings.resume_max_bytes", 10):
+        with patch("app.api.v1.candidates_actions.settings.resume_max_bytes", 10):
             response = client.post(
                 f"/api/v1/candidates/{candidate_id}/resume",
                 files={"file": ("resume.pdf", b"0123456789ABCDEF", "application/pdf")},
@@ -127,7 +127,7 @@ def test_upload_success_mocked_storage():
     app.dependency_overrides[get_db] = lambda: db
     try:
         with (
-            patch("app.api.v1.candidates.storage.upload_object") as upload,
+            patch("app.api.v1.candidates_actions.storage.upload_object") as upload,
             patch(
                 "app.api.v1.candidates.storage.create_signed_url",
                 return_value="https://signed.example/r.pdf",
@@ -164,8 +164,8 @@ def test_upload_rolls_back_storage_when_db_commit_fails():
     app.dependency_overrides[get_db] = lambda: db
     try:
         with (
-            patch("app.api.v1.candidates.storage.upload_object"),
-            patch("app.api.v1.candidates.storage.delete_object") as delete,
+            patch("app.api.v1.candidates_actions.storage.upload_object"),
+            patch("app.api.v1.candidates_actions.storage.delete_object") as delete,
         ):
             response = client.post(
                 f"/api/v1/candidates/{candidate_id}/resume",

@@ -318,6 +318,14 @@ def get_public_evaluation_details(
         candidate_resume_url=resume_url,
         candidate_experience=candidate.profile.total_experience if candidate.profile else None,
         candidate_education=candidate.profile.raw_data.get("highestQual", "") if candidate.profile and candidate.profile.raw_data else "",
+        candidate_email=candidate.email,
+        candidate_phone=candidate.phone,
+        candidate_location=candidate.branch_location,
+        candidate_source=candidate.source if candidate.source else None,
+        candidate_skills=candidate.profile.raw_data.get("skills", "") if candidate.profile and candidate.profile.raw_data else "",
+        candidate_current_salary=candidate.profile.raw_data.get("currentSalary", "") if candidate.profile and candidate.profile.raw_data else "",
+        candidate_expected_salary=candidate.profile.raw_data.get("expectedSalary", "") if candidate.profile and candidate.profile.raw_data else "",
+        candidate_notice_period=candidate.profile.raw_data.get("noticePeriod", "") if candidate.profile and candidate.profile.raw_data else "",
         previous_remarks=previous_remarks,
         is_already_submitted=is_already_submitted
     )

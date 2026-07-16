@@ -48,6 +48,14 @@ class EvaluationPublicOut(BaseModel):
     candidate_resume_url: str | None = None
     candidate_education: str | None = None
     candidate_experience: str | None = None
+    candidate_email: str | None = None
+    candidate_phone: str | None = None
+    candidate_location: str | None = None
+    candidate_source: str | None = None
+    candidate_skills: str | None = None
+    candidate_current_salary: str | None = None
+    candidate_expected_salary: str | None = None
+    candidate_notice_period: str | None = None
     previous_remarks: list[dict] = []
     is_already_submitted: bool = False
 

@@ -190,29 +190,38 @@ export default function CandidateProfile() {
       <div className="flex-1 flex flex-col pl-4 sm:pl-6 lg:pl-8 pt-4 lg:pt-6 pr-0 lg:pr-8 pb-4 min-w-0 transition-all duration-300 ease-in-out">
 
         {/* ── CANDIDATE HEADER ── */}
-        <div className="pb-8 mb-6 border-b border-border">
-          <div className="max-w-2xl mx-auto w-full">
-            <div className="flex items-center justify-between gap-4 mb-6">
+        <div className="pb-6 mb-6 border-b border-border">
+          <div className="w-full">
+            <div className="flex items-center gap-2 mb-4">
               <button
                 type="button"
                 onClick={() => navigate('/candidates')}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title="Back to Candidates"
               >
-                <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-                Back to Candidates
+                <ArrowLeft className="w-4 h-4" />
               </button>
-              <span className={cn('shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border', stageColor(stage))}>
-                {stageLabel(stage)}
-              </span>
+              <span className="text-sm font-medium text-muted-foreground">Candidates</span>
+              <span className="text-sm font-medium text-muted-foreground">/</span>
+              <span className="text-sm font-medium text-foreground">{candidate.full_name}</span>
             </div>
 
-            <div className="flex flex-col items-center text-center gap-4">
-              <div>
-                <div className="flex flex-wrap items-center justify-center gap-3 mb-1">
-                  <h1 className="text-3xl font-bold tracking-tight text-foreground text-balance">{candidate.full_name}</h1>
-                <div className="flex items-center gap-2">
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+              {/* Left Column: Title & Metadata */}
+              <div className="flex-1 min-w-0 space-y-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground truncate">{candidate.full_name}</h1>
+                  <span className={cn('shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm', stageColor(stage))}>
+                    {stageLabel(stage)}
+                  </span>
+                  {candidate.is_duplicate_flagged && (
+                    <span className="text-[10px] font-semibold text-warning bg-warning/10 border border-warning/20 px-2 py-0.5 rounded-md">
+                      Duplicate
+                    </span>
+                  )}
                   {stage === 'ON_HOLD' && (
                     <Button
+                      size="sm"
                       onClick={async () => {
                         if (!candidate) return;
                         setIsResuming(true);
@@ -227,76 +236,62 @@ export default function CandidateProfile() {
                         }
                       }}
                       isLoading={isResuming}
-                      className="gap-2 bg-warning/90 hover:bg-warning text-white"
+                      className="h-7 px-3 text-xs gap-1.5 bg-warning/90 hover:bg-warning text-white"
                     >
-                      <Play className="w-4 h-4" /> Resume to previous
+                      <Play className="w-3.5 h-3.5" /> Resume to previous
                     </Button>
                   )}
                 </div>
-                  {candidate.is_duplicate_flagged && (
-                    <span className="text-[10px] font-semibold text-warning bg-warning/10 border border-warning/20 px-1.5 py-0.5 rounded-[4px]">
-                      Duplicate
+
+                {candidate.position_applied_for && (
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Applying for: <strong className="text-foreground">{candidate.position_applied_for}</strong>
+                  </p>
+                )}
+
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Phone className="w-4 h-4 shrink-0" />
+                    <span className="text-foreground font-medium">+91 {candidate.phone}</span>
+                  </span>
+                  {candidate.email && (
+                    <span className="flex items-center gap-1.5">
+                      <Mail className="w-4 h-4 shrink-0" />
+                      <span className="text-foreground font-medium">{candidate.email}</span>
+                    </span>
+                  )}
+                  {candidate.branch_location && (
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="w-4 h-4 shrink-0" />
+                      <span className="text-foreground font-medium">{candidate.branch_location}</span>
+                    </span>
+                  )}
+                  {candidate.source && (
+                    <span className="flex items-center gap-1.5">
+                      <span className="font-medium text-foreground">
+                        Source: {candidate.source === 'INDEED' ? 'Indeed' : candidate.source === 'NAUKRI' ? 'Naukri' : candidate.source.replace(/_/g, ' ')}
+                      </span>
                     </span>
                   )}
                 </div>
-                {candidate.position_applied_for && (
-                  <p className="text-lg font-medium text-muted-foreground mt-1">
-                    {candidate.position_applied_for}
-                  </p>
-                )}
               </div>
 
-              <div className="flex flex-wrap justify-center items-center gap-4 sm:gap-6 text-sm">
-                <span className="flex items-center gap-2 font-medium text-foreground">
-                  <Phone className="w-4 h-4 text-muted-foreground" />
-                  +91 {candidate.phone}
-                </span>
-                {candidate.email && (
-                  <span className="flex items-center gap-2 font-medium text-foreground break-all">
-                    <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                    {candidate.email}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
-                {candidate.source && (
-                  <div className="flex items-center gap-1.5 bg-muted/50 border border-border/50 px-2.5 py-1 rounded-md text-muted-foreground">
-                    {candidate.source === 'INDEED' ? (
-                      <img src="/indeed.png" alt="Indeed" className="source-brand-logo" />
-                    ) : candidate.source === 'NAUKRI' ? (
-                      <img src="/Naukri.png" alt="Naukri" className="source-brand-logo" />
-                    ) : (
-                      <>
-                        <span className="font-medium">Source:</span>
-                        <strong className="text-foreground uppercase">{candidate.source.replace(/_/g, ' ')}</strong>
-                      </>
-                    )}
-                  </div>
-                )}
-                {candidate.branch_location && (
-                  <div className="flex items-center gap-1.5 bg-muted/50 border border-border/50 px-2.5 py-1 rounded-md text-foreground font-medium">
-                    <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
-                    {candidate.branch_location}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center justify-center gap-2">
+              {/* Right Column: Actions */}
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <a
                   href={`https://wa.me/91${candidate.phone}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-bold rounded-lg border border-border hover:bg-muted transition-colors text-foreground shadow-sm"
+                  className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
                 >
-                  <img src="/whatsapp.webp" className="action-brand-icon" alt="WhatsApp" /> WhatsApp
+                  <img src="/whatsapp.webp" className="w-4 h-4 object-contain" alt="WhatsApp" /> WhatsApp
                 </a>
                 {candidate.email && (
                   <a
                     href={`mailto:${candidate.email}`}
-                    className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-bold rounded-lg border border-border hover:bg-muted transition-colors text-foreground shadow-sm"
+                    className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
                   >
-                    <img src="/gmail.webp" className="action-brand-icon" alt="Email" /> Email
+                    <img src="/gmail.webp" className="w-4 h-4 object-contain" alt="Email" /> Email
                   </a>
                 )}
                 {candidate.has_resume && (
@@ -311,7 +306,7 @@ export default function CandidateProfile() {
                     variant="danger"
                     size="sm"
                     onClick={() => setShowRejectModal(true)}
-                    className="h-9 px-4 gap-2 border border-danger/40"
+                    className="h-9 px-4 gap-2 bg-danger/10 text-danger hover:bg-danger hover:text-white border-transparent transition-colors shadow-sm"
                   >
                     <XCircle className="w-4 h-4" /> Reject
                   </Button>
@@ -319,7 +314,8 @@ export default function CandidateProfile() {
               </div>
             </div>
 
-            <div className="mt-8 flex items-center justify-between gap-4">
+            {/* Stepper block */}
+            <div className="mt-8 pt-6 border-t border-border flex items-center justify-between gap-4">
               <Button
                 type="button"
                 variant="ghost"
@@ -327,12 +323,12 @@ export default function CandidateProfile() {
                 disabled={isPrevDisabled}
                 onClick={handlePrevStep}
                 className={cn(
-                  "h-10 w-10 rounded-full border border-border bg-background shadow-xs shrink-0 flex items-center justify-center transition-all duration-200",
-                  !isPrevDisabled ? "hover:bg-muted hover:border-success/30 hover:text-success text-foreground" : "opacity-40 cursor-not-allowed"
+                  "h-9 w-9 rounded-md border border-border bg-background shadow-sm shrink-0 flex items-center justify-center transition-all",
+                  !isPrevDisabled ? "hover:bg-muted hover:text-foreground text-muted-foreground" : "opacity-40 cursor-not-allowed"
                 )}
                 title="Previous Step"
               >
-                <ChevronLeft className="w-5 h-5 text-muted-foreground" />
+                <ChevronLeft className="w-4 h-4" />
               </Button>
 
               <div className="flex-1 min-w-0">
@@ -351,12 +347,12 @@ export default function CandidateProfile() {
                 disabled={isNextDisabled}
                 onClick={handleNextStep}
                 className={cn(
-                  "h-10 w-10 rounded-full border border-border bg-background shadow-xs shrink-0 flex items-center justify-center transition-all duration-200",
-                  !isNextDisabled ? "hover:bg-muted hover:border-success/30 hover:text-success text-foreground" : "opacity-40 cursor-not-allowed"
+                  "h-9 w-9 rounded-md border border-border bg-background shadow-sm shrink-0 flex items-center justify-center transition-all",
+                  !isNextDisabled ? "hover:bg-muted hover:text-foreground text-muted-foreground" : "opacity-40 cursor-not-allowed"
                 )}
                 title="Next Step"
               >
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
           </div>

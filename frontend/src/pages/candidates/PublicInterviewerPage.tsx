@@ -158,24 +158,76 @@ export default function PublicInterviewerPage() {
           {/* Candidate Card */}
           <div className="border border-border bg-surface/50 rounded-2xl p-6 shadow-sm">
             <h2 className="text-xl font-bold text-foreground mb-4">Candidate Profile</h2>
-            <div className="grid grid-cols-2 gap-4 text-xs mb-4">
+            
+            {/* Primary Details */}
+            <div className="grid grid-cols-2 gap-y-5 gap-x-4 mb-6">
               <div>
-                <span className="text-muted-foreground block mb-0.5">Full Name</span>
+                <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider block mb-1">Full Name</span>
                 <strong className="text-foreground text-sm">{details.candidate_name}</strong>
               </div>
               <div>
-                <span className="text-muted-foreground block mb-0.5">Position Applied</span>
+                <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider block mb-1">Position Applied</span>
                 <strong className="text-foreground text-sm">{details.candidate_position}</strong>
               </div>
               <div>
-                <span className="text-muted-foreground block mb-0.5">Total Experience</span>
+                <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider block mb-1">Total Experience</span>
                 <strong className="text-foreground text-sm">{details.candidate_experience || 'Fresher'}</strong>
               </div>
               <div>
-                <span className="text-muted-foreground block mb-0.5">Highest Qualification</span>
+                <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider block mb-1">Highest Qualification</span>
                 <strong className="text-foreground text-sm">{details.candidate_education || 'N/A'}</strong>
               </div>
+              {(details.candidate_email || details.candidate_phone) && (
+                <>
+                  <div>
+                    <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider block mb-1">Email</span>
+                    <strong className="text-foreground text-sm break-all">{details.candidate_email || 'N/A'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider block mb-1">Phone</span>
+                    <strong className="text-foreground text-sm">+91 {details.candidate_phone || 'N/A'}</strong>
+                  </div>
+                </>
+              )}
+              {(details.candidate_location || details.candidate_source) && (
+                <>
+                  <div>
+                    <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider block mb-1">Location</span>
+                    <strong className="text-foreground text-sm">{details.candidate_location || 'N/A'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider block mb-1">Source</span>
+                    <strong className="text-foreground text-sm">{details.candidate_source ? details.candidate_source.replace(/_/g, ' ') : 'N/A'}</strong>
+                  </div>
+                </>
+              )}
+              {(details.candidate_current_salary || details.candidate_expected_salary) && (
+                <>
+                  <div>
+                    <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider block mb-1">Current Salary</span>
+                    <strong className="text-foreground text-sm">{details.candidate_current_salary || 'N/A'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider block mb-1">Expected Salary</span>
+                    <strong className="text-foreground text-sm">{details.candidate_expected_salary || 'N/A'}</strong>
+                  </div>
+                </>
+              )}
             </div>
+
+            {/* Skills (if available) */}
+            {details.candidate_skills && (
+              <div className="mb-4">
+                <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wider block mb-1.5">Skills & Competencies</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {details.candidate_skills.split(',').map((skill, i) => (
+                    <span key={i} className="px-2 py-1 bg-muted/50 border border-border/50 rounded-md text-xs font-medium text-foreground">
+                      {skill.trim()}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             
             {details.candidate_resume_url && (
               <div className="border-t border-border/50 pt-4 mt-2">

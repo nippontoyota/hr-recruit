@@ -36,13 +36,7 @@ export function HRInterviewWhatsAppPreview({
   const [isSending, setIsSending] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
-  const generateRandomMeetLink = () => {
-    const chars = 'abcdefghijklmnopqrstuvwxyz';
-    const randStr = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-    const code = `${randStr(3)}-${randStr(4)}-${randStr(3)}`;
-    setLocationOrLink(`https://meet.google.com/${code}`);
-    toast.success('Generated open Google Meet link!');
-  };
+
 
 
   const parsedDate = scheduledTime ? parseISO(scheduledTime) : null;
@@ -141,23 +135,9 @@ Nippon Toyota`;
 
   // Location/Link prefix logic
   const isOnline = interviewMode === 'ONLINE';
-  const prefix = 'https://meet.google.com/';
-  
-  let displayLocation = locationOrLink;
-  if (isOnline && locationOrLink.startsWith(prefix)) {
-    displayLocation = locationOrLink.substring(prefix.length);
-  }
 
   const handleLocationChange = (val: string) => {
-    if (isOnline) {
-      let code = val;
-      if (code.startsWith(prefix)) code = code.substring(prefix.length);
-      // Remove any trailing slashes just in case
-      code = code.replace(/^\/+/, '');
-      setLocationOrLink(val ? prefix + code : '');
-    } else {
-      setLocationOrLink(val);
-    }
+    setLocationOrLink(val);
   };
 
   return (
@@ -332,33 +312,29 @@ Nippon Toyota`;
                 >
                   <div className="flex items-center justify-between mb-2">
                     <label className="form-label !mb-0">
-                      {isOnline ? 'Meeting Code' : 'Branch / Location'}
+                      {isOnline ? 'Meeting Link' : 'Branch / Location'}
                     </label>
                     {isOnline && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={generateRandomMeetLink}
-                          className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors bg-muted/40 hover:bg-muted/80 px-2 py-1 rounded-md border border-border shadow-sm"
-                          title="Generate Open Google Meet Link"
-                        >
-                          <img src="/gmeet.png" alt="Google Meet" className="w-4 h-4 object-contain" />
-                          Auto-generate Meet
-                        </button>
-                      </div>
+                      <a
+                        href="https://meet.google.com/new"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors bg-primary/5 hover:bg-primary/10 px-2 py-1 rounded-md"
+                        title="Open Google Meet in a new tab"
+                      >
+                        <Video className="w-4 h-4" />
+                        Create Google Meet
+                      </a>
                     )}
                   </div>
                   {isOnline ? (
                     <div className="flex bg-background border border-border rounded-xl focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden">
-                      <div className="bg-muted px-3 flex items-center border-r border-border text-sm text-muted-foreground select-none shrink-0 font-medium">
-                        https://meet.google.com/
-                      </div>
                       <input
                         type="text"
-                        value={displayLocation}
+                        value={locationOrLink}
                         onChange={(e) => handleLocationChange(e.target.value)}
-                        placeholder="abc-defg-hij"
-                        className="w-full p-2.5 text-sm text-foreground focus:outline-none"
+                        placeholder="https://meet.google.com/..."
+                        className="w-full p-2.5 text-sm text-foreground focus:outline-none bg-transparent"
                       />
                     </div>
                   ) : (

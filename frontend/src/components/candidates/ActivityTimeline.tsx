@@ -91,23 +91,20 @@ export function ActivityTimeline({ candidateId }: ActivityTimelineProps) {
   }
 
   return (
-    <div className="relative">
+    <div className="relative pt-2 pb-4">
       {/* Vertical line */}
-      <div className="absolute left-[18px] top-3 bottom-3 w-px bg-border" aria-hidden="true" />
+      <div className="absolute left-4 top-3 bottom-3 w-px bg-border" aria-hidden="true" />
 
-      <ol className="space-y-0">
-        {logs.map((log, idx) => (
+      <ol className="space-y-6">
+        {logs.map((log) => (
           <li
             key={log.id}
-            className={cn(
-              'relative flex gap-3 py-3 pl-10 pr-3 group',
-              idx < logs.length - 1 && 'border-b border-border/50'
-            )}
+            className="relative flex gap-4 pl-10 pr-4 group"
           >
             {/* Icon bubble */}
             <div
               className={cn(
-                'absolute left-0 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border shadow-xs',
+                'absolute left-0 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border shadow-sm ring-4 ring-background',
                 activityColor(log.activity_type)
               )}
             >
@@ -115,15 +112,15 @@ export function ActivityTimeline({ candidateId }: ActivityTimelineProps) {
             </div>
 
             {/* Content */}
-            <div className="min-w-0 flex-1 pt-1">
-              <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1 pt-1.5">
+              <div className="flex items-start justify-between gap-2 mb-1">
                 <p className="text-sm font-semibold text-foreground leading-tight">{log.title}</p>
-                <span className="shrink-0 text-[11px] text-muted-foreground whitespace-nowrap pt-0.5">
+                <span className="shrink-0 text-[11px] font-medium text-muted-foreground whitespace-nowrap">
                   {formatRelativeTime(log.created_at)}
                 </span>
               </div>
               {log.description && (
-                <p className="mt-0.5 text-xs text-muted-foreground leading-snug line-clamp-2">
+                <p className="text-sm text-muted-foreground leading-relaxed break-words">
                   {log.description}
                 </p>
               )}
