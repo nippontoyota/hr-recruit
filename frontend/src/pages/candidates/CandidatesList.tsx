@@ -1,51 +1,137 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Button, Modal, LoadingSpinner, EmptyState, Badge } from '../../components/ui';
-import { Plus, Link, RefreshCw, Trash } from 'lucide-react';
+import { Plus, Link, RefreshCw, Trash, Search, X, CheckSquare, Square, Minus } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { copyToClipboard } from '../../lib/clipboard';
 import { getCandidates, deleteCandidate } from '../../api/candidates';
-import { getStageBadgeVariant, stageLabel } from '../../lib/stages';
-import type { Candidate } from '../../types';
+import { getStageBadgeVariant, stageLabel, formatSource } from '../../lib/stages';
+import type { Candidate, PipelineStage } from '../../types';
 import { AddCandidateForm } from '../../components/candidates/AddCandidateForm';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { toast } from 'sonner';
+import { cn } from '../../lib/utils';
+
+const PIPELINE_STAGES: PipelineStage[] = [
+  'SCREENING', 'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW',
+  'BRANCH_EVALUATION', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD',
+];
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 
 export default function CandidatesList() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const canDelete = ['SUPER_ADMIN', 'HR'].includes(user?.role as string);
+
+  // Data
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [stageFilter, setStageFilter] = useState<PipelineStage | ''>('');
+
+  // Single delete
   const [candidateToDelete, setCandidateToDelete] = useState<Candidate | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Form Modal State
+  // Multi-select
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+  // Add form
   const [isAddOpen, setIsAddOpen] = useState(false);
 
-  const fetchCandidatesList = async (showLoading = true) => {
+  const fetchCandidatesList = useCallback(async (showLoading = true) => {
     try {
-      if (showLoading) {
-        setLoading(true);
-      }
+      if (showLoading) setLoading(true);
       const list = await getCandidates();
       setCandidates(list);
     } catch (err) {
       console.error('Failed to load candidates', err);
     } finally {
-      if (showLoading) {
-        setLoading(false);
-      }
+      if (showLoading) setLoading(false);
     }
-  };
+  }, []);
 
+  useEffect(() => {
+    fetchCandidatesList(true);
+    const intervalId = setInterval(() => fetchCandidatesList(false), 10000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchCandidatesList(false);
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
+  }, [fetchCandidatesList]);
+
+  // Clear selection when filters change
+  useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter]);
+
+  const filteredCandidates = candidates.filter((c) => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      !q ||
+      c.full_name.toLowerCase().includes(q) ||
+      c.phone.includes(q) ||
+      (c.candidate_id && c.candidate_id.toLowerCase().includes(q));
+    const matchesStage = !stageFilter || c.current_stage === stageFilter;
+    return matchesSearch && matchesStage;
+  });
+
+  // Select-all derived state
+  const allVisibleIds = filteredCandidates.map((c) => c.id);
+  const selectedVisibleCount = allVisibleIds.filter((id) => selectedIds.has(id)).length;
+  const allSelected = allVisibleIds.length > 0 && selectedVisibleCount === allVisibleIds.length;
+  const someSelected = selectedVisibleCount > 0 && !allSelected;
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      // Deselect all visible
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        allVisibleIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      // Select all visible
+      setSelectedIds((prev) => new Set([...prev, ...allVisibleIds]));
+    }
+  }
+
+  function toggleSelect(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  // Single delete
   const handleDeleteCandidate = async () => {
     if (!candidateToDelete) return;
     setIsDeleting(true);
     try {
       await deleteCandidate(candidateToDelete.id);
       setCandidateToDelete(null);
+      setSelectedIds((prev) => { const n = new Set(prev); n.delete(candidateToDelete.id); return n; });
       await fetchCandidatesList();
       toast.success('Candidate deleted successfully');
     } catch (err: any) {
@@ -55,27 +141,26 @@ export default function CandidatesList() {
     }
   };
 
-  useEffect(() => {
-    fetchCandidatesList(true);
-
-    const intervalId = setInterval(() => {
-      fetchCandidatesList(false);
-    }, 10000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchCandidatesList(false);
-      }
-    };
-    window.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleVisibilityChange);
-
-    return () => {
-      clearInterval(intervalId);
-      window.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleVisibilityChange);
-    };
-  }, []);
+  // Bulk delete
+  const handleBulkDelete = async () => {
+    setIsBulkDeleting(true);
+    const ids = [...selectedIds];
+    const results = await Promise.allSettled(ids.map((id) => deleteCandidate(id)));
+    const failed = results
+      .map((r, i) => (r.status === 'rejected' ? ids[i] : null))
+      .filter(Boolean) as string[];
+    await fetchCandidatesList();
+    // Keep failed ones selected so HR can retry
+    setSelectedIds(new Set(failed));
+    setShowBulkDeleteConfirm(false);
+    setIsBulkDeleting(false);
+    const deleted = ids.length - failed.length;
+    if (failed.length === 0) {
+      toast.success(`${deleted} candidate${deleted > 1 ? 's' : ''} deleted`);
+    } else {
+      toast.error(`${deleted} deleted, ${failed.length} failed — still selected`);
+    }
+  };
 
   const handleCopyLink = async () => {
     if (!user) return;
@@ -90,11 +175,6 @@ export default function CandidatesList() {
     }
   };
 
-  const handleOpenAddModal = () => {
-    setIsAddOpen(true);
-  };
-
-
   return (
     <>
       <PageHeader
@@ -106,7 +186,7 @@ export default function CandidatesList() {
               <Link className="w-4 h-4 mr-2" />
               {copied ? 'Copied!' : 'Copy Recruiter Link'}
             </Button>
-            <Button onClick={handleOpenAddModal}>
+            <Button onClick={() => setIsAddOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Candidate
             </Button>
@@ -125,81 +205,209 @@ export default function CandidatesList() {
             description="No candidates have applied or been registered under your recruiter profile yet."
             icon={<RefreshCw className="w-8 h-8 opacity-50" />}
             action={
-              <Button onClick={handleOpenAddModal}>
+              <Button onClick={() => setIsAddOpen(true)}>
                 <Plus className="w-4 h-4 mr-2" /> Register Candidate
               </Button>
             }
           />
         </div>
       ) : (
-        <div className="page-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="data-table w-full text-left border-collapse whitespace-nowrap">
-              <thead>
-                <tr>
-                  <th>Candidate</th>
-                  <th>Position</th>
-                  <th>Stage</th>
-                  <th>Source</th>
-                  <th className="text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {candidates.map((candidate) => (
-                  <tr
-                    key={candidate.id}
-                    className="cursor-pointer group"
-                    onClick={() => navigate(`/candidates/${candidate.id}`)}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-text-primary">{candidate.full_name}</span>
-                        <span className="text-xs text-text-secondary">+91 {candidate.phone}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-text-secondary font-medium">
-                      {candidate.position_applied_for || '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={getStageBadgeVariant(candidate.current_stage)} className="font-semibold px-2.5 py-0.5 rounded-lg">
-                        {stageLabel(candidate.current_stage)}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-text-secondary">
-                      <span className="px-2 py-1 bg-background border border-border rounded-[10px] text-xs font-medium">
-                        {candidate.source || 'Direct'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <ResumeButton
-                          candidateId={candidate.id}
-                          candidateName={candidate.full_name}
-                          hasResume={candidate.has_resume}
-                          variant="icon"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        {['SUPER_ADMIN', 'HR'].includes(user?.role as string) ? (
-                          <button
-                            type="button"
-                            className="p-1.5 text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors rounded-[10px] focus:outline-none"
-                            onClick={(e) => { e.stopPropagation(); setCandidateToDelete(candidate); }}
-                            title="Delete Candidate"
-                          >
-                            <Trash className="w-4 h-4" strokeWidth={2} />
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
+        <div className="space-y-3">
+          {/* ── Search + Filter bar ── */}
+          <div className="flex flex-wrap items-center gap-3 px-1">
+            <div className="relative flex-1 min-w-[200px] max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search name, phone…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-9 pl-9 pr-8 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground placeholder:text-muted-foreground"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value as PipelineStage | '')}
+              className="h-9 px-3 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
+            >
+              <option value="">All stages</option>
+              {PIPELINE_STAGES.map((s) => (
+                <option key={s} value={s}>{stageLabel(s)}</option>
+              ))}
+            </select>
+
+            {(searchQuery || stageFilter) && (
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(''); setStageFilter(''); }}
+                className="text-xs text-muted-foreground hover:text-foreground font-medium underline underline-offset-2"
+              >
+                Clear filters
+              </button>
+            )}
+
+            <span className="ml-auto text-xs text-muted-foreground font-medium">
+              {filteredCandidates.length} of {candidates.length}
+            </span>
+          </div>
+
+          {/* ── Table ── */}
+          <div className="page-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="data-table w-full text-left border-collapse whitespace-nowrap">
+                <thead>
+                  <tr>
+                    {/* Select-all checkbox */}
+                    <th className="w-10 px-3">
+                      <button
+                        type="button"
+                        onClick={toggleSelectAll}
+                        className="flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                        title={allSelected ? 'Deselect all' : 'Select all visible'}
+                      >
+                        {allSelected ? (
+                          <CheckSquare className="w-4 h-4 text-primary" />
+                        ) : someSelected ? (
+                          <Minus className="w-4 h-4 text-primary" />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
+                      </button>
+                    </th>
+                    <th>Candidate</th>
+                    <th>Position</th>
+                    <th>Stage</th>
+                    <th>Source</th>
+                    <th>Date Added</th>
+                    <th className="text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredCandidates.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-10 text-sm text-muted-foreground">
+                        No candidates match your search.
+                      </td>
+                    </tr>
+                  ) : filteredCandidates.map((candidate) => {
+                    const isSelected = selectedIds.has(candidate.id);
+                    return (
+                      <tr
+                        key={candidate.id}
+                        className={cn(
+                          'cursor-pointer group transition-colors',
+                          isSelected && 'bg-primary/5 hover:bg-primary/8'
+                        )}
+                        onClick={() => navigate(`/candidates/${candidate.id}`)}
+                      >
+                        {/* Row checkbox */}
+                        <td className="w-10 px-3" onClick={(e) => toggleSelect(candidate.id, e)}>
+                          <div className="flex items-center justify-center">
+                            {isSelected ? (
+                              <CheckSquare className="w-4 h-4 text-primary" />
+                            ) : (
+                              <Square className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-text-primary">{candidate.full_name}</span>
+                            <span className="text-xs text-text-secondary">+91 {candidate.phone}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-text-secondary font-medium">
+                          {candidate.position_applied_for || '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant={getStageBadgeVariant(candidate.current_stage)} className="font-semibold px-2.5 py-0.5 rounded-lg">
+                            {stageLabel(candidate.current_stage)}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-text-secondary">
+                          <span className="px-2 py-1 bg-background border border-border rounded-[10px] text-xs font-medium">
+                            {formatSource(candidate.source)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground font-medium">
+                          {formatDate(candidate.created_at)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <ResumeButton
+                              candidateId={candidate.id}
+                              candidateName={candidate.full_name}
+                              hasResume={candidate.has_resume}
+                              variant="icon"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            {canDelete && (
+                              <button
+                                type="button"
+                                className="p-1.5 text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors rounded-[10px] focus:outline-none"
+                                onClick={(e) => { e.stopPropagation(); setCandidateToDelete(candidate); }}
+                                title="Delete Candidate"
+                              >
+                                <Trash className="w-4 h-4" strokeWidth={2} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* ── Bulk action bar ── */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200">
+          <div className="flex items-center gap-3 bg-foreground text-background rounded-2xl shadow-2xl px-5 py-3 border border-border/10">
+            {/* Count + deselect */}
+            <span className="text-sm font-bold tabular-nums">
+              {selectedIds.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="text-xs text-background/60 hover:text-background font-medium underline underline-offset-2 transition-colors"
+            >
+              Clear
+            </button>
+
+            <div className="h-4 w-px bg-background/20" />
+
+            {canDelete && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setShowBulkDeleteConfirm(true)}
+                className="h-8 px-4 gap-2 bg-danger hover:bg-danger/90 text-white border-0 shadow-none"
+              >
+                <Trash className="w-3.5 h-3.5" />
+                Delete {selectedIds.size > 1 ? `${selectedIds.size} candidates` : 'candidate'}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Single delete modal ── */}
       <Modal
         isOpen={!!candidateToDelete}
         onClose={() => setCandidateToDelete(null)}
@@ -216,6 +424,28 @@ export default function CandidatesList() {
             </Button>
             <Button variant="danger" onClick={handleDeleteCandidate} isLoading={isDeleting}>
               Delete Candidate
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Bulk delete confirmation modal ── */}
+      <Modal
+        isOpen={showBulkDeleteConfirm}
+        onClose={() => !isBulkDeleting && setShowBulkDeleteConfirm(false)}
+        title={`Delete ${selectedIds.size} candidate${selectedIds.size > 1 ? 's' : ''}?`}
+        size="sm"
+      >
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-text-secondary">
+            This will permanently delete <strong>{selectedIds.size}</strong> candidate record{selectedIds.size > 1 ? 's' : ''} and all associated data. This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3 pt-4 border-t border-border/40">
+            <Button variant="ghost" onClick={() => setShowBulkDeleteConfirm(false)} disabled={isBulkDeleting}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={handleBulkDelete} isLoading={isBulkDeleting}>
+              Delete {selectedIds.size} {selectedIds.size > 1 ? 'Candidates' : 'Candidate'}
             </Button>
           </div>
         </div>

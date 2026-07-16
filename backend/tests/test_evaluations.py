@@ -50,7 +50,21 @@ def test_evaluations_initialized_on_department_stage():
             added_evaluations.append(obj)
             
     db.add = mock_add
-    db.scalar = lambda q: None
+    
+    def mock_scalar(query):
+        try:
+            params = query.compile().params
+            if any(val == EvaluationType.BRANCH_HR for val in params.values()):
+                return Evaluation(
+                    candidate_id=candidate.id,
+                    type=EvaluationType.BRANCH_HR,
+                    status=InterviewStatus.EVALUATED,
+                    verdict=EvaluationVerdict.SELECTED
+                )
+        except Exception:
+            pass
+        return None
+    db.scalar = mock_scalar
     db.flush = lambda: None
     
     user = _admin_user()
@@ -82,6 +96,17 @@ def test_transition_flushes_new_evaluations_into_session():
                 created_evaluations.append(obj)
 
         def scalar(self, query):
+            try:
+                params = query.compile().params
+                if any(val == EvaluationType.BRANCH_HR for val in params.values()):
+                    return Evaluation(
+                        candidate_id=candidate.id,
+                        type=EvaluationType.BRANCH_HR,
+                        status=InterviewStatus.EVALUATED,
+                        verdict=EvaluationVerdict.SELECTED
+                    )
+            except Exception:
+                pass
             return None
 
         def flush(self):

@@ -72,8 +72,20 @@ class WorkflowService:
         from app.models.evaluation import Evaluation
         from app.models.enums import EvaluationType, InterviewStatus
 
+        # To move from HR_INTERVIEW ➔ DEPARTMENT_INTERVIEW, BRANCH_HR evaluation must be completed
+        if target_stage == PipelineStage.DEPARTMENT_INTERVIEW:
+            hr_eval = db.scalar(sa.select(Evaluation).where(
+                Evaluation.candidate_id == candidate.id,
+                Evaluation.type == EvaluationType.BRANCH_HR
+            ))
+            if not hr_eval or hr_eval.status != InterviewStatus.EVALUATED or hr_eval.verdict is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot transition. HR Interview evaluation must be completed."
+                )
+
         # To move from DEPARTMENT_INTERVIEW ➔ BRANCH_EVALUATION, DEPT_HEAD evaluation must be completed
-        if target_stage == PipelineStage.BRANCH_EVALUATION:
+        elif target_stage == PipelineStage.BRANCH_EVALUATION:
             dept_eval = db.scalar(sa.select(Evaluation).where(
                 Evaluation.candidate_id == candidate.id,
                 Evaluation.type == EvaluationType.DEPT_HEAD
@@ -108,7 +120,18 @@ class WorkflowService:
                 )
 
         # Auto-initialize Evaluations upon stage entry
-        if target_stage == PipelineStage.DEPARTMENT_INTERVIEW:
+        if target_stage == PipelineStage.HR_INTERVIEW:
+            existing = db.scalar(sa.select(Evaluation).where(
+                sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == EvaluationType.BRANCH_HR)
+            ))
+            if not existing:
+                db.add(Evaluation(
+                    candidate_id=candidate.id,
+                    type=EvaluationType.BRANCH_HR,
+                    status=InterviewStatus.PENDING_SCHEDULE
+                ))
+
+        elif target_stage == PipelineStage.DEPARTMENT_INTERVIEW:
             existing = db.scalar(sa.select(Evaluation).where(
                 sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == EvaluationType.DEPT_HEAD)
             ))
@@ -141,6 +164,7 @@ class WorkflowService:
                     type=EvaluationType.HQ_INTERVIEW,
                     status=InterviewStatus.PENDING_SCHEDULE
                 ))
+
             
         old_stage = candidate.current_stage
         

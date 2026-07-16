@@ -43,11 +43,13 @@ class ActivityType(str, enum.Enum):
     STAGE_CHANGE = "STAGE_CHANGE"
     FORM = "FORM"
     SYSTEM = "SYSTEM"
+    NOTE = "NOTE"
 
 
 class SourceChannel(str, enum.Enum):
     WALK_IN = "WALK_IN"
     INDEED = "INDEED"
+    NAUKRI = "NAUKRI"
     REFERRAL = "REFERRAL"
     CAMPUS = "CAMPUS"
     OTHER = "OTHER"

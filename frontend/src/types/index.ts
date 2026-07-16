@@ -66,6 +66,7 @@ export interface Candidate {
   is_rejoining: boolean;
   applied_at: string;
   has_resume?: boolean;
+  created_at: string;
 }
 
 export interface ResumeDocument {
@@ -153,5 +154,18 @@ export interface EvaluationPublicDetails {
     verdict?: string;
     remarks: string;
   }>;
+  is_already_submitted?: boolean;
+}
+
+export type ActivityType = 'CALL' | 'WHATSAPP' | 'EMAIL' | 'STAGE_CHANGE' | 'FORM' | 'SYSTEM' | 'NOTE';
+
+export interface ActivityLog {
+  id: string;
+  candidate_id: string;
+  activity_type: ActivityType;
+  title: string;
+  description: string;
+  created_by_user_id?: string;
+  created_at: string;
 }
 

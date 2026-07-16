@@ -49,6 +49,7 @@ class EvaluationPublicOut(BaseModel):
     candidate_education: str | None = None
     candidate_experience: str | None = None
     previous_remarks: list[dict] = []
+    is_already_submitted: bool = False
 
 
 class EvaluationPublicSubmit(BaseModel):
@@ -58,4 +59,9 @@ class EvaluationPublicSubmit(BaseModel):
 
 
 class CandidateTestSubmit(BaseModel):
-    answers: dict
+    answers: dict[str, str]
+
+
+class EvaluationWhatsAppInvite(BaseModel):
+    to_phone: str
+    variables: dict[str, str]

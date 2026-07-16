@@ -41,3 +41,19 @@ export function getStageBadgeVariant(stage: PipelineStage | string): BadgeProps[
   if (stage === 'FINAL_APPROVAL') return 'teal';
   return 'secondary';
 }
+
+const SOURCE_LABELS: Record<string, string> = {
+  WALK_IN: 'Walk-in',
+  INDEED: 'Indeed',
+  NAUKRI: 'Naukri',
+  REFERRAL: 'Referral',
+  CAMPUS: 'Campus',
+  LINKEDIN: 'LinkedIn',
+  OTHER: 'Other',
+};
+
+export function formatSource(source: string | undefined | null): string {
+  if (!source) return 'Direct';
+  return SOURCE_LABELS[source.toUpperCase()] ?? source.replace(/_/g, ' ');
+}
+

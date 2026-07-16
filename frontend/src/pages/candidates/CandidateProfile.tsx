@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
-import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
+import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History } from 'lucide-react';
 import { getCandidateById, updateCandidateStage, unholdCandidate } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { toast } from 'sonner';
@@ -12,8 +12,8 @@ import { ScreeningChecklist } from '../../components/candidates/ScreeningCheckli
 import { PreFormStatus } from '../../components/candidates/PreFormStatus';
 import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPreviewPanel';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
-import { HRInterviewDashboard } from '../../components/candidates/HRInterviewDashboard';
 import { EvaluationStageWidget } from '../../components/candidates/EvaluationStageWidget';
+import { ActivityTimeline } from '../../components/candidates/ActivityTimeline';
 import { extractError } from '../../lib/utils';
 
 
@@ -103,6 +103,8 @@ export default function CandidateProfile() {
 
   const handleStageClick = async (clickedStage: PipelineStage) => {
     if (!candidate || candidate.current_stage === clickedStage) return;
+    // Prevent accidentally navigating into side/terminal states via the stepper
+    if (clickedStage === 'REJECTED' || clickedStage === 'ON_HOLD' || clickedStage === 'HIRED') return;
     
     setIsUpdating(true);
     try {
@@ -304,6 +306,16 @@ export default function CandidateProfile() {
                     hasResume={candidate.has_resume}
                   />
                 )}
+                {stage !== 'REJECTED' && stage !== 'HIRED' && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setShowRejectModal(true)}
+                    className="h-9 px-4 gap-2 border border-danger/40"
+                  >
+                    <XCircle className="w-4 h-4" /> Reject
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -367,7 +379,7 @@ export default function CandidateProfile() {
             )}
 
             {stage === 'CANDIDATE_FORM' && (
-              <PreFormStatus candidate={candidate} />
+              <PreFormStatus candidate={candidate} onUpdate={handleUpdate} />
             )}
 
             {showWhatsAppSidebar && (
@@ -375,8 +387,12 @@ export default function CandidateProfile() {
             )}
 
             {stage === 'HR_INTERVIEW' && (
-              <HRInterviewDashboard
+              <EvaluationStageWidget
                 candidate={candidate}
+                evalTypes={['BRANCH_HR']}
+                title="HR Interview Evaluation"
+                nextStage="DEPARTMENT_INTERVIEW"
+                nextStageRemarks="HR Interview complete. Transition to Department Head Interview."
                 onUpdate={handleUpdate}
               />
             )}
@@ -467,6 +483,19 @@ export default function CandidateProfile() {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* ── ACTIVITY TIMELINE ── */}
+        <div className="mt-8 mb-6 border-t border-border pt-6">
+          <div className="max-w-2xl mx-auto w-full">
+            <div className="flex items-center gap-2 mb-4">
+              <History className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Activity Log</h3>
+            </div>
+            <div className="bg-background border border-border rounded-xl overflow-hidden">
+              <ActivityTimeline candidateId={candidate.id} />
+            </div>
           </div>
         </div>
       </div>

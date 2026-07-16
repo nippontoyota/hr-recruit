@@ -64,3 +64,15 @@ export const submitPublicTest = async (
   const response = await api.post(`/evaluations/public/${token}/submit-test`, { answers });
   return response.data;
 };
+
+export const sendEvaluationWhatsAppInvite = async (
+  evalId: string,
+  data: {
+    to_phone: string;
+    variables: Record<string, string>;
+  }
+): Promise<any> => {
+  const response = await api.post(`/evaluations/${evalId}/send-whatsapp-invite`, data);
+  return response.data;
+};
+

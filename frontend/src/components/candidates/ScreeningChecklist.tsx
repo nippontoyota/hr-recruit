@@ -18,8 +18,9 @@ interface ScreeningChecklistProps {
 export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklistProps) {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(true);
   const [hasSavedData, setHasSavedData] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   // Local state for editing
   const [status, setStatus] = useState('PENDING');
@@ -60,6 +61,8 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
       setIsEditing(!isFilled);
     } catch (err) {
       console.error(err);
+      setHasSavedData(false);
+      setIsEditing(true);
     } finally {
       setLoading(false);
     }
@@ -98,6 +101,7 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
       onUpdate();
       setHasSavedData(true);
       setIsEditing(false);
+      setLastSavedAt(new Date());
       if (res?.candidate) {
         toast.success('Candidate accepted — form link ready. Send WhatsApp invite from the sidebar.');
       } else {
@@ -353,19 +357,26 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
 
             </div>
             
-            <div className="pt-2 flex justify-end gap-3 mt-auto">
-              {hasSavedData && (
-                <Button
-                  variant="ghost"
-                  onClick={() => setIsEditing(false)}
-                  className="h-12 px-6 rounded-xl border border-border"
-                >
-                  Cancel
+            <div className="pt-2 flex flex-col items-end gap-1.5 mt-auto">
+              <div className="flex justify-end gap-3 w-full">
+                {hasSavedData && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => setIsEditing(false)}
+                    className="h-12 px-6 rounded-xl border border-border"
+                  >
+                    Cancel
+                  </Button>
+                )}
+                <Button onClick={handleSave} isLoading={isSubmitting} className="!bg-success hover:!bg-success/90 text-white !text-base !font-extrabold w-full sm:w-auto h-12 px-10 rounded-xl shadow-[0_4px_14px_rgba(22,163,74,0.3)] hover:shadow-[0_6px_20px_rgba(22,163,74,0.4)] hover:-translate-y-[1px] transition-all duration-300">
+                  Save
                 </Button>
+              </div>
+              {lastSavedAt && (
+                <p className="text-[11px] text-muted-foreground">
+                  ✓ Saved at {lastSavedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                </p>
               )}
-              <Button onClick={handleSave} isLoading={isSubmitting} className="!bg-success hover:!bg-success/90 text-white !text-base !font-extrabold w-full sm:w-auto h-12 px-10 rounded-xl shadow-[0_4px_14px_rgba(22,163,74,0.3)] hover:shadow-[0_6px_20px_rgba(22,163,74,0.4)] hover:-translate-y-[1px] transition-all duration-300">
-                Save
-              </Button>
             </div>
 
           </div>

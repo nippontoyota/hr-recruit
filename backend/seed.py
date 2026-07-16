@@ -1,12 +1,12 @@
 from sqlalchemy import select
 
-from app.api.v1.candidates import change_stage, create_candidate
+from app.api.v1.candidates import create_candidate
 from app.core.database import SessionLocal
-from app.models.enums import PipelineStage, SourceChannel
+from app.models.enums import PipelineStage
 from app.models.user import User
-from app.schemas.candidate import CandidateCreate, StageChange
+from app.schemas.candidate import CandidateCreate
 from scripts.seed_users import seed_users
-
+from app.services.workflow import WorkflowService
 
 def seed():
     seed_users()
@@ -30,16 +30,29 @@ def seed():
                 full_name="Arjun Patel",
                 phone="9876543210",
                 email="arjun@email.com",
-                source_channel=SourceChannel.INDEED,
+                source="Indeed",
                 assigned_hr_user_id=hr.id,
             ),
             admin.id,
         )
-        change_stage(
-            db,
-            row,
-            StageChange(to_stage=PipelineStage.HR_INTERVIEW, changed_by_user_id=admin.id),
+        
+        WorkflowService.transition(
+            db=db,
+            candidate=row,
+            target_stage=PipelineStage.CANDIDATE_FORM,
+            user=admin,
+            remarks="Seed transition 1"
         )
+        db.flush()
+        
+        WorkflowService.transition(
+            db=db,
+            candidate=row,
+            target_stage=PipelineStage.HR_INTERVIEW,
+            user=admin,
+            remarks="Seed transition 2"
+        )
+        db.commit()
     finally:
         db.close()
 

@@ -34,6 +34,9 @@ export default function PublicInterviewerPage() {
       setLoading(true);
       const res = await getPublicEvaluation(token);
       setDetails(res);
+      if (res.is_already_submitted) {
+        setSubmitted(true);
+      }
     } catch (err: any) {
       setError(extractError(err, 'This evaluation link is invalid, expired, or has already been used.'));
     } finally {

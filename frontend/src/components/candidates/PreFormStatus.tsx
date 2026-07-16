@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Button, Input } from '../ui';
-import { CheckCircle2, Pencil, Printer, Save, X } from 'lucide-react';
+import { Button, Input, Modal } from '../ui';
+import { CheckCircle2, Pencil, Printer, Save, X, RefreshCw } from 'lucide-react';
 import type { Candidate } from '../../types';
 import { toast } from 'sonner';
 import { ResumeButton } from './ResumeButton';
-import { updateCandidateRawData } from '../../api/candidates';
+import { updateCandidateRawData, resendPreForm } from '../../api/candidates';
 import { copyToClipboard } from '../../lib/clipboard';
+import { WhatsAppPreviewPanel } from './WhatsAppPreviewPanel';
 
 interface PreFormStatusProps {
   candidate: Candidate;
+  onUpdate?: () => void;
 }
 
 const HIDDEN_RAW_KEYS = new Set(['whatsapp_invite', 'resumeFileObject']);
@@ -28,11 +30,13 @@ function formatFieldValue(value: unknown): string {
   return String(value);
 }
 
-export function PreFormStatus({ candidate }: PreFormStatusProps) {
+export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, any>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [showResendModal, setShowResendModal] = useState(false);
 
   const status = candidate.pre_form_status || 'NOT_SENT';
   const [localRawData, setLocalRawData] = useState<Record<string, any>>(candidate.profile?.raw_data ?? {});
@@ -63,6 +67,19 @@ export function PreFormStatus({ candidate }: PreFormStatusProps) {
       toast.error(err.response?.data?.detail || 'Failed to update application form');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setIsResending(true);
+    try {
+      await resendPreForm(candidate.id);
+      toast.success('Form link resent successfully');
+      onUpdate?.();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || 'Failed to resend form link');
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -228,6 +245,16 @@ export function PreFormStatus({ candidate }: PreFormStatusProps) {
                 Sent {new Date(candidate.pre_form_sent_at).toLocaleString('en-IN')}
               </p>
             )}
+            {(status === 'SENT' || status === 'VIEWED') && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowResendModal(true)}
+                className="w-fit gap-2"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Resend Link
+              </Button>
+            )}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">Form link will appear here after screening acceptance.</p>
@@ -237,6 +264,20 @@ export function PreFormStatus({ candidate }: PreFormStatusProps) {
       <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-sm text-muted-foreground text-center">
         Responses will appear here automatically once the candidate submits the form.
       </div>
+
+      <Modal
+        isOpen={showResendModal}
+        onClose={() => setShowResendModal(false)}
+        title="Resend Pre-interview Form Link"
+        size="lg"
+      >
+        <div className="flex justify-center p-6 bg-background h-[75vh] overflow-y-auto">
+          <WhatsAppPreviewPanel 
+            candidate={candidate} 
+            className="!w-full border-none bg-transparent" 
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

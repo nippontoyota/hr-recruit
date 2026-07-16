@@ -102,6 +102,10 @@ export function HRInterviewDashboard({ candidate, onUpdate }: HRInterviewDashboa
   };
 
   const handleSaveSchedule = async () => {
+    if (!scheduledTime) {
+      toast.error('Please select an interview date and time before saving.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       await submitHRInterview(candidate.id, {

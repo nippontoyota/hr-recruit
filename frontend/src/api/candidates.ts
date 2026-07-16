@@ -1,4 +1,4 @@
-import type { Candidate, ResumeDocument, HRInterviewData } from '../types';
+import type { Candidate, ResumeDocument, HRInterviewData, ActivityLog } from '../types';
 import api from './client';
 
 export const getCandidates = async (): Promise<Candidate[]> => {
@@ -130,5 +130,15 @@ export const sendHRInterviewInvite = async (
   variables: Record<string, string>
 ): Promise<any> => {
   const response = await api.post(`/candidates/${candidateId}/hr-interview/send-invite`, { variables });
+  return response.data;
+};
+
+export const getActivityLogs = async (candidateId: string): Promise<ActivityLog[]> => {
+  const response = await api.get(`/candidates/${candidateId}/activity-logs`);
+  return response.data;
+};
+
+export const resendPreForm = async (candidateId: string): Promise<Candidate> => {
+  const response = await api.post(`/candidates/${candidateId}/pre-form/send`);
   return response.data;
 };

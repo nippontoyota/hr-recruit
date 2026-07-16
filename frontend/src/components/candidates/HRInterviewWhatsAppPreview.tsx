@@ -36,6 +36,15 @@ export function HRInterviewWhatsAppPreview({
   const [isSending, setIsSending] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
+  const generateRandomMeetLink = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz';
+    const randStr = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    const code = `${randStr(3)}-${randStr(4)}-${randStr(3)}`;
+    setLocationOrLink(`https://meet.google.com/${code}`);
+    toast.success('Generated open Google Meet link!');
+  };
+
+
   const parsedDate = scheduledTime ? parseISO(scheduledTime) : null;
   const dateStr = parsedDate && !isNaN(parsedDate.getTime()) ? format(parsedDate, 'dd MMM yyyy') : 'TBD';
   const timeStr = parsedDate && !isNaN(parsedDate.getTime()) ? format(parsedDate, 'h:mm a') : 'TBD';
@@ -328,12 +337,13 @@ Nippon Toyota`;
                     {isOnline && (
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => window.open('https://meet.google.com/new', '_blank')}
+                          type="button"
+                          onClick={generateRandomMeetLink}
                           className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors bg-muted/40 hover:bg-muted/80 px-2 py-1 rounded-md border border-border shadow-sm"
-                          title="Create New Google Meet"
+                          title="Generate Open Google Meet Link"
                         >
                           <img src="/gmeet.png" alt="Google Meet" className="w-4 h-4 object-contain" />
-                          GMeet
+                          Auto-generate Meet
                         </button>
                       </div>
                     )}
