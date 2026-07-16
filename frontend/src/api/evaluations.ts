@@ -69,6 +69,7 @@ export const sendEvaluationWhatsAppInvite = async (
   evalId: string,
   data: {
     to_phone: string;
+    recipient_type?: string;
     variables: Record<string, string>;
   }
 ): Promise<any> => {

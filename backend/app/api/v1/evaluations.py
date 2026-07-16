@@ -525,10 +525,12 @@ def send_evaluation_whatsapp_invite(
         
     client = DoubleTickClient()
     
+    template_name = "nippon_interviewer_invite" if body.recipient_type == "INTERVIEWER" else "nippon_hr_interview_invite"
+    
     try:
         res = client.send_template(
             to_phone=body.to_phone,
-            template_name="nippon_hr_interview_invite",
+            template_name=template_name,
             placeholders=placeholders,
         )
         external_message_id = None
@@ -544,7 +546,7 @@ def send_evaluation_whatsapp_invite(
         
     # Construct content preview
     content_lines = [
-        f"Template: nippon_hr_interview_invite",
+        f"Template: {template_name}",
         f"To: {body.to_phone}",
     ]
     for key in DOUBLETICK_VARIABLE_KEYS:

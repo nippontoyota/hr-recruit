@@ -138,26 +138,20 @@ export default function PublicInterviewerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Brand Header */}
-      <header className="h-16 bg-surface border-b border-border px-6 flex items-center justify-between shrink-0 shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold">NT</div>
-          <h1 className="font-bold text-base text-foreground tracking-tight">Nippon Toyota — Interviewer Evaluation</h1>
-        </div>
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-primary/10 text-primary border-primary/20 uppercase">
-          {details.type.replace(/_/g, ' ')}
-        </span>
+    <div className="min-h-screen bg-background flex flex-col font-sans text-foreground">
+      {/* Header */}
+      <header className="h-24 border-b border-border/60 px-8 lg:px-12 flex items-center shrink-0">
+          <h1 className="text-2xl font-black uppercase tracking-widest text-foreground">Interviewer Evaluation</h1>
       </header>
 
       {/* Main split dashboard layout */}
-      <main className="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-6 p-6 overflow-hidden">
+      <main className="flex-1 grid grid-cols-1 xl:grid-cols-2 w-full">
         
         {/* LEFT: Candidate Context & Prior Remarks */}
-        <div className="flex flex-col gap-6 overflow-y-auto">
-          {/* Candidate Card */}
-          <div className="border border-border bg-surface/50 rounded-2xl p-6 shadow-sm">
-            <h2 className="text-xl font-bold text-foreground mb-4">Candidate Profile</h2>
+        <div className="flex flex-col gap-10 overflow-y-auto p-8 lg:p-12 xl:border-r xl:border-border/60">
+          {/* Candidate Profile */}
+          <div>
+            <h2 className="text-sm font-bold text-muted-foreground mb-6 uppercase tracking-widest border-b border-border/50 pb-3">Candidate Profile</h2>
             
             {/* Primary Details */}
             <div className="grid grid-cols-2 gap-y-5 gap-x-4 mb-6">
@@ -239,15 +233,15 @@ export default function PublicInterviewerPage() {
           </div>
 
           {/* Prior Remarks Timeline */}
-          <div className="border border-border bg-surface/50 rounded-2xl p-6 shadow-sm">
-            <h2 className="text-base font-bold text-foreground mb-4">Prior Evaluations History</h2>
+          <div>
+            <h2 className="text-sm font-bold text-muted-foreground mb-6 uppercase tracking-widest border-b border-border/50 pb-3">Prior Evaluations History</h2>
             {details.previous_remarks.length === 0 ? (
               <p className="text-xs text-muted-foreground italic py-3">No prior interview remarks recorded for this candidate.</p>
             ) : (
               <div className="space-y-4">
                 {details.previous_remarks.map((rem, i) => (
-                  <div key={i} className="bg-background border border-border/60 p-4 rounded-xl text-xs space-y-2 relative">
-                    <div className="flex justify-between items-center font-bold text-foreground border-b border-border/40 pb-1.5">
+                  <div key={i} className="bg-muted/10 border border-border/50 p-4 rounded-lg text-xs space-y-2 relative">
+                    <div className="flex justify-between items-center font-bold text-foreground border-b border-border/40 pb-2">
                       <span>{rem.type ? rem.type.replace(/_/g, ' ') : ''}</span>
                       <span className={cn("px-1.5 py-0.5 rounded text-[9px] uppercase border", 
                         rem.verdict === 'SELECTED' || rem.verdict === 'PASS' ? "bg-success/10 text-success border-success/20" : 
@@ -266,10 +260,18 @@ export default function PublicInterviewerPage() {
         </div>
 
         {/* RIGHT: Scorecard Entry Form */}
-        <div className="border border-border bg-surface/50 rounded-2xl p-6 shadow-sm overflow-y-auto flex flex-col justify-between">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <h2 className="text-lg font-bold text-foreground">Scorecard Submission</h2>
-            <p className="text-xs text-muted-foreground">Rate the candidate's core metrics based on your interview session.</p>
+        <div className="p-8 lg:p-12 overflow-y-auto">
+          <form onSubmit={handleSubmit} className="space-y-8 max-w-3xl">
+            <div className="flex items-center justify-between mb-6 border-b border-border/50 pb-3">
+              <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Scorecard Submission</h2>
+              <button 
+                type="button" 
+                onClick={() => { setTechScore(5); setCommScore(5); setExpScore(5); setFitScore(5); }}
+                className="text-[10px] font-bold uppercase tracking-wider text-[#075E54] hover:text-[#064c44] flex items-center gap-1 bg-[#075E54]/10 px-2 py-1 rounded transition-colors border border-[#075E54]/20 shadow-sm"
+              >
+                <Star className="w-3.5 h-3.5 fill-[#075E54]" /> Rate 5/5 All
+              </button>
+            </div>
 
             <div className="grid grid-cols-2 gap-6">
               <StarRating label="Technical Skills" val={techScore} setVal={setTechScore} />
@@ -278,28 +280,54 @@ export default function PublicInterviewerPage() {
               <StarRating label="Cultural Fit" val={fitScore} setVal={setFitScore} />
             </div>
 
-            <div className="h-px w-full bg-border" />
+            <div className="h-px w-full bg-border/50" />
 
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2 text-xs">
-                <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1.5">Interviewer Verdict</label>
-                <select value={verdict} onChange={(e) => setVerdict(e.target.value as EvaluationVerdict)} className="w-full bg-background border border-border rounded-xl p-3 focus:ring-2 focus:ring-primary/20">
-                  <option value="SELECTED">Selected / Recommended</option>
-                  <option value="ON_HOLD">Put On Hold</option>
-                  <option value="REJECTED">Reject Candidate</option>
-                </select>
+            <div className="text-sm">
+              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-2">Interviewer Verdict</label>
+              <div className="flex bg-muted/20 p-1.5 rounded-lg border border-border gap-1 relative text-xs shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setVerdict('SELECTED')}
+                  className={cn(
+                    "flex-1 py-3.5 font-bold rounded transition-colors relative z-10 border border-transparent",
+                    verdict === 'SELECTED' ? "bg-success text-white shadow-md border-success/50" : "text-muted-foreground hover:text-foreground hover:bg-background hover:border-border"
+                  )}
+                >
+                  Selected / Recommended
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVerdict('ON_HOLD')}
+                  className={cn(
+                    "flex-1 py-3.5 font-bold rounded transition-colors relative z-10 border border-transparent",
+                    verdict === 'ON_HOLD' ? "bg-warning text-white shadow-md border-warning/50" : "text-muted-foreground hover:text-foreground hover:bg-background hover:border-border"
+                  )}
+                >
+                  Put On Hold
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVerdict('REJECTED')}
+                  className={cn(
+                    "flex-1 py-3.5 font-bold rounded transition-colors relative z-10 border border-transparent",
+                    verdict === 'REJECTED' ? "bg-danger text-white shadow-md border-danger/50" : "text-muted-foreground hover:text-foreground hover:bg-background hover:border-border"
+                  )}
+                >
+                  Reject Candidate
+                </button>
               </div>
             </div>
 
-            <div className="text-xs">
-              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1.5">Evaluation Remarks <span className="text-danger">*</span></label>
-              <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} required placeholder="Provide a detailed summary of candidate strengths, gaps, and technical competence..." className="w-full min-h-[140px] bg-background border border-border rounded-xl p-4 focus:ring-2 focus:ring-primary/20 resize-y" />
+            <div className="text-sm">
+              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-2">Evaluation Remarks <span className="text-danger">*</span></label>
+              <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} required placeholder="Provide a detailed summary of candidate strengths, gaps, and technical competence..." className="w-full min-h-[160px] bg-background border border-border rounded-lg p-4 focus:ring-2 focus:ring-[#075E54]/20 outline-none transition-all shadow-sm resize-y leading-relaxed" />
             </div>
 
-            <div className="pt-4 border-t border-border">
-              <Button type="submit" variant="primary" className="w-full shadow-sm" isLoading={submitting}>
-                Submit Scorecard
-              </Button>
+            <div className="pt-6 border-t border-border/50">
+              <button type="submit" disabled={submitting} className={cn("w-full bg-[#075E54] hover:bg-[#064c44] text-white py-3.5 rounded-lg font-bold tracking-wide shadow-md transition-colors flex justify-center items-center gap-2", submitting ? "opacity-70 cursor-not-allowed" : "")}>
+                {submitting ? <LoadingSpinner size="sm" /> : <CheckCircle className="w-5 h-5" />}
+                {submitting ? 'Submitting...' : 'Submit Final Scorecard'}
+              </button>
             </div>
           </form>
         </div>

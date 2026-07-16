@@ -32,7 +32,7 @@ export function EvaluationStageWidget({
 
   // WhatsApp Share Modal State
   const [shareEval, setShareEval] = useState<Evaluation | null>(null);
-  const [recipientType, setRecipientType] = useState<'INTERVIEWER' | 'CANDIDATE'>('INTERVIEWER');
+  const [recipientType, setRecipientType] = useState<'INTERVIEWER' | 'CANDIDATE'>('CANDIDATE');
 
   // Cancel Schedule Confirm State
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export function EvaluationStageWidget({
 
   const openShareModal = (ev: Evaluation) => {
     setShareEval(ev);
-    setRecipientType('INTERVIEWER');
+    setRecipientType('CANDIDATE');
     setInterviewerPhone('');
     setInterviewerName('');
     setRecruiterName(user?.full_name || '');
@@ -236,6 +236,7 @@ export function EvaluationStageWidget({
 
       await sendEvaluationWhatsAppInvite(shareEval.id, {
         to_phone: toPhone,
+        recipient_type: recipientType,
         variables: {
           candidateName: recipientType === 'INTERVIEWER' ? (interviewerName || 'Interviewer') : candidate.full_name,
           position: candidate.position_applied_for || 'Unknown Position',
@@ -332,7 +333,7 @@ export function EvaluationStageWidget({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-bold text-foreground mb-3">{title}</h2>
+        <h2 className="text-xl font-bold text-foreground mb-4">{title}</h2>
         <div className={cn(
           "grid gap-4",
           evaluations.length === 1 ? "grid-cols-1" : "grid-cols-1 xl:grid-cols-2"
@@ -344,13 +345,13 @@ export function EvaluationStageWidget({
                 <div>
                   <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 gap-3">
                     <div className="flex items-center gap-3">
-                      <h3 className="font-bold text-sm uppercase tracking-wider text-foreground">
+                      <h3 className="font-bold text-lg uppercase tracking-wider text-foreground">
                         {ev.type.replace(/_/g, ' ')}
                       </h3>
                       <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm whitespace-nowrap",
                         isCompleted ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/30"
                       )}>
-                        {isCompleted ? 'Evaluated' : 'Pending'}
+                        {isCompleted ? 'Evaluated' : 'Result Pending'}
                       </span>
                     </div>
 
@@ -375,11 +376,11 @@ export function EvaluationStageWidget({
                           </div>
                         ) : (
                           <>
-                            <button type="button" onClick={() => handleOpenSchedule(ev.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-md transition-colors shadow-xs whitespace-nowrap">
-                              <Calendar className="w-4 h-4" /> Schedule
+                            <button type="button" onClick={() => handleOpenSchedule(ev.id)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-all shadow-sm whitespace-nowrap">
+                              <Calendar className="w-4 h-4" /> Schedule Interview
                             </button>
-                            <button type="button" onClick={() => setRemarksId(ev.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-white bg-primary hover:bg-primary/90 rounded-md transition-colors shadow-xs whitespace-nowrap">
-                              <UserCheck className="w-4 h-4" /> Direct Remarks
+                            <button type="button" onClick={() => setRemarksId(ev.id)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-primary hover:bg-primary/90 rounded-xl transition-all shadow-md whitespace-nowrap">
+                              <UserCheck className="w-4 h-4" /> Enter Evaluation Result
                             </button>
                           </>
                         )}
@@ -388,84 +389,109 @@ export function EvaluationStageWidget({
                   </div>
 
                   {isCompleted ? (
-                    <div className="space-y-2 mt-2">
-                      <div className="flex items-center gap-1.5 text-xs text-foreground font-semibold">
-                        <span>Verdict:</span>
-                        <span className={cn("px-1.5 py-0.5 rounded text-[10px] border uppercase",
-                          ev.verdict === 'SELECTED' || ev.verdict === 'PASS' ? "bg-success/10 text-success border-success/20" :
-                            ev.verdict === 'ON_HOLD' ? "bg-warning/10 text-warning border-warning/20" :
-                              "bg-danger/10 text-danger border-danger/20"
-                        )}>
-                          {ev.verdict}
-                        </span>
+                    <div className="mt-4 p-5 bg-background border border-border/80 rounded-xl shadow-sm">
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border/50 pb-4 mb-4">
+                         <div>
+                            <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Final Verdict</span>
+                            <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-bold border uppercase shadow-xs",
+                               ev.verdict === 'SELECTED' || ev.verdict === 'PASS' ? "bg-success/10 text-success border-success/30" :
+                                 ev.verdict === 'ON_HOLD' ? "bg-warning/10 text-warning border-warning/30" :
+                                   "bg-danger/10 text-danger border-danger/30"
+                             )}>
+                               {ev.verdict?.replace(/_/g, ' ') || 'EVALUATED'}
+                            </span>
+                         </div>
+                         {ev.scores?.percentage !== undefined && (
+                            <div className="text-right">
+                              <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Test Score</span>
+                              <span className="text-xl font-black text-foreground tracking-tight">
+                                {ev.scores.percentage}%
+                              </span>
+                              {ev.scores.correct_answers !== undefined && (
+                                <span className="text-xs text-muted-foreground ml-1 font-semibold">({ev.scores.correct_answers}/{ev.scores.total_questions})</span>
+                              )}
+                            </div>
+                         )}
                       </div>
-                      {ev.remarks && (
-                        <p className="text-xs text-muted-foreground italic bg-muted/20 border border-border/40 p-2.5 rounded-lg mt-1">
-                          "{ev.remarks}"
-                        </p>
+                      
+                      {ev.scores && ev.scores.technical !== undefined && (
+                         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-5 pb-5 border-b border-border/50">
+                            {['technical', 'communication', 'experience', 'cultural_fit'].map(k => (
+                               (ev.scores as any)[k] !== undefined ? (
+                                  <div key={k}>
+                                    <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{k.replace('_', ' ')}</span>
+                                    <div className="flex gap-0.5">
+                                      {[1, 2, 3, 4, 5].map(s => (
+                                         <Star key={s} className={cn("w-4 h-4 transition-colors", s <= (ev.scores as any)[k] ? "fill-[#075E54] text-[#075E54]" : "fill-muted text-muted-foreground/30")} />
+                                      ))}
+                                    </div>
+                                  </div>
+                               ) : null
+                            ))}
+                         </div>
                       )}
-                      {ev.scores?.percentage !== undefined && (
-                        <span className="text-[10px] text-muted-foreground font-semibold">
-                          Grade: {ev.scores.percentage}% {ev.scores.correct_answers !== undefined && `(${ev.scores.correct_answers}/${ev.scores.total_questions})`}
-                        </span>
-                      )}
+
+                      <div>
+                         <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Evaluation Remarks</span>
+                         <p className="text-sm text-foreground leading-relaxed bg-muted/10 p-3 rounded-lg border border-border/30">
+                           {ev.remarks ? `"${ev.remarks}"` : <span className="text-muted-foreground italic">No remarks provided.</span>}
+                         </p>
+                      </div>
                     </div>
                   ) : (
                     <>
                       {ev.scheduled_time && !schedulingId && !remarksId ? (
-                        <div className="mt-4 w-full relative flex justify-between items-end">
-                          <div className="absolute top-0 right-0">
-                            <button type="button" onClick={() => setCancelConfirmId(ev.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-danger/80 hover:text-danger hover:bg-danger/10 rounded-md transition-colors shadow-xs">
-                              <XCircle className="w-4 h-4" /> Cancel Schedule
-                            </button>
-                          </div>
-
-                          <div className="flex flex-col gap-4">
-                            {/* Date */}
-                            <div className="flex flex-col">
-                              <span className="text-xs font-semibold text-muted-foreground mb-0.5">Scheduled Date</span>
-                              <div className="text-base font-bold text-foreground">
-                                {format(new Date(ev.scheduled_time), 'MMM dd, yyyy')}
+                        <div className="mt-5 p-4 bg-background border border-border rounded-xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 shadow-sm">
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 flex-1 w-full">
+                              {/* Date */}
+                              <div className="flex flex-col">
+                                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Scheduled Date</span>
+                                <div className="text-sm font-bold text-foreground">
+                                  {format(new Date(ev.scheduled_time), 'MMM dd, yyyy')}
+                                </div>
                               </div>
-                            </div>
 
-                            {/* Time */}
-                            <div className="flex flex-col">
-                              <span className="text-xs font-semibold text-muted-foreground mb-0.5">Time</span>
-                              <div className="text-base font-bold text-foreground">
-                                {format(new Date(ev.scheduled_time), 'hh:mm a')}
+                              {/* Time */}
+                              <div className="flex flex-col">
+                                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Time</span>
+                                <div className="text-sm font-bold text-foreground">
+                                  {format(new Date(ev.scheduled_time), 'hh:mm a')}
+                                </div>
                               </div>
-                            </div>
 
-                            {/* Location */}
-                            <div className="flex flex-col">
-                              <span className="text-xs font-semibold text-muted-foreground mb-0.5">
-                                {ev.interview_mode === 'ONLINE' ? 'Meeting Link' : 'Location'}
-                              </span>
-                              <div className="text-base font-bold text-foreground">
-                                {ev.location_or_link ? (
-                                  ev.interview_mode === 'ONLINE' ? (
-                                    <a href={ev.location_or_link} target="_blank" rel="noopener noreferrer" className="hover:underline transition-colors truncate inline-block align-bottom max-w-full">
-                                      {ev.location_or_link}
-                                    </a>
+                              {/* Location */}
+                              <div className="flex flex-col col-span-2 md:col-span-1">
+                                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                                  {ev.interview_mode === 'ONLINE' ? 'Meeting Link' : 'Location'}
+                                </span>
+                                <div className="text-sm font-bold text-foreground truncate max-w-full" title={ev.location_or_link || ''}>
+                                  {ev.location_or_link ? (
+                                    ev.interview_mode === 'ONLINE' ? (
+                                      <a href={ev.location_or_link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline transition-colors truncate block">
+                                        {ev.location_or_link}
+                                      </a>
+                                    ) : (
+                                      ev.location_or_link
+                                    )
                                   ) : (
-                                    ev.location_or_link
-                                  )
-                                ) : (
-                                  <span className="text-muted-foreground/50 font-medium">TBD</span>
-                                )}
+                                    <span className="text-muted-foreground/50 font-medium">TBD</span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <button type="button" onClick={() => handleCopyLink(ev.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors border border-border/50 bg-background shadow-xs whitespace-nowrap">
-                              {copiedId === ev.id ? <CheckCircle className="w-4 h-4 text-success" /> : <Link className="w-4 h-4" />}
-                              {copiedId === ev.id ? 'Copied!' : 'Copy Link'}
-                            </button>
-                            <button type="button" onClick={() => openShareModal(ev)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#128C7E] bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 rounded-md transition-colors shadow-xs whitespace-nowrap">
-                              <img src="/whatsapp.webp" alt="WhatsApp" className="w-4 h-4 object-contain" /> Share
-                            </button>
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-3 w-full xl:w-auto pt-4 xl:pt-0 border-t border-border/50 xl:border-none justify-end">
+                              <button type="button" onClick={() => handleCopyLink(ev.id)} className="flex flex-1 xl:flex-none justify-center items-center gap-2 px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted rounded-lg transition-colors border border-border shadow-sm">
+                                {copiedId === ev.id ? <CheckCircle className="w-4 h-4 text-success" /> : <Link className="w-4 h-4" />}
+                                {copiedId === ev.id ? 'Copied' : 'Copy'}
+                              </button>
+                              <button type="button" onClick={() => openShareModal(ev)} className="flex flex-1 xl:flex-none justify-center items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#075E54] hover:bg-[#064c44] rounded-lg transition-colors shadow-sm">
+                                <img src="/whatsapp.webp" alt="WhatsApp" className="w-4 h-4 object-contain" /> Send Invite
+                              </button>
+                              <button type="button" onClick={() => setCancelConfirmId(ev.id)} className="flex flex-none justify-center items-center p-2 text-danger/80 hover:text-danger hover:bg-danger/10 rounded-lg transition-colors" title="Cancel Schedule">
+                                <XCircle className="w-5 h-5" />
+                              </button>
                           </div>
                         </div>
                       ) : (
@@ -498,11 +524,11 @@ export function EvaluationStageWidget({
                                 onClick={() => setMode('PHYSICAL')}
                                 className={cn(
                                   "flex-1 py-2 px-3 text-sm font-bold rounded-lg transition-colors relative z-10",
-                                  mode === 'PHYSICAL' ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                                  mode === 'PHYSICAL' ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                                 )}
                               >
                                 {mode === 'PHYSICAL' && (
-                                  <motion.div layoutId={`mode-bg-${ev.id}`} className="absolute inset-0 bg-background rounded-lg shadow-sm border border-border/50" style={{ zIndex: -1 }} />
+                                  <motion.div layoutId={`mode-bg-${ev.id}`} className="absolute inset-0 bg-primary rounded-lg shadow-md border border-border/50" style={{ zIndex: -1 }} transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
                                 )}
                                 Physical / Walk-in
                               </button>
@@ -511,11 +537,11 @@ export function EvaluationStageWidget({
                                 onClick={() => setMode('ONLINE')}
                                 className={cn(
                                   "flex-1 py-2 px-3 text-sm font-bold rounded-lg transition-colors relative z-10",
-                                  mode === 'ONLINE' ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                                  mode === 'ONLINE' ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                                 )}
                               >
                                 {mode === 'ONLINE' && (
-                                  <motion.div layoutId={`mode-bg-${ev.id}`} className="absolute inset-0 bg-background rounded-lg shadow-sm border border-border/50" style={{ zIndex: -1 }} />
+                                  <motion.div layoutId={`mode-bg-${ev.id}`} className="absolute inset-0 bg-primary rounded-lg shadow-md border border-border/50" style={{ zIndex: -1 }} transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
                                 )}
                                 Online Meeting
                               </button>
@@ -671,24 +697,40 @@ export function EvaluationStageWidget({
           <div className="lg:col-span-7 flex flex-col h-full overflow-y-auto p-6 justify-between">
             <div className="space-y-5">
               {/* Recipient Selector Tabs */}
-              <div className="flex bg-muted/40 p-1 rounded-xl border border-border">
+              <div className="flex bg-muted/40 p-1.5 rounded-xl border border-border gap-1 relative">
                 <button
-                  onClick={() => setRecipientType('INTERVIEWER')}
-                  className={cn(
-                    "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-                    recipientType === 'INTERVIEWER' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Send to Interviewer
-                </button>
-                <button
+                  type="button"
                   onClick={() => setRecipientType('CANDIDATE')}
                   className={cn(
-                    "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
-                    recipientType === 'CANDIDATE' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    "flex-1 py-2.5 text-xs font-bold rounded-lg transition-colors relative z-10",
+                    recipientType === 'CANDIDATE' ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
                 >
+                  {recipientType === 'CANDIDATE' && (
+                    <motion.div
+                      layoutId="recipientToggle"
+                      className="absolute inset-0 bg-primary rounded-lg shadow-md -z-10"
+                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                    />
+                  )}
                   Send to Candidate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecipientType('INTERVIEWER')}
+                  className={cn(
+                    "flex-1 py-2.5 text-xs font-bold rounded-lg transition-colors relative z-10",
+                    recipientType === 'INTERVIEWER' ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  )}
+                >
+                  {recipientType === 'INTERVIEWER' && (
+                    <motion.div
+                      layoutId="recipientToggle"
+                      className="absolute inset-0 bg-primary rounded-lg shadow-md -z-10"
+                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                    />
+                  )}
+                  Send to Interviewer
                 </button>
               </div>
 
@@ -709,7 +751,6 @@ export function EvaluationStageWidget({
                     <div>
                       <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1.5">Interviewer Name</label>
                       <Input
-                        placeholder="e.g. John Doe"
                         value={interviewerName}
                         onChange={(e) => setInterviewerName(e.target.value)}
                       />
@@ -746,86 +787,32 @@ export function EvaluationStageWidget({
                     </div>
 
                     <div className="sm:col-span-2 border-t border-border pt-4 mt-2">
-                      <h4 className="text-xs font-bold text-foreground mb-3 uppercase tracking-wider">Interview Timing & Mode</h4>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1.5">Date</label>
-                      <input
-                        type="date"
-                        value={shareDate}
-                        onChange={(e) => setShareDate(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary/20 text-foreground"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1.5">Time</label>
-                      <input
-                        type="time"
-                        value={shareTime}
-                        onChange={(e) => setShareTime(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl p-3 text-sm focus:ring-2 focus:ring-primary/20 text-foreground"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1.5">Mode</label>
-                      <div className="flex bg-muted/40 p-0.5 rounded-lg border border-border w-fit text-xs">
-                        <button
-                          type="button"
-                          onClick={() => setShareMode('PHYSICAL')}
-                          className={cn("px-4 py-1.5 rounded-md font-bold transition-all", shareMode === 'PHYSICAL' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-                        >
-                          Physical / In-Person
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShareMode('ONLINE')}
-                          className={cn("px-4 py-1.5 rounded-md font-bold transition-all", shareMode === 'ONLINE' ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-                        >
-                          Online / Video Call
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider">
-                          {shareMode === 'ONLINE' ? 'Google Meet Link' : 'Interview Location Cabin/Branch'}
-                        </label>
-                        {shareMode === 'ONLINE' && (
-                          <button
-                            type="button"
-                            onClick={() => generateRandomMeetLink('share')}
-                            className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground hover:text-primary transition-colors bg-muted/50 px-2 py-0.5 rounded border shadow-xs"
-                          >
-                            <Video className="w-3.5 h-3.5" /> Auto-generate Meet
-                          </button>
-                        )}
-                      </div>
-                      {shareMode === 'ONLINE' ? (
-                        <div className="flex bg-background border border-border rounded-xl focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden">
-                          <span className="bg-muted px-3 flex items-center border-r border-border text-xs text-muted-foreground select-none">
-                            https://meet.google.com/
-                          </span>
-                          <input
-                            type="text"
-                            value={shareLocation.startsWith('https://meet.google.com/') ? shareLocation.substring(24) : shareLocation}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setShareLocation(val.startsWith('https://') ? val : 'https://meet.google.com/' + val);
-                            }}
-                            placeholder="abc-defg-hij"
-                            className="w-full p-3 text-sm text-foreground focus:outline-none"
-                          />
+                      <h4 className="text-xs font-bold text-foreground mb-3 uppercase tracking-wider">Scheduled Interview Details</h4>
+                      <div className="bg-muted/20 border border-border/60 rounded-xl p-4 flex flex-col gap-4">
+                        <div className="grid grid-cols-2 gap-4">
+                           <div>
+                             <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Date</span>
+                             <span className="text-sm font-semibold text-foreground">
+                               {shareEval?.scheduled_time ? format(new Date(shareEval.scheduled_time), 'MMM dd, yyyy') : 'TBD'}
+                             </span>
+                           </div>
+                           <div>
+                             <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Time</span>
+                             <span className="text-sm font-semibold text-foreground">
+                               {shareEval?.scheduled_time ? format(new Date(shareEval.scheduled_time), 'hh:mm a') : 'TBD'}
+                             </span>
+                           </div>
                         </div>
-                      ) : (
-                        <Input
-                          placeholder="e.g. Enchakkal Branch, 1st Floor Cabin A"
-                          value={shareLocation}
-                          onChange={(e) => setShareLocation(e.target.value)}
-                        />
-                      )}
+                        <div>
+                             <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
+                               {shareEval?.interview_mode === 'ONLINE' ? 'Meeting Link' : 'Location'} 
+                               <span className="text-muted-foreground ml-1 font-normal capitalize">({shareEval?.interview_mode?.toLowerCase() || 'Walk-in'})</span>
+                             </span>
+                             <span className="text-sm font-semibold text-foreground break-all">
+                               {shareEval?.location_or_link || 'TBD'}
+                             </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -900,16 +887,33 @@ export function EvaluationStageWidget({
                         const targetName = recipientType === 'INTERVIEWER' ? (interviewerName || 'Interviewer') : candidate.full_name;
                         const finalLink = recipientType === 'INTERVIEWER' ? 'https://recruitment.nippontoyota.com/#/eval/token-xyz' : (shareLocation || 'TBD');
 
-                        const previewMessage = `Dear *${targetName}*,
+                        const previewMessage = recipientType === 'INTERVIEWER' ? 
+`Dear *${targetName}*,
 
-Your HR interview for the position of *${candidate.position_applied_for || 'Unknown Position'}* is scheduled.
+An interview has been scheduled for candidate *${candidate.full_name}* for the position of *${candidate.position_applied_for || 'Unknown Position'}*.
+
+*Date:* ${dStr}
+*Time:* ${tStr}
+*Mode:* ${displayMode}
+
+Please use the secure link below to access the candidate's profile and submit your evaluation promptly after the interview.
+
+*Evaluation Link:* ${finalLink}
+
+Best Regards,
+*${recruiterName || 'HR Team'}*
+Nippon Toyota` 
+: 
+`Dear *${targetName}*,
+
+We are pleased to invite you for an interview at Nippon Toyota for the position of *${candidate.position_applied_for || 'Unknown Position'}*.
 
 *Date:* ${dStr}
 *Time:* ${tStr}
 *Mode:* ${displayMode}
 *Location/Link:* ${finalLink}
 
-Please be on time.
+Please ensure you are available on time. If you have any questions, please reply to this message.
 
 Best Regards,
 *${recruiterName || 'HR Team'}*
