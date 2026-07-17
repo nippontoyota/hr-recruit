@@ -1,0 +1,45 @@
+                <div>
+                  {ev.type !== 'TECHNICAL_TEST' && (
+                  <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 gap-3">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-bold text-lg uppercase tracking-wider text-foreground">
+                        {ev.type.replace(/_/g, ' ')}
+                      </h3>
+                      <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm whitespace-nowrap",
+                        isCompleted ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/30"
+                      )}>
+                        {isCompleted ? 'Evaluated' : 'Result Pending'}
+                      </span>
+                    </div>
+
+                    {!isCompleted && !schedulingId && !remarksId && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={() => handleCopyLink(ev.id)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-foreground bg-background border border-border hover:bg-muted rounded-xl transition-all shadow-sm whitespace-nowrap">
+                          {copiedId === ev.id ? <CheckCircle className="w-4 h-4 text-success" /> : <Link className="w-4 h-4" />}
+                          {copiedId === ev.id ? 'Copied' : 'Copy Link'}
+                        </button>
+                        <button type="button" onClick={() => openShareModal(ev)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded-xl transition-all shadow-sm whitespace-nowrap">
+                          <img src="/whatsapp.webp" alt="WhatsApp" className="w-4 h-4 object-contain" /> Send Invite
+                        </button>
+                        <button type="button" onClick={() => handleOpenSchedule(ev.id)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-all shadow-sm whitespace-nowrap">
+                          <Calendar className="w-4 h-4" /> Schedule Evaluation
+                        </button>
+                        <button type="button" onClick={() => setRemarksId(ev.id)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-primary hover:bg-primary/90 rounded-xl transition-all shadow-md whitespace-nowrap">
+                          <UserCheck className="w-4 h-4" /> Enter Evaluation Result
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  )}
+
+                  {isCompleted ? (
+                    <div className="mt-4 p-5 bg-background border border-border/80 rounded-xl shadow-sm">
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border/50 pb-4 mb-4">
+                         <div>
+                            <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Final Verdict</span>
+                            <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-bold border uppercase shadow-xs",
+                               ev.verdict === 'SELECTED' || ev.verdict === 'PASS' ? "bg-success/10 text-success border-success/30" :
+                                 ev.verdict === 'ON_HOLD' ? "bg-warning/10 text-warning border-warning/30" :
+                                   "bg-danger/10 text-danger border-danger/30"
+                             )}>
+                               {ev.verdict?.replace(/_/g, ' ') || 'EVALUATED'}

@@ -23,14 +23,17 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// Simple global cache to allow stale-while-revalidate (instant loading)
+let candidatesCache: Candidate[] = [];
+
 export default function CandidatesList() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canDelete = ['SUPER_ADMIN', 'HR'].includes(user?.role as string);
 
   // Data
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [candidates, setCandidates] = useState<Candidate[]>(candidatesCache);
+  const [loading, setLoading] = useState(candidatesCache.length === 0);
   const [copied, setCopied] = useState(false);
 
   // Filters
@@ -51,13 +54,14 @@ export default function CandidatesList() {
 
   const fetchCandidatesList = useCallback(async (showLoading = true) => {
     try {
-      if (showLoading) setLoading(true);
+      if (showLoading && candidatesCache.length === 0) setLoading(true);
       const list = await getCandidates();
+      candidatesCache = list;
       setCandidates(list);
     } catch (err) {
       console.error('Failed to load candidates', err);
     } finally {
-      if (showLoading) setLoading(false);
+      setLoading(false);
     }
   }, []);
 
@@ -145,20 +149,29 @@ export default function CandidatesList() {
   const handleBulkDelete = async () => {
     setIsBulkDeleting(true);
     const ids = [...selectedIds];
-    const results = await Promise.allSettled(ids.map((id) => deleteCandidate(id)));
-    const failed = results
-      .map((r, i) => (r.status === 'rejected' ? ids[i] : null))
-      .filter(Boolean) as string[];
+    const failed: string[] = [];
+    let deletedCount = 0;
+    
+    // Process sequentially to prevent backend deadlocks and thread pool exhaustion
+    for (const id of ids) {
+      try {
+        await deleteCandidate(id);
+        deletedCount++;
+      } catch (err) {
+        failed.push(id);
+      }
+    }
+    
     await fetchCandidatesList();
     // Keep failed ones selected so HR can retry
     setSelectedIds(new Set(failed));
     setShowBulkDeleteConfirm(false);
     setIsBulkDeleting(false);
-    const deleted = ids.length - failed.length;
+    
     if (failed.length === 0) {
-      toast.success(`${deleted} candidate${deleted > 1 ? 's' : ''} deleted`);
+      toast.success(`${deletedCount} candidate${deletedCount > 1 ? 's' : ''} deleted`);
     } else {
-      toast.error(`${deleted} deleted, ${failed.length} failed — still selected`);
+      toast.error(`${deletedCount} deleted, ${failed.length} failed — still selected`);
     }
   };
 

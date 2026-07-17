@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { format } from 'date-fns';
+
 import { ArrowLeft, Pencil, Send, Video, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCheck } from 'lucide-react';
 import type { Candidate } from '../../types';
 import { Button, Input, Modal } from '../ui';
@@ -211,7 +211,7 @@ export function WhatsAppPreviewPanel({ candidate, className, inviteType = 'pre' 
                       <WhatsAppMessageBody text={message} />
                     </div>
                     <div className="absolute bottom-1 right-2 flex items-center gap-1">
-                      <p className="text-[10px] text-[#667781] whitespace-nowrap">{format(new Date(), 'h:mm a')}</p>
+                      <p className="text-[10px] text-[#667781] whitespace-nowrap">{new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date()).toLowerCase()}</p>
                       <CheckCheck className="h-[15px] w-[15px] text-[#34B7F1]" strokeWidth={2.5} />
                     </div>
                   </div>

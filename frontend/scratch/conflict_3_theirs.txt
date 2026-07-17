@@ -1,0 +1,12 @@
+                           <div>
+                             <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Date</span>
+                             <span className="text-sm font-semibold text-foreground">
+                               {shareEval?.scheduled_time ? new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).format(new Date(shareEval.scheduled_time)) : 'TBD'}
+                             </span>
+                           </div>
+                           <div>
+                             <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Time</span>
+                             <span className="text-sm font-semibold text-foreground">
+                               {shareEval?.scheduled_time ? new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date(shareEval.scheduled_time)).toLowerCase() : 'TBD'}
+                             </span>
+                           </div>

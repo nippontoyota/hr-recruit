@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Link, UserCheck, FileText, CheckCircle, Star, Send, Video, Clock, CheckCheck, ArrowLeft, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCircle2, XCircle } from 'lucide-react';
+import { Calendar, Link, Clipboard, UserCheck, FileText, CheckCircle, Star, Send, Video, Clock, CheckCheck, ArrowLeft, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, LoadingSpinner, Modal, Input } from '../ui';
-import { getCandidateEvaluations, scheduleEvaluation, generateEvaluationToken, submitScorecardDirect, sendEvaluationWhatsAppInvite } from '../../api/evaluations';
+import { getCandidateEvaluations, scheduleEvaluation, generateEvaluationToken, submitScorecardDirect, sendEvaluationWhatsAppInvite, getDepartmentQuestions } from '../../api/evaluations';
 import type { Candidate, Evaluation, EvaluationVerdict, User } from '../../types';
 import { cn, extractError } from '../../lib/utils';
 import { useAuth } from '../../auth/AuthContext';
-import { format, addDays } from 'date-fns';
+
 
 
 interface EvaluationStageWidgetProps {
@@ -17,6 +17,9 @@ interface EvaluationStageWidgetProps {
   onUpdate: () => void;
 }
 
+// Simple global cache to allow stale-while-revalidate (instant loading)
+const evaluationsCache: Record<string, Evaluation[]> = {};
+
 export function EvaluationStageWidget({
   candidate,
   evalTypes,
@@ -24,8 +27,9 @@ export function EvaluationStageWidget({
   onUpdate
 }: EvaluationStageWidgetProps) {
   const { user } = useAuth();
-  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = evaluationsCache[candidate.id];
+  const [evaluations, setEvaluations] = useState<Evaluation[]>(cached ? cached.filter(e => evalTypes.includes(e.type)) : []);
+  const [loading, setLoading] = useState(!cached);
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
   const [remarksId, setRemarksId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -134,9 +138,9 @@ export function EvaluationStageWidget({
   const handleOpenSchedule = (id: string) => {
     setSchedulingId(id);
     setLocation('Training room');
-    const tomorrow = addDays(new Date(), 1);
+    const tomorrow = new Date(Date.now() + 86400000);
     tomorrow.setHours(9, 0, 0, 0);
-    setTime(format(tomorrow, "yyyy-MM-dd'T'HH:mm"));
+    setTime((() => { const d = tomorrow; const pad = (n: number) => n.toString().padStart(2, '0'); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; })());
   };
 
   // Remarks form state
@@ -151,10 +155,15 @@ export function EvaluationStageWidget({
   const [testScore, setTestScore] = useState('');
   const [testVerdict, setTestVerdict] = useState<EvaluationVerdict>('PASS');
   const [testRemarks, setTestRemarks] = useState('');
+  const [testMode, setTestMode] = useState<'PAPER' | 'ONLINE'>('ONLINE');
 
   const fetchEvaluations = async () => {
+    if (!evaluationsCache[candidate.id]) {
+      setLoading(true);
+    }
     try {
       const data = await getCandidateEvaluations(candidate.id);
+      evaluationsCache[candidate.id] = data;
       // Filter evaluations to only matching types
       const filtered = data.filter(e => evalTypes.includes(e.type));
       setEvaluations(filtered);
@@ -256,8 +265,8 @@ export function EvaluationStageWidget({
         try {
           const parsedDate = new Date(`${shareDate}T${shareTime}`);
           if (!isNaN(parsedDate.getTime())) {
-            dateStr = format(parsedDate, 'dd MMM yyyy');
-            timeStr = format(parsedDate, 'h:mm a');
+            dateStr = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(parsedDate);
+            timeStr = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(parsedDate).toLowerCase();
           }
         } catch (e) {
           console.error(e);
@@ -288,33 +297,9 @@ export function EvaluationStageWidget({
       setSendingInvite(false);
     }
   };
-  const handleInstantWhatsAppShare = async (ev: Evaluation) => {
-    toast.loading('Generating link and sending WhatsApp invite...', { id: 'send-link' });
-    try {
-      const tokenData = await generateEvaluationToken(ev.id);
-      const finalLink = `${window.location.origin}/#/test/${tokenData.token}`;
-      
-      const now = new Date();
-      const dateStr = format(now, 'dd MMM yyyy');
-      const timeStr = format(now, 'h:mm a');
-
-      await sendEvaluationWhatsAppInvite(ev.id, {
-        to_phone: candidate.phone,
-        recipient_type: 'CANDIDATE',
-        variables: {
-          candidateName: candidate.full_name,
-          position: candidate.position_applied_for || 'Unknown Position',
-          date: dateStr,
-          time: timeStr,
-          mode: 'Online Exam Link',
-          locationOrLink: finalLink,
-          recruiterName: user?.full_name || 'HR Team',
-        }
-      });
-      toast.success('WhatsApp test link sent directly!', { id: 'send-link' });
-    } catch (err) {
-      toast.error(extractError(err, 'Failed to send WhatsApp link'), { id: 'send-link' });
-    }
+  const handleInstantWhatsAppShare = (ev: Evaluation) => {
+    const mockEv = { ...ev, scheduled_time: new Date().toISOString(), interview_mode: 'ONLINE' };
+    openShareModal(mockEv as Evaluation);
   };
 
   const handleSubmitScorecard = async (evalId: string, isTechTest = false) => {
@@ -393,7 +378,7 @@ export function EvaluationStageWidget({
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-bold text-foreground mb-4">{title}</h2>
-
+        
         {evalTypes.length > 1 && (
           <div className="flex bg-muted/30 p-1 rounded-xl mb-6 w-fit relative border border-border/50">
             {evalTypes.map((type) => (
@@ -425,437 +410,444 @@ export function EvaluationStageWidget({
               .map((ev) => {
                 const isCompleted = ev.status === 'EVALUATED';
                 return (
-                  <motion.div
-                    key={ev.id}
+                  <motion.div 
+                    key={ev.id} 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
                     className="flex flex-col justify-between py-2"
                   >
-                    <div>
-                      {ev.type !== 'TECHNICAL_TEST' && (
-                        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 gap-3">
-                          <div className="flex items-center gap-3">
-                            <h3 className="font-bold text-lg uppercase tracking-wider text-foreground">
-                              {ev.type.replace(/_/g, ' ')}
-                            </h3>
-                            <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm whitespace-nowrap",
-                              isCompleted ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/30"
-                            )}>
-                              {isCompleted ? 'Evaluated' : 'Result Pending'}
+                <div>
+                  {ev.type !== 'TECHNICAL_TEST' && (
+                  <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 gap-3">
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-bold text-lg uppercase tracking-wider text-foreground">
+                        {ev.type.replace(/_/g, ' ')}
+                      </h3>
+                      <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm whitespace-nowrap",
+                        isCompleted ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/30"
+                      )}>
+                        {isCompleted ? 'Evaluated' : 'Result Pending'}
+                      </span>
+                    </div>
+
+                    {!isCompleted && !schedulingId && !remarksId && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={() => handleCopyLink(ev.id)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-foreground bg-background border border-border hover:bg-muted rounded-xl transition-all shadow-sm whitespace-nowrap">
+                          {copiedId === ev.id ? <CheckCircle className="w-4 h-4 text-success" /> : <Link className="w-4 h-4" />}
+                          {copiedId === ev.id ? 'Copied' : 'Copy Link'}
+                        </button>
+                        <button type="button" onClick={() => openShareModal(ev)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded-xl transition-all shadow-sm whitespace-nowrap">
+                          <img src="/whatsapp.webp" alt="WhatsApp" className="w-4 h-4 object-contain" /> Send Invite
+                        </button>
+                        <button type="button" onClick={() => handleOpenSchedule(ev.id)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-all shadow-sm whitespace-nowrap">
+                          <Calendar className="w-4 h-4" /> Schedule Evaluation
+                        </button>
+                        <button type="button" onClick={() => setRemarksId(ev.id)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-primary hover:bg-primary/90 rounded-xl transition-all shadow-md whitespace-nowrap">
+                          <UserCheck className="w-4 h-4" /> Enter Evaluation Result
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  )}
+
+                  {isCompleted ? (
+                    <div className="mt-4 p-5 bg-background border border-border/80 rounded-xl shadow-sm">
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border/50 pb-4 mb-4">
+                         <div>
+                            <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Final Verdict</span>
+                            <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-bold border uppercase shadow-xs",
+                               ev.verdict === 'SELECTED' || ev.verdict === 'PASS' ? "bg-success/10 text-success border-success/30" :
+                                 ev.verdict === 'ON_HOLD' ? "bg-warning/10 text-warning border-warning/30" :
+                                   "bg-danger/10 text-danger border-danger/30"
+                             )}>
+                               {ev.verdict?.replace(/_/g, ' ') || 'EVALUATED'}
                             </span>
-                          </div>
-
-                          {!isCompleted && !schedulingId && !remarksId && (
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button type="button" onClick={() => handleOpenSchedule(ev.id)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-all shadow-sm whitespace-nowrap">
-                                <Calendar className="w-4 h-4" /> Schedule Evaluation
-                              </button>
-                              <button type="button" onClick={() => setRemarksId(ev.id)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-primary hover:bg-primary/90 rounded-xl transition-all shadow-md whitespace-nowrap">
-                                <UserCheck className="w-4 h-4" /> Enter Evaluation Result
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {isCompleted ? (
-                        <div className="mt-4 p-5 bg-background border border-border/80 rounded-xl shadow-sm">
-                          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border/50 pb-4 mb-4">
-                            <div>
-                              <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Final Verdict</span>
-                              <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-bold border uppercase shadow-xs",
-                                ev.verdict === 'SELECTED' || ev.verdict === 'PASS' ? "bg-success/10 text-success border-success/30" :
-                                  ev.verdict === 'ON_HOLD' ? "bg-warning/10 text-warning border-warning/30" :
-                                    "bg-danger/10 text-danger border-danger/30"
-                              )}>
-                                {ev.verdict?.replace(/_/g, ' ') || 'EVALUATED'}
+                         </div>
+                         {ev.scores?.percentage !== undefined && (
+                            <div className="text-right">
+                              <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Test Score</span>
+                              <span className="text-xl font-black text-foreground tracking-tight">
+                                {ev.scores.percentage}%
                               </span>
+                              {ev.scores.correct_answers !== undefined && (
+                                <span className="text-xs text-muted-foreground ml-1 font-semibold">({ev.scores.correct_answers}/{ev.scores.total_questions})</span>
+                              )}
                             </div>
-                            {ev.scores?.percentage !== undefined && (
-                              <div className="text-right">
-                                <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Test Score</span>
-                                <span className="text-xl font-black text-foreground tracking-tight">
-                                  {ev.scores.percentage}%
-                                </span>
-                                {ev.scores.correct_answers !== undefined && (
-                                  <span className="text-xs text-muted-foreground ml-1 font-semibold">({ev.scores.correct_answers}/{ev.scores.total_questions})</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {ev.scores && ev.scores.technical !== undefined && (
-                            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-5 pb-5 border-b border-border/50">
-                              {['technical', 'communication', 'experience', 'cultural_fit'].map(k => (
-                                (ev.scores as any)[k] !== undefined ? (
+                         )}
+                      </div>
+                      
+                      {ev.scores && ev.scores.technical !== undefined && (
+                         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-5 pb-5 border-b border-border/50">
+                            {['technical', 'communication', 'experience', 'cultural_fit'].map(k => (
+                               (ev.scores as any)[k] !== undefined ? (
                                   <div key={k}>
                                     <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{k.replace('_', ' ')}</span>
                                     <div className="flex gap-0.5">
                                       {[1, 2, 3, 4, 5].map(s => (
-                                        <Star key={s} className={cn("w-4 h-4 transition-colors", s <= (ev.scores as any)[k] ? "fill-[#075E54] text-[#075E54]" : "fill-muted text-muted-foreground/30")} />
+                                         <Star key={s} className={cn("w-4 h-4 transition-colors", s <= (ev.scores as any)[k] ? "fill-[#075E54] text-[#075E54]" : "fill-muted text-muted-foreground/30")} />
                                       ))}
                                     </div>
                                   </div>
-                                ) : null
-                              ))}
+                               ) : null
+                            ))}
+                         </div>
+                      )}
+
+                      <div>
+                         <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Evaluation Remarks</span>
+                         <p className="text-sm text-foreground leading-relaxed bg-muted/10 p-3 rounded-lg border border-border/30">
+                           {ev.remarks ? `"${ev.remarks}"` : <span className="text-muted-foreground italic">No remarks provided.</span>}
+                         </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {ev.type === 'TECHNICAL_TEST' ? (
+                        <div className="mt-5 bg-white shadow-xl rounded-sm w-full max-w-4xl mx-auto text-black font-sans relative overflow-hidden ring-1 ring-black/5">
+                          {/* Floating Actions */}
+                          {!remarksId && (
+                            <div className="absolute top-4 right-4 flex gap-2 print:hidden z-10">
+                              <button type="button" onClick={() => window.print()} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded shadow-md transition-colors whitespace-nowrap">
+                                <FileText className="w-3.5 h-3.5" /> Print Paper
+                              </button>
+                              <button type="button" onClick={() => handleInstantWhatsAppShare(ev)} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded shadow-md transition-colors whitespace-nowrap">
+                                <img src="/whatsapp.webp" alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> Send Link
+                              </button>
                             </div>
                           )}
 
-                          <div>
-                            <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Evaluation Remarks</span>
-                            <p className="text-sm text-foreground leading-relaxed bg-muted/10 p-3 rounded-lg border border-border/30">
-                              {ev.remarks ? `"${ev.remarks}"` : <span className="text-muted-foreground italic">No remarks provided.</span>}
-                            </p>
+                          <div className="p-4 pb-8">
+                            {/* Header Section */}
+                            <div className="flex justify-between items-start border-2 border-black border-b-0">
+                              <div className="p-2">
+                                <h1 className="font-bold text-xl tracking-widest uppercase mb-1">Toyota</h1>
+                                <h2 className="font-semibold text-[10px] uppercase">Motor Corporation</h2>
+                                <p className="text-[9px] italic mt-1 text-gray-700">For candidates with one year experience and above</p>
+                              </div>
+                              <div className="border-l-2 border-black flex flex-col w-40 text-xs">
+                                <div className="border-b-2 border-black p-1 text-center font-bold tracking-wide">Series B</div>
+                                <div className="border-b-2 border-black p-1 text-center font-bold text-[10px] tracking-wide">Version 2020.1</div>
+                                <div className="border-b-2 border-black p-1 font-medium flex justify-between"><span>Date:</span> <span className="underline decoration-dashed underline-offset-4 text-gray-800 flex-1 ml-1 text-right">{new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())}</span></div>
+                                <div className="p-1 font-medium flex justify-between"><span>Time:</span> <span className="underline decoration-dashed underline-offset-4 text-gray-800 flex-1 ml-1 text-right">{new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())}</span></div>
+                              </div>
+                            </div>
+                            
+                            <div className="border-2 border-black border-b-0 p-1 text-center font-bold uppercase tracking-widest text-xs ">
+                              Human Resources Department
+                            </div>
+                            
+                            <div className="border-2 border-black border-b-0 p-2 text-xs flex flex-col gap-2">
+                              <div className="flex items-end">
+                                <span className="w-32 font-semibold">Name of the Candidate:</span>
+                                <span className="flex-1 border-b-2 border-black text-sm pl-2 pb-0.5 text-blue-900" style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif' }}>{candidate.full_name}</span>
+                              </div>
+                              <div className="flex items-end">
+                                <span className="w-32 font-semibold">Position Applied For:</span>
+                                <span className="flex-1 border-b-2 border-black text-sm pl-2 pb-0.5 text-blue-900" style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif' }}>{candidate.position_applied_for}</span>
+                              </div>
+                            </div>
+                            
+                            <div className="border-2 border-black p-1 text-center font-bold uppercase tracking-widest text-xs ">
+                              Question Paper - {candidate.position_applied_for || 'Call Centre'}
+                            </div>
+
+                            {/* Questions Table */}
+                            {loadingQuestions ? (
+                              <div className="flex justify-center py-12 border-x-2 border-b-2 border-black"><LoadingSpinner size="md" /></div>
+                            ) : technicalQuestions?.length === 0 ? (
+                              <div className="text-center py-12 border-x-2 border-b-2 border-black text-gray-500 font-semibold">No questions found.</div>
+                            ) : (
+                              <table className="w-full border-collapse border-2 border-t-0 border-black text-sm">
+                                <thead>
+                                  <tr>
+                                    <th className="border-2 border-t-0 border-black w-8 p-0"></th>
+                                    <th className="border-2 border-t-0 border-black p-0"></th>
+                                    <th className="border-2 border-t-0 border-black w-12 text-center text-[10px] p-1 leading-tight">Max.<br/>Marks</th>
+                                    <th className="border-2 border-t-0 border-black w-14 text-center text-[10px] p-1 leading-tight">Marks<br/>Obtained</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {technicalQuestions?.map((q, idx) => {
+                                    const submittedAns = ev.scores?.candidate_answers?.[q.id];
+                                    return (
+                                      <tr key={q.id || idx}>
+                                        <td className="border-2 border-black text-center align-top py-1.5 text-xs font-semibold text-gray-800">{idx + 1}</td>
+                                        <td className="border-2 border-black p-0 align-top">
+                                          <div className="border-b-2 border-black p-1.5 text-[13px] font-bold text-gray-900 leading-snug">
+                                            {q.text}
+                                          </div>
+                                          <div className="p-1.5 min-h-[2.5rem] text-gray-800 flex flex-col justify-center">
+                                            {q.options && Object.keys(q.options).length > 0 ? (
+                                              <div className="flex flex-col gap-1.5">
+                                                {Object.entries(q.options).map(([key, val]) => (
+                                                  <div key={key} className={cn("flex gap-1.5 text-[11px]", submittedAns === key ? "font-bold text-black" : "")}>
+                                                    <span className="font-semibold w-4">{key}.</span> 
+                                                    <span>{val as React.ReactNode}</span>
+                                                    {submittedAns === key && (
+                                                      <span className="ml-1 italic text-green-700 font-bold text-sm leading-none align-middle" style={{ transform: 'rotate(-10deg)', display: 'inline-block' }}>✓</span>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            ) : (
+                                              <div className="text-gray-500 italic h-6 flex items-end">
+                                                {submittedAns ? <span className="text-blue-900 font-semibold text-sm leading-none block border-b border-dashed border-gray-400 w-full pb-0.5" style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif' }}>{submittedAns}</span> : ""}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td className="border-2 border-black text-center align-middle font-bold text-[13px] text-gray-800">1</td>
+                                        <td className="border-2 border-black text-center align-middle relative">
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        </div>
+                      ) : ev.scheduled_time && !schedulingId && !remarksId ? (
+                        <div className="mt-5 p-4 bg-background border border-border rounded-xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 shadow-sm">
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 flex-1 w-full">
+                              {/* Date */}
+                              <div className="flex flex-col">
+                                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Scheduled Date</span>
+                                <div className="text-sm font-bold text-foreground">
+                                  {new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).format(new Date(ev.scheduled_time))}
+                                </div>
+                              </div>
+
+                              {/* Time */}
+                              <div className="flex flex-col">
+                                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Time</span>
+                                <div className="text-sm font-bold text-foreground">
+                                  {new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date(ev.scheduled_time)).toLowerCase()}
+                                </div>
+                              </div>
+
+                              {/* Location */}
+                              <div className="flex flex-col col-span-2 md:col-span-1">
+                                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                                  {ev.interview_mode === 'ONLINE' ? 'Meeting Link' : 'Location'}
+                                </span>
+                                <div className="text-sm font-bold text-foreground truncate max-w-full" title={ev.location_or_link || ''}>
+                                  {ev.location_or_link ? (
+                                    ev.interview_mode === 'ONLINE' ? (
+                                      <a href={ev.location_or_link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline transition-colors truncate block">
+                                        {ev.location_or_link}
+                                      </a>
+                                    ) : (
+                                      ev.location_or_link
+                                    )
+                                  ) : (
+                                    <span className="text-muted-foreground/50 font-medium">TBD</span>
+                                  )}
+                                </div>
+                              </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-3 w-full xl:w-auto pt-4 xl:pt-0 border-t border-border/50 xl:border-none justify-end">
+                              <button type="button" onClick={() => handleCopyLink(ev.id)} className="flex flex-1 xl:flex-none justify-center items-center gap-2 px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted rounded-lg transition-colors border border-border shadow-sm">
+                                {copiedId === ev.id ? <CheckCircle className="w-4 h-4 text-success" /> : <Link className="w-4 h-4" />}
+                                {copiedId === ev.id ? 'Copied' : 'Copy'}
+                              </button>
+                              <button type="button" onClick={() => openShareModal(ev)} className="flex flex-1 xl:flex-none justify-center items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#075E54] hover:bg-[#064c44] rounded-lg transition-colors shadow-sm">
+                                <img src="/whatsapp.webp" alt="WhatsApp" className="w-4 h-4 object-contain" /> Send Invite
+                              </button>
+                              <button type="button" onClick={() => setCancelConfirmId(ev.id)} className="flex flex-none justify-center items-center p-2 text-danger/80 hover:text-danger hover:bg-danger/10 rounded-lg transition-colors" title="Cancel Schedule">
+                                <XCircle className="w-5 h-5" />
+                              </button>
                           </div>
                         </div>
                       ) : (
-                        <>
-                          {ev.type === 'TECHNICAL_TEST' ? (
-                            <div className="mt-5 bg-white shadow-xl rounded-sm w-full max-w-4xl mx-auto text-black font-sans relative overflow-hidden ring-1 ring-black/5">
-                              {/* Floating Actions */}
-                              {!remarksId && (
-                                <div className="absolute top-4 right-4 flex gap-2 print:hidden z-10">
-                                  <button type="button" onClick={() => window.print()} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded shadow-md transition-colors whitespace-nowrap">
-                                    <FileText className="w-3.5 h-3.5" /> Print Paper
-                                  </button>
-                                  <button type="button" onClick={() => handleInstantWhatsAppShare(ev)} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded shadow-md transition-colors whitespace-nowrap">
-                                    <img src="/whatsapp.webp" alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> Send Link
-                                  </button>
-                                </div>
-                              )}
-
-                              <div className="p-4 pb-8">
-                                {/* Header Section */}
-                                <div className="flex justify-between items-start border-2 border-black border-b-0">
-                                  <div className="p-2">
-                                    <h1 className="font-bold text-xl tracking-widest uppercase mb-1">Toyota</h1>
-                                    <h2 className="font-semibold text-[10px] uppercase">Motor Corporation</h2>
-                                    <p className="text-[9px] italic mt-1 text-gray-700">For candidates with one year experience and above</p>
-                                  </div>
-                                  <div className="border-l-2 border-black flex flex-col w-40 text-xs">
-                                    <div className="border-b-2 border-black p-1 text-center font-bold tracking-wide">Series B</div>
-                                    <div className="border-b-2 border-black p-1 text-center font-bold text-[10px] tracking-wide">Version 2020.1</div>
-                                    <div className="border-b-2 border-black p-1 font-medium flex justify-between"><span>Date:</span> <span className="underline decoration-dashed underline-offset-4 text-gray-800 flex-1 ml-1 text-right">{format(new Date(), 'dd/MM/yyyy')}</span></div>
-                                    <div className="p-1 font-medium flex justify-between"><span>Time:</span> <span className="underline decoration-dashed underline-offset-4 text-gray-800 flex-1 ml-1 text-right">{format(new Date(), 'HH:mm')}</span></div>
-                                  </div>
-                                </div>
-
-                                <div className="border-2 border-black border-b-0 p-1 text-center font-bold uppercase tracking-widest text-xs ">
-                                  Human Resources Department
-                                </div>
-
-                                <div className="border-2 border-black border-b-0 p-2 text-xs flex flex-col gap-2">
-                                  <div className="flex items-end">
-                                    <span className="w-32 font-semibold">Name of the Candidate:</span>
-                                    <span className="flex-1 border-b-2 border-black text-sm pl-2 pb-0.5 text-blue-900" style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif' }}>{candidate.full_name}</span>
-                                  </div>
-                                  <div className="flex items-end">
-                                    <span className="w-32 font-semibold">Position Applied For:</span>
-                                    <span className="flex-1 border-b-2 border-black text-sm pl-2 pb-0.5 text-blue-900" style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif' }}>{candidate.position_applied_for}</span>
-                                  </div>
-                                </div>
-
-                                <div className="border-2 border-black p-1 text-center font-bold uppercase tracking-widest text-xs ">
-                                  Question Paper - {candidate.position_applied_for || 'Call Centre'}
-                                </div>
-
-                                {/* Questions Table */}
-                                {loadingQuestions ? (
-                                  <div className="flex justify-center py-12 border-x-2 border-b-2 border-black"><LoadingSpinner size="md" /></div>
-                                ) : technicalQuestions?.length === 0 ? (
-                                  <div className="text-center py-12 border-x-2 border-b-2 border-black text-gray-500 font-semibold">No questions found.</div>
-                                ) : (
-                                  <table className="w-full border-collapse border-2 border-t-0 border-black text-sm">
-                                    <thead>
-                                      <tr>
-                                        <th className="border-2 border-t-0 border-black w-8 p-0"></th>
-                                        <th className="border-2 border-t-0 border-black p-0"></th>
-                                        <th className="border-2 border-t-0 border-black w-12 text-center text-[10px] p-1 leading-tight">Max.<br />Marks</th>
-                                        <th className="border-2 border-t-0 border-black w-14 text-center text-[10px] p-1 leading-tight">Marks<br />Obtained</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {technicalQuestions?.map((q, idx) => {
-                                        const submittedAns = ev.scores?.candidate_answers?.[q.id];
-                                        return (
-                                          <tr key={q.id || idx}>
-                                            <td className="border-2 border-black text-center align-top py-1.5 text-xs font-semibold text-gray-800">{idx + 1}</td>
-                                            <td className="border-2 border-black p-0 align-top">
-                                              <div className="border-b-2 border-black p-1.5 text-[13px] font-bold text-gray-900 leading-snug">
-                                                {q.text}
-                                              </div>
-                                              <div className="p-1.5 min-h-[2.5rem] text-gray-800 flex flex-col justify-center">
-                                                {q.options && Object.keys(q.options).length > 0 ? (
-                                                  <div className="flex flex-col gap-1.5">
-                                                    {Object.entries(q.options).map(([key, val]) => (
-                                                      <div key={key} className={cn("flex gap-1.5 text-[11px]", submittedAns === key ? "font-bold text-black" : "")}>
-                                                        <span className="font-semibold w-4">{key}.</span>
-                                                        <span>{val as React.ReactNode}</span>
-                                                        {submittedAns === key && (
-                                                          <span className="ml-1 italic text-green-700 font-bold text-sm leading-none align-middle" style={{ transform: 'rotate(-10deg)', display: 'inline-block' }}>✓</span>
-                                                        )}
-                                                      </div>
-                                                    ))}
-                                                  </div>
-                                                ) : (
-                                                  <div className="text-gray-500 italic h-6 flex items-end">
-                                                    {submittedAns ? <span className="text-blue-900 font-semibold text-sm leading-none block border-b border-dashed border-gray-400 w-full pb-0.5" style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif' }}>{submittedAns}</span> : ""}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </td>
-                                            <td className="border-2 border-black text-center align-middle font-bold text-[13px] text-gray-800">1</td>
-                                            <td className="border-2 border-black text-center align-middle relative">
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                )}
-                              </div>
-                            </div>
-                          ) : ev.scheduled_time && !schedulingId && !remarksId ? (
-                            <div className="mt-5 p-4 bg-background border border-border rounded-xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 shadow-sm">
-                              <div className="grid grid-cols-2 md:grid-cols-3 gap-6 flex-1 w-full">
-                                {/* Date */}
-                                <div className="flex flex-col">
-                                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Scheduled Date</span>
-                                  <div className="text-sm font-bold text-foreground">
-                                    {format(new Date(ev.scheduled_time), 'MMM dd, yyyy')}
-                                  </div>
-                                </div>
-
-                                {/* Time */}
-                                <div className="flex flex-col">
-                                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Time</span>
-                                  <div className="text-sm font-bold text-foreground">
-                                    {format(new Date(ev.scheduled_time), 'hh:mm a')}
-                                  </div>
-                                </div>
-
-                                {/* Location */}
-                                <div className="flex flex-col col-span-2 md:col-span-1">
-                                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-                                    {ev.interview_mode === 'ONLINE' ? 'Meeting Link' : 'Location'}
-                                  </span>
-                                  <div className="text-sm font-bold text-foreground truncate max-w-full" title={ev.location_or_link || ''}>
-                                    {ev.location_or_link ? (
-                                      ev.interview_mode === 'ONLINE' ? (
-                                        <a href={ev.location_or_link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline transition-colors truncate block">
-                                          {ev.location_or_link}
-                                        </a>
-                                      ) : (
-                                        ev.location_or_link
-                                      )
-                                    ) : (
-                                      <span className="text-muted-foreground/50 font-medium">TBD</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Action Buttons */}
-                              <div className="flex items-center gap-3 w-full xl:w-auto pt-4 xl:pt-0 border-t border-border/50 xl:border-none justify-end">
-                                <button type="button" onClick={() => handleCopyLink(ev.id)} className="flex flex-1 xl:flex-none justify-center items-center gap-2 px-4 py-2 text-sm font-semibold text-foreground hover:bg-muted rounded-lg transition-colors border border-border shadow-sm">
-                                  {copiedId === ev.id ? <CheckCircle className="w-4 h-4 text-success" /> : <Link className="w-4 h-4" />}
-                                  {copiedId === ev.id ? 'Copied' : 'Copy'}
-                                </button>
-                                <button type="button" onClick={() => openShareModal(ev)} className="flex flex-1 xl:flex-none justify-center items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-[#075E54] hover:bg-[#064c44] rounded-lg transition-colors shadow-sm">
-                                  <img src="/whatsapp.webp" alt="WhatsApp" className="w-4 h-4 object-contain" /> Send Invite
-                                </button>
-                                <button type="button" onClick={() => setCancelConfirmId(ev.id)} className="flex flex-none justify-center items-center p-2 text-danger/80 hover:text-danger hover:bg-danger/10 rounded-lg transition-colors" title="Cancel Schedule">
-                                  <XCircle className="w-5 h-5" />
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            !schedulingId && !remarksId && (
-                              <div className="flex flex-col items-center justify-center py-10 px-4 mt-6 bg-muted/20 border border-dashed border-border/60 rounded-2xl">
-                                <Calendar className="w-10 h-10 text-muted-foreground/30 mb-3" />
-                                <h3 className="text-base font-bold text-muted-foreground mb-1">Not scheduled yet</h3>
-                                <p className="text-sm text-muted-foreground/60 text-center max-w-sm">
-                                  Click the "Schedule" button above to set the date, time, and location for this evaluation.
-                                </p>
-                              </div>
-                            )
-                          )}
-                        </>
+                        !schedulingId && !remarksId && (
+                          <div className="flex flex-col items-center justify-center py-10 px-4 mt-6 bg-muted/20 border border-dashed border-border/60 rounded-2xl">
+                            <Calendar className="w-10 h-10 text-muted-foreground/30 mb-3" />
+                            <h3 className="text-base font-bold text-muted-foreground mb-1">Not scheduled yet</h3>
+                            <p className="text-sm text-muted-foreground/60 text-center max-w-sm">
+                              Click the "Schedule" button above to set the date, time, and location for this evaluation.
+                            </p>
+                          </div>
+                        )
                       )}
-                    </div>
+                    </>
+                  )}
+                </div>
 
-                    {/* Scheduling Forms */}
-                    <div className="mt-3">
-                      <AnimatePresence mode="wait">
-                        {schedulingId === ev.id && (
-                          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="space-y-4 pt-4 border-t border-border mt-4">
-                            <h4 className="font-bold text-sm uppercase tracking-wider text-foreground">Schedule Details</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                              <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Mode</label>
-                                <div className="flex bg-muted/40 p-1 rounded-xl border border-border/50 relative">
-                                  <button
-                                    type="button"
-                                    onClick={() => setMode('PHYSICAL')}
-                                    className={cn(
-                                      "flex-1 py-2 px-3 text-sm font-bold rounded-lg transition-colors relative z-10",
-                                      mode === 'PHYSICAL' ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                                    )}
-                                  >
-                                    {mode === 'PHYSICAL' && (
-                                      <motion.div layoutId={`mode-bg-${ev.id}`} className="absolute inset-0 bg-primary rounded-lg shadow-md border border-border/50" style={{ zIndex: -1 }} transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
-                                    )}
-                                    {ev.type === 'TECHNICAL_TEST' ? 'Physical / Paper' : 'Physical / Walk-in'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setMode('ONLINE')}
-                                    className={cn(
-                                      "flex-1 py-2 px-3 text-sm font-bold rounded-lg transition-colors relative z-10",
-                                      mode === 'ONLINE' ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                                    )}
-                                  >
-                                    {mode === 'ONLINE' && (
-                                      <motion.div layoutId={`mode-bg-${ev.id}`} className="absolute inset-0 bg-primary rounded-lg shadow-md border border-border/50" style={{ zIndex: -1 }} transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
-                                    )}
-                                    {ev.type === 'TECHNICAL_TEST' ? 'Online Exam Link' : 'Online Meeting'}
-                                  </button>
-                                </div>
-                              </div>
-                              <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Date & Time</label>
-                                <input type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-background border border-border rounded-xl p-3 focus:ring-2 focus:ring-primary/20 transition-all text-foreground font-medium" />
-                              </div>
-                              <div className="sm:col-span-2">
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                                    {mode === 'ONLINE' ? (ev.type === 'TECHNICAL_TEST' ? 'Exam Link URL' : 'Google Meet / Zoom Link') : (ev.type === 'TECHNICAL_TEST' ? 'Location (if any)' : 'Location Room/Cabin')}
-                                  </label>
-                                  {mode === 'ONLINE' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => generateRandomMeetLink('schedule')}
-                                      className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary/80 transition-colors bg-primary/5 hover:bg-primary/10 px-2 py-1 rounded-md"
-                                    >
-                                      <Video className="w-3.5 h-3.5" /> Auto-generate Meet
-                                    </button>
-                                  )}
-                                </div>
-                                <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder={mode === 'ONLINE' ? 'https://meet.google.com/...' : 'Conference Room A'} className="w-full bg-background border border-border rounded-xl p-3 focus:ring-2 focus:ring-primary/20 transition-all text-foreground" />
-                              </div>
-                              <div className="sm:col-span-2">
-                                <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Assign Interviewer</label>
-                                <select
-                                  value={interviewerId}
-                                  onChange={(e) => setInterviewerId(e.target.value)}
-                                  className="w-full bg-background border border-border rounded-xl p-3 focus:ring-2 focus:ring-primary/20 transition-all text-foreground font-medium"
+                {/* Scheduling Forms */}
+                <div className="mt-3">
+                  <AnimatePresence mode="wait">
+                    {schedulingId === ev.id && (
+                      <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="space-y-4 pt-4 border-t border-border mt-4">
+                        <h4 className="font-bold text-sm uppercase tracking-wider text-foreground">Schedule Details</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Mode</label>
+                            <div className="flex bg-muted/40 p-1 rounded-xl border border-border/50 relative">
+                              <button
+                                type="button"
+                                onClick={() => setMode('PHYSICAL')}
+                                className={cn(
+                                  "flex-1 py-2 px-3 text-sm font-bold rounded-lg transition-colors relative z-10",
+                                  mode === 'PHYSICAL' ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                                )}
+                              >
+                                {mode === 'PHYSICAL' && (
+                                  <motion.div layoutId={`mode-bg-${ev.id}`} className="absolute inset-0 bg-primary rounded-lg shadow-md border border-border/50" style={{ zIndex: -1 }} transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
+                                )}
+                                {ev.type === 'TECHNICAL_TEST' ? 'Physical / Paper' : 'Physical / Walk-in'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setMode('ONLINE')}
+                                className={cn(
+                                  "flex-1 py-2 px-3 text-sm font-bold rounded-lg transition-colors relative z-10",
+                                  mode === 'ONLINE' ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                                )}
+                              >
+                                {mode === 'ONLINE' && (
+                                  <motion.div layoutId={`mode-bg-${ev.id}`} className="absolute inset-0 bg-primary rounded-lg shadow-md border border-border/50" style={{ zIndex: -1 }} transition={{ type: "spring", bounce: 0.2, duration: 0.6 }} />
+                                )}
+                                {ev.type === 'TECHNICAL_TEST' ? 'Online Exam Link' : 'Online Meeting'}
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Date & Time</label>
+                            <input type="datetime-local" value={time} onChange={(e) => setTime(e.target.value)} className="w-full bg-background border border-border rounded-xl p-3 focus:ring-2 focus:ring-primary/20 transition-all text-foreground font-medium" />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                {mode === 'ONLINE' ? (ev.type === 'TECHNICAL_TEST' ? 'Exam Link URL' : 'Google Meet / Zoom Link') : (ev.type === 'TECHNICAL_TEST' ? 'Location (if any)' : 'Location Room/Cabin')}
+                              </label>
+                              {mode === 'ONLINE' && (
+                                <button
+                                  type="button"
+                                  onClick={() => generateRandomMeetLink('schedule')}
+                                  className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary/80 transition-colors bg-primary/5 hover:bg-primary/10 px-2 py-1 rounded-md"
                                 >
-                                  <option value="">-- Select Interviewer --</option>
-                                  {allUsers.map((u) => (
-                                    <option key={u.id} value={u.id}>
-                                      {u.full_name} ({u.role.replace(/_/g, ' ')}) {u.department ? `- ${u.department}` : ''}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
+                                  <Video className="w-3.5 h-3.5" /> Auto-generate Meet
+                                </button>
+                              )}
                             </div>
-                            <div className="flex gap-3 justify-end pt-2 border-t border-border/50">
-                              <Button variant="ghost" onClick={() => setSchedulingId(null)} className="font-semibold">Cancel</Button>
-                              <Button variant="primary" onClick={() => handleSchedule(ev.id)} isLoading={submitting} className="font-bold shadow-sm px-6">Save Schedule</Button>
+                            <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder={mode === 'ONLINE' ? 'https://meet.google.com/...' : 'Conference Room A'} className="w-full bg-background border border-border rounded-xl p-3 focus:ring-2 focus:ring-primary/20 transition-all text-foreground" />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Assign Interviewer</label>
+                            <select
+                              value={interviewerId}
+                              onChange={(e) => setInterviewerId(e.target.value)}
+                              className="w-full bg-background border border-border rounded-xl p-3 focus:ring-2 focus:ring-primary/20 transition-all text-foreground font-medium"
+                            >
+                              <option value="">-- Select Interviewer --</option>
+                              {allUsers.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.full_name} ({u.role.replace(/_/g, ' ')}) {u.department ? `- ${u.department}` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex gap-3 justify-end pt-2 border-t border-border/50">
+                          <Button variant="ghost" onClick={() => setSchedulingId(null)} className="font-semibold">Cancel</Button>
+                          <Button variant="primary" onClick={() => handleSchedule(ev.id)} isLoading={submitting} className="font-bold shadow-sm px-6">Save Schedule</Button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {remarksId === ev.id && (
+                      <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="space-y-3 pt-3 border-t border-border mt-3">
+                        <h4 className="font-bold text-[10px] uppercase text-foreground">Submit Scorecard Direct</h4>
+                        {ev.type === 'TECHNICAL_TEST' ? (
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Score %</label>
+                              <input type="number" min="0" max="100" value={testScore} onChange={(e) => setTestScore(e.target.value)} placeholder="80" className="w-full bg-background border border-border rounded-lg p-2" />
                             </div>
-                          </motion.div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Verdict</label>
+                              <select value={testVerdict} onChange={(e) => setTestVerdict(e.target.value as EvaluationVerdict)} className="w-full bg-background border border-border rounded-lg p-2">
+                                <option value="PASS">Pass</option>
+                                <option value="FAIL">Fail</option>
+                              </select>
+                            </div>
+                            <div className="col-span-2">
+                              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Remarks</label>
+                              <textarea value={testRemarks} onChange={(e) => setTestRemarks(e.target.value)} placeholder="Technical test notes..." className="w-full min-h-[60px] bg-background border border-border rounded-lg p-2 resize-y" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-3">
+                              <StarInput label="Communication" val={commScore} setVal={setCommScore} />
+                              <StarInput label="Technical" val={techScore} setVal={setTechScore} />
+                              <StarInput label="Experience" val={expScore} setVal={setExpScore} />
+                              <StarInput label="Culture Fit" val={fitScore} setVal={setFitScore} />
+                            </div>
+
+                            <div className="h-px w-full bg-border" />
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-2">Remarks & Key Takeaways</label>
+                              <textarea value={remarksText} onChange={(e) => setRemarksText(e.target.value)} placeholder="Summary of interview..." className="w-full min-h-[80px] bg-background border border-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary/20 resize-y transition-all" />
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-3 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => setVerdict('SELECTED')}
+                                className={cn(
+                                  "flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg font-bold text-xs transition-all border",
+                                  verdict === 'SELECTED'
+                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-600/30"
+                                    : "bg-background text-foreground border-border hover:bg-emerald-50 hover:border-emerald-200 dark:hover:bg-emerald-900/20"
+                                )}
+                              >
+                                <CheckCircle2 className="w-4 h-4" /> Selected
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setVerdict('ON_HOLD')}
+                                className={cn(
+                                  "flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg font-bold text-xs transition-all border",
+                                  verdict === 'ON_HOLD'
+                                    ? "bg-amber-500 text-white border-amber-500 shadow-md ring-2 ring-amber-500/30"
+                                    : "bg-background text-foreground border-border hover:bg-amber-50 hover:border-amber-200 dark:hover:bg-amber-900/20"
+                                )}
+                              >
+                                <Clock className="w-4 h-4" /> Hold
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setVerdict('REJECTED')}
+                                className={cn(
+                                  "flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg font-bold text-xs transition-all border",
+                                  verdict === 'REJECTED'
+                                    ? "bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-600/30"
+                                    : "bg-background text-foreground border-border hover:bg-rose-50 hover:border-rose-200 dark:hover:bg-rose-900/20"
+                                )}
+                              >
+                                <XCircle className="w-4 h-4" /> Reject
+                              </button>
+                            </div>
+                          </div>
                         )}
-
-                        {remarksId === ev.id && (
-                          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="space-y-3 pt-3 border-t border-border mt-3">
-                            <h4 className="font-bold text-[10px] uppercase text-foreground">Submit Scorecard Direct</h4>
-                            {ev.type === 'TECHNICAL_TEST' ? (
-                              <div className="grid grid-cols-2 gap-3 text-xs">
-                                <div>
-                                  <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Score %</label>
-                                  <input type="number" min="0" max="100" value={testScore} onChange={(e) => setTestScore(e.target.value)} placeholder="80" className="w-full bg-background border border-border rounded-lg p-2" />
-                                </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Verdict</label>
-                                  <select value={testVerdict} onChange={(e) => setTestVerdict(e.target.value as EvaluationVerdict)} className="w-full bg-background border border-border rounded-lg p-2">
-                                    <option value="PASS">Pass</option>
-                                    <option value="FAIL">Fail</option>
-                                  </select>
-                                </div>
-                                <div className="col-span-2">
-                                  <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Remarks</label>
-                                  <textarea value={testRemarks} onChange={(e) => setTestRemarks(e.target.value)} placeholder="Technical test notes..." className="w-full min-h-[60px] bg-background border border-border rounded-lg p-2 resize-y" />
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-3">
-                                  <StarInput label="Communication" val={commScore} setVal={setCommScore} />
-                                  <StarInput label="Technical" val={techScore} setVal={setTechScore} />
-                                  <StarInput label="Experience" val={expScore} setVal={setExpScore} />
-                                  <StarInput label="Culture Fit" val={fitScore} setVal={setFitScore} />
-                                </div>
-
-                                <div className="h-px w-full bg-border" />
-
-                                <div>
-                                  <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-2">Remarks & Key Takeaways</label>
-                                  <textarea value={remarksText} onChange={(e) => setRemarksText(e.target.value)} placeholder="Summary of interview..." className="w-full min-h-[80px] bg-background border border-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary/20 resize-y transition-all" />
-                                </div>
-
-                                <div className="grid grid-cols-3 gap-3 pt-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => setVerdict('SELECTED')}
-                                    className={cn(
-                                      "flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg font-bold text-xs transition-all border",
-                                      verdict === 'SELECTED'
-                                        ? "bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-600/30"
-                                        : "bg-background text-foreground border-border hover:bg-emerald-50 hover:border-emerald-200 dark:hover:bg-emerald-900/20"
-                                    )}
-                                  >
-                                    <CheckCircle2 className="w-4 h-4" /> Selected
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setVerdict('ON_HOLD')}
-                                    className={cn(
-                                      "flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg font-bold text-xs transition-all border",
-                                      verdict === 'ON_HOLD'
-                                        ? "bg-amber-500 text-white border-amber-500 shadow-md ring-2 ring-amber-500/30"
-                                        : "bg-background text-foreground border-border hover:bg-amber-50 hover:border-amber-200 dark:hover:bg-amber-900/20"
-                                    )}
-                                  >
-                                    <Clock className="w-4 h-4" /> Hold
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setVerdict('REJECTED')}
-                                    className={cn(
-                                      "flex flex-col items-center justify-center gap-1.5 py-3 rounded-lg font-bold text-xs transition-all border",
-                                      verdict === 'REJECTED'
-                                        ? "bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-600/30"
-                                        : "bg-background text-foreground border-border hover:bg-rose-50 hover:border-rose-200 dark:hover:bg-rose-900/20"
-                                    )}
-                                  >
-                                    <XCircle className="w-4 h-4" /> Reject
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                            <div className="flex gap-2 justify-end pt-1">
-                              <Button variant="ghost" size="sm" onClick={() => setRemarksId(null)}>Cancel</Button>
-                              <Button variant="primary" size="sm" onClick={() => handleSubmitScorecard(ev.id, ev.type === 'TECHNICAL_TEST')} isLoading={submitting}>Submit</Button>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </motion.div>
-                );
-              })}
+                        <div className="flex gap-2 justify-end pt-1">
+                          <Button variant="ghost" size="sm" onClick={() => setRemarksId(null)}>Cancel</Button>
+                          <Button variant="primary" size="sm" onClick={() => handleSubmitScorecard(ev.id, ev.type === 'TECHNICAL_TEST')} isLoading={submitting}>Submit</Button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            );
+          })}
           </AnimatePresence>
         </div>
       </div>
@@ -981,27 +973,27 @@ export function EvaluationStageWidget({
                       <h4 className="text-xs font-bold text-foreground mb-3 uppercase tracking-wider">Scheduled Interview Details</h4>
                       <div className="bg-muted/20 border border-border/60 rounded-xl p-4 flex flex-col gap-4">
                         <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Date</span>
-                            <span className="text-sm font-semibold text-foreground">
-                              {shareEval?.scheduled_time ? format(new Date(shareEval.scheduled_time), 'MMM dd, yyyy') : 'TBD'}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Time</span>
-                            <span className="text-sm font-semibold text-foreground">
-                              {shareEval?.scheduled_time ? format(new Date(shareEval.scheduled_time), 'hh:mm a') : 'TBD'}
-                            </span>
-                          </div>
+                           <div>
+                             <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Date</span>
+                             <span className="text-sm font-semibold text-foreground">
+                               {shareEval?.scheduled_time ? new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).format(new Date(shareEval.scheduled_time)) : 'TBD'}
+                             </span>
+                           </div>
+                           <div>
+                             <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Time</span>
+                             <span className="text-sm font-semibold text-foreground">
+                               {shareEval?.scheduled_time ? new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date(shareEval.scheduled_time)).toLowerCase() : 'TBD'}
+                             </span>
+                           </div>
                         </div>
                         <div>
-                          <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                            {shareEval?.interview_mode === 'ONLINE' ? 'Meeting Link' : 'Location'}
-                            <span className="text-muted-foreground ml-1 font-normal capitalize">({shareEval?.interview_mode?.toLowerCase() || 'Walk-in'})</span>
-                          </span>
-                          <span className="text-sm font-semibold text-foreground break-all">
-                            {shareEval?.location_or_link || 'TBD'}
-                          </span>
+                             <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
+                               {shareEval?.interview_mode === 'ONLINE' ? 'Meeting Link' : 'Location'} 
+                               <span className="text-muted-foreground ml-1 font-normal capitalize">({shareEval?.interview_mode?.toLowerCase() || 'Walk-in'})</span>
+                             </span>
+                             <span className="text-sm font-semibold text-foreground break-all">
+                               {shareEval?.location_or_link || 'TBD'}
+                             </span>
                         </div>
                       </div>
                     </div>
@@ -1069,8 +1061,8 @@ export function EvaluationStageWidget({
                           try {
                             const parsedDate = new Date(`${shareDate}T${shareTime}`);
                             if (!isNaN(parsedDate.getTime())) {
-                              dStr = format(parsedDate, 'dd MMM yyyy');
-                              tStr = format(parsedDate, 'h:mm a');
+                              dStr = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(parsedDate);
+                              tStr = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(parsedDate).toLowerCase();
                             }
                           } catch (e) { }
                         }
@@ -1078,8 +1070,8 @@ export function EvaluationStageWidget({
                         const targetName = recipientType === 'INTERVIEWER' ? (interviewerName || 'Interviewer') : candidate.full_name;
                         const finalLink = recipientType === 'INTERVIEWER' ? 'https://recruitment.nippontoyota.com/#/eval/token-xyz' : (shareLocation || 'TBD');
 
-                        const previewMessage = recipientType === 'INTERVIEWER' ?
-                          `Dear *${targetName}*,
+                        const previewMessage = recipientType === 'INTERVIEWER' ? 
+`Dear *${targetName}*,
 
 An interview has been scheduled for candidate *${candidate.full_name}* for the position of *${candidate.position_applied_for || 'Unknown Position'}*.
 
@@ -1093,9 +1085,9 @@ Please use the secure link below to access the candidate's profile and submit yo
 
 Best Regards,
 *${recruiterName || 'HR Team'}*
-Nippon Toyota`
-                          :
-                          `Dear *${targetName}*,
+Nippon Toyota` 
+: 
+`Dear *${targetName}*,
 
 We are pleased to invite you for an interview at Nippon Toyota for the position of *${candidate.position_applied_for || 'Unknown Position'}*.
 
@@ -1125,7 +1117,7 @@ Nippon Toyota`;
                       })()}
                     </div>
                     <div className="absolute bottom-0.5 right-1.5 flex items-center gap-0.5">
-                      <p className="text-[8px] text-[#667781] whitespace-nowrap">{format(new Date(), 'h:mm a')}</p>
+                      <p className="text-[8px] text-[#667781] whitespace-nowrap">{new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date()).toLowerCase()}</p>
                       <CheckCheck className="h-[10px] w-[10px] text-[#34B7F1]" strokeWidth={2.5} />
                     </div>
                   </div>

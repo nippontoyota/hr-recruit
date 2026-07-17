@@ -167,12 +167,16 @@ def generate_evaluation_token(
     if not evaluation:
         raise HTTPException(status_code=404, detail="Evaluation not found")
         
-    # Mark old tokens for this evaluation as used/expired
-    old_tokens = db.scalars(
-        select(EvaluationToken).where(EvaluationToken.evaluation_id == eval_id)
-    ).all()
-    for t in old_tokens:
-        t.is_used = True
+    # Reuse existing active token if present
+    existing_token = db.scalar(
+        select(EvaluationToken).where(
+            EvaluationToken.evaluation_id == eval_id,
+            EvaluationToken.is_used.is_(False),
+            EvaluationToken.expires_at > datetime.now(UTC)
+        )
+    )
+    if existing_token:
+        return existing_token
 
     token_str = generate_secure_token()
     
@@ -325,10 +329,24 @@ def get_public_evaluation_details(
     ).all()
     
     previous_remarks = []
+    
+    # 1. Fetch HR screening remarks (Chronologically first)
+    from app.models.candidate_screening import CandidateScreening
+    screening = db.scalar(
+        select(CandidateScreening).where(CandidateScreening.candidate_id == candidate.id)
+    )
+    if screening and screening.remarks:
+        previous_remarks.append({
+            "type": "HR_SCREENING",
+            "verdict": screening.status.value if hasattr(screening.status, 'value') else screening.status,
+            "remarks": screening.remarks
+        })
+
+    # 2. Append prior evaluation stage remarks
     for pe in prior_evals:
         previous_remarks.append({
-            "type": pe.type.value if pe.type else "EVALUATION",
-            "verdict": pe.verdict.value if pe.verdict else None,
+            "type": pe.type.value if hasattr(pe.type, 'value') else (pe.type or "EVALUATION"),
+            "verdict": pe.verdict.value if hasattr(pe.verdict, 'value') else pe.verdict,
             "remarks": pe.remarks or ""
         })
         
@@ -350,6 +368,7 @@ def get_public_evaluation_details(
         candidate_current_salary=candidate.profile.raw_data.get("currentSalary", "") if candidate.profile and candidate.profile.raw_data else "",
         candidate_expected_salary=candidate.profile.raw_data.get("expectedSalary", "") if candidate.profile and candidate.profile.raw_data else "",
         candidate_notice_period=candidate.profile.raw_data.get("noticePeriod", "") if candidate.profile and candidate.profile.raw_data else "",
+        candidate_raw_data=candidate.profile.raw_data if candidate.profile else None,
         previous_remarks=previous_remarks,
         is_already_submitted=is_already_submitted
     )

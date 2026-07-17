@@ -65,6 +65,7 @@ class EvaluationPublicOut(BaseModel):
     candidate_current_salary: str | None = None
     candidate_expected_salary: str | None = None
     candidate_notice_period: str | None = None
+    candidate_raw_data: dict | None = None
     previous_remarks: list[dict] = []
     is_already_submitted: bool = False
 

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Send, CheckCheck, Smile, Paperclip, Camera, Video, Phone, MoreVertical, ArrowLeft, Pencil, MapPin, Calendar, Clock } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { sendHRInterviewInvite } from '../../api/candidates';
 import type { Candidate, InterviewMode } from '../../types';
@@ -39,9 +38,9 @@ export function HRInterviewWhatsAppPreview({
 
 
 
-  const parsedDate = scheduledTime ? parseISO(scheduledTime) : null;
-  const dateStr = parsedDate && !isNaN(parsedDate.getTime()) ? format(parsedDate, 'dd MMM yyyy') : 'TBD';
-  const timeStr = parsedDate && !isNaN(parsedDate.getTime()) ? format(parsedDate, 'h:mm a') : 'TBD';
+  const parsedDate = scheduledTime ? new Date(scheduledTime) : null;
+  const dateStr = parsedDate && !isNaN(parsedDate.getTime()) ? new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(parsedDate) : 'TBD';
+  const timeStr = parsedDate && !isNaN(parsedDate.getTime()) ? new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(parsedDate).toLowerCase() : 'TBD';
   const defaultMode = interviewMode === 'PHYSICAL' ? 'Walk-in' : (interviewMode === 'ONLINE' ? 'Online' : 'TBD');
 
   // Text overrides for WhatsApp message
@@ -128,7 +127,7 @@ Nippon Toyota`;
     } else {
       // If time is changed but no date is set, we can't form a valid datetime-local string
       // Just temporarily keep it in a state or ignore it. Let's force date today if they pick time first
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const today = new Date().toLocaleDateString('en-CA');
       setScheduledTime(`${today}T${val}`);
     }
   };
@@ -197,7 +196,7 @@ Nippon Toyota`;
                 ))}
               </div>
               <div className="absolute bottom-1 right-2 flex items-center gap-1">
-                <p className="text-[10px] text-[#667781] whitespace-nowrap">{format(new Date(), 'h:mm a')}</p>
+                <p className="text-[10px] text-[#667781] whitespace-nowrap">{new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date()).toLowerCase()}</p>
                 <CheckCheck className="h-[15px] w-[15px] text-[#34B7F1]" strokeWidth={2.5} />
               </div>
             </div>

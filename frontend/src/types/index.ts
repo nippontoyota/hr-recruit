@@ -164,6 +164,7 @@ export interface EvaluationPublicDetails {
   candidate_current_salary?: string;
   candidate_expected_salary?: string;
   candidate_notice_period?: string;
+  candidate_raw_data?: Record<string, any>;
   previous_remarks: Array<{
     type: string;
     verdict?: string;

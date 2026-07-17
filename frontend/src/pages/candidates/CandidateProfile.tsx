@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
 import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History, Printer } from 'lucide-react';
-import { getCandidateById, updateCandidateStage, unholdCandidate } from '../../api/candidates';
+import { getCandidateById, updateCandidateStage, unholdCandidate, getScreening } from '../../api/candidates';
+import { getCandidateEvaluations } from '../../api/evaluations';
 import type { Candidate, PipelineStage } from '../../types';
 import { toast } from 'sonner';
 import { validateRejectRemarks } from '../../lib/validation';
@@ -24,13 +25,21 @@ const LINEAR_STAGES: PipelineStage[] = [
 ];
 
 
+// Simple global cache to allow stale-while-revalidate (instant loading)
+const profileCache: Record<string, Candidate> = {};
+
 export default function CandidateProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [candidate, setCandidate] = useState<Candidate | null>(null);
-  const [initialLoading, setInitialLoading] = useState(true);
+  
+  const cachedCandidate = id ? profileCache[id] : null;
+  const [candidate, setCandidate] = useState<Candidate | null>(cachedCandidate);
+  const [initialLoading, setInitialLoading] = useState(!cachedCandidate);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [evaluations, setEvaluations] = useState<any[]>([]);
+  const [screening, setScreening] = useState<any>(null);
 
 
 
@@ -40,6 +49,7 @@ export default function CandidateProfile() {
   const [resumeStage, setResumeStage] = useState<PipelineStage>('SCREENING');
   const [isResuming, setIsResuming] = useState(false);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
+  const [viewedStage, setViewedStage] = useState<PipelineStage | null>(null);
 
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -56,16 +66,23 @@ export default function CandidateProfile() {
   const fetchCandidate = async (showLoading = true) => {
     if (!id) return;
     try {
-      if (showLoading) {
-        if (!candidate) {
-          setInitialLoading(true);
-        } else {
-          setIsUpdating(true);
-        }
+      if (showLoading && !profileCache[id]) {
+        setInitialLoading(true);
+      } else if (showLoading) {
+        setIsUpdating(true);
       }
-      const res = await getCandidateById(id);
+      
+      const [res, evals, screen] = await Promise.all([
+        getCandidateById(id),
+        getCandidateEvaluations(id).catch(() => []),
+        getScreening(id).catch(() => null)
+      ]);
+      
       if (res) {
+        profileCache[id] = res;
         setCandidate(res);
+        setEvaluations(evals);
+        setScreening(screen);
       } else {
         setError('Candidate not found.');
       }
@@ -105,17 +122,27 @@ export default function CandidateProfile() {
   };
 
   const handleStageClick = async (clickedStage: PipelineStage) => {
-    if (!candidate || candidate.current_stage === clickedStage) return;
+    if (!candidate) return;
     // Prevent accidentally navigating into side/terminal states via the stepper
     if (clickedStage === 'REJECTED' || clickedStage === 'ON_HOLD' || clickedStage === 'HIRED') return;
     
-    setIsUpdating(true);
-    try {
-      await updateCandidateStage(candidate.id, clickedStage, '');
-      handleUpdate();
-    } catch (err: any) {
-      toast.error(extractError(err, 'Failed to update stage.'));
-      setIsUpdating(false);
+    const currentIdx = LINEAR_STAGES.indexOf(candidate.current_stage);
+    const clickedIdx = LINEAR_STAGES.indexOf(clickedStage);
+
+    // Always update the viewed tab
+    setViewedStage(clickedStage);
+
+    // Only update the database if we are moving FORWARD in the pipeline
+    if (clickedIdx > currentIdx) {
+      setIsUpdating(true);
+      try {
+        await updateCandidateStage(candidate.id, clickedStage, '');
+        handleUpdate();
+      } catch (err: any) {
+        toast.error(extractError(err, 'Failed to update stage.'));
+      } finally {
+        setIsUpdating(false);
+      }
     }
   };
 
@@ -166,23 +193,76 @@ export default function CandidateProfile() {
   }
 
 
-  const stage = candidate.current_stage;
-  const showWhatsAppSidebar = stage === 'CANDIDATE_FORM' && candidate.pre_form_status !== 'SUBMITTED';
+  const actualStage = candidate.current_stage;
+  const stageToView = viewedStage || actualStage;
+  const showWhatsAppSidebar = stageToView === 'CANDIDATE_FORM' && candidate.pre_form_status !== 'SUBMITTED';
 
   const stepperStages = LINEAR_STAGES.filter((s): s is Exclude<PipelineStage, 'HIRED'> => s !== 'HIRED');
-  const currentIdx = stepperStages.findIndex((s) => s === stage);
-  const isPrevDisabled = currentIdx <= 0 || isUpdating;
-  const isNextDisabled = currentIdx === -1 || currentIdx >= stepperStages.length - 1 || isUpdating;
+  const viewedIdx = stepperStages.findIndex((s) => s === stageToView);
+  const isPrevDisabled = viewedIdx <= 0 || isUpdating;
+  const isNextDisabled = viewedIdx === -1 || viewedIdx >= stepperStages.length - 1 || isUpdating;
+
+  const completedStages: PipelineStage[] = [];
+  const skippedStages: PipelineStage[] = [];
+
+  if (candidate) {
+    // 1. SCREENING
+    if (screening && (screening.status === 'QUALIFIED' || screening.status === 'REJECTED')) {
+      completedStages.push('SCREENING');
+    }
+    
+    // 2. CANDIDATE_FORM
+    if (candidate.pre_form_status === 'SUBMITTED') {
+      completedStages.push('CANDIDATE_FORM');
+    }
+    
+    // 3. HR_INTERVIEW
+    const hrEval = evaluations.find(e => e.type === 'BRANCH_HR');
+    if (hrEval && hrEval.verdict) {
+      completedStages.push('HR_INTERVIEW');
+    }
+    
+    // 4. DEPARTMENT_INTERVIEW
+    const deptEval = evaluations.find(e => e.type === 'DEPT_HEAD');
+    if (deptEval && deptEval.verdict) {
+      completedStages.push('DEPARTMENT_INTERVIEW');
+    }
+    
+    // 5. BRANCH_EVALUATION
+    const gmEval = evaluations.find(e => e.type === 'GM_LEVEL');
+    if (gmEval && gmEval.verdict) {
+      completedStages.push('BRANCH_EVALUATION');
+    }
+    
+    // 6. FINAL_APPROVAL
+    const hqEval = evaluations.find(e => e.type === 'HQ_INTERVIEW');
+    if (hqEval && hqEval.verdict) {
+      completedStages.push('FINAL_APPROVAL');
+    }
+    
+    // 7. HIRED
+    if (candidate.current_stage === 'HIRED') {
+      completedStages.push('HIRED');
+    }
+
+    // A stage is skipped if it is not completed, but the candidate's current stage is past it in the linear sequence!
+    const currentIdx = LINEAR_STAGES.indexOf(candidate.current_stage);
+    LINEAR_STAGES.forEach((stage, idx) => {
+      if (idx < currentIdx && !completedStages.includes(stage)) {
+        skippedStages.push(stage);
+      }
+    });
+  }
 
   const handlePrevStep = () => {
-    if (!isPrevDisabled && currentIdx > 0) {
-      handleStageClick(stepperStages[currentIdx - 1]);
+    if (!isPrevDisabled && viewedIdx > 0) {
+      handleStageClick(stepperStages[viewedIdx - 1]);
     }
   };
 
   const handleNextStep = () => {
-    if (!isNextDisabled && currentIdx >= 0 && currentIdx < stepperStages.length - 1) {
-      handleStageClick(stepperStages[currentIdx + 1]);
+    if (!isNextDisabled && viewedIdx >= 0 && viewedIdx < stepperStages.length - 1) {
+      handleStageClick(stepperStages[viewedIdx + 1]);
     }
   };
 
@@ -214,15 +294,15 @@ export default function CandidateProfile() {
               <div className="flex-1 min-w-0 space-y-3">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h1 className="text-2xl font-bold tracking-tight text-foreground truncate">{candidate.full_name}</h1>
-                  <span className={cn('shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm', stageColor(stage))}>
-                    {stageLabel(stage)}
+                  <span className={cn('shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm', stageColor(actualStage))}>
+                    {stageLabel(actualStage)}
                   </span>
                   {candidate.is_duplicate_flagged && (
                     <span className="text-[10px] font-semibold text-warning bg-warning/10 border border-warning/20 px-2 py-0.5 rounded-md">
                       Duplicate
                     </span>
                   )}
-                  {stage === 'ON_HOLD' && (
+                  {actualStage === 'ON_HOLD' && (
                     <Button
                       size="sm"
                       onClick={async () => {
@@ -288,7 +368,7 @@ export default function CandidateProfile() {
                 >
                   <History className="w-4 h-4 text-muted-foreground" /> Activity Log
                 </Button>
-                {stage === 'FINAL_APPROVAL' && (
+                {actualStage === 'FINAL_APPROVAL' && (
                   <a
                     href={`/candidates/${candidate.id}/print`}
                     target="_blank"
@@ -321,7 +401,7 @@ export default function CandidateProfile() {
                     hasResume={candidate.has_resume}
                   />
                 )}
-                {stage !== 'REJECTED' && stage !== 'HIRED' && (
+                {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && (
                   <Button
                     variant="danger"
                     size="sm"
@@ -354,9 +434,12 @@ export default function CandidateProfile() {
               <div className="flex-1 min-w-0">
                 <PipelineStepper 
                   stages={stepperStages} 
-                  currentStage={stage} 
+                  currentStage={stageToView} 
+                  actualStage={actualStage}
                   onStageClick={handleStageClick}
                   isLoading={isUpdating}
+                  completedStages={completedStages}
+                  skippedStages={skippedStages}
                 />
               </div>
 
@@ -387,14 +470,14 @@ export default function CandidateProfile() {
           )}
 
           <div className={cn("transition-opacity duration-300", isUpdating ? "opacity-50 pointer-events-none" : "opacity-100")}>
-            {stage === 'SCREENING' && (
+            {stageToView === 'SCREENING' && (
               <ScreeningChecklist
                 candidateId={candidate.id}
                 onUpdate={handleUpdate}
               />
             )}
 
-            {stage === 'CANDIDATE_FORM' && (
+            {stageToView === 'CANDIDATE_FORM' && (
               <PreFormStatus candidate={candidate} onUpdate={handleUpdate} />
             )}
 
@@ -402,7 +485,7 @@ export default function CandidateProfile() {
               <WhatsAppPreviewPanel candidate={candidate} className="lg:hidden mt-6 rounded-xl border border-border overflow-hidden" />
             )}
 
-            {stage === 'HR_INTERVIEW' && (
+            {stageToView === 'HR_INTERVIEW' && (
               <EvaluationStageWidget
                 candidate={candidate}
                 evalTypes={['BRANCH_HR']}
@@ -411,7 +494,7 @@ export default function CandidateProfile() {
               />
             )}
 
-            {stage === 'DEPARTMENT_INTERVIEW' && (
+            {stageToView === 'DEPARTMENT_INTERVIEW' && (
               <EvaluationStageWidget
                 candidate={candidate}
                 evalTypes={['DEPT_HEAD']}
@@ -420,7 +503,7 @@ export default function CandidateProfile() {
               />
             )}
 
-            {stage === 'BRANCH_EVALUATION' && (
+            {stageToView === 'BRANCH_EVALUATION' && (
               <EvaluationStageWidget
                 candidate={candidate}
                 evalTypes={['GM_LEVEL', 'TECHNICAL_TEST']}
@@ -429,7 +512,7 @@ export default function CandidateProfile() {
               />
             )}
 
-            {stage === 'FINAL_APPROVAL' && (
+            {stageToView === 'FINAL_APPROVAL' && (
               <FinalApprovalWidget
                 candidate={candidate}
                 onUpdate={handleUpdate}
@@ -437,7 +520,7 @@ export default function CandidateProfile() {
             )}
 
 
-            {stage === 'ON_HOLD' && (
+            {actualStage === 'ON_HOLD' && (
               <div className="bg-warning/5 border border-warning/20 p-8 rounded-xl mt-6 flex flex-col items-center">
                 <div className="w-16 h-16 bg-warning rounded-full flex items-center justify-center shadow-lg mb-4">
                   <Pause className="w-8 h-8 text-white" />
@@ -478,7 +561,7 @@ export default function CandidateProfile() {
               </div>
             )}
 
-            {stage === 'HIRED' && (
+            {actualStage === 'HIRED' && (
               <div className="bg-success/5 border border-success/20 p-8 rounded-xl text-center mt-6 flex flex-col items-center">
                 <div className="w-16 h-16 bg-success rounded-full flex items-center justify-center shadow-lg mb-4">
                   <Trophy className="w-8 h-8 text-white" />
