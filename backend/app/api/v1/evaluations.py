@@ -54,10 +54,10 @@ router = APIRouter(prefix="/evaluations", tags=["Evaluations"])
 
 def _get_candidate_department(position: str | None) -> str:
     if not position:
-        return "IT"
+        return "Telecalling Customer Support"
     pos = position.upper()
     if any(k in pos for k in ["DEVELOPER", "TECH", "SOFTWARE", "IT", "SYSTEM"]):
-        return "IT"
+        return "Telecalling Customer Support"
     if any(k in pos for k in ["SALES", "MARKETING", "ADVISOR", "CONSULTANT"]):
         return "SALES"
     if any(k in pos for k in ["SERVICE", "MECHANIC", "DIAGNOSTIC", "WORKSHOP", "TECHNICIAN"]):
@@ -185,7 +185,7 @@ def generate_evaluation_token(
         ).all()
         if not q_rows:
             q_rows = db.scalars(
-                select(TechnicalQuestion).where(TechnicalQuestion.department == "IT")
+                select(TechnicalQuestion).where(TechnicalQuestion.department == "Telecalling Customer Support")
             ).all()
         q_list = list(q_rows)
         random.shuffle(q_list)
@@ -439,7 +439,7 @@ def get_public_test_questions(
         ).all()
         if not q_rows:
             q_rows = db.scalars(
-                select(TechnicalQuestion).where(TechnicalQuestion.department == "IT")
+                select(TechnicalQuestion).where(TechnicalQuestion.department == "Telecalling Customer Support")
             ).all()
         public_questions = [
             {"id": q.id, "text": q.text, "options": q.options}
@@ -472,35 +472,8 @@ def submit_public_test(
     candidate = db.get(Candidate, evaluation.candidate_id)
     dept = _get_candidate_department(candidate.position_applied_for)
     
-    if token_row.test_data and "answers" in token_row.test_data:
-        answers_map = token_row.test_data["answers"]
-    else:
-        q_rows = db.scalars(
-            select(TechnicalQuestion).where(TechnicalQuestion.department == dept)
-        ).all()
-        if not q_rows:
-            q_rows = db.scalars(
-                select(TechnicalQuestion).where(TechnicalQuestion.department == "IT")
-            ).all()
-        answers_map = {q.id: q.answer for q in q_rows}
-        
-    correct_count = 0
-    total_count = len(answers_map)
-    for qid, correct_ans in answers_map.items():
-        candidate_ans = body.answers.get(qid)
-        if candidate_ans == correct_ans:
-            correct_count += 1
-            
-    percentage = (correct_count / total_count) * 100 if total_count > 0 else 0
-    verdict = EvaluationVerdict.PASS if percentage >= 60.0 else EvaluationVerdict.FAIL
-    
-    evaluation.verdict = verdict
-    evaluation.status = InterviewStatus.EVALUATED
-    evaluation.remarks = f"Score: {correct_count}/{total_count} ({percentage:.1f}%) via online portal test."
     evaluation.scores = {
-        "correct_answers": correct_count,
-        "total_questions": total_count,
-        "percentage": percentage
+        "candidate_answers": body.answers
     }
     
     token_row.is_used = True
@@ -508,13 +481,13 @@ def submit_public_test(
     db.add(ActivityLog(
         candidate_id=candidate.id,
         activity_type=ActivityType.FORM,
-        title="Technical Test Completed",
-        description=f"Online technical test completed. Score: {correct_count}/{total_count} ({percentage:.1f}%) - {verdict.value}.",
+        title="Technical Test Submitted",
+        description="Candidate has submitted the online technical test. Awaiting manual evaluation.",
         created_by_user_id=None
     ))
     
     db.commit()
-    return {"status": "success", "verdict": verdict.value, "score": f"{correct_count}/{total_count}"}
+    return {"status": "success", "message": "Test submitted for manual evaluation."}
 
 
 @router.post("/{eval_id}/send-whatsapp-invite")
@@ -544,12 +517,18 @@ def send_evaluation_whatsapp_invite(
     
     placeholders = []
     for key in DOUBLETICK_VARIABLE_KEYS:
-        val = body.variables.get(key, "")
+        val = body.variables.get(key, "") if body.variables else ""
         placeholders.append(val)
         
     client = DoubleTickClient()
     
-    template_name = "nippon_interviewer_invite" if body.recipient_type == "INTERVIEWER" else "nippon_hr_interview_invite"
+    if body.recipient_type == "INTERVIEWER":
+        template_name = "nippon_interviewer_invite"
+    else:
+        if evaluation.type == EvaluationType.TECHNICAL_TEST:
+            template_name = "nippon_technical_test_invite"
+        else:
+            template_name = "nippon_hr_interview_invite"
     
     try:
         res = client.send_template(
@@ -606,3 +585,39 @@ def send_evaluation_whatsapp_invite(
         
     return {"status": "success", "message_id": external_message_id}
 
+
+@router.get("/questions")
+def get_department_questions(
+    department: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.HR))
+):
+    q_rows = db.scalars(
+        select(TechnicalQuestion).where(TechnicalQuestion.department == department)
+    ).all()
+    if not q_rows:
+        q_rows = db.scalars(
+            select(TechnicalQuestion).where(TechnicalQuestion.department == "Telecalling Customer Support")
+        ).all()
+        
+    return [
+        {
+            "id": str(q.id),
+            "text": q.text,
+            "options": q.options,
+            "department": q.department
+        } for q in q_rows
+    ]
+    if not q_rows:
+        q_rows = db.scalars(
+            select(TechnicalQuestion).where(TechnicalQuestion.department == "Telecalling Customer Support")
+        ).all()
+        
+    return [
+        {
+            "id": str(q.id),
+            "text": q.text,
+            "options": q.options,
+            "department": q.department
+        } for q in q_rows
+    ]

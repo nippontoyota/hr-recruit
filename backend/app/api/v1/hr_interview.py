@@ -143,7 +143,7 @@ def send_hr_interview_invite(
     
     placeholders = []
     for key in DOUBLETICK_VARIABLE_KEYS:
-        val = body.variables.get(key, "")
+        val = body.variables.get(key, "") if body.variables else ""
         placeholders.append(val)
         
     client = DoubleTickClient()

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { CheckCircle, ShieldAlert, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Button, LoadingSpinner } from '../../components/ui';
-import PublicShell from './PublicShell';
+import { PublicShell } from '../../components/layout/PublicShell';
 import { getPublicTestQuestions, submitPublicTest } from '../../api/evaluations';
 import { cn, extractError } from '../../lib/utils';
 import { toast } from 'sonner';

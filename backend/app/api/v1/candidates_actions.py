@@ -207,6 +207,19 @@ def send_pre_form(
     db.refresh(row)
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
 
+@router.post("/{id}/post-form/send", response_model=CandidateOut)
+def send_post_form(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR, UserRole.HQ_HR)),
+):
+    from app.api.v1.candidates_core import _issue_post_form
+    row = get_candidate_for_user(db, id, user)
+    _issue_post_form(db, row, user)
+    db.commit()
+    db.refresh(row)
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
+
 @router.post("/{id}/whatsapp-invite")
 def send_whatsapp_invite(
     id: UUID,
@@ -231,7 +244,7 @@ def send_whatsapp_invite(
     
     placeholders = []
     for key in DOUBLETICK_VARIABLE_KEYS:
-        val = body.variables.get(key, "")
+        val = (body.variables or {}).get(key, "")
         placeholders.append(val)
         
     client = DoubleTickClient()
@@ -255,24 +268,24 @@ def send_whatsapp_invite(
         
     # Construct content preview
     content_lines = [
-        f"Hello {body.variables.get('candidateName', '')},",
+        f"Hello {(body.variables or {}).get('candidateName', '')},",
         "",
-        f"Thank you for your interest in the *{body.variables.get('position', '')}* role at Nippon Toyota.",
+        f"Thank you for your interest in the *{(body.variables or {}).get('position', '')}* role at Nippon Toyota.",
         "",
         "Please complete your pre-interview form using the link below:",
-        body.variables.get('formLink', ''),
+        (body.variables or {}).get('formLink', ''),
         "",
-        body.variables.get('extraInstructions', '').strip() or "Fill all sections carefully. Incomplete forms may delay your application.",
+        (body.variables or {}).get('extraInstructions', '').strip() or "Fill all sections carefully. Incomplete forms may delay your application.",
         "",
-        f"Date: *{body.variables.get('visitDate', '')}*",
-        f"Arrival time: *{body.variables.get('arrivalTime', '')}*",
-        f"Location: *{body.variables.get('branchName', '')}*",
+        f"Date: *{(body.variables or {}).get('visitDate', '')}*",
+        f"Arrival time: *{(body.variables or {}).get('arrivalTime', '')}*",
+        f"Location: *{(body.variables or {}).get('branchName', '')}*",
         "",
         "Google Maps:",
-        body.variables.get('mapsLink', ''),
+        (body.variables or {}).get('mapsLink', ''),
         "",
         "Regards,",
-        body.variables.get('recruiterName', ''),
+        (body.variables or {}).get('recruiterName', ''),
         "Nippon Toyota — HR Team"
     ]
     full_content = "\n".join(content_lines)

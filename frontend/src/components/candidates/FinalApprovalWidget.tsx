@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Send, FileText, CheckCircle2 } from 'lucide-react';
+import { Send, FileText, CheckCircle2, Link } from 'lucide-react';
 import { Button, LoadingSpinner } from '../ui';
 import { CandidateSummaryDocument } from './CandidateSummaryDocument';
 import { EvaluationStageWidget } from './EvaluationStageWidget';
@@ -28,10 +28,10 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
     setLoading(true);
     try {
       await sendPostForm(candidate.id);
-      toast.success('Post-Interview form link generated and Activity Log updated.');
+      toast.success('Information form link generated and Activity Log updated.');
       onUpdate();
     } catch (error) {
-      toast.error('Failed to send Post-Interview form.');
+      toast.error('Failed to send Candidate Information Form.');
     } finally {
       setLoading(false);
     }
@@ -57,7 +57,7 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
               <FileText className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Post-Interview Form</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Candidate Information Form</h3>
               <p className="text-sm text-gray-500">
                 Status: <span className="font-medium text-gray-900">{candidate.post_form_status?.replace('_', ' ') || 'NOT SENT'}</span>
               </p>
@@ -67,12 +67,22 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
           {(!candidate.post_form_status || candidate.post_form_status === 'NOT_SENT') && (
             <Button onClick={handleSendPostForm} disabled={loading} className="gap-2">
               <Send className="w-4 h-4" />
-              {loading ? 'Sending...' : 'Send Post Form'}
+              {loading ? 'Generating...' : 'Generate Information Form'}
             </Button>
           )}
           {(candidate.post_form_status === 'SENT' || candidate.post_form_status === 'VIEWED') && (
-            <div className="text-sm text-yellow-600 font-medium bg-yellow-50 px-3 py-1.5 rounded-full border border-yellow-200">
-              Awaiting Candidate Submission
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-yellow-600 font-medium bg-yellow-50 px-3 py-1.5 rounded-full border border-yellow-200">
+                Awaiting Candidate Submission
+              </div>
+              {candidate.post_share_url && (
+                <Button variant="secondary" size="sm" onClick={() => {
+                  navigator.clipboard.writeText(candidate.post_share_url!);
+                  toast.success('Form link copied to clipboard!');
+                }} className="gap-2 text-sm">
+                  <Link className="w-4 h-4" /> Copy Link
+                </Button>
+              )}
             </div>
           )}
           {isSubmitted && (
@@ -84,13 +94,10 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
         </div>
 
         {isSubmitted && (
-          <div className="mt-8 border rounded-xl overflow-hidden bg-gray-50">
-            <div className="bg-gray-800 text-white px-4 py-3 text-sm font-medium flex justify-between items-center">
-              <span>Candidate Summary Sheet (CSS)</span>
-              <span className="text-gray-400">Scroll to view</span>
-            </div>
-            <div className="max-h-[70vh] overflow-y-auto p-4 custom-scrollbar">
-              <div className="scale-90 origin-top-center transition-all">
+          <div className="mt-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-6 pb-2 border-b">Candidate Summary Sheet (CSS)</h3>
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="max-h-[80vh] overflow-y-auto custom-scrollbar">
                 {fetching ? (
                   <div className="flex justify-center p-12"><LoadingSpinner /></div>
                 ) : (

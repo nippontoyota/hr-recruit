@@ -203,13 +203,144 @@ export default function PostFormPage() {
     </div>
   );
 
+  const fillDummyData = () => {
+    reset({
+      languagesWrite: 'English, Malayalam, Hindi', 
+      languagesSpeak: 'English, Malayalam',
+      languagesOther: 'Tamil',
+      drive2Wheeler: true,
+      drive3Wheeler: false,
+      drive4Wheeler: true,
+      driveHeavy: false,
+      gradMode: 'Regular',
+      postGradMode: 'Distance',
+      compWord: true,
+      compExcel: true,
+      compPowerPoint: true,
+      compTally: false,
+      compOther: false,
+      softwareCerts: 'Diploma in Computer Applications',
+      
+      fatherName: 'Ramesh Kumar',
+      fatherAge: '55',
+      fatherOccupation: 'Business',
+      fatherCompany: 'Self Employed',
+      fatherPhone: '9876543210',
+
+      motherName: 'Lekshmi Ramesh',
+      motherAge: '50',
+      motherOccupation: 'Housewife',
+      motherCompany: '',
+      motherPhone: '9876543211',
+
+      spouseName: '',
+      spouseAge: '',
+      spouseOccupation: '',
+      spouseCompany: '',
+      spousePhone: '',
+
+      child1Relation: '',
+      child1Name: '',
+      child1Age: '',
+      child1Occupation: '',
+      child1Company: '',
+      child1Phone: '',
+
+      child2Relation: '',
+      child2Name: '',
+      child2Age: '',
+      child2Occupation: '',
+      child2Company: '',
+      child2Phone: '',
+      
+      child3Relation: '',
+      child3Name: '',
+      child3Age: '',
+      child3Occupation: '',
+      child3Company: '',
+      child3Phone: '',
+
+      sibling1Relation: 'Brother',
+      sibling1Name: 'Rahul Kumar',
+      sibling1Age: '28',
+      sibling1Occupation: 'Software Engineer',
+      sibling1Company: 'Infosys',
+      sibling1Phone: '9876543212',
+
+      sibling2Relation: '',
+      sibling2Name: '',
+      sibling2Age: '',
+      sibling2Occupation: '',
+      sibling2Company: '',
+      sibling2Phone: '',
+
+      sibling3Relation: '',
+      sibling3Name: '',
+      sibling3Age: '',
+      sibling3Occupation: '',
+      sibling3Company: '',
+      sibling3Phone: '',
+
+      hobbies: 'Reading, Traveling, Coding',
+      achievements: 'Best Employee of the Year 2022',
+
+      emergency1Relation: 'Father',
+      emergency1Name: 'Ramesh Kumar',
+      emergency1Address: '123, ABC Street, Trivandrum',
+      emergency1Contact: '9876543210',
+
+      emergency2Relation: 'Friend',
+      emergency2Name: 'Arjun Menon',
+      emergency2Address: '456, XYZ Road, Trivandrum',
+      emergency2Contact: '9876543213',
+
+      prev1Reporting: 'Manager - Sales',
+      prev1From: 'Jan 2021',
+      prev1To: 'Dec 2023',
+      prev1Salary: '45000',
+      prev1Reason: 'Career Growth',
+
+      prev2Name: '',
+      prev2Position: '',
+      prev2Reporting: '',
+      prev2From: '',
+      prev2To: '',
+      prev2Salary: '',
+      prev2Reason: '',
+
+      prev3Name: '',
+      prev3Position: '',
+      prev3Reporting: '',
+      prev3From: '',
+      prev3To: '',
+      prev3Salary: '',
+      prev3Reason: '',
+
+      prev4Name: '',
+      prev4Position: '',
+      prev4Reporting: '',
+      prev4From: '',
+      prev4To: '',
+      prev4Salary: '',
+      prev4Reason: '',
+      
+      facebookUrl: 'https://facebook.com/dummy',
+      instagramUrl: 'https://instagram.com/dummy',
+      twitterUrl: 'https://twitter.com/dummy',
+    });
+    toast.success('Filled with dummy data!');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
         
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2">Post-Interview Application Form</h1>
+        <div className="text-center mb-8 relative">
+          <h1 className="text-3xl font-bold text-primary mb-2">Candidate Information Form</h1>
           <p className="text-gray-600">Please provide the following additional details to complete your profile, {candidateName}.</p>
+          <div className="absolute top-0 right-0">
+            <Button variant="secondary" size="sm" type="button" onClick={fillDummyData}>Fill Dummy Data</Button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">

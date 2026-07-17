@@ -43,6 +43,7 @@ export interface User {
   full_name: string;
   role: UserRole;
   branch_location?: string;
+  department?: string;
 }
 
 export interface Candidate {
@@ -57,6 +58,7 @@ export interface Candidate {
   share_url?: string;
   pre_form_status?: string;
   post_form_status?: string;
+  post_share_url?: string;
   post_form_token?: string;
   is_awaiting_full_fill?: boolean;
   pre_form_sent_at?: string;

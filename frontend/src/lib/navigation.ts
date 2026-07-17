@@ -21,6 +21,6 @@ export const NAV_ITEMS: NavItem[] = [
     name: 'User Management',
     href: '/admin/users',
     icon: Shield,
-    roles: ['SUPER_ADMIN', 'COMPANY_HR_HEAD'],
+    roles: ['SUPER_ADMIN', 'HR'],
   },
 ];

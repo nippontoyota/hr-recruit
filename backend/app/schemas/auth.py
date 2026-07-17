@@ -30,7 +30,7 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    email: EmailStr
+    email: EmailAddress
     full_name: str
     role: str
     branch_location: str | None = None

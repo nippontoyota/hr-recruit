@@ -239,6 +239,133 @@ class PreFormApplicationData(BaseModel):
         return self
 
 
+class PostFormApplicationData(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    languagesWrite: str = ""
+    languagesSpeak: str = ""
+    languagesOther: str = ""
+    drive2Wheeler: bool = False
+    drive3Wheeler: bool = False
+    drive4Wheeler: bool = False
+    driveHeavy: bool = False
+
+    gradMode: str = ""
+    postGradMode: str = ""
+
+    compWord: bool = False
+    compExcel: bool = False
+    compPowerPoint: bool = False
+    compTally: bool = False
+    compOther: bool = False
+    softwareCerts: str = ""
+
+    fatherName: str = ""
+    fatherAge: str = ""
+    fatherOccupation: str = ""
+    fatherCompany: str = ""
+    fatherPhone: str = ""
+
+    motherName: str = ""
+    motherAge: str = ""
+    motherOccupation: str = ""
+    motherCompany: str = ""
+    motherPhone: str = ""
+
+    spouseName: str = ""
+    spouseAge: str = ""
+    spouseOccupation: str = ""
+    spouseCompany: str = ""
+    spousePhone: str = ""
+
+    child1Relation: str = ""
+    child1Name: str = ""
+    child1Age: str = ""
+    child1Occupation: str = ""
+    child1Company: str = ""
+    child1Phone: str = ""
+
+    child2Relation: str = ""
+    child2Name: str = ""
+    child2Age: str = ""
+    child2Occupation: str = ""
+    child2Company: str = ""
+    child2Phone: str = ""
+
+    child3Relation: str = ""
+    child3Name: str = ""
+    child3Age: str = ""
+    child3Occupation: str = ""
+    child3Company: str = ""
+    child3Phone: str = ""
+
+    sibling1Relation: str = ""
+    sibling1Name: str = ""
+    sibling1Age: str = ""
+    sibling1Occupation: str = ""
+    sibling1Company: str = ""
+    sibling1Phone: str = ""
+
+    sibling2Relation: str = ""
+    sibling2Name: str = ""
+    sibling2Age: str = ""
+    sibling2Occupation: str = ""
+    sibling2Company: str = ""
+    sibling2Phone: str = ""
+
+    sibling3Relation: str = ""
+    sibling3Name: str = ""
+    sibling3Age: str = ""
+    sibling3Occupation: str = ""
+    sibling3Company: str = ""
+    sibling3Phone: str = ""
+
+    hobbies: str = ""
+    achievements: str = ""
+
+    emergency1Relation: str = ""
+    emergency1Name: str = ""
+    emergency1Address: str = ""
+    emergency1Contact: str = ""
+
+    emergency2Relation: str = ""
+    emergency2Name: str = ""
+    emergency2Address: str = ""
+    emergency2Contact: str = ""
+
+    prev1Reporting: str = ""
+    prev1From: str = ""
+    prev1To: str = ""
+    prev1Salary: str = ""
+    prev1Reason: str = ""
+
+    prev2Name: str = ""
+    prev2Position: str = ""
+    prev2Reporting: str = ""
+    prev2From: str = ""
+    prev2To: str = ""
+    prev2Salary: str = ""
+    prev2Reason: str = ""
+
+    prev3Name: str = ""
+    prev3Position: str = ""
+    prev3Reporting: str = ""
+    prev3From: str = ""
+    prev3To: str = ""
+    prev3Salary: str = ""
+    prev3Reason: str = ""
+
+    prev4Name: str = ""
+    prev4Position: str = ""
+    prev4Reporting: str = ""
+    prev4From: str = ""
+    prev4To: str = ""
+    prev4Salary: str = ""
+    prev4Reason: str = ""
+
+    facebookUrl: str = ""
+    instagramUrl: str = ""
+    twitterUrl: str = ""
 
 
 class CandidateProfileRawDataUpdate(BaseModel):
@@ -277,6 +404,10 @@ class CandidateOut(BaseModel):
     pre_form_status: FormStatus
     pre_form_sent_at: datetime | None
     pre_form_submitted_at: datetime | None
+    post_form_status: FormStatus | None = None
+    post_form_sent_at: datetime | None = None
+    post_form_submitted_at: datetime | None = None
+    post_share_url: str | None = None
     current_stage: PipelineStage
     branch_location: str | None
     profile: CandidateProfileOut | None = None

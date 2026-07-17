@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getCandidate } from '../../api/candidates';
+import { getCandidateById } from '../../api/candidates';
 import { getDepartmentQuestions } from '../../api/evaluations';
 import { LoadingSpinner } from '../../components/ui';
 import type { Candidate } from '../../types';
@@ -18,11 +18,13 @@ export default function PrintTechnicalTestPage() {
 
     const fetchData = async () => {
       try {
-        const cand = await getCandidate(id);
-        setCandidate(cand);
-        const dept = cand.position_applied_for || 'Call Centre';
-        const qs = await getDepartmentQuestions(dept);
-        setQuestions(qs);
+        const data = await getCandidateById(id);
+        if (data) {
+          setCandidate(data as Candidate);
+          const dept = data.position_applied_for || 'Call Centre';
+          const qs = await getDepartmentQuestions(dept);
+          setQuestions(qs);
+        }
       } catch (err) {
         setError('Failed to load candidate or test data.');
       } finally {

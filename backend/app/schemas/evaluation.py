@@ -82,4 +82,5 @@ class CandidateTestSubmit(BaseModel):
 class EvaluationWhatsAppInvite(BaseModel):
     to_phone: str
     recipient_type: str = "CANDIDATE"
-    variables: dict[str, str]
+    variables: dict[str, str] | None = None
+    message_text: str | None = None
