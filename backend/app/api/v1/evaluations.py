@@ -40,6 +40,7 @@ from app.schemas.evaluation import (
     CandidateTestSubmit,
     EvaluationTokenOut,
     EvaluationWhatsAppInvite,
+    TechnicalQuestionOut,
 )
 from app.services.workflow import WorkflowService
 from app.services import storage
@@ -64,6 +65,20 @@ def _get_candidate_department(position: str | None) -> str:
     if any(k in pos for k in ["FINANCE", "ACCOUNT", "BILLING", "CASHIER"]):
         return "FINANCE"
     return "IT"  # default
+
+
+@router.get("/questions", response_model=list[TechnicalQuestionOut])
+def get_department_questions(
+    department: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(
+        UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR,
+        UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN, UserRole.DEPT_HEAD
+    )),
+):
+    norm_dept = _get_candidate_department(department)
+    questions = db.scalars(select(TechnicalQuestion).where(TechnicalQuestion.department == norm_dept)).all()
+    return questions
 
 
 @router.get("/candidate/{candidate_id}", response_model=list[EvaluationOut])
