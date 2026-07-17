@@ -9,27 +9,6 @@ from app.models.enums import PipelineStage, ActivityType
 from app.models.stage_history import StageHistory
 from app.models.activity_log import ActivityLog
 
-# Allowed transitions based on Workflow Specification
-ALLOWED_TRANSITIONS = {
-    PipelineStage.SCREENING: [PipelineStage.CANDIDATE_FORM, PipelineStage.REJECTED, PipelineStage.ON_HOLD],
-    PipelineStage.CANDIDATE_FORM: [PipelineStage.SCREENING, PipelineStage.HR_INTERVIEW, PipelineStage.REJECTED, PipelineStage.ON_HOLD],
-    PipelineStage.HR_INTERVIEW: [PipelineStage.CANDIDATE_FORM, PipelineStage.DEPARTMENT_INTERVIEW, PipelineStage.REJECTED, PipelineStage.ON_HOLD],
-    PipelineStage.DEPARTMENT_INTERVIEW: [PipelineStage.HR_INTERVIEW, PipelineStage.BRANCH_EVALUATION, PipelineStage.REJECTED, PipelineStage.ON_HOLD],
-    PipelineStage.BRANCH_EVALUATION: [PipelineStage.DEPARTMENT_INTERVIEW, PipelineStage.FINAL_APPROVAL, PipelineStage.REJECTED, PipelineStage.ON_HOLD],
-    PipelineStage.FINAL_APPROVAL: [PipelineStage.BRANCH_EVALUATION, PipelineStage.HIRED, PipelineStage.REJECTED, PipelineStage.ON_HOLD],
-    
-    # ON_HOLD can resume to previous stage, but for MVP we might allow returning to any active stage, or enforce strictly.
-    # To keep MVP flexible, we allow ON_HOLD to go back to any active stage.
-    PipelineStage.ON_HOLD: [
-        PipelineStage.SCREENING, PipelineStage.CANDIDATE_FORM, 
-        PipelineStage.HR_INTERVIEW, PipelineStage.DEPARTMENT_INTERVIEW, 
-        PipelineStage.BRANCH_EVALUATION, PipelineStage.FINAL_APPROVAL, PipelineStage.REJECTED
-    ],
-    
-    PipelineStage.HIRED: [], # Terminal
-    PipelineStage.REJECTED: [], # Terminal
-}
-
 class WorkflowService:
     @staticmethod
     def transition(
@@ -46,14 +25,7 @@ class WorkflowService:
         if candidate.current_stage == target_stage:
             return candidate # No change
 
-        # 1. Validate Transition
-        allowed = ALLOWED_TRANSITIONS.get(candidate.current_stage, [])
-        if target_stage not in allowed:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid transition from {candidate.current_stage.value} to {target_stage.value}"
-            )
-            
+
         if target_stage == PipelineStage.REJECTED and not remarks:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -71,51 +43,69 @@ class WorkflowService:
         from app.models.evaluation import Evaluation
         from app.models.enums import EvaluationType, InterviewStatus
 
-        # Auto-initialize Evaluations upon stage entry
-        if target_stage == PipelineStage.HR_INTERVIEW:
-            existing = db.scalar(sa.select(Evaluation).where(
-                sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == EvaluationType.BRANCH_HR)
-            ))
-            if not existing:
-                db.add(Evaluation(
-                    candidate_id=candidate.id,
-                    type=EvaluationType.BRANCH_HR,
-                    status=InterviewStatus.PENDING_SCHEDULE
-                ))
-
-        elif target_stage == PipelineStage.DEPARTMENT_INTERVIEW:
-            existing = db.scalar(sa.select(Evaluation).where(
-                sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == EvaluationType.DEPT_HEAD)
-            ))
-            if not existing:
-                db.add(Evaluation(
-                    candidate_id=candidate.id,
-                    type=EvaluationType.DEPT_HEAD,
-                    status=InterviewStatus.PENDING_SCHEDULE
-                ))
-
-        elif target_stage == PipelineStage.BRANCH_EVALUATION:
-            for etype in [EvaluationType.GM_LEVEL, EvaluationType.TECHNICAL_TEST]:
+        # We will loop through the standard stages up to the target_stage
+        # and initialize evaluations for any skipped stages.
+        standard_stages = [
+            PipelineStage.SCREENING,
+            PipelineStage.CANDIDATE_FORM,
+            PipelineStage.HR_INTERVIEW,
+            PipelineStage.DEPARTMENT_INTERVIEW,
+            PipelineStage.BRANCH_EVALUATION,
+            PipelineStage.FINAL_APPROVAL,
+            PipelineStage.HIRED
+        ]
+        
+        target_idx = -1
+        if target_stage in standard_stages:
+            target_idx = standard_stages.index(target_stage)
+            
+        for i in range(target_idx + 1):
+            s = standard_stages[i]
+            
+            if s == PipelineStage.HR_INTERVIEW:
                 existing = db.scalar(sa.select(Evaluation).where(
-                    sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == etype)
+                    sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == EvaluationType.BRANCH_HR)
                 ))
                 if not existing:
                     db.add(Evaluation(
                         candidate_id=candidate.id,
-                        type=etype,
+                        type=EvaluationType.BRANCH_HR,
                         status=InterviewStatus.PENDING_SCHEDULE
                     ))
 
-        elif target_stage == PipelineStage.FINAL_APPROVAL:
-            existing = db.scalar(sa.select(Evaluation).where(
-                sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == EvaluationType.HQ_INTERVIEW)
-            ))
-            if not existing:
-                db.add(Evaluation(
-                    candidate_id=candidate.id,
-                    type=EvaluationType.HQ_INTERVIEW,
-                    status=InterviewStatus.PENDING_SCHEDULE
+            elif s == PipelineStage.DEPARTMENT_INTERVIEW:
+                existing = db.scalar(sa.select(Evaluation).where(
+                    sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == EvaluationType.DEPT_HEAD)
                 ))
+                if not existing:
+                    db.add(Evaluation(
+                        candidate_id=candidate.id,
+                        type=EvaluationType.DEPT_HEAD,
+                        status=InterviewStatus.PENDING_SCHEDULE
+                    ))
+
+            elif s == PipelineStage.BRANCH_EVALUATION:
+                for etype in [EvaluationType.GM_LEVEL, EvaluationType.TECHNICAL_TEST]:
+                    existing = db.scalar(sa.select(Evaluation).where(
+                        sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == etype)
+                    ))
+                    if not existing:
+                        db.add(Evaluation(
+                            candidate_id=candidate.id,
+                            type=etype,
+                            status=InterviewStatus.PENDING_SCHEDULE
+                        ))
+
+            elif s == PipelineStage.FINAL_APPROVAL:
+                existing = db.scalar(sa.select(Evaluation).where(
+                    sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == EvaluationType.HQ_INTERVIEW)
+                ))
+                if not existing:
+                    db.add(Evaluation(
+                        candidate_id=candidate.id,
+                        type=EvaluationType.HQ_INTERVIEW,
+                        status=InterviewStatus.PENDING_SCHEDULE
+                    ))
 
             
         old_stage = candidate.current_stage

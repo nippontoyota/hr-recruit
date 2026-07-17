@@ -7,7 +7,7 @@ import { getCandidateEvaluations, scheduleEvaluation, generateEvaluationToken, s
 import type { Candidate, Evaluation, EvaluationVerdict, User } from '../../types';
 import { cn, extractError } from '../../lib/utils';
 import { useAuth } from '../../auth/AuthContext';
-import { format, addDays } from 'date-fns';
+
 
 
 interface EvaluationStageWidgetProps {
@@ -17,6 +17,9 @@ interface EvaluationStageWidgetProps {
   onUpdate: () => void;
 }
 
+// Simple global cache to allow stale-while-revalidate (instant loading)
+const evaluationsCache: Record<string, Evaluation[]> = {};
+
 export function EvaluationStageWidget({
   candidate,
   evalTypes,
@@ -24,8 +27,9 @@ export function EvaluationStageWidget({
   onUpdate
 }: EvaluationStageWidgetProps) {
   const { user } = useAuth();
-  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = evaluationsCache[candidate.id];
+  const [evaluations, setEvaluations] = useState<Evaluation[]>(cached ? cached.filter(e => evalTypes.includes(e.type)) : []);
+  const [loading, setLoading] = useState(!cached);
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
   const [remarksId, setRemarksId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -134,9 +138,9 @@ export function EvaluationStageWidget({
   const handleOpenSchedule = (id: string) => {
     setSchedulingId(id);
     setLocation('Training room');
-    const tomorrow = addDays(new Date(), 1);
+    const tomorrow = new Date(Date.now() + 86400000);
     tomorrow.setHours(9, 0, 0, 0);
-    setTime(format(tomorrow, "yyyy-MM-dd'T'HH:mm"));
+    setTime((() => { const d = tomorrow; const pad = (n: number) => n.toString().padStart(2, '0'); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; })());
   };
 
   // Remarks form state
@@ -154,8 +158,12 @@ export function EvaluationStageWidget({
   const [testMode, setTestMode] = useState<'PAPER' | 'ONLINE'>('ONLINE');
 
   const fetchEvaluations = async () => {
+    if (!evaluationsCache[candidate.id]) {
+      setLoading(true);
+    }
     try {
       const data = await getCandidateEvaluations(candidate.id);
+      evaluationsCache[candidate.id] = data;
       // Filter evaluations to only matching types
       const filtered = data.filter(e => evalTypes.includes(e.type));
       setEvaluations(filtered);
@@ -257,8 +265,8 @@ export function EvaluationStageWidget({
         try {
           const parsedDate = new Date(`${shareDate}T${shareTime}`);
           if (!isNaN(parsedDate.getTime())) {
-            dateStr = format(parsedDate, 'dd MMM yyyy');
-            timeStr = format(parsedDate, 'h:mm a');
+            dateStr = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(parsedDate);
+            timeStr = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(parsedDate).toLowerCase();
           }
         } catch (e) {
           console.error(e);
@@ -426,6 +434,13 @@ export function EvaluationStageWidget({
 
                     {!isCompleted && !schedulingId && !remarksId && (
                       <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={() => handleCopyLink(ev.id)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-foreground bg-background border border-border hover:bg-muted rounded-xl transition-all shadow-sm whitespace-nowrap">
+                          {copiedId === ev.id ? <CheckCircle className="w-4 h-4 text-success" /> : <Link className="w-4 h-4" />}
+                          {copiedId === ev.id ? 'Copied' : 'Copy Link'}
+                        </button>
+                        <button type="button" onClick={() => openShareModal(ev)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded-xl transition-all shadow-sm whitespace-nowrap">
+                          <img src="/whatsapp.webp" alt="WhatsApp" className="w-4 h-4 object-contain" /> Send Invite
+                        </button>
                         <button type="button" onClick={() => handleOpenSchedule(ev.id)} className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-xl transition-all shadow-sm whitespace-nowrap">
                           <Calendar className="w-4 h-4" /> Schedule Evaluation
                         </button>
@@ -514,8 +529,8 @@ export function EvaluationStageWidget({
                               <div className="border-l-2 border-black flex flex-col w-40 text-xs">
                                 <div className="border-b-2 border-black p-1 text-center font-bold tracking-wide">Series B</div>
                                 <div className="border-b-2 border-black p-1 text-center font-bold text-[10px] tracking-wide">Version 2020.1</div>
-                                <div className="border-b-2 border-black p-1 font-medium flex justify-between"><span>Date:</span> <span className="underline decoration-dashed underline-offset-4 text-gray-800 flex-1 ml-1 text-right">{format(new Date(), 'dd/MM/yyyy')}</span></div>
-                                <div className="p-1 font-medium flex justify-between"><span>Time:</span> <span className="underline decoration-dashed underline-offset-4 text-gray-800 flex-1 ml-1 text-right">{format(new Date(), 'HH:mm')}</span></div>
+                                <div className="border-b-2 border-black p-1 font-medium flex justify-between"><span>Date:</span> <span className="underline decoration-dashed underline-offset-4 text-gray-800 flex-1 ml-1 text-right">{new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())}</span></div>
+                                <div className="p-1 font-medium flex justify-between"><span>Time:</span> <span className="underline decoration-dashed underline-offset-4 text-gray-800 flex-1 ml-1 text-right">{new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())}</span></div>
                               </div>
                             </div>
                             
@@ -601,7 +616,7 @@ export function EvaluationStageWidget({
                               <div className="flex flex-col">
                                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Scheduled Date</span>
                                 <div className="text-sm font-bold text-foreground">
-                                  {format(new Date(ev.scheduled_time), 'MMM dd, yyyy')}
+                                  {new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).format(new Date(ev.scheduled_time))}
                                 </div>
                               </div>
 
@@ -609,7 +624,7 @@ export function EvaluationStageWidget({
                               <div className="flex flex-col">
                                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Time</span>
                                 <div className="text-sm font-bold text-foreground">
-                                  {format(new Date(ev.scheduled_time), 'hh:mm a')}
+                                  {new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date(ev.scheduled_time)).toLowerCase()}
                                 </div>
                               </div>
 
@@ -961,13 +976,13 @@ export function EvaluationStageWidget({
                            <div>
                              <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Date</span>
                              <span className="text-sm font-semibold text-foreground">
-                               {shareEval?.scheduled_time ? format(new Date(shareEval.scheduled_time), 'MMM dd, yyyy') : 'TBD'}
+                               {shareEval?.scheduled_time ? new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).format(new Date(shareEval.scheduled_time)) : 'TBD'}
                              </span>
                            </div>
                            <div>
                              <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Time</span>
                              <span className="text-sm font-semibold text-foreground">
-                               {shareEval?.scheduled_time ? format(new Date(shareEval.scheduled_time), 'hh:mm a') : 'TBD'}
+                               {shareEval?.scheduled_time ? new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date(shareEval.scheduled_time)).toLowerCase() : 'TBD'}
                              </span>
                            </div>
                         </div>
@@ -1046,8 +1061,8 @@ export function EvaluationStageWidget({
                           try {
                             const parsedDate = new Date(`${shareDate}T${shareTime}`);
                             if (!isNaN(parsedDate.getTime())) {
-                              dStr = format(parsedDate, 'dd MMM yyyy');
-                              tStr = format(parsedDate, 'h:mm a');
+                              dStr = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(parsedDate);
+                              tStr = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(parsedDate).toLowerCase();
                             }
                           } catch (e) { }
                         }
@@ -1102,7 +1117,7 @@ Nippon Toyota`;
                       })()}
                     </div>
                     <div className="absolute bottom-0.5 right-1.5 flex items-center gap-0.5">
-                      <p className="text-[8px] text-[#667781] whitespace-nowrap">{format(new Date(), 'h:mm a')}</p>
+                      <p className="text-[8px] text-[#667781] whitespace-nowrap">{new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date()).toLowerCase()}</p>
                       <CheckCheck className="h-[10px] w-[10px] text-[#34B7F1]" strokeWidth={2.5} />
                     </div>
                   </div>

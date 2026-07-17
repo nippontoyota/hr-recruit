@@ -1,4 +1,3 @@
-import { format } from 'date-fns';
 import { findBranch } from './branchLocations';
 
 export interface WhatsAppTemplateVars {
@@ -72,7 +71,7 @@ export function defaultTemplateVars(input: {
     position: input.position || 'the applied',
     formLink: input.formLink || '(form link will appear after save)',
     branchName: branch?.name ?? input.branchName ?? 'Kalamassery (Nippon Towers)',
-    visitDate: format(visit, 'EEEE, d MMMM yyyy'),
+    visitDate: new Intl.DateTimeFormat('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(visit),
     arrivalTime: '10:30 AM',
     mapsLink: input.mapsLink || branch?.mapsUrl || '',
     recruiterName: input.recruiterName || 'HR Team',

@@ -5,9 +5,6 @@ import { AlertCircle, CheckCircle2, XCircle, Clock, Pencil, Calendar as Calendar
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { format } from 'date-fns';
-import { Popover, PopoverTrigger, PopoverContent } from '../ui/Popover';
-import { Calendar } from '../ui/Calendar';
 
 
 interface ScreeningChecklistProps {
@@ -15,20 +12,28 @@ interface ScreeningChecklistProps {
   onUpdate: () => void;
 }
 
+// Simple global cache to allow stale-while-revalidate (instant loading)
+const screeningCache: Record<string, any> = {};
+
 export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklistProps) {
-  const [loading, setLoading] = useState(true);
+  const cached = screeningCache[candidateId];
+  const [loading, setLoading] = useState(!cached);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isEditing, setIsEditing] = useState(true);
-  const [hasSavedData, setHasSavedData] = useState(false);
+  
+  const isFilled = cached ? (cached.status === 'QUALIFIED' || cached.status === 'REJECTED' || (cached.status === 'PENDING' && !!cached.pending_reason)) : false;
+  const [isEditing, setIsEditing] = useState(cached ? !isFilled : true);
+  const [hasSavedData, setHasSavedData] = useState(cached ? isFilled : false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   // Local state for editing
-  const [status, setStatus] = useState('PENDING');
-  const [remarks, setRemarks] = useState('');
+  const [status, setStatus] = useState(cached?.status || 'PENDING');
+  const [remarks, setRemarks] = useState(cached?.remarks || '');
   
   // New Follow up fields
-  const [pendingReason, setPendingReason] = useState<string>('');
-  const [followUpDate, setFollowUpDate] = useState<Date | undefined>();
+  const [pendingReason, setPendingReason] = useState<string>(cached?.pending_reason || '');
+  const [followUpDate, setFollowUpDate] = useState<Date | undefined>(
+    cached?.follow_up_date ? new Date(cached.follow_up_date) : undefined
+  );
 
   useEffect(() => {
     fetchScreening();
@@ -36,9 +41,12 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
   }, [candidateId]);
 
   const fetchScreening = async () => {
-    setLoading(true);
+    if (!screeningCache[candidateId]) {
+      setLoading(true);
+    }
     try {
       const data = await getScreening(candidateId);
+      screeningCache[candidateId] = data;
       setStatus(data.status);
       setRemarks(data.remarks || '');
       
@@ -56,9 +64,9 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
         setFollowUpDate(undefined);
       }
 
-      const isFilled = data.status === 'QUALIFIED' || data.status === 'REJECTED' || (data.status === 'PENDING' && hasPending);
-      setHasSavedData(isFilled);
-      setIsEditing(!isFilled);
+      const freshIsFilled = data.status === 'QUALIFIED' || data.status === 'REJECTED' || (data.status === 'PENDING' && hasPending);
+      setHasSavedData(freshIsFilled);
+      setIsEditing(!freshIsFilled);
     } catch (err) {
       console.error(err);
       setHasSavedData(false);
@@ -211,7 +219,7 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
                     </span>
                     <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
                       <CalendarIcon className="w-4 h-4 text-muted-foreground" />
-                      {format(followUpDate, "EEEE, d MMMM yyyy")}
+                      {new Intl.DateTimeFormat('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(followUpDate)}
                     </span>
                   </div>
                 )}
@@ -316,27 +324,15 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
                     
                     <div>
                       <label className="block text-xs font-bold text-foreground uppercase tracking-wider mb-2">Follow-up Date</label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            className={cn(
-                              "w-full h-11 px-4 justify-start text-left font-normal rounded-xl border border-border bg-background shadow-sm hover:bg-muted text-sm",
-                              !followUpDate && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {followUpDate ? format(followUpDate, "PPP") : <span>Pick a date</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={followUpDate}
-                            onSelect={setFollowUpDate}
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <input
+                        type="date"
+                        value={followUpDate ? followUpDate.toISOString().split('T')[0] : ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFollowUpDate(val ? new Date(val) : undefined);
+                        }}
+                        className="w-full h-11 px-4 text-left font-normal rounded-xl border border-border bg-background shadow-sm hover:bg-muted text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
                     </div>
                   </div>
                 </motion.div>

@@ -14,9 +14,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 interface PipelineStepperProps {
   stages: PipelineStage[];
-  currentStage: PipelineStage;
+  currentStage: PipelineStage; // Viewed stage
+  actualStage: PipelineStage;  // DB stage
   onStageClick: (stage: PipelineStage) => void;
   isLoading?: boolean;
+  completedStages?: PipelineStage[];
+  skippedStages?: PipelineStage[];
 }
 
 const STAGE_ICONS: Record<string, React.ElementType> = {
@@ -27,8 +30,17 @@ const STAGE_ICONS: Record<string, React.ElementType> = {
   'FINAL_APPROVAL': ShieldCheck,
 };
 
-export function PipelineStepper({ stages, currentStage, onStageClick, isLoading }: PipelineStepperProps) {
-  const currentIndex = stages.indexOf(currentStage);
+export function PipelineStepper({ 
+  stages, 
+  currentStage, 
+  actualStage,
+  onStageClick, 
+  isLoading,
+  completedStages,
+  skippedStages
+}: PipelineStepperProps) {
+  const currentIndex = stages.indexOf(actualStage);
+  const viewedIndex = stages.indexOf(currentStage);
   
   const isTerminalStage = currentIndex === -1;
   const activeIndex = isTerminalStage ? stages.length : currentIndex;
@@ -43,7 +55,7 @@ export function PipelineStepper({ stages, currentStage, onStageClick, isLoading 
           Step {activeIndex + 1} of {stages.length}
         </span>
         <span className="text-sm font-bold text-foreground text-center">
-          {isTerminalStage ? 'Completed' : stageLabel(currentStage)}
+          {isTerminalStage ? 'Completed' : stageLabel(actualStage)}
         </span>
         {/* Compact progress bar */}
         <div className="w-24 bg-muted h-1 rounded-full overflow-hidden mt-1.5">
@@ -71,11 +83,14 @@ export function PipelineStepper({ stages, currentStage, onStageClick, isLoading 
         )}
 
         {stages.map((stage, index) => {
-          const isCompleted = index < activeIndex;
-          const isCurrent = index === activeIndex;
-          const Icon = STAGE_ICONS[stage] || FileText;
+          const isCompleted = completedStages ? completedStages.includes(stage) : index < activeIndex;
+          const isSkipped = skippedStages ? skippedStages.includes(stage) : false;
           
-          const isClickable = !isLoading && !isTerminalStage && (isCompleted || index === activeIndex + 1);
+          const isCurrentActual = index === activeIndex;
+          const isCurrentViewed = index === viewedIndex;
+          
+          const Icon = STAGE_ICONS[stage] || FileText;
+          const isClickable = !isLoading && !isTerminalStage && !isCurrentViewed;
 
           return (
             <motion.div 
@@ -86,8 +101,8 @@ export function PipelineStepper({ stages, currentStage, onStageClick, isLoading 
               className="flex flex-col items-center gap-2 relative group w-20"
             >
               
-              {/* Pulse effect for current stage */}
-              {isCurrent && (
+              {/* Pulse effect for actual stage */}
+              {isCurrentActual && (
                 <motion.div 
                   className="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full bg-success/20 -z-10"
                   animate={{ scale: [1, 1.4, 1], opacity: [0.7, 0, 0] }}
@@ -99,14 +114,16 @@ export function PipelineStepper({ stages, currentStage, onStageClick, isLoading 
               <motion.button
                 disabled={!isClickable}
                 onClick={() => isClickable && onStageClick(stage)}
-                whileHover={isClickable && !isCurrent ? { scale: 1.1, y: -2 } : {}}
-                whileTap={isClickable && !isCurrent ? { scale: 0.95 } : {}}
+                whileHover={isClickable && !isCurrentViewed ? { scale: 1.1, y: -2 } : {}}
+                whileTap={isClickable && !isCurrentViewed ? { scale: 0.95 } : {}}
                 className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-300 relative bg-background border-2",
+                  "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 relative bg-background border-2",
+                  isCurrentViewed ? "ring-2 ring-primary ring-offset-2 scale-105" : "",
                   isCompleted ? "border-success bg-success/5 text-success shadow-sm" :
-                  isCurrent ? "border-success bg-success text-white shadow-md" :
+                  isSkipped ? "border-warning border-dashed bg-warning/5 text-warning shadow-sm" :
+                  isCurrentActual ? "border-success bg-success text-white shadow-md" :
                   "border-muted text-muted-foreground",
-                  isClickable && !isCurrent ? "cursor-pointer hover:border-success hover:text-success" : "cursor-not-allowed",
+                  isClickable && !isCurrentViewed ? "cursor-pointer hover:border-success hover:text-success" : "cursor-not-allowed",
                   isTerminalStage && "opacity-60"
                 )}
               >
@@ -134,21 +151,23 @@ export function PipelineStepper({ stages, currentStage, onStageClick, isLoading 
               </motion.button>
 
               {/* Stage Label */}
-              <div className="flex flex-col items-center mt-1">
+              <div className="flex flex-col items-center mt-1 select-none">
                 <span className={cn(
-                  "text-[10px] font-bold uppercase tracking-wider mb-0.5 transition-colors duration-300",
-                  isCurrent ? "text-success" : "text-muted-foreground/60"
+                  "text-[9px] font-bold uppercase tracking-wider mb-0.5 transition-colors duration-300",
+                  isCurrentViewed ? "text-primary font-extrabold" :
+                  isCurrentActual ? "text-success" :
+                  isSkipped ? "text-warning" : 
+                  "text-muted-foreground/60"
                 )}>
-                  Step {index + 1}
+                  {isSkipped ? "Skipped" : isCompleted ? "Completed" : `Step ${index + 1}`}
                 </span>
                 <span className={cn(
                   "text-[11px] font-semibold text-center w-24 text-balance leading-tight transition-colors duration-300",
-                  isCurrent ? "text-foreground" : "text-muted-foreground"
+                  isCurrentViewed ? "text-foreground font-bold" : "text-muted-foreground"
                 )}>
                   {stageLabel(stage)}
                 </span>
               </div>
-
             </motion.div>
           );
         })}

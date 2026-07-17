@@ -145,7 +145,12 @@ export function ResumeViewerProvider({ children }: { children: ReactNode }) {
 export function useResumeViewer() {
   const context = useContext(ResumeViewerContext);
   if (!context) {
-    throw new Error('useResumeViewer must be used within ResumeViewerProvider');
+    console.error('useResumeViewer must be used within ResumeViewerProvider. If you are in development, this is likely an HMR artifact.');
+    return {
+      openResume: () => {
+        console.error('Resume viewer context not found. Please refresh the page.');
+      }
+    };
   }
   return context;
 }
