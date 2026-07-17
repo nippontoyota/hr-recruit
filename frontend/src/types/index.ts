@@ -69,6 +69,8 @@ export interface Candidate {
   is_duplicate_flagged: boolean;
   duplicate_of_candidate_id?: string;
   is_rejoining: boolean;
+  post_form_sent_at?: string;
+  post_form_submitted_at?: string;
   applied_at: string;
   has_resume?: boolean;
   created_at: string;

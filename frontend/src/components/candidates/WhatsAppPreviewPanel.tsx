@@ -20,6 +20,7 @@ import { sendWhatsAppInvite } from '../../api/candidates';
 interface WhatsAppPreviewPanelProps {
   candidate: Candidate;
   className?: string;
+  inviteType?: 'pre' | 'post';
 }
 
 const FIELD_LABELS: Partial<Record<keyof WhatsAppTemplateVars, string>> = {
@@ -80,34 +81,38 @@ function WhatsAppMessageBody({ text }: { text: string }) {
   );
 }
 
-export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPanelProps) {
+export function WhatsAppPreviewPanel({ candidate, className, inviteType = 'pre' }: WhatsAppPreviewPanelProps) {
   const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
   const [vars, setVars] = useState<WhatsAppTemplateVars>(() => {
+    const linkToUse = inviteType === 'post' ? candidate.post_share_url : candidate.share_url;
     const defaults = defaultTemplateVars({
       candidateName: candidate.full_name,
       position: candidate.position_applied_for,
-      formLink: candidate.share_url || `${window.location.origin}/#/pre-form/pending`,
+      formLink: linkToUse || `${window.location.origin}/#/${inviteType}-form/pending`,
       branchName: 'Nippon Toyota Kochi - Edappally',
       mapsLink: 'https://maps.google.com/?q=Nippon+Toyota+Kochi+Edappally',
       recruiterName: user?.full_name,
+      inviteType,
     });
 
     return {
       ...defaults,
       ...loadStoredTemplateVars(candidate.id),
-      formLink: candidate.share_url || defaults.formLink,
+      formLink: linkToUse || defaults.formLink,
+      inviteType,
     };
   });
   const [draft, setDraft] = useState(vars);
 
   useEffect(() => {
-    if (!candidate.share_url) return;
-    setVars((current) => ({ ...current, formLink: candidate.share_url! }));
-  }, [candidate.share_url]);
+    const linkToUse = inviteType === 'post' ? candidate.post_share_url : candidate.share_url;
+    if (!linkToUse) return;
+    setVars((current) => ({ ...current, formLink: linkToUse! }));
+  }, [candidate.share_url, candidate.post_share_url, inviteType]);
 
   useEffect(() => {
     storeTemplateVars(candidate.id, vars);
@@ -125,7 +130,8 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
   };
 
   const saveDraft = () => {
-    setVars({ ...draft, formLink: candidate.share_url || draft.formLink });
+    const linkToUse = inviteType === 'post' ? candidate.post_share_url : candidate.share_url;
+    setVars({ ...draft, formLink: linkToUse || draft.formLink });
     setIsEditing(false);
     toast.success('Preview updated');
   };
@@ -282,7 +288,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
                 <img src="/link-icon.png" alt="Link" className="w-4 h-4 object-contain" />
                 Candidate form link
               </label>
-              <Input value={candidate.share_url || draft.formLink} readOnly disabled />
+              <Input value={(inviteType === 'post' ? candidate.post_share_url : candidate.share_url) || draft.formLink} readOnly disabled />
               <p className="mt-1.5 text-xs text-muted-foreground">Uses this candidate&apos;s generated form link.</p>
             </div>
           </div>

@@ -1,20 +1,28 @@
 import { useState, useEffect } from 'react';
-import { Send, FileText, CheckCircle2, Link } from 'lucide-react';
-import { Button, LoadingSpinner } from '../ui';
+import { LoadingSpinner } from '../ui';
 import { CandidateSummaryDocument } from './CandidateSummaryDocument';
 import { EvaluationStageWidget } from './EvaluationStageWidget';
-import { sendPostForm } from '../../api/candidates';
-import { toast } from 'sonner';
+import { PostFormStatus } from './PostFormStatus';
 import { getCandidateEvaluations } from '../../api/evaluations';
 import type { Candidate, Evaluation } from '../../types';
+import { cn } from '../../lib/utils';
+import { AlertTriangle } from 'lucide-react';
 
 interface FinalApprovalWidgetProps {
   candidate: Candidate;
   onUpdate: () => void;
 }
 
+type TabId = 'HQ_INTERVIEW' | 'POST_FORM' | 'CSS';
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'HQ_INTERVIEW', label: 'HQ Online Interview' },
+  { id: 'POST_FORM', label: 'Candidate Information Form' },
+  { id: 'CSS', label: 'Candidate Summary Sheet' }
+];
+
 export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidgetProps) {
-  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabId>('HQ_INTERVIEW');
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [fetching, setFetching] = useState(true);
 
@@ -24,80 +32,67 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
       .finally(() => setFetching(false));
   }, [candidate.id]);
 
-  const handleSendPostForm = async () => {
-    setLoading(true);
-    try {
-      await sendPostForm(candidate.id);
-      toast.success('Information form link generated and Activity Log updated.');
-      onUpdate();
-    } catch (error) {
-      toast.error('Failed to send Candidate Information Form.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const isSubmitted = candidate.post_form_status === 'SUBMITTED';
 
   return (
-    <div className="space-y-8">
-      {/* 1. HQ Interview Evaluation (if needed) */}
-      <EvaluationStageWidget
-        candidate={candidate}
-        evalTypes={['HQ_INTERVIEW']}
-        title="HQ Online Interview"
-        onUpdate={onUpdate}
-      />
+    <div className="space-y-6">
+      {/* Tabs Header */}
+      <div className="flex bg-white rounded-xl shadow-sm border border-border p-1 gap-1 overflow-x-auto">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "flex-1 min-w-[200px] px-4 py-3 text-sm font-semibold rounded-lg transition-all",
+              activeTab === tab.id
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      {/* 2. Post Form & Candidate Summary */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-              <FileText className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Candidate Information Form</h3>
-              <p className="text-sm text-gray-500">
-                Status: <span className="font-medium text-gray-900">{candidate.post_form_status?.replace('_', ' ') || 'NOT SENT'}</span>
-              </p>
-            </div>
+      {/* Tab Content */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-0 overflow-hidden min-h-[500px]">
+        {activeTab === 'HQ_INTERVIEW' && (
+          <div className="p-6">
+            <EvaluationStageWidget
+              candidate={candidate}
+              evalTypes={['HQ_INTERVIEW']}
+              title="HQ Online Interview"
+              onUpdate={onUpdate}
+            />
           </div>
-          
-          {(!candidate.post_form_status || candidate.post_form_status === 'NOT_SENT') && (
-            <Button onClick={handleSendPostForm} disabled={loading} className="gap-2">
-              <Send className="w-4 h-4" />
-              {loading ? 'Generating...' : 'Generate Information Form'}
-            </Button>
-          )}
-          {(candidate.post_form_status === 'SENT' || candidate.post_form_status === 'VIEWED') && (
-            <div className="flex items-center gap-3">
-              <div className="text-sm text-yellow-600 font-medium bg-yellow-50 px-3 py-1.5 rounded-full border border-yellow-200">
-                Awaiting Candidate Submission
-              </div>
-              {candidate.post_share_url && (
-                <Button variant="secondary" size="sm" onClick={() => {
-                  navigator.clipboard.writeText(candidate.post_share_url!);
-                  toast.success('Form link copied to clipboard!');
-                }} className="gap-2 text-sm">
-                  <Link className="w-4 h-4" /> Copy Link
-                </Button>
-              )}
-            </div>
-          )}
-          {isSubmitted && (
-            <div className="text-sm text-green-600 font-medium bg-green-50 px-3 py-1.5 rounded-full border border-green-200 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4" />
-              Submitted Successfully
-            </div>
-          )}
-        </div>
+        )}
 
-        {isSubmitted && (
-          <div className="mt-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6 pb-2 border-b">Candidate Summary Sheet (CSS)</h3>
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="max-h-[80vh] overflow-y-auto custom-scrollbar">
+        {activeTab === 'POST_FORM' && (
+          <div className="p-6 bg-muted/10 h-full">
+            <PostFormStatus 
+              candidate={candidate} 
+              onUpdate={onUpdate} 
+            />
+          </div>
+        )}
+
+        {activeTab === 'CSS' && (
+          <div className="min-h-[80vh]">
+            {!isSubmitted && (
+              <div className="mx-6 mt-6 mb-4 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-xl flex items-start gap-3 shadow-sm max-w-4xl">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-sm">Incomplete Data Warning</h4>
+                  <p className="text-sm mt-1">
+                    The candidate has not submitted their final Information Form yet. 
+                    The Candidate Summary Sheet generated below will be missing key final details.
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            <div className="w-full">
+              <div className="bg-white">
                 {fetching ? (
                   <div className="flex justify-center p-12"><LoadingSpinner /></div>
                 ) : (
@@ -111,7 +106,6 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

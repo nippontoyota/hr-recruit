@@ -11,6 +11,7 @@ export interface WhatsAppTemplateVars {
   mapsLink: string;
   recruiterName: string;
   extraInstructions: string;
+  inviteType?: 'pre' | 'post';
 }
 
 export const DOUBLETICK_TEMPLATE_NAME = 'nippon_pre_interview_invite';
@@ -37,7 +38,9 @@ export function buildWhatsAppMessage(vars: WhatsAppTemplateVars): string {
     '',
     `Thank you for your interest in the *${vars.position}* role at Nippon Toyota.`,
     '',
-    'Please complete your pre-interview form using the link below:',
+    vars.inviteType === 'post'
+      ? 'Congratulations on clearing the interview! Please complete your Candidate Information form using the link below:'
+      : 'Please complete your pre-interview form using the link below:',
     vars.formLink,
     '',
     vars.extraInstructions.trim() ? vars.extraInstructions.trim() : 'Fill all sections carefully. Incomplete forms may delay your application.',
@@ -63,6 +66,7 @@ export function defaultTemplateVars(input: {
   visitDate?: Date;
   mapsLink?: string;
   recruiterName?: string;
+  inviteType?: 'pre' | 'post';
 }): WhatsAppTemplateVars {
   const branch = findBranch(input.branchName);
   const visit = input.visitDate ?? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
@@ -78,6 +82,7 @@ export function defaultTemplateVars(input: {
     recruiterName: input.recruiterName || 'HR Team',
     extraInstructions:
       'Bring a copy of your resume and valid ID proof when you visit the branch.',
+    inviteType: input.inviteType || 'pre',
   };
 }
 
