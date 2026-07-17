@@ -1,9 +1,8 @@
 import random
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -71,7 +70,7 @@ def _get_candidate_department(position: str | None) -> str:
 def get_candidate_evaluations(
     candidate_id: UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.HR)),
+    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
 ):
     candidate = db.get(Candidate, candidate_id)
     if not candidate:
@@ -113,7 +112,7 @@ def schedule_evaluation(
     eval_id: UUID,
     body: EvaluationSchedule,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.HR)),
+    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
 ):
     evaluation = db.get(Evaluation, eval_id)
     if not evaluation:
@@ -122,6 +121,16 @@ def schedule_evaluation(
     evaluation.interview_mode = body.interview_mode
     evaluation.scheduled_time = body.scheduled_time
     evaluation.location_or_link = body.location_or_link
+    
+    if body.interviewer_id:
+        from sqlalchemy.orm.attributes import flag_modified
+        candidate = db.get(Candidate, evaluation.candidate_id)
+        if not candidate:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        assignments = candidate.interviewer_assignments or {}
+        assignments[evaluation.type.value] = str(body.interviewer_id)
+        candidate.interviewer_assignments = assignments
+        flag_modified(candidate, "interviewer_assignments")
     
     if body.interview_mode or body.scheduled_time or body.location_or_link:
         evaluation.status = InterviewStatus.SCHEDULED
@@ -137,7 +146,7 @@ def schedule_evaluation(
 def generate_evaluation_token(
     eval_id: UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.HR)),
+    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
 ):
     evaluation = db.get(Evaluation, eval_id)
     if not evaluation:
@@ -194,7 +203,7 @@ def submit_scorecard(
     eval_id: UUID,
     body: EvaluationSubmitScorecard,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.HR)),
+    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
 ):
     evaluation = db.get(Evaluation, eval_id)
     if not evaluation:
@@ -340,7 +349,7 @@ def submit_public_evaluation(
     token_row = db.scalar(
         select(EvaluationToken).where(
             EvaluationToken.token == token,
-            EvaluationToken.is_used == False,
+            EvaluationToken.is_used.is_(False),
             EvaluationToken.expires_at > datetime.now(UTC)
         ).with_for_update()
     )
@@ -393,7 +402,7 @@ def get_public_test_questions(
     token_row = db.scalar(
         select(EvaluationToken).where(
             EvaluationToken.token == token,
-            EvaluationToken.is_used == False,
+            EvaluationToken.is_used.is_(False),
             EvaluationToken.expires_at > datetime.now(UTC)
         )
     )
@@ -434,7 +443,7 @@ def submit_public_test(
     token_row = db.scalar(
         select(EvaluationToken).where(
             EvaluationToken.token == token,
-            EvaluationToken.is_used == False,
+            EvaluationToken.is_used.is_(False),
             EvaluationToken.expires_at > datetime.now(UTC)
         ).with_for_update()
     )
@@ -498,7 +507,7 @@ def send_evaluation_whatsapp_invite(
     eval_id: UUID,
     body: EvaluationWhatsAppInvite,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.HR)),
+    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
 ):
     evaluation = db.get(Evaluation, eval_id)
     if not evaluation:

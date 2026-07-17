@@ -1,5 +1,4 @@
 import importlib
-import sys
 from uuid import uuid4
 from datetime import datetime, timedelta, UTC
 from unittest.mock import MagicMock, patch
@@ -417,7 +416,6 @@ def test_evaluation_token_generation_shuffles_questions():
     db.add.side_effect = mock_add
     
     # Mock authentication / roles dependency override
-    from app.core.deps import get_current_active_user
     dummy_user = User(id=uuid4(), email="admin@nippon.test", role=UserRole.ADMIN, is_active=True)
     app.dependency_overrides[get_current_active_user] = lambda: dummy_user
     app.dependency_overrides[get_db] = lambda: db

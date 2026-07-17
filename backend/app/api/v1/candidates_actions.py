@@ -1,28 +1,20 @@
-from datetime import UTC, datetime
-from pathlib import PurePosixPath
-from uuid import UUID, uuid4
+from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
-import os
-from app.core.config import settings
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.deps import get_current_active_user, require_roles
-from app.core.access import assert_candidate_access, get_candidate_for_user
+from app.core.deps import require_roles
+from app.core.access import get_candidate_for_user
 from app.models.candidate import Candidate
-from app.models.candidate_profile import CandidateProfile
 from app.models.candidate_screening import CandidateScreening
 from app.models.activity_log import ActivityLog
-from app.models.document import Document
-from app.models.enums import DocumentType, PipelineStage, UserRole, ActivityType, ScreeningStatus, FormStatus
+from app.models.enums import PipelineStage, UserRole, ActivityType, ScreeningStatus
 from app.models.stage_history import StageHistory
 from app.models.user import User
 from app.models.communication import Communication
 from app.models.enums import CommunicationType, CommunicationDirection, CommunicationStatus
-from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, PreFormApplicationData, ScreeningSubmitResponse, CandidateProfileRawDataUpdate, WhatsAppInviteCreate
-from app.services import storage
+from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, ScreeningSubmitResponse, WhatsAppInviteCreate
 from app.services.workflow import WorkflowService
 from app.services.doubletick import DoubleTickClient
 
@@ -30,8 +22,7 @@ router = APIRouter(prefix="/candidates", tags=["candidates"])
 
 from .candidates_core import *
 from .candidates_core import (
-    _resume_extension, _safe_filename, _validate_resume_content_type,
-    _read_resume_bytes, _validate_resume_magic, _get_resume_document,
+    _get_resume_document,
     _document_out, _save_resume_for_candidate, _issue_pre_form, _store_whatsapp_invite
 )
 
@@ -40,7 +31,7 @@ async def upload_resume(
     id: UUID,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
     return await _save_resume_for_candidate(db, row, file, uploaded_by_user_id=user.id)
@@ -50,7 +41,7 @@ async def upload_resume(
 def get_resume(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     get_candidate_for_user(db, id, user)
     doc = _get_resume_document(db, id)
@@ -64,7 +55,7 @@ def transition_stage(
     id: UUID,
     body: StageChange,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
     updated = WorkflowService.transition(
@@ -88,7 +79,7 @@ def unhold_candidate(
     id: UUID,
     body: UnholdRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     """Resume a candidate from ON_HOLD back to the previous stage recorded in stage history.
 
@@ -123,7 +114,7 @@ def unhold_candidate(
 def history(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     get_candidate_for_user(db, id, user)
     return list(db.scalars(select(StageHistory).where(StageHistory.candidate_id == id).order_by(StageHistory.created_at)))
@@ -132,7 +123,7 @@ def history(
 def get_activity_logs(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     get_candidate_for_user(db, id, user)
     return list(db.scalars(select(ActivityLog).where(ActivityLog.candidate_id == id).order_by(ActivityLog.created_at.desc())))
@@ -141,7 +132,7 @@ def get_activity_logs(
 def get_screening(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     get_candidate_for_user(db, id, user)
     row = db.scalar(select(CandidateScreening).where(CandidateScreening.candidate_id == id))
@@ -154,7 +145,7 @@ def submit_screening(
     id: UUID,
     body: CandidateScreeningCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     candidate = get_candidate_for_user(db, id, user)
     screening = db.scalar(select(CandidateScreening).where(CandidateScreening.candidate_id == id))
@@ -208,7 +199,7 @@ def submit_screening(
 def send_pre_form(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
     _issue_pre_form(db, row, user)
@@ -221,7 +212,7 @@ def send_whatsapp_invite(
     id: UUID,
     body: WhatsAppInviteCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     candidate = get_candidate_for_user(db, id, user)
     

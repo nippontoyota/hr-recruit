@@ -7,7 +7,6 @@ Create Date: 2026-07-10 16:05:00.000000
 """
 from typing import Sequence, Union
 
-import sqlalchemy as sa
 from alembic import op
 
 
@@ -40,7 +39,7 @@ def upgrade() -> None:
     """)
     
     # 3. Alter columns using a mapping CASE statement to translate existing values
-    mapping_case = f"""
+    mapping_case = """
         CASE 
             WHEN current_stage::text = 'NEW_APPLICATION' THEN 'SCREENING'
             WHEN current_stage::text = 'AWAITING_PRE_INTERVIEW_FORM_FILL' THEN 'CANDIDATE_FORM'

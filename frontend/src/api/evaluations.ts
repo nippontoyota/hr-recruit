@@ -12,6 +12,7 @@ export const scheduleEvaluation = async (
     interview_mode?: 'PHYSICAL' | 'ONLINE' | null;
     scheduled_time?: string | null;
     location_or_link?: string | null;
+    interviewer_id?: string | null;
   }
 ): Promise<Evaluation> => {
   const response = await api.post(`/evaluations/${evalId}/schedule`, data);

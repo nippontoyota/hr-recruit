@@ -1,38 +1,21 @@
 from datetime import UTC, datetime
-from pathlib import PurePosixPath
-from uuid import UUID, uuid4
+from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
-from sqlalchemy import func, or_, select
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
-import os
-from app.core.config import settings
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.deps import get_current_active_user, require_roles
-from app.core.access import assert_candidate_access, get_candidate_for_user
 from app.models.candidate import Candidate
 from app.models.candidate_profile import CandidateProfile
-from app.models.candidate_screening import CandidateScreening
 from app.models.activity_log import ActivityLog
-from app.models.document import Document
-from app.models.enums import DocumentType, PipelineStage, UserRole, ActivityType, ScreeningStatus, FormStatus
-from app.models.stage_history import StageHistory
+from app.models.enums import PipelineStage, UserRole, ActivityType, FormStatus
 from app.models.user import User
-from app.models.communication import Communication
-from app.models.enums import CommunicationType, CommunicationDirection, CommunicationStatus
-from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, PreFormApplicationData, ScreeningSubmitResponse, CandidateProfileRawDataUpdate, WhatsAppInviteCreate
-from app.services import storage
-from app.services.workflow import WorkflowService
-from app.services.doubletick import DoubleTickClient
+from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, PreFormApplicationData
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
 from .candidates_core import *
 from .candidates_core import (
-    _resume_extension, _safe_filename, _validate_resume_content_type,
-    _read_resume_bytes, _validate_resume_magic, _get_resume_document,
-    _document_out, _save_resume_for_candidate, _issue_pre_form, _store_whatsapp_invite
+    _save_resume_for_candidate
 )
 
 @router.post("/public-apply", response_model=CandidateOut, status_code=201)

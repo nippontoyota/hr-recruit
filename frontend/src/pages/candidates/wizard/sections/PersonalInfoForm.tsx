@@ -54,7 +54,22 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
           <Input
             type="date"
             value={data.dateOfBirth}
-            onChange={(e) => update('dateOfBirth', e.target.value)}
+            onChange={(e) => {
+              const newDob = e.target.value;
+              update('dateOfBirth', newDob);
+              if (newDob) {
+                const dobDate = new Date(newDob);
+                const today = new Date();
+                let calculatedAge = today.getFullYear() - dobDate.getFullYear();
+                const m = today.getMonth() - dobDate.getMonth();
+                if (m < 0 || (m === 0 && today.getDate() < dobDate.getDate())) {
+                  calculatedAge--;
+                }
+                update('age', calculatedAge.toString());
+              } else {
+                update('age', '');
+              }
+            }}
             onBlur={() => onBlurField('dateOfBirth')}
             error={!!errors.dateOfBirth}
             max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}

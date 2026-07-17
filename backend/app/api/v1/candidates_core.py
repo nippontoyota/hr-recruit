@@ -2,9 +2,8 @@ from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from sqlalchemy import or_, select, cast, String, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 import os
@@ -21,12 +20,9 @@ from app.models.document import Document
 from app.models.enums import DocumentType, PipelineStage, UserRole, ActivityType, ScreeningStatus, FormStatus
 from app.models.stage_history import StageHistory
 from app.models.user import User
-from app.models.communication import Communication
-from app.models.enums import CommunicationType, CommunicationDirection, CommunicationStatus
-from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, PreFormApplicationData, ScreeningSubmitResponse, CandidateProfileRawDataUpdate, WhatsAppInviteCreate
+from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, CandidateScreeningCreate, CandidateProfileRawDataUpdate
 from app.services import storage
 from app.services.workflow import WorkflowService
-from app.services.doubletick import DoubleTickClient
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -136,7 +132,7 @@ def _store_whatsapp_invite(
     profile.raw_data = raw
 
 
-def create_candidate(db: Session, body: CandidateCreate, user_id: UUID) -> Candidate:
+def create_candidate(db: Session, body: CandidateCreate, user_id: UUID | None, created_via_public_apply: bool = False) -> Candidate:
     match = [Candidate.phone == body.phone]
     if body.email:
         match.append(Candidate.email == body.email)
@@ -168,13 +164,12 @@ def create_candidate(db: Session, body: CandidateCreate, user_id: UUID) -> Candi
         profile = CandidateProfile(candidate_id=row.id)
         db.add(profile)
         
-        log_desc = "Candidate applied via public form." if user_id == body.assigned_hr_user_id and "public-apply" in str(user_id) else "Candidate created manually in SCREENING stage."
-        # Since user_id is passed as UUID, we will just use a generic message
+        log_desc = "Candidate applied via public form." if created_via_public_apply else "Candidate created manually in SCREENING stage."
         log = ActivityLog(
             candidate_id=row.id,
             activity_type=ActivityType.SYSTEM,
             title="Candidate Created",
-            description="Candidate record created.",
+            description=log_desc,
             created_by_user_id=user_id if user_id else None
         )
         db.add(log)
@@ -320,13 +315,61 @@ def list_candidates(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(
+        UserRole.COMPANY_HR_HEAD, UserRole.SUPER_ADMIN, UserRole.ADMIN,
+        UserRole.BRANCH_HR, UserRole.DEPT_HEAD, UserRole.BRANCH_VP,
+        UserRole.SERVICE_VP, UserRole.FINANCE, UserRole.HQ_HR,
+        UserRole.HQ_STAFF, UserRole.LOCAL_HR
+    )),
 ):
     q = select(Candidate).options(joinedload(Candidate.profile)).order_by(Candidate.created_at.desc())
     if stage:
         q = q.where(Candidate.current_stage == stage)
-    if user.role == UserRole.LOCAL_HR:
-        q = q.where(Candidate.assigned_hr_user_id == user.id)
+        
+    # Row-Level Security / Visibility Logic
+    if user.role in (UserRole.COMPANY_HR_HEAD, UserRole.SUPER_ADMIN, UserRole.ADMIN):
+        pass # sees all
+    elif user.role == UserRole.BRANCH_HR:
+        # Branch HR sees candidates assigned to them, or candidates in their branch
+        q = q.where(
+            or_(
+                Candidate.assigned_hr_user_id == user.id,
+                Candidate.branch_location == user.branch_location
+            )
+        )
+    elif user.role == UserRole.DEPT_HEAD:
+        # Dept Head sees candidates for their department, or where they are assigned as interviewer
+        q = q.where(
+            or_(
+                Candidate.position_applied_for == user.department,
+                func.jsonb_path_exists(Candidate.interviewer_assignments, f'$.* ? (@ == "{str(user.id)}")')
+            )
+        )
+    elif user.role == UserRole.BRANCH_VP:
+        q = q.where(
+            or_(
+                Candidate.branch_location == user.branch_location,
+                func.jsonb_path_exists(Candidate.interviewer_assignments, f'$.* ? (@ == "{str(user.id)}")')
+            )
+        )
+    elif user.role == UserRole.SERVICE_VP:
+        q = q.where(
+            or_(
+                Candidate.position_applied_for.ilike("%service%"),
+                func.jsonb_path_exists(Candidate.interviewer_assignments, f'$.* ? (@ == "{str(user.id)}")')
+            )
+        )
+    elif user.role == UserRole.FINANCE:
+        # Finance only sees candidates in final stages
+        q = q.where(Candidate.current_stage.in_([PipelineStage.FINAL_APPROVAL, PipelineStage.HIRED]))
+    else:
+        # HQ_HR, HQ_STAFF, INTERVIEWER fallback
+        q = q.where(
+            or_(
+                Candidate.assigned_hr_user_id == user.id,
+                func.jsonb_path_exists(Candidate.interviewer_assignments, f'$.* ? (@ == "{str(user.id)}")')
+            )
+        )
     
     q = q.offset(skip).limit(limit)
     rows = list(db.scalars(q).all())
@@ -338,11 +381,11 @@ def list_candidates(
 def create(
     body: CandidateCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     if body.assigned_hr_user_id is None:
         body = body.model_copy(update={"assigned_hr_user_id": user.id})
-    row = create_candidate(db, body, user.id)
+    row = create_candidate(db, body, user.id, created_via_public_apply=False)
     return to_candidate_out(row, False)
 
 
@@ -350,7 +393,7 @@ def create(
 def get_one(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     row = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.id == id))
     if not row:
@@ -364,7 +407,7 @@ def update_profile_raw_data(
     id: UUID,
     body: CandidateProfileRawDataUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     row = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.id == id))
     if not row:
@@ -383,7 +426,7 @@ def update_profile_raw_data(
         candidate_id=row.id,
         activity_type=ActivityType.NOTE,
         title="Application Form Updated",
-        description=f"Candidate's pre-interview application form was manually updated by HR.",
+        description="Candidate's pre-interview application form was manually updated by HR.",
         created_by_user_id=user.id,
     )
     db.add(log)
@@ -396,7 +439,7 @@ def update_profile_raw_data(
 def delete_candidate_endpoint(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
     
@@ -424,7 +467,7 @@ def delete_candidate_endpoint(
     db.delete(row)
     try:
         db.commit()
-    except IntegrityError as e:
+    except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="Cannot delete candidate due to existing references.")
 
