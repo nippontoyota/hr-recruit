@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { CheckCircle, ShieldAlert, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Button, LoadingSpinner } from '../../components/ui';
+import PublicShell from './PublicShell';
 import { getPublicTestQuestions, submitPublicTest } from '../../api/evaluations';
 import { cn, extractError } from '../../lib/utils';
 import { toast } from 'sonner';
@@ -128,20 +129,9 @@ export default function PublicTestPage() {
   const selectedOpt = answers[q.id];
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Test Page Header */}
-      <header className="h-16 bg-surface border-b border-border px-6 flex items-center justify-between shrink-0 shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold">NT</div>
-          <h1 className="font-bold text-base text-foreground tracking-tight">Nippon Toyota — Technical Assessment</h1>
-        </div>
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-primary/10 text-primary border-primary/20 uppercase">
-          {department} DEPARTMENT
-        </span>
-      </header>
-
+    <PublicShell>
       {/* Main Container */}
-      <main className="flex-1 flex flex-col items-center justify-center p-6 bg-muted/10">
+      <div className="flex-1 flex flex-col items-center p-4 sm:p-6 bg-muted/10">
         <div className="w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-md overflow-hidden flex flex-col">
           
           {/* Progress Header */}
@@ -163,28 +153,37 @@ export default function PublicTestPage() {
             </h3>
 
             <div className="space-y-3">
-              {Object.entries(q.options).map(([optKey, optVal]) => {
-                const isSelected = selectedOpt === optKey;
-                return (
-                  <button
-                    key={optKey}
-                    type="button"
-                    onClick={() => handleSelectOption(q.id, optKey)}
-                    className={cn(
-                      "w-full text-left p-4 rounded-xl border border-border bg-background/50 hover:bg-muted/30 transition-all duration-200 flex items-center gap-3 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-primary focus:outline-none",
-                      isSelected && "border-primary bg-primary/5 text-primary"
-                    )}
-                  >
-                    <span className={cn(
-                      "w-5 h-5 rounded-full border border-border flex items-center justify-center text-[10px] shrink-0 font-bold",
-                      isSelected ? "bg-primary border-transparent text-primary-foreground" : "bg-muted"
-                    )}>
-                      {optKey.toUpperCase()}
-                    </span>
-                    {optVal}
-                  </button>
-                );
-              })}
+              {Object.keys(q.options).length > 0 ? (
+                Object.entries(q.options).map(([optKey, optVal]) => {
+                  const isSelected = selectedOpt === optKey;
+                  return (
+                    <button
+                      key={optKey}
+                      type="button"
+                      onClick={() => handleSelectOption(q.id, optKey)}
+                      className={cn(
+                        "w-full text-left p-4 rounded-xl border border-border bg-background/50 hover:bg-muted/30 transition-all duration-200 flex items-center gap-3 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-primary focus:outline-none",
+                        isSelected && "border-primary bg-primary/5 text-primary"
+                      )}
+                    >
+                      <span className={cn(
+                        "w-5 h-5 rounded-full border border-border flex items-center justify-center text-[10px] shrink-0 font-bold",
+                        isSelected ? "bg-primary border-transparent text-primary-foreground" : "bg-muted"
+                      )}>
+                        {optKey.toUpperCase()}
+                      </span>
+                      {optVal}
+                    </button>
+                  );
+                })
+              ) : (
+                <textarea
+                  value={answers[q.id] || ''}
+                  onChange={(e) => setAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                  className="w-full h-40 p-4 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 transition-all focus:outline-none resize-none font-medium text-foreground placeholder:text-muted-foreground/60"
+                  placeholder="Type your answer here..."
+                />
+              )}
             </div>
           </div>
 
@@ -221,9 +220,8 @@ export default function PublicTestPage() {
               </Button>
             )}
           </div>
-
         </div>
-      </main>
-    </div>
+      </div>
+    </PublicShell>
   );
 }

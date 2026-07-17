@@ -53,6 +53,31 @@ export const getRecruiterPublic = async (hrId: string): Promise<{ full_name: str
   return response.data;
 };
 
+export const fetchPublicPreForm = async (token: string) => {
+  const res = await api.get(`/candidates/public-pre-form/${token}`);
+  return res.data;
+};
+
+export const submitPublicPreForm = async (token: string, data: any) => {
+  const res = await api.post(`/candidates/public-pre-form/${token}`, data);
+  return res.data;
+};
+
+export const fetchPublicPostForm = async (token: string) => {
+  const res = await api.get(`/candidates/public-post-form/${token}`);
+  return res.data;
+};
+
+export const submitPublicPostForm = async (token: string, data: any) => {
+  const res = await api.post(`/candidates/public-post-form/${token}`, data);
+  return res.data;
+};
+
+export const sendPostForm = async (id: string) => {
+  const res = await api.post(`/candidates/${id}/post-form/send`);
+  return res.data;
+};
+
 export const publicGetBasicCandidate = async (candidateId: string): Promise<Candidate> => {
   const response = await api.get(`/candidates/public-basic/${candidateId}`);
   return response.data;

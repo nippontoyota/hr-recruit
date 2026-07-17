@@ -77,3 +77,8 @@ export const sendEvaluationWhatsAppInvite = async (
   return response.data;
 };
 
+
+export const getDepartmentQuestions = async (department: string): Promise<any[]> => {
+  const response = await api.get(`/evaluations/questions?department=${encodeURIComponent(department)}`);
+  return response.data;
+};

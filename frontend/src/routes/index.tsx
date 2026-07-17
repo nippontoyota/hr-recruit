@@ -11,11 +11,14 @@ import { RouteErrorPage } from '../components/layout/RouteErrorPage';
 const Login = lazy(() => import('../pages/Login'));
 const CandidatesList = lazy(() => import('../pages/candidates/CandidatesList'));
 const CandidateProfile = lazy(() => import('../pages/candidates/CandidateProfile'));
+const CandidatePrintView = lazy(() => import('../pages/candidates/CandidatePrintView'));
 const NotFound = lazy(() => import('../pages/NotFound'));
 const ApplyForm = lazy(() => import('../pages/candidates/ApplyForm'));
 const PreFormPage = lazy(() => import('../pages/candidates/PreFormPage'));
+const PostFormPage = lazy(() => import('../pages/candidates/PostFormPage'));
 const PublicInterviewerPage = lazy(() => import('../pages/candidates/PublicInterviewerPage'));
 const PublicTestPage = lazy(() => import('../pages/candidates/PublicTestPage'));
+const PrintTechnicalTestPage = lazy(() => import('../pages/candidates/PrintTechnicalTestPage'));
 
 const SuspenseFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -56,6 +59,15 @@ export const router = createHashRouter([
     ),
   },
   {
+    path: '/post-form/:token',
+    errorElement: <RouteErrorPage />,
+    element: (
+      <PageSuspense>
+        <PostFormPage />
+      </PageSuspense>
+    ),
+  },
+  {
     path: '/eval/:token',
     errorElement: <RouteErrorPage />,
     element: (
@@ -71,6 +83,26 @@ export const router = createHashRouter([
       <PageSuspense>
         <PublicTestPage />
       </PageSuspense>
+    ),
+  },
+  {
+    path: '/candidates/:id/print',
+    element: (
+      <ProtectedRoute>
+        <PageSuspense>
+          <CandidatePrintView />
+        </PageSuspense>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/candidates/:id/print-test',
+    element: (
+      <ProtectedRoute>
+        <PageSuspense>
+          <PrintTechnicalTestPage />
+        </PageSuspense>
+      </ProtectedRoute>
     ),
   },
   {

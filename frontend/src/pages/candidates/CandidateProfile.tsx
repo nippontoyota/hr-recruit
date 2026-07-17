@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
-import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History } from 'lucide-react';
+import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History, Printer } from 'lucide-react';
 import { getCandidateById, updateCandidateStage, unholdCandidate } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { toast } from 'sonner';
@@ -14,6 +14,7 @@ import { PreFormStatus } from '../../components/candidates/PreFormStatus';
 import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPreviewPanel';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { EvaluationStageWidget } from '../../components/candidates/EvaluationStageWidget';
+import { FinalApprovalWidget } from '../../components/candidates/FinalApprovalWidget';
 import { ActivityTimeline } from '../../components/candidates/ActivityTimeline';
 import { extractError } from '../../lib/utils';
 
@@ -287,6 +288,16 @@ export default function CandidateProfile() {
                 >
                   <History className="w-4 h-4 text-muted-foreground" /> Activity Log
                 </Button>
+                {stage === 'FINAL_APPROVAL' && (
+                  <a
+                    href={`/candidates/${candidate.id}/print`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
+                  >
+                    <Printer className="w-4 h-4 text-muted-foreground" /> Print Form
+                  </a>
+                )}
                 <a
                   href={`https://wa.me/91${candidate.phone}`}
                   target="_blank"
@@ -419,10 +430,8 @@ export default function CandidateProfile() {
             )}
 
             {stage === 'FINAL_APPROVAL' && (
-              <EvaluationStageWidget
+              <FinalApprovalWidget
                 candidate={candidate}
-                evalTypes={['HQ_INTERVIEW']}
-                title="HQ Online Interview"
                 onUpdate={handleUpdate}
               />
             )}
