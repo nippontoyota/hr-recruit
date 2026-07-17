@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
 import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History } from 'lucide-react';
@@ -37,6 +38,7 @@ export default function CandidateProfile() {
   const [isRejecting, setIsRejecting] = useState(false);
   const [resumeStage, setResumeStage] = useState<PipelineStage>('SCREENING');
   const [isResuming, setIsResuming] = useState(false);
+  const [isActivityOpen, setIsActivityOpen] = useState(false);
 
   const workspaceRef = useRef<HTMLDivElement>(null);
 
@@ -278,6 +280,13 @@ export default function CandidateProfile() {
 
               {/* Right Column: Actions */}
               <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <Button
+                  variant="ghost"
+                  onClick={() => setIsActivityOpen(true)}
+                  className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
+                >
+                  <History className="w-4 h-4 text-muted-foreground" /> Activity Log
+                </Button>
                 <a
                   href={`https://wa.me/91${candidate.phone}`}
                   target="_blank"
@@ -474,23 +483,39 @@ export default function CandidateProfile() {
           </div>
         </div>
 
-        {/* ── ACTIVITY TIMELINE ── */}
-        <div className="mt-8 mb-6 border-t border-border pt-6">
-          <div className="max-w-2xl mx-auto w-full">
-            <div className="flex items-center gap-2 mb-4">
-              <History className="w-4 h-4 text-muted-foreground" />
-              <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Activity Log</h3>
-            </div>
-            <div className="bg-background border border-border rounded-xl overflow-hidden">
-              <ActivityTimeline candidateId={candidate.id} />
-            </div>
-          </div>
         </div>
-      </div>
 
       {showWhatsAppSidebar && (
         <WhatsAppPreviewPanel candidate={candidate} className="hidden lg:flex sticky top-0 h-screen" />
       )}
+
+      {/* ── ACTIVITY TIMELINE SIDEBAR ── */}
+      <AnimatePresence>
+        {isActivityOpen && (
+          <motion.div
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 350, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ ease: 'easeInOut', duration: 0.3 }}
+            className="flex-shrink-0 h-screen sticky top-0 bg-background border-l border-border flex flex-col overflow-hidden shadow-sm z-40"
+          >
+            <div className="w-[350px] flex flex-col h-full">
+              <div className="flex items-center justify-between p-4 md:p-6 border-b border-border/50 bg-muted/20 shrink-0">
+                <div className="flex items-center gap-2">
+                  <History className="w-5 h-5 text-muted-foreground" />
+                  <h3 className="text-base font-bold text-foreground uppercase tracking-wider">Activity Log</h3>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setIsActivityOpen(false)} className="hover:bg-muted/50 rounded-full h-8 w-8 shrink-0">
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </Button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-background">
+                <ActivityTimeline candidateId={candidate.id} />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── REJECT MODAL ── */}
       <Modal isOpen={showRejectModal} onClose={() => setShowRejectModal(false)} title="Reject Candidate" size="sm">

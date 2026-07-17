@@ -91,24 +91,26 @@ export function ActivityTimeline({ candidateId }: ActivityTimelineProps) {
   }
 
   return (
-    <div className="relative pt-2 pb-4">
+    <div className="relative pt-2 pb-4 pl-2">
       {/* Vertical line */}
-      <div className="absolute left-4 top-3 bottom-3 w-px bg-border" aria-hidden="true" />
+      <div className="absolute left-6 top-4 bottom-4 w-px bg-border z-0" aria-hidden="true" />
 
-      <ol className="space-y-6">
+      <ol className="space-y-6 relative z-10">
         {logs.map((log) => (
           <li
             key={log.id}
-            className="relative flex gap-4 pl-10 pr-4 group"
+            className="relative flex gap-4 pl-12 pr-2 group"
           >
             {/* Icon bubble */}
-            <div
-              className={cn(
-                'absolute left-0 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border shadow-sm ring-4 ring-background',
-                activityColor(log.activity_type)
-              )}
-            >
-              {activityIcon(log.activity_type)}
+            <div className="absolute left-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background ring-4 ring-background z-10">
+              <div
+                className={cn(
+                  'flex h-full w-full items-center justify-center rounded-full border shadow-sm',
+                  activityColor(log.activity_type)
+                )}
+              >
+                {activityIcon(log.activity_type)}
+              </div>
             </div>
 
             {/* Content */}
