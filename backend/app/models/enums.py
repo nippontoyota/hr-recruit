@@ -2,11 +2,19 @@ import enum
 
 
 class UserRole(str, enum.Enum):
+    SUPER_ADMIN = "SUPER_ADMIN"
+    COMPANY_HR_HEAD = "COMPANY_HR_HEAD"
+    BRANCH_HR = "BRANCH_HR"
+    HQ_HR = "HQ_HR"
+    DEPT_HEAD = "DEPT_HEAD"
+    BRANCH_VP = "BRANCH_VP"
+    SERVICE_VP = "SERVICE_VP"
+    HQ_STAFF = "HQ_STAFF"
+    FINANCE = "FINANCE"
+    # Legacy roles for compatibility
     ADMIN = "ADMIN"
-    SUPER_ADMIN = "ADMIN"
     LOCAL_HR = "LOCAL_HR"
     HR = "LOCAL_HR"
-    HQ_HR = "HQ_HR"
 
 
 class PipelineStage(str, enum.Enum):

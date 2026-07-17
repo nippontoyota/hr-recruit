@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from app.core.compat import parse_source_channel, role_for_frontend
 from app.core.database import get_db
 from app.core.deps import get_current_active_user
-from app.core.security import create_access_token, hash_password
+from app.core.security import hash_password
 from app.main import app
 from app.models.enums import PipelineStage, SourceChannel, UserRole, FormStatus
 from app.models.user import User
@@ -258,7 +258,7 @@ def test_public_apply():
 
     app.dependency_overrides[get_db] = lambda: db
     try:
-        with patch("app.api.v1.candidates_public.create_candidate", return_value=created) as create_mock:
+        with patch("app.api.v1.candidates_public.create_candidate", return_value=created):
             response = client.post(
                 f"/api/v1/candidates/public-apply?hr_id={hr_user.id}",
                 json={

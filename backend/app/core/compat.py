@@ -10,6 +10,15 @@ from app.models.enums import SourceChannel, UserRole
 ROLE_TO_FRONTEND: dict[UserRole, str] = {
     UserRole.ADMIN: "SUPER_ADMIN",
     UserRole.LOCAL_HR: "HR",
+    UserRole.SUPER_ADMIN: "SUPER_ADMIN",
+    UserRole.COMPANY_HR_HEAD: "COMPANY_HR_HEAD",
+    UserRole.BRANCH_HR: "BRANCH_HR",
+    UserRole.HQ_HR: "HQ_HR",
+    UserRole.DEPT_HEAD: "DEPT_HEAD",
+    UserRole.BRANCH_VP: "BRANCH_VP",
+    UserRole.SERVICE_VP: "SERVICE_VP",
+    UserRole.HQ_STAFF: "HQ_STAFF",
+    UserRole.FINANCE: "FINANCE",
 }
 
 # Common UI / mock labels → SourceChannel

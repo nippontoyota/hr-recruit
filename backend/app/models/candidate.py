@@ -45,6 +45,8 @@ class Candidate(Base):
     assigned_gm_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id"), nullable=True
     )
+    is_head_office_hire: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False, nullable=False)
+    interviewer_assignments: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     
     # Pre-Form Tracking
     pre_form_token: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)

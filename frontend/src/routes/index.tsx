@@ -16,6 +16,7 @@ const ApplyForm = lazy(() => import('../pages/candidates/ApplyForm'));
 const PreFormPage = lazy(() => import('../pages/candidates/PreFormPage'));
 const PublicInterviewerPage = lazy(() => import('../pages/candidates/PublicInterviewerPage'));
 const PublicTestPage = lazy(() => import('../pages/candidates/PublicTestPage'));
+const AdminUsers = lazy(() => import('../pages/AdminUsers'));
 
 const SuspenseFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -103,6 +104,16 @@ export const router = createHashRouter([
           <RoleRoute allowed={ALL_ROLES}>
             <PageSuspense>
               <CandidateProfile />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'admin/users',
+        element: (
+          <RoleRoute allowed={['SUPER_ADMIN', 'COMPANY_HR_HEAD']}>
+            <PageSuspense>
+              <AdminUsers />
             </PageSuspense>
           </RoleRoute>
         ),

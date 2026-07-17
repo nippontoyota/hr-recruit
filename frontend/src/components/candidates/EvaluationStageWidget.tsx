@@ -4,7 +4,7 @@ import { Calendar, Link, Clipboard, UserCheck, FileText, CheckCircle, Star, Send
 import { toast } from 'sonner';
 import { Button, LoadingSpinner, Modal, Input } from '../ui';
 import { getCandidateEvaluations, scheduleEvaluation, generateEvaluationToken, submitScorecardDirect, sendEvaluationWhatsAppInvite } from '../../api/evaluations';
-import type { Candidate, Evaluation, EvaluationVerdict } from '../../types';
+import type { Candidate, Evaluation, EvaluationVerdict, User } from '../../types';
 import { cn, extractError } from '../../lib/utils';
 import { useAuth } from '../../auth/AuthContext';
 import { format, addDays } from 'date-fns';
@@ -98,6 +98,21 @@ export function EvaluationStageWidget({
   const [mode, setMode] = useState<'PHYSICAL' | 'ONLINE'>('PHYSICAL');
   const [time, setTime] = useState('');
   const [location, setLocation] = useState('');
+  const [interviewerId, setInterviewerId] = useState('');
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    import('../../api/users').then(({ getInterviewers }) => {
+      getInterviewers().then(users => {
+        if (isMounted) setAllUsers(users);
+      }).catch(err => {
+        console.error(err);
+        toast.error('Failed to load interviewers');
+      });
+    });
+    return () => { isMounted = false; };
+  }, []);
 
   const handleOpenSchedule = (id: string) => {
     setSchedulingId(id);
@@ -150,7 +165,8 @@ export function EvaluationStageWidget({
       await scheduleEvaluation(evalId, {
         interview_mode: mode,
         scheduled_time: new Date(time).toISOString(),
-        location_or_link: location
+        location_or_link: location,
+        interviewer_id: interviewerId || null
       });
       toast.success('Interview scheduled successfully');
       setSchedulingId(null);
@@ -567,6 +583,21 @@ export function EvaluationStageWidget({
                               )}
                             </div>
                             <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder={mode === 'ONLINE' ? 'https://meet.google.com/...' : 'Conference Room A'} className="w-full bg-background border border-border rounded-xl p-3 focus:ring-2 focus:ring-primary/20 transition-all text-foreground" />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Assign Interviewer</label>
+                            <select
+                              value={interviewerId}
+                              onChange={(e) => setInterviewerId(e.target.value)}
+                              className="w-full bg-background border border-border rounded-xl p-3 focus:ring-2 focus:ring-primary/20 transition-all text-foreground font-medium"
+                            >
+                              <option value="">-- Select Interviewer --</option>
+                              {allUsers.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.full_name} ({u.role.replace(/_/g, ' ')}) {u.department ? `- ${u.department}` : ''}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                         </div>
                         <div className="flex gap-3 justify-end pt-2 border-t border-border/50">

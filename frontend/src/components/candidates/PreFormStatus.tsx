@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button, Input, Modal } from '../ui';
-import { CheckCircle2, Pencil, Printer, Save, X, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Pencil, Printer, Save, X, RefreshCw, Link } from 'lucide-react';
 import type { Candidate } from '../../types';
 import { toast } from 'sonner';
 import { ResumeButton } from './ResumeButton';
@@ -201,7 +201,7 @@ export function PreFormStatus({ candidate }: PreFormStatusProps) {
         {candidate.share_url ? (
           <div className="space-y-3">
             <label className="form-label flex items-center gap-1.5">
-              <img src="/link-icon.png" alt="Link" className="w-4 h-4 object-contain" />
+              <Link className="w-4 h-4" />
               Candidate form link
             </label>
             <div className="flex items-center gap-2 w-full bg-background border border-border p-1.5 rounded-xl">

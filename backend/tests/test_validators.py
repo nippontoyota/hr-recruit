@@ -1,7 +1,6 @@
 import pytest
 
 from app.schemas.candidate import CandidateCreate, PreFormApplicationData, StageChange
-from app.models.enums import PipelineStage
 from app.utils import validators as v
 
 

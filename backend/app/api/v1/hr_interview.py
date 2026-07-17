@@ -10,7 +10,7 @@ from app.core.deps import get_current_active_user
 from app.models.hr_interview import HRInterview
 from app.models.candidate import Candidate
 from app.models.activity_log import ActivityLog
-from app.models.enums import InterviewVerdict, PipelineStage, InterviewMode, InterviewStatus, ActivityType, CommunicationStatus
+from app.models.enums import InterviewVerdict, PipelineStage, InterviewMode, InterviewStatus, ActivityType
 from app.schemas.candidate import WhatsAppInviteCreate
 from app.services.doubletick import DoubleTickClient
 
@@ -154,6 +154,10 @@ def send_hr_interview_invite(
             template_name="nippon_hr_interview_invite",
             placeholders=placeholders,
         )
+        external_message_id = None
+        messages = res.get("messages", []) if res else []
+        if messages:
+            external_message_id = messages[0].get("id")
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Failed to send invite: {str(e)}")
         
@@ -161,7 +165,7 @@ def send_hr_interview_invite(
         candidate_id=candidate.id,
         activity_type=ActivityType.CALL,
         title="HR Interview Invite Sent",
-        description="WhatsApp invite for HR interview sent to candidate.",
+        description="WhatsApp invite for HR interview sent to candidate." + (f" Message ID: {external_message_id}" if external_message_id else ""),
         created_by_user_id=current_user.id,
     )
     db.add(log)

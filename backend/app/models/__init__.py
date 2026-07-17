@@ -8,6 +8,7 @@ from .evaluation import Evaluation
 from .evaluation_token import EvaluationToken
 from .followup import FollowUp
 from .hr_interview import HRInterview
+from .settings import LocationTemplate, MessageTemplate
 from .stage_history import StageHistory
 from .technical_question import TechnicalQuestion
 from .user import User
@@ -23,6 +24,8 @@ __all__ = [
     "EvaluationToken",
     "FollowUp",
     "HRInterview",
+    "LocationTemplate",
+    "MessageTemplate",
     "StageHistory",
     "TechnicalQuestion",
     "User",

@@ -8,6 +8,7 @@ class EvaluationSchedule(BaseModel):
     interview_mode: InterviewMode | None = None
     scheduled_time: datetime | None = None
     location_or_link: str | None = None
+    interviewer_id: UUID | None = None
 
 
 class EvaluationSubmitScorecard(BaseModel):
