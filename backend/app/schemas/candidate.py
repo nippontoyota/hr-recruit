@@ -427,6 +427,11 @@ class CandidateScreeningOut(CandidateScreeningCreate):
     created_at: datetime
     updated_at: datetime
 
+    @model_validator(mode="after")
+    def check_pending_fields(self) -> "CandidateScreeningOut":
+        # Skip strict validation on read — existing DB records may lack pending_reason/follow_up_date
+        return self
+
 
 class CandidateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
