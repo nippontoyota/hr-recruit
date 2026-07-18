@@ -15,8 +15,8 @@ from app.models.user import User
 from app.models.communication import Communication
 from app.models.enums import CommunicationType, CommunicationDirection, CommunicationStatus
 from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, ScreeningSubmitResponse, WhatsAppInviteCreate
-from app.services.workflow import WorkflowService
-from app.services.doubletick import DoubleTickClient
+from app.services.workflow import transition
+from app.services.doubletick import send_template
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -58,7 +58,7 @@ def transition_stage(
     user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
-    updated = WorkflowService.transition(
+    updated = transition(
         db=db,
         candidate=row,
         target_stage=body.to_stage,
@@ -104,7 +104,7 @@ def unhold_candidate(
 
     remarks = body.remarks or "Resumed from On Hold"
 
-    updated = WorkflowService.transition(db=db, candidate=candidate, target_stage=target_stage, user=user, remarks=remarks)
+    updated = transition(db=db, candidate=candidate, target_stage=target_stage, user=user, remarks=remarks)
     db.commit()
     db.refresh(updated)
     return to_candidate_out(updated, id in resume_candidate_ids(db, [id]))
@@ -128,7 +128,10 @@ def get_activity_logs(
     get_candidate_for_user(db, id, user)
     return list(db.scalars(select(ActivityLog).where(ActivityLog.candidate_id == id).order_by(ActivityLog.created_at.desc())))
 
+from fastapi_cache.decorator import cache
+
 @router.get("/{id}/screening", response_model=CandidateScreeningOut)
+@cache(expire=30)
 def get_screening(
     id: UUID,
     db: Session = Depends(get_db),
@@ -247,10 +250,8 @@ def send_whatsapp_invite(
         val = (body.variables or {}).get(key, "")
         placeholders.append(val)
         
-    client = DoubleTickClient()
-    
     try:
-        res = client.send_template(
+        res = send_template(
             to_phone=candidate.phone,
             template_name="nippon_pre_interview_invite",
             placeholders=placeholders,

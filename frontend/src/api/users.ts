@@ -1,26 +1,26 @@
-import api from './client';
+import { request } from './client';
 import type { User } from '../types';
 
 export const getUsers = async (): Promise<User[]> => {
-  const response = await api.get('/users');
+  const response = await request('GET', '/users');
   return response.data;
 };
 
 export const getInterviewers = async (): Promise<User[]> => {
-  const response = await api.get('/users/interviewers');
+  const response = await request('GET', '/users/interviewers');
   return response.data;
 };
 
 export const createUser = async (data: any): Promise<User> => {
-  const response = await api.post('/users', data);
+  const response = await request('POST', '/users', data);
   return response.data;
 };
 
 export const updateUser = async (id: string, data: any): Promise<User> => {
-  const response = await api.patch(`/users/${id}`, data);
+  const response = await request('PATCH', `/users/${id}`, data);
   return response.data;
 };
 
 export const deleteUser = async (id: string): Promise<void> => {
-  await api.delete(`/users/${id}`);
+  await request('DELETE', `/users/${id}`);
 };

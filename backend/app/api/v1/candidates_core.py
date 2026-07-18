@@ -22,7 +22,7 @@ from app.models.stage_history import StageHistory
 from app.models.user import User
 from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, CandidateScreeningCreate, CandidateProfileRawDataUpdate
 from app.services import storage
-from app.services.workflow import WorkflowService
+from app.services.workflow import transition
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -85,7 +85,7 @@ def _issue_pre_form(db: Session, candidate: Candidate, user: User) -> None:
     candidate.pre_form_sent_at = datetime.now(UTC)
 
     if candidate.current_stage != PipelineStage.CANDIDATE_FORM:
-        WorkflowService.transition(
+        transition(
             db=db,
             candidate=candidate,
             target_stage=PipelineStage.CANDIDATE_FORM,
@@ -345,7 +345,7 @@ def list_candidates(
         UserRole.HQ_STAFF, UserRole.LOCAL_HR
     )),
 ):
-    q = select(Candidate).options(joinedload(Candidate.profile)).order_by(Candidate.created_at.desc())
+    q = select(Candidate).options(joinedload(Candidate.profile), joinedload(Candidate.screening)).order_by(Candidate.created_at.desc())
     if stage:
         q = q.where(Candidate.current_stage == stage)
         
@@ -413,12 +413,12 @@ def create(
 
 
 @router.get("/{id}", response_model=CandidateOut)
-def get_one(
+def get_candidate(
     id: UUID,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
-    row = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.id == id))
+    row = db.scalar(select(Candidate).options(joinedload(Candidate.profile), joinedload(Candidate.screening)).where(Candidate.id == id))
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
     assert_candidate_access(user, row)

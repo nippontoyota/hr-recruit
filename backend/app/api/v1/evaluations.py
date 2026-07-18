@@ -42,9 +42,9 @@ from app.schemas.evaluation import (
     EvaluationWhatsAppInvite,
     TechnicalQuestionOut,
 )
-from app.services.workflow import WorkflowService
+from app.services.workflow import transition
 from app.services import storage
-from app.services.doubletick import DoubleTickClient
+from app.services.doubletick import send_template
 
 
 router = APIRouter(prefix="/evaluations", tags=["Evaluations"])
@@ -81,7 +81,10 @@ def get_department_questions(
     return questions
 
 
+from fastapi_cache.decorator import cache
+
 @router.get("/candidate/{candidate_id}", response_model=list[EvaluationOut])
+@cache(expire=30)
 def get_candidate_evaluations(
     candidate_id: UUID,
     db: Session = Depends(get_db),
@@ -249,34 +252,33 @@ def submit_scorecard(
     )
     db.add(log)
     
-    # Auto transition workflow on Reject
+    # Auto transition workflow on Reject or On Hold
     if body.verdict == EvaluationVerdict.REJECTED:
-        WorkflowService.transition(
+        transition(
             db=db,
             candidate=candidate,
             target_stage=PipelineStage.REJECTED,
             user=current_user,
             remarks=f"Rejected during {evaluation.type.value.replace('_', ' ').title()} evaluation."
         )
+    elif body.verdict == EvaluationVerdict.ON_HOLD:
+        transition(
+            db=db,
+            candidate=candidate,
+            target_stage=PipelineStage.ON_HOLD,
+            user=current_user,
+            remarks=f"Placed on hold during {evaluation.type.value.replace('_', ' ').title()} evaluation."
+        )
         
-    # Auto transition to Hired/Rejected/On-Hold for HQ Interview
-    if evaluation.type == EvaluationType.HQ_INTERVIEW and body.verdict:
-        if body.verdict == EvaluationVerdict.SELECTED:
-            WorkflowService.transition(
-                db=db,
-                candidate=candidate,
-                target_stage=PipelineStage.HIRED,
-                user=current_user,
-                remarks="HQ interview approved. Candidate hired."
-            )
-        elif body.verdict == EvaluationVerdict.ON_HOLD:
-            WorkflowService.transition(
-                db=db,
-                candidate=candidate,
-                target_stage=PipelineStage.ON_HOLD,
-                user=current_user,
-                remarks="Placed on hold after HQ interview."
-            )
+    # Auto transition to Hired for HQ Interview
+    if evaluation.type == EvaluationType.HQ_INTERVIEW and body.verdict == EvaluationVerdict.SELECTED:
+        transition(
+            db=db,
+            candidate=candidate,
+            target_stage=PipelineStage.HIRED,
+            user=current_user,
+            remarks="HQ interview approved. Candidate hired."
+        )
             
     db.commit()
     db.refresh(evaluation)
@@ -411,17 +413,24 @@ def submit_public_evaluation(
     )
     db.add(log)
     
-    # Auto transition to Reject if appropriate
-    if body.verdict == EvaluationVerdict.REJECTED:
+    # Auto transition to Reject or On Hold if appropriate
+    if body.verdict in (EvaluationVerdict.REJECTED, EvaluationVerdict.ON_HOLD):
         # Since this is a public unauthenticated route, actor is system or candidate's assigned HR
         system_user = db.get(User, candidate.assigned_hr_user_id) if candidate.assigned_hr_user_id else None
         if system_user:
-            WorkflowService.transition(
+            if body.verdict == EvaluationVerdict.REJECTED:
+                remarks = f"Rejected during public {evaluation.type.value.replace('_', ' ').title()} evaluation."
+                target = PipelineStage.REJECTED
+            else:
+                remarks = f"Placed on hold during public {evaluation.type.value.replace('_', ' ').title()} evaluation."
+                target = PipelineStage.ON_HOLD
+                
+            transition(
                 db=db,
                 candidate=candidate,
-                target_stage=PipelineStage.REJECTED,
+                target_stage=target,
                 user=system_user,
-                remarks=f"Rejected during public {evaluation.type.value.replace('_', ' ').title()} evaluation."
+                remarks=remarks
             )
             
     db.commit()
@@ -539,8 +548,8 @@ def send_evaluation_whatsapp_invite(
         val = body.variables.get(key, "") if body.variables else ""
         placeholders.append(val)
         
-    client = DoubleTickClient()
     
+
     if body.recipient_type == "INTERVIEWER":
         template_name = "nippon_interviewer_invite"
     else:
@@ -550,7 +559,7 @@ def send_evaluation_whatsapp_invite(
             template_name = "nippon_hr_interview_invite"
     
     try:
-        res = client.send_template(
+        res = send_template(
             to_phone=body.to_phone,
             template_name=template_name,
             placeholders=placeholders,

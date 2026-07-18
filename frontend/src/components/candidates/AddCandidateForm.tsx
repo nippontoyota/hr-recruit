@@ -4,7 +4,7 @@ import { Button, Input, Select, Modal } from '../ui';
 import { UploadCloud, AlertTriangle, ArrowRight } from 'lucide-react';
 import { createCandidate, uploadResume } from '../../api/candidates';
 import { NIPPON_BRANCHES } from '../../types';
-import { digitsOnly, validateResumeFile } from '../../lib/validation';
+import { validateResumeFile } from '../../lib/validation';
 import { validateBasicCandidateForm } from '../../lib/validatePreForm';
 
 interface AddCandidateFormProps {
@@ -86,7 +86,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
     setFormError('');
 
     try {
-      const normalizedPhone = digitsOnly(phone);
+      const normalizedPhone = phone;
       const newCandidate = await createCandidate({
         full_name: fullName.trim(),
         phone: normalizedPhone,
@@ -195,7 +195,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
             </label>
             <Input
               value={phone}
-              onChange={(e) => setPhone(digitsOnly(e.target.value, 10))}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
               required
               inputMode="numeric"
               maxLength={10}

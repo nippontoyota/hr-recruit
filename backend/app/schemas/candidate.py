@@ -389,6 +389,45 @@ class CandidateProfileOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+class CandidateScreeningCreate(BaseModel):
+    status: ScreeningStatus
+    call_completed: bool = False
+    interest_confirmed: bool = False
+    salary_discussed: bool = False
+    notice_period_discussed: bool = False
+    basic_eligibility_checked: bool = False
+    remarks: str | None = None
+    pending_reason: str | None = None
+    follow_up_date: datetime | None = None
+    visit_branch: str | None = None
+    branch_visit_date: datetime | None = None
+    maps_link: str | None = None
+    extra_instructions: str | None = None
+
+    @model_validator(mode="after")
+    def check_pending_fields(self) -> "CandidateScreeningCreate":
+        from datetime import date
+
+        if self.status == ScreeningStatus.PENDING:
+            if not self.pending_reason or not self.pending_reason.strip():
+                raise ValueError("Pending reason is required when status is PENDING.")
+            if self.follow_up_date is None:
+                raise ValueError("Follow-up date is required when status is PENDING.")
+            if self.follow_up_date.date() < date.today():
+                raise ValueError("Follow-up date cannot be in the past.")
+
+        if self.remarks and len(self.remarks) > 2000:
+            raise ValueError("Remarks must be at most 2000 characters.")
+        return self
+
+class CandidateScreeningOut(CandidateScreeningCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    candidate_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
 class CandidateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -421,6 +460,7 @@ class CandidateOut(BaseModel):
     updated_at: datetime
     has_resume: bool = False
     is_rejoining: bool = False
+    screening: "CandidateScreeningOut | None" = None
 
 
 class StageChange(BaseModel):
@@ -459,43 +499,7 @@ class DocumentOut(BaseModel):
     created_at: datetime
     download_url: str
 
-class CandidateScreeningCreate(BaseModel):
-    status: ScreeningStatus
-    call_completed: bool = False
-    interest_confirmed: bool = False
-    salary_discussed: bool = False
-    notice_period_discussed: bool = False
-    basic_eligibility_checked: bool = False
-    remarks: str | None = None
-    pending_reason: str | None = None
-    follow_up_date: datetime | None = None
-    visit_branch: str | None = None
-    branch_visit_date: datetime | None = None
-    maps_link: str | None = None
-    extra_instructions: str | None = None
 
-    @model_validator(mode="after")
-    def check_pending_fields(self) -> "CandidateScreeningCreate":
-        from datetime import date
-
-        if self.status == ScreeningStatus.PENDING:
-            if not self.pending_reason or not self.pending_reason.strip():
-                raise ValueError("Pending reason is required when status is PENDING.")
-            if self.follow_up_date is None:
-                raise ValueError("Follow-up date is required when status is PENDING.")
-            if self.follow_up_date.date() < date.today():
-                raise ValueError("Follow-up date cannot be in the past.")
-
-        if self.remarks and len(self.remarks) > 2000:
-            raise ValueError("Remarks must be at most 2000 characters.")
-        return self
-
-class CandidateScreeningOut(CandidateScreeningCreate):
-    model_config = ConfigDict(from_attributes=True)
-    id: UUID
-    candidate_id: UUID
-    created_at: datetime
-    updated_at: datetime
 
 
 class ScreeningSubmitResponse(BaseModel):

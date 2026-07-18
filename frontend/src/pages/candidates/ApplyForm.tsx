@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { getRecruiterPublic, publicApplyCandidate, publicGetBasicCandidate, publicUpdateBasicCandidate, uploadResume } from '../../api/candidates';
 import { LoadingSpinner, Button, Input, Select } from '../../components/ui';
 import { UploadCloud } from 'lucide-react';
-import { digitsOnly, validateResumeFile } from '../../lib/validation';
+import { validateResumeFile } from '../../lib/validation';
 import { CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { validateBasicCandidateForm } from '../../lib/validatePreForm';
@@ -100,7 +100,7 @@ export default function ApplyForm() {
 
     try {
       let candidateObj;
-      const normalizedPhone = digitsOnly(phone);
+      const normalizedPhone = phone;
       if (candidateId) {
         // Update basic info
         candidateObj = await publicUpdateBasicCandidate(candidateId, {
@@ -258,7 +258,7 @@ export default function ApplyForm() {
             <label className="form-label form-label-required">Phone number</label>
             <Input
               value={phone}
-              onChange={(e) => setPhone(digitsOnly(e.target.value, 10))}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
               placeholder="e.g. 9876543210"
               inputMode="numeric"
               maxLength={10}

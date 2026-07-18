@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     public_app_url: str = "http://localhost:5173"
     rate_limit_per_minute: int = 60
+    redis_url: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

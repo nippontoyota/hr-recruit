@@ -4,8 +4,8 @@ import { CheckCircle2, Pencil, Printer, Save, X, RefreshCw, Link } from 'lucide-
 import type { Candidate } from '../../types';
 import { toast } from 'sonner';
 import { ResumeButton } from './ResumeButton';
-import { updateCandidateRawData } from '../../api/candidates';
-import { copyToClipboard } from '../../lib/clipboard';
+import { updateCandidateRawData, sendPreForm } from '../../api/candidates';
+
 import { WhatsAppPreviewPanel } from './WhatsAppPreviewPanel';
 import { cn } from '../../lib/utils';
 
@@ -80,6 +80,7 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
   const [editData, setEditData] = useState<Record<string, any>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [showResendModal, setShowResendModal] = useState(false);
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
 
   const status = candidate.pre_form_status || 'NOT_SENT';
   const [localRawData, setLocalRawData] = useState<Record<string, any>>(candidate.profile?.raw_data ?? {});
@@ -310,11 +311,11 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
               <Button
                 variant="secondary"
                 onClick={async () => {
-                  const success = await copyToClipboard(candidate.share_url || '');
-                  if (success) {
+                  try {
+                    await navigator.clipboard.writeText(candidate.share_url || '');
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
-                  } else {
+                  } catch {
                     toast.error('Failed to copy link.');
                   }
                 }}
@@ -340,7 +341,29 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Form link will appear here after screening acceptance.</p>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Form link will appear here after screening acceptance.</p>
+            <Button
+              variant="secondary"
+              size="sm"
+              isLoading={isGeneratingLink}
+              onClick={async () => {
+                try {
+                  setIsGeneratingLink(true);
+                  await sendPreForm(candidate.id);
+                  toast.success('Form link generated successfully');
+                  if (onUpdate) onUpdate();
+                } catch (err: any) {
+                  toast.error(err.response?.data?.detail || 'Failed to generate link');
+                } finally {
+                  setIsGeneratingLink(false);
+                }
+              }}
+              className="w-fit gap-2"
+            >
+              <Link className="w-3.5 h-3.5" /> Generate Link
+            </Button>
+          </div>
         )}
       </div>
 

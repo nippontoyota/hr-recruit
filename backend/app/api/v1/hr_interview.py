@@ -12,7 +12,7 @@ from app.models.candidate import Candidate
 from app.models.activity_log import ActivityLog
 from app.models.enums import InterviewVerdict, PipelineStage, InterviewMode, InterviewStatus, ActivityType
 from app.schemas.candidate import WhatsAppInviteCreate
-from app.services.doubletick import DoubleTickClient
+from app.services.doubletick import send_template
 
 router = APIRouter(prefix="/candidates/{candidate_id}/hr-interview", tags=["HR Interview"])
 
@@ -83,9 +83,9 @@ def submit_hr_interview(
     # Update candidate stage based on final verdict if present
     if data.verdict:
         interview.status = InterviewStatus.EVALUATED
-        from app.services.workflow import WorkflowService
+        from app.services.workflow import transition
         if data.verdict == InterviewVerdict.SELECTED:
-            WorkflowService.transition(
+            transition(
                 db=db,
                 candidate=candidate,
                 target_stage=PipelineStage.DEPARTMENT_INTERVIEW,
@@ -93,7 +93,7 @@ def submit_hr_interview(
                 remarks=data.remarks or "HR Interview approved. Transitioning to Department Head Interview."
             )
         elif data.verdict == InterviewVerdict.REJECTED:
-            WorkflowService.transition(
+            transition(
                 db=db,
                 candidate=candidate,
                 target_stage=PipelineStage.REJECTED,
@@ -101,7 +101,7 @@ def submit_hr_interview(
                 remarks=data.remarks or "Rejected during HR Interview."
             )
         elif data.verdict == InterviewVerdict.ON_HOLD:
-            WorkflowService.transition(
+            transition(
                 db=db,
                 candidate=candidate,
                 target_stage=PipelineStage.ON_HOLD,
@@ -146,10 +146,8 @@ def send_hr_interview_invite(
         val = body.variables.get(key, "") if body.variables else ""
         placeholders.append(val)
         
-    client = DoubleTickClient()
-    
     try:
-        res = client.send_template(
+        res = send_template(
             to_phone=candidate.phone,
             template_name="nippon_hr_interview_invite",
             placeholders=placeholders,

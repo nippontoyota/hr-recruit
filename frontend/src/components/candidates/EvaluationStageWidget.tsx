@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Link, Clipboard, UserCheck, FileText, CheckCircle, Star, Send, Video, Clock, CheckCheck, ArrowLeft, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCircle2, XCircle } from 'lucide-react';
+import { Calendar, Link, UserCheck, FileText, CheckCircle, Star, Send, Video, Clock, CheckCheck, ArrowLeft, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, LoadingSpinner, Modal, Input } from '../ui';
-import { getCandidateEvaluations, scheduleEvaluation, generateEvaluationToken, submitScorecardDirect, sendEvaluationWhatsAppInvite, getDepartmentQuestions } from '../../api/evaluations';
+import { Button, LoadingSpinner, Modal, Input, EmptyState } from '../ui';
+import { getCandidateEvaluations, scheduleEvaluation, generateEvaluationToken, submitScorecardDirect, sendEvaluationWhatsAppInvite } from '../../api/evaluations';
 import type { Candidate, Evaluation, EvaluationVerdict, User } from '../../types';
 import { cn, extractError } from '../../lib/utils';
 import { useAuth } from '../../auth/AuthContext';
@@ -155,8 +155,6 @@ export function EvaluationStageWidget({
   const [testScore, setTestScore] = useState('');
   const [testVerdict, setTestVerdict] = useState<EvaluationVerdict>('PASS');
   const [testRemarks, setTestRemarks] = useState('');
-  const [testMode, setTestMode] = useState<'PAPER' | 'ONLINE'>('ONLINE');
-
   const fetchEvaluations = async () => {
     if (!evaluationsCache[candidate.id]) {
       setLoading(true);
@@ -405,7 +403,15 @@ export function EvaluationStageWidget({
 
         <div className="grid gap-4 grid-cols-1">
           <AnimatePresence mode="wait">
-            {evaluations
+            {evaluations.filter((ev) => evalTypes.length === 1 || ev.type === activeType).length === 0 ? (
+              <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <EmptyState
+                  icon={<FileText className="w-10 h-10 text-muted-foreground/30" />}
+                  title="No evaluation found"
+                  description="There are no active evaluations matching this type for the candidate."
+                />
+              </motion.div>
+            ) : evaluations
               .filter((ev) => evalTypes.length === 1 || ev.type === activeType)
               .map((ev) => {
                 const isCompleted = ev.status === 'EVALUATED';
@@ -452,18 +458,38 @@ export function EvaluationStageWidget({
                   </div>
                   )}
 
-                  {isCompleted ? (
+                  {isCompleted && remarksId !== ev.id ? (
                     <div className="mt-4 p-5 bg-background border border-border/80 rounded-xl shadow-sm">
                       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border/50 pb-4 mb-4">
                          <div>
                             <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Final Verdict</span>
-                            <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-bold border uppercase shadow-xs",
-                               ev.verdict === 'SELECTED' || ev.verdict === 'PASS' ? "bg-success/10 text-success border-success/30" :
-                                 ev.verdict === 'ON_HOLD' ? "bg-warning/10 text-warning border-warning/30" :
-                                   "bg-danger/10 text-danger border-danger/30"
-                             )}>
-                               {ev.verdict?.replace(/_/g, ' ') || 'EVALUATED'}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-bold border uppercase shadow-xs",
+                                 ev.verdict === 'SELECTED' || ev.verdict === 'PASS' ? "bg-success/10 text-success border-success/30" :
+                                   ev.verdict === 'ON_HOLD' ? "bg-warning/10 text-warning border-warning/30" :
+                                     "bg-danger/10 text-danger border-danger/30"
+                               )}>
+                                 {ev.verdict?.replace(/_/g, ' ') || 'EVALUATED'}
+                              </span>
+                              {ev.verdict === 'ON_HOLD' && (
+                                <button type="button" onClick={() => {
+                                  setVerdict(ev.verdict as EvaluationVerdict);
+                                  setTestVerdict(ev.verdict as EvaluationVerdict);
+                                  setRemarksText(ev.remarks || '');
+                                  setTestRemarks(ev.remarks || '');
+                                  if (ev.scores) {
+                                    setCommScore((ev.scores as any).communication || 0);
+                                    setTechScore((ev.scores as any).technical || 0);
+                                    setExpScore((ev.scores as any).experience || 0);
+                                    setFitScore((ev.scores as any).cultural_fit || 0);
+                                    setTestScore((ev.scores as any).percentage?.toString() || '');
+                                  }
+                                  setRemarksId(ev.id);
+                                }} className="text-[10px] font-bold text-primary hover:underline px-2 py-1">
+                                  Edit
+                                </button>
+                              )}
+                            </div>
                          </div>
                          {ev.scores?.percentage !== undefined && (
                             <div className="text-right">

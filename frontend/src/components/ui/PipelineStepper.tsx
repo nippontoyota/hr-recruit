@@ -6,7 +6,8 @@ import {
   Users, 
   Building2, 
   ShieldCheck, 
-  Check
+  Check,
+  Pause
 } from 'lucide-react';
 import type { PipelineStage } from '../../types';
 import { stageLabel } from '../../lib/stages';
@@ -20,6 +21,7 @@ interface PipelineStepperProps {
   isLoading?: boolean;
   completedStages?: PipelineStage[];
   skippedStages?: PipelineStage[];
+  heldStages?: PipelineStage[];
 }
 
 const STAGE_ICONS: Record<string, React.ElementType> = {
@@ -37,13 +39,20 @@ export function PipelineStepper({
   onStageClick, 
   isLoading,
   completedStages,
-  skippedStages
+  skippedStages,
+  heldStages
 }: PipelineStepperProps) {
   const currentIndex = stages.indexOf(actualStage);
   const viewedIndex = stages.indexOf(currentStage);
   
   const isTerminalStage = currentIndex === -1;
-  const activeIndex = isTerminalStage ? stages.length : currentIndex;
+  let activeIndex = isTerminalStage ? stages.length : currentIndex;
+  
+  if (isTerminalStage && actualStage === 'ON_HOLD' && heldStages && heldStages.length > 0) {
+    const heldIdx = stages.findIndex(s => heldStages.includes(s));
+    if (heldIdx !== -1) activeIndex = heldIdx;
+  }
+
   const safeStageCount = stages.length || 1;
   const progressPercentage = Math.min(100, Math.max(0, ((activeIndex + 1) / safeStageCount) * 100));
 
@@ -85,8 +94,9 @@ export function PipelineStepper({
         {stages.map((stage, index) => {
           const isCompleted = completedStages ? completedStages.includes(stage) : index < activeIndex;
           const isSkipped = skippedStages ? skippedStages.includes(stage) : false;
+          const isHeld = heldStages ? heldStages.includes(stage) : false;
           
-          const isCurrentActual = index === activeIndex;
+          const isCurrentActual = index === activeIndex && actualStage !== 'ON_HOLD' && actualStage !== 'REJECTED';
           const isCurrentViewed = index === viewedIndex;
           
           const Icon = STAGE_ICONS[stage] || FileText;
@@ -120,6 +130,7 @@ export function PipelineStepper({
                   "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 relative bg-background border-2",
                   isCurrentViewed ? "ring-2 ring-primary ring-offset-2 scale-105" : "",
                   isCompleted ? "border-success bg-success/5 text-success shadow-sm" :
+                  isHeld ? "border-warning bg-warning/5 text-warning shadow-sm ring-2 ring-warning/30" :
                   isSkipped ? "border-warning border-dashed bg-warning/5 text-warning shadow-sm" :
                   isCurrentActual ? "border-success bg-success text-white shadow-md" :
                   "border-muted text-muted-foreground",
@@ -136,6 +147,15 @@ export function PipelineStepper({
                       transition={{ type: "spring", bounce: 0.5 }}
                     >
                       <Check className="w-5 h-5 stroke-[2.5]" />
+                    </motion.div>
+                  ) : isHeld ? (
+                    <motion.div
+                      key="held"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", bounce: 0.5 }}
+                    >
+                      <Pause className="w-4 h-4 fill-current" />
                     </motion.div>
                   ) : (
                     <motion.div
@@ -156,10 +176,10 @@ export function PipelineStepper({
                   "text-[9px] font-bold uppercase tracking-wider mb-0.5 transition-colors duration-300",
                   isCurrentViewed ? "text-primary font-extrabold" :
                   isCurrentActual ? "text-success" :
-                  isSkipped ? "text-warning" : 
+                  (isSkipped || isHeld) ? "text-warning" : 
                   "text-muted-foreground/60"
                 )}>
-                  {isSkipped ? "Skipped" : isCompleted ? "Completed" : `Step ${index + 1}`}
+                  {isHeld ? "On Hold" : isSkipped ? "Skipped" : isCompleted ? "Completed" : `Step ${index + 1}`}
                 </span>
                 <span className={cn(
                   "text-[11px] font-semibold text-center w-24 text-balance leading-tight transition-colors duration-300",

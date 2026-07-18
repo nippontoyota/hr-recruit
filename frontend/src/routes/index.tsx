@@ -131,6 +131,16 @@ export const router = createHashRouter([
         ),
       },
       {
+        path: 'updates',
+        element: (
+          <RoleRoute allowed={ALL_ROLES}>
+            <PageSuspense>
+              <CandidatesList />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
         path: 'candidates/:id',
         element: (
           <RoleRoute allowed={ALL_ROLES}>
@@ -143,7 +153,7 @@ export const router = createHashRouter([
       {
         path: 'admin/users',
         element: (
-          <RoleRoute allowed={['SUPER_ADMIN', 'HR']}>
+          <RoleRoute allowed={['SUPER_ADMIN']}>
             <PageSuspense>
               <AdminUsers />
             </PageSuspense>

@@ -5,7 +5,7 @@ import type { Candidate } from '../../types';
 import { toast } from 'sonner';
 import { ResumeButton } from './ResumeButton';
 import { updateCandidateRawData, sendPostForm } from '../../api/candidates';
-import { copyToClipboard } from '../../lib/clipboard';
+
 import { WhatsAppPreviewPanel } from './WhatsAppPreviewPanel';
 
 interface PostFormStatusProps {
@@ -227,11 +227,11 @@ export function PostFormStatus({ candidate, onUpdate }: PostFormStatusProps) {
               <Button
                 variant="secondary"
                 onClick={async () => {
-                  const success = await copyToClipboard(candidate.post_share_url || '');
-                  if (success) {
+                  try {
+                    await navigator.clipboard.writeText(candidate.post_share_url || '');
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
-                  } else {
+                  } catch {
                     toast.error('Failed to copy link.');
                   }
                 }}

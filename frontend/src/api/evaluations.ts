@@ -1,8 +1,8 @@
 import type { Evaluation, EvaluationToken, EvaluationPublicDetails } from '../types';
-import api from './client';
+import { request } from './client';
 
 export const getCandidateEvaluations = async (candidateId: string): Promise<Evaluation[]> => {
-  const response = await api.get(`/evaluations/candidate/${candidateId}`);
+  const response = await request('GET', `/evaluations/candidate/${candidateId}`);
   return response.data;
 };
 
@@ -15,12 +15,12 @@ export const scheduleEvaluation = async (
     interviewer_id?: string | null;
   }
 ): Promise<Evaluation> => {
-  const response = await api.post(`/evaluations/${evalId}/schedule`, data);
+  const response = await request('POST', `/evaluations/${evalId}/schedule`, data);
   return response.data;
 };
 
 export const generateEvaluationToken = async (evalId: string): Promise<EvaluationToken> => {
-  const response = await api.post(`/evaluations/${evalId}/token`);
+  const response = await request('POST', `/evaluations/${evalId}/token`);
   return response.data;
 };
 
@@ -32,12 +32,12 @@ export const submitScorecardDirect = async (
     scores?: Record<string, any>;
   }
 ): Promise<Evaluation> => {
-  const response = await api.post(`/evaluations/${evalId}/submit-scorecard`, data);
+  const response = await request('POST', `/evaluations/${evalId}/submit-scorecard`, data);
   return response.data;
 };
 
 export const getPublicEvaluation = async (token: string): Promise<EvaluationPublicDetails> => {
-  const response = await api.get(`/evaluations/public/${token}`);
+  const response = await request('GET', `/evaluations/public/${token}`);
   return response.data;
 };
 
@@ -49,12 +49,12 @@ export const submitPublicEvaluation = async (
     scores?: Record<string, any>;
   }
 ): Promise<any> => {
-  const response = await api.post(`/evaluations/public/${token}/submit`, data);
+  const response = await request('POST', `/evaluations/public/${token}/submit`, data);
   return response.data;
 };
 
 export const getPublicTestQuestions = async (token: string): Promise<{ department: string; questions: any[] }> => {
-  const response = await api.get(`/evaluations/public/${token}/test-questions`);
+  const response = await request('GET', `/evaluations/public/${token}/test-questions`);
   return response.data;
 };
 
@@ -62,7 +62,7 @@ export const submitPublicTest = async (
   token: string,
   answers: Record<string, string>
 ): Promise<{ verdict: string; score: string }> => {
-  const response = await api.post(`/evaluations/public/${token}/submit-test`, { answers });
+  const response = await request('POST', `/evaluations/public/${token}/submit-test`, { answers });
   return response.data;
 };
 
@@ -74,12 +74,12 @@ export const sendEvaluationWhatsAppInvite = async (
     variables: Record<string, string>;
   }
 ): Promise<any> => {
-  const response = await api.post(`/evaluations/${evalId}/send-whatsapp-invite`, data);
+  const response = await request('POST', `/evaluations/${evalId}/send-whatsapp-invite`, data);
   return response.data;
 };
 
 
 export const getDepartmentQuestions = async (department: string): Promise<any[]> => {
-  const response = await api.get(`/evaluations/questions?department=${encodeURIComponent(department)}`);
+  const response = await request('GET', `/evaluations/questions?department=${encodeURIComponent(department)}`);
   return response.data;
 };

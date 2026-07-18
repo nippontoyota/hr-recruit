@@ -126,7 +126,7 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
   if (loading) return <div className="animate-pulse h-[400px] bg-muted/20 border border-dashed border-border rounded-2xl" />;
 
   const STATUSES = [
-    { value: 'QUALIFIED', label: 'Accepted', color: 'bg-muted/50 text-muted-foreground hover:bg-muted', activeColor: 'bg-success/15 text-success border-success/30' },
+    { value: 'QUALIFIED', label: 'Selected', color: 'bg-muted/50 text-muted-foreground hover:bg-muted', activeColor: 'bg-success/15 text-success border-success/30' },
     { value: 'PENDING', label: 'Pending', color: 'bg-muted/50 text-muted-foreground hover:bg-muted', activeColor: 'bg-warning/15 text-warning-foreground border-warning/30' },
     { value: 'REJECTED', label: 'Rejected', color: 'bg-muted/50 text-muted-foreground hover:bg-muted', activeColor: 'bg-danger/15 text-danger border-danger/30' },
   ];
@@ -193,7 +193,7 @@ export function ScreeningChecklist({ candidateId, onUpdate }: ScreeningChecklist
                 isPending && "bg-warning/15 text-warning-foreground border-warning/30"
               )}
             >
-              {isAccepted && "Accepted"}
+              {isAccepted && "Selected"}
               {isRejected && "Rejected"}
               {isPending && "Pending Follow-up"}
             </div>

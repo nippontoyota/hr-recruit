@@ -64,6 +64,7 @@ export interface Candidate {
   pre_form_sent_at?: string;
   pre_form_submitted_at?: string;
   current_stage: PipelineStage;
+  screening?: CandidateScreening;
   branch_location?: string;
   profile?: CandidateProfile;
   is_duplicate_flagged: boolean;
@@ -85,6 +86,26 @@ export interface ResumeDocument {
   file_size_bytes: number;
   download_url: string;
   created_at: string;
+}
+
+export interface CandidateScreening {
+  id: string;
+  candidate_id: string;
+  status: 'PENDING' | 'QUALIFIED' | 'REJECTED';
+  call_completed?: boolean;
+  interest_confirmed?: boolean;
+  salary_discussed?: boolean;
+  notice_period_discussed?: boolean;
+  basic_eligibility_checked?: boolean;
+  remarks?: string;
+  pending_reason?: string;
+  follow_up_date?: string;
+  visit_branch?: string;
+  branch_visit_date?: string;
+  maps_link?: string;
+  extra_instructions?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CandidateProfile {

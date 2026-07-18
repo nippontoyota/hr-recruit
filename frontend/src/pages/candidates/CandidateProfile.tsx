@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
-import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History, Printer } from 'lucide-react';
+import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History, Printer, Edit2 } from 'lucide-react';
 import { getCandidateById, updateCandidateStage, unholdCandidate, getScreening } from '../../api/candidates';
 import { getCandidateEvaluations } from '../../api/evaluations';
 import type { Candidate, PipelineStage } from '../../types';
@@ -46,6 +46,11 @@ export default function CandidateProfile() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
+  
+  const [showEditStageModal, setShowEditStageModal] = useState(false);
+  const [editStageSelection, setEditStageSelection] = useState<PipelineStage>('SCREENING');
+  const [editStageRemarks, setEditStageRemarks] = useState('');
+  const [isEditingStage, setIsEditingStage] = useState(false);
   const [resumeStage, setResumeStage] = useState<PipelineStage>('SCREENING');
   const [isResuming, setIsResuming] = useState(false);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
@@ -107,12 +112,10 @@ export default function CandidateProfile() {
       }
     };
     window.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleVisibilityChange);
 
     return () => {
       clearInterval(intervalId);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleVisibilityChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -167,6 +170,26 @@ export default function CandidateProfile() {
     }
   };
 
+  const handleEditStage = async () => {
+    if (!candidate) return;
+    if (!editStageSelection) {
+      toast.error('Please select a stage');
+      return;
+    }
+    setIsEditingStage(true);
+    try {
+      await updateCandidateStage(candidate.id, editStageSelection, editStageRemarks);
+      handleUpdate();
+      setShowEditStageModal(false);
+      setEditStageRemarks('');
+      toast.success('Candidate stage updated successfully');
+    } catch (err: any) {
+      toast.error(extractError(err, 'Failed to update candidate stage.'));
+    } finally {
+      setIsEditingStage(false);
+    }
+  };
+
   if (initialLoading) {
     return (
       <div className="w-full min-h-[60vh] flex items-center justify-center">
@@ -204,6 +227,7 @@ export default function CandidateProfile() {
 
   const completedStages: PipelineStage[] = [];
   const skippedStages: PipelineStage[] = [];
+  const heldStages: PipelineStage[] = [];
 
   if (candidate) {
     // 1. SCREENING
@@ -219,25 +243,29 @@ export default function CandidateProfile() {
     // 3. HR_INTERVIEW
     const hrEval = evaluations.find(e => e.type === 'BRANCH_HR');
     if (hrEval && hrEval.verdict) {
-      completedStages.push('HR_INTERVIEW');
+      if (hrEval.verdict === 'ON_HOLD') heldStages.push('HR_INTERVIEW');
+      else completedStages.push('HR_INTERVIEW');
     }
     
     // 4. DEPARTMENT_INTERVIEW
     const deptEval = evaluations.find(e => e.type === 'DEPT_HEAD');
     if (deptEval && deptEval.verdict) {
-      completedStages.push('DEPARTMENT_INTERVIEW');
+      if (deptEval.verdict === 'ON_HOLD') heldStages.push('DEPARTMENT_INTERVIEW');
+      else completedStages.push('DEPARTMENT_INTERVIEW');
     }
     
     // 5. BRANCH_EVALUATION
     const gmEval = evaluations.find(e => e.type === 'GM_LEVEL');
     if (gmEval && gmEval.verdict) {
-      completedStages.push('BRANCH_EVALUATION');
+      if (gmEval.verdict === 'ON_HOLD') heldStages.push('BRANCH_EVALUATION');
+      else completedStages.push('BRANCH_EVALUATION');
     }
     
     // 6. FINAL_APPROVAL
     const hqEval = evaluations.find(e => e.type === 'HQ_INTERVIEW');
     if (hqEval && hqEval.verdict) {
-      completedStages.push('FINAL_APPROVAL');
+      if (hqEval.verdict === 'ON_HOLD') heldStages.push('FINAL_APPROVAL');
+      else completedStages.push('FINAL_APPROVAL');
     }
     
     // 7. HIRED
@@ -245,10 +273,10 @@ export default function CandidateProfile() {
       completedStages.push('HIRED');
     }
 
-    // A stage is skipped if it is not completed, but the candidate's current stage is past it in the linear sequence!
+    // A stage is skipped if it is not completed and not held, but the candidate's current stage is past it in the linear sequence!
     const currentIdx = LINEAR_STAGES.indexOf(candidate.current_stage);
     LINEAR_STAGES.forEach((stage, idx) => {
-      if (idx < currentIdx && !completedStages.includes(stage)) {
+      if (idx < currentIdx && !completedStages.includes(stage) && !heldStages.includes(stage)) {
         skippedStages.push(stage);
       }
     });
@@ -411,6 +439,18 @@ export default function CandidateProfile() {
                     <XCircle className="w-4 h-4" /> Reject
                   </Button>
                 )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setEditStageSelection(actualStage);
+                    setEditStageRemarks('');
+                    setShowEditStageModal(true);
+                  }}
+                  className="h-9 px-4 gap-2 shadow-sm"
+                >
+                  <Edit2 className="w-4 h-4" /> Edit Stage
+                </Button>
               </div>
             </div>
 
@@ -440,6 +480,7 @@ export default function CandidateProfile() {
                   isLoading={isUpdating}
                   completedStages={completedStages}
                   skippedStages={skippedStages}
+                  heldStages={heldStages}
                 />
               </div>
 
@@ -629,6 +670,53 @@ export default function CandidateProfile() {
           <div className="flex justify-end gap-2 pt-4 border-t border-border">
             <Button variant="ghost" onClick={() => setShowRejectModal(false)}>Cancel</Button>
             <Button variant="danger" onClick={handleReject} isLoading={isRejecting}>Reject Candidate</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 📝 EDIT STAGE MODAL 📝 */}
+      <Modal isOpen={showEditStageModal} onClose={() => setShowEditStageModal(false)} title="Edit Candidate Stage" size="sm">
+        <div className="space-y-4 p-6">
+          <div className="p-3 bg-primary/5 border border-primary/20 rounded-[10px] flex items-start gap-3">
+            <Edit2 className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+            <p className="text-sm text-muted-foreground">Manually overriding the candidate's stage will update their current status in the pipeline.</p>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
+                New Stage
+              </label>
+              <select 
+                value={editStageSelection} 
+                onChange={(e) => setEditStageSelection(e.target.value as PipelineStage)}
+                className="w-full bg-background border border-border rounded-[10px] p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+              >
+                <option value="SCREENING">Screening</option>
+                <option value="CANDIDATE_FORM">Candidate Form</option>
+                <option value="HR_INTERVIEW">HR Interview</option>
+                <option value="DEPARTMENT_INTERVIEW">Department Interview</option>
+                <option value="BRANCH_EVALUATION">Branch Evaluation</option>
+                <option value="FINAL_APPROVAL">Final Approval</option>
+                <option value="ON_HOLD">On Hold</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="HIRED">Hired</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
+                Remarks (Optional)
+              </label>
+              <textarea
+                value={editStageRemarks}
+                onChange={(e) => setEditStageRemarks(e.target.value)}
+                placeholder="Reason for editing stage..."
+                className="w-full bg-background border border-border rounded-[10px] p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all duration-200 min-h-[80px] resize-y"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-4 border-t border-border">
+            <Button variant="ghost" onClick={() => setShowEditStageModal(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleEditStage} isLoading={isEditingStage}>Save Stage</Button>
           </div>
         </div>
       </Modal>

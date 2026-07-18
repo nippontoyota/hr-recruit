@@ -1,17 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Button, Modal, LoadingSpinner, EmptyState, Badge } from '../../components/ui';
-import { Plus, Link, RefreshCw, Trash, Search, X, CheckSquare, Square, Minus } from 'lucide-react';
+import { Plus, Link, RefreshCw, Trash, Search, X, CheckSquare, Square, Minus, Play } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
-import { copyToClipboard } from '../../lib/clipboard';
-import { getCandidates, deleteCandidate } from '../../api/candidates';
+import { getCandidates, deleteCandidate, unholdCandidate } from '../../api/candidates';
 import { getStageBadgeVariant, stageLabel, formatSource } from '../../lib/stages';
 import type { Candidate, PipelineStage } from '../../types';
 import { AddCandidateForm } from '../../components/candidates/AddCandidateForm';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { toast } from 'sonner';
-import { cn } from '../../lib/utils';
+import { cn, extractError } from '../../lib/utils';
 
 const PIPELINE_STAGES: PipelineStage[] = [
   'SCREENING', 'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW',
@@ -34,11 +33,15 @@ export default function CandidatesList() {
   // Data
   const [candidates, setCandidates] = useState<Candidate[]>(candidatesCache);
   const [loading, setLoading] = useState(candidatesCache.length === 0);
+  const [resumingId, setResumingId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Filters
+  const location = useLocation();
+  const activeTab = location.pathname === '/updates' ? 'UPDATES' : 'ALL';
   const [searchQuery, setSearchQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<PipelineStage | ''>('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'CURRENT' | 'ON_HOLD' | 'REJECTED'>('ALL');
 
   // Single delete
   const [candidateToDelete, setCandidateToDelete] = useState<Candidate | null>(null);
@@ -81,9 +84,17 @@ export default function CandidatesList() {
   }, [fetchCandidatesList]);
 
   // Clear selection when filters change
-  useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter]);
+  useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter, statusFilter]);
 
   const filteredCandidates = candidates.filter((c) => {
+    if (activeTab === 'UPDATES') {
+      if (c.current_stage !== 'SCREENING') return false;
+      if (!c.screening || c.screening.status !== 'PENDING' || !c.screening.follow_up_date) return false;
+      const followUp = new Date(c.screening.follow_up_date);
+      const today = new Date();
+      if (followUp > today) return false;
+    }
+
     const q = searchQuery.toLowerCase();
     const matchesSearch =
       !q ||
@@ -91,7 +102,14 @@ export default function CandidatesList() {
       c.phone.includes(q) ||
       (c.candidate_id && c.candidate_id.toLowerCase().includes(q));
     const matchesStage = !stageFilter || c.current_stage === stageFilter;
-    return matchesSearch && matchesStage;
+    
+    const matchesStatus = 
+      statusFilter === 'ALL' ? true :
+      statusFilter === 'CURRENT' ? !['REJECTED', 'ON_HOLD', 'HIRED'].includes(c.current_stage) :
+      statusFilter === 'ON_HOLD' ? c.current_stage === 'ON_HOLD' :
+      statusFilter === 'REJECTED' ? c.current_stage === 'REJECTED' : true;
+      
+    return matchesSearch && matchesStage && matchesStatus;
   });
 
   // Select-all derived state
@@ -145,6 +163,20 @@ export default function CandidatesList() {
     }
   };
 
+  const handleUnhold = async (candidate: Candidate, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setResumingId(candidate.id);
+    try {
+      await unholdCandidate(candidate.id, 'Resumed from candidates list');
+      toast.success(`${candidate.full_name} resumed to previous stage`);
+      await fetchCandidatesList();
+    } catch (err: any) {
+      toast.error(extractError(err, 'Failed to resume candidate'));
+    } finally {
+      setResumingId(null);
+    }
+  };
+
   // Bulk delete
   const handleBulkDelete = async () => {
     setIsBulkDeleting(true);
@@ -178,12 +210,12 @@ export default function CandidatesList() {
   const handleCopyLink = async () => {
     if (!user) return;
     const url = `${window.location.origin}/#/apply?hr=${user.id}`;
-    const success = await copyToClipboard(url);
-    if (success) {
+    try {
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       toast.success('Recruiter link copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
-    } else {
+    } catch {
       toast.error('Failed to copy link. Please select and copy manually.');
     }
   };
@@ -191,8 +223,8 @@ export default function CandidatesList() {
   return (
     <>
       <PageHeader
-        title="Candidates"
-        description="All applicants linked to your recruiter profile. Click a row to open the full profile and manage pipeline stages."
+        title={activeTab === 'UPDATES' ? 'Updates' : 'Candidates'}
+        description={activeTab === 'UPDATES' ? 'Candidates needing your attention' : 'All applicants linked to your recruiter profile. Click a row to open the full profile and manage pipeline stages.'}
         action={
           <div className="flex gap-3">
             <Button variant="secondary" onClick={handleCopyLink}>
@@ -226,8 +258,9 @@ export default function CandidatesList() {
         </div>
       ) : (
         <div className="space-y-3">
+
           {/* ── Search + Filter bar ── */}
-          <div className="flex flex-wrap items-center gap-3 px-1">
+          <div className="flex flex-wrap items-center gap-3 px-1 pt-2">
             <div className="relative flex-1 min-w-[200px] max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <input
@@ -249,6 +282,17 @@ export default function CandidatesList() {
             </div>
 
             <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="h-9 px-3 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
+            >
+              <option value="ALL">All Status</option>
+              <option value="CURRENT">Current Candidates</option>
+              <option value="ON_HOLD">On Hold</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+
+            <select
               value={stageFilter}
               onChange={(e) => setStageFilter(e.target.value as PipelineStage | '')}
               className="h-9 px-3 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
@@ -259,10 +303,10 @@ export default function CandidatesList() {
               ))}
             </select>
 
-            {(searchQuery || stageFilter) && (
+            {(searchQuery || stageFilter || statusFilter !== 'ALL') && (
               <button
                 type="button"
-                onClick={() => { setSearchQuery(''); setStageFilter(''); }}
+                onClick={() => { setSearchQuery(''); setStageFilter(''); setStatusFilter('ALL'); }}
                 className="text-xs text-muted-foreground hover:text-foreground font-medium underline underline-offset-2"
               >
                 Clear filters
@@ -314,14 +358,15 @@ export default function CandidatesList() {
                     </tr>
                   ) : filteredCandidates.map((candidate) => {
                     const isSelected = selectedIds.has(candidate.id);
+                    const isOnHold = candidate.current_stage === 'ON_HOLD';
                     return (
                       <tr
                         key={candidate.id}
-                        className={cn(
-                          'cursor-pointer group transition-colors',
-                          isSelected && 'bg-primary/5 hover:bg-primary/8'
-                        )}
                         onClick={() => navigate(`/candidates/${candidate.id}`)}
+                        className={cn(
+                          "group border-b border-border transition-colors hover:bg-muted/50 cursor-pointer",
+                          isSelected ? "bg-primary/5" : isOnHold ? "bg-warning/5 hover:bg-warning/10" : ""
+                        )}
                       >
                         {/* Row checkbox */}
                         <td className="w-10 px-3" onClick={(e) => toggleSelect(candidate.id, e)}>
@@ -365,6 +410,21 @@ export default function CandidatesList() {
                               variant="icon"
                               onClick={(e) => e.stopPropagation()}
                             />
+                            {isOnHold && (
+                              <button
+                                type="button"
+                                className="p-1.5 text-warning hover:text-white hover:bg-warning transition-colors rounded-[10px] focus:outline-none flex items-center justify-center"
+                                onClick={(e) => handleUnhold(candidate, e)}
+                                disabled={resumingId === candidate.id}
+                                title="Remove from hold"
+                              >
+                                {resumingId === candidate.id ? (
+                                  <LoadingSpinner size="sm" />
+                                ) : (
+                                  <Play className="w-4 h-4 fill-current" strokeWidth={2} />
+                                )}
+                              </button>
+                            )}
                             {canDelete && (
                               <button
                                 type="button"

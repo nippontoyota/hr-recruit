@@ -10,7 +10,7 @@ class FetchError extends Error {
   }
 }
 
-async function request(method: string, endpoint: string, body?: any, config?: { headers?: Record<string, string> }) {
+export async function request(method: string, endpoint: string, body?: any, config?: { headers?: Record<string, string> }) {
   const url = `${baseURL}${endpoint}`;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -57,17 +57,9 @@ async function request(method: string, endpoint: string, body?: any, config?: { 
   return { data };
 }
 
-const api = {
-  get: (url: string, config?: any) => request('GET', url, undefined, config),
-  post: (url: string, body?: any, config?: any) => request('POST', url, body, config),
-  put: (url: string, body?: any, config?: any) => request('PUT', url, body, config),
-  patch: (url: string, body?: any, config?: any) => request('PATCH', url, body, config),
-  delete: (url: string, config?: any) => request('DELETE', url, undefined, config),
-};
 
 export const login = async (email: string, password: string) => {
-  const response = await api.post('/auth/login', { email, password });
+  const response = await request('POST', '/auth/login', { email, password });
   return response.data;
 };
 
-export default api;

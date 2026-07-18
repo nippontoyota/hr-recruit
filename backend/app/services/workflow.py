@@ -9,15 +9,13 @@ from app.models.enums import PipelineStage, ActivityType
 from app.models.stage_history import StageHistory
 from app.models.activity_log import ActivityLog
 
-class WorkflowService:
-    @staticmethod
-    def transition(
-        db: Session, 
-        candidate: Candidate, 
-        target_stage: PipelineStage, 
-        user: User, 
-        remarks: Optional[str] = None
-    ) -> Candidate:
+def transition(
+    db: Session, 
+    candidate: Candidate, 
+    target_stage: PipelineStage, 
+    user: User, 
+    remarks: Optional[str] = None
+) -> Candidate:
         """
         Validates the transition against the contract, updates the candidate, 
         records stage history, and writes an activity log.
