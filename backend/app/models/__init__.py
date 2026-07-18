@@ -7,7 +7,7 @@ from .document import Document
 from .evaluation import Evaluation
 from .evaluation_token import EvaluationToken
 from .followup import FollowUp
-from .hr_interview import HRInterview
+from .branch_interview import BranchInterview
 from .settings import LocationTemplate, MessageTemplate
 from .stage_history import StageHistory
 from .technical_question import TechnicalQuestion
@@ -23,7 +23,7 @@ __all__ = [
     "Evaluation",
     "EvaluationToken",
     "FollowUp",
-    "HRInterview",
+    "BranchInterview",
     "LocationTemplate",
     "MessageTemplate",
     "StageHistory",

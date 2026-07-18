@@ -410,11 +410,10 @@ class CandidateScreeningCreate(BaseModel):
 
         if self.status == ScreeningStatus.PENDING:
             if not self.pending_reason or not self.pending_reason.strip():
-                raise ValueError("Pending reason is required when status is PENDING.")
+                self.pending_reason = "No reason provided"
             if self.follow_up_date is None:
-                raise ValueError("Follow-up date is required when status is PENDING.")
-            if self.follow_up_date.date() < date.today():
-                raise ValueError("Follow-up date cannot be in the past.")
+                from datetime import datetime, timezone
+                self.follow_up_date = datetime.now(timezone.utc)
 
         if self.remarks and len(self.remarks) > 2000:
             raise ValueError("Remarks must be at most 2000 characters.")

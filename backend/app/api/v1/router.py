@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import auth, candidates_core, candidates_public, candidates_actions, communications, followups, hr_interview, evaluations, users, settings
+from app.api.v1 import auth, candidates_core, candidates_public, candidates_actions, communications, followups, branch_interview, evaluations, users, settings
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
@@ -10,6 +10,6 @@ api_router.include_router(candidates_public.router)
 api_router.include_router(candidates_actions.router)
 api_router.include_router(communications.router)
 api_router.include_router(followups.router)
-api_router.include_router(hr_interview.router)
+api_router.include_router(branch_interview.router)
 api_router.include_router(evaluations.router)
 api_router.include_router(settings.router, prefix="/settings", tags=["Settings"])

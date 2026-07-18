@@ -1,4 +1,4 @@
-import type { Candidate, ResumeDocument, HRInterviewData, ActivityLog } from '../types';
+import type { Candidate, ResumeDocument, BranchInterviewData, ActivityLog } from '../types';
 import { request } from './client';
 
 export const getCandidates = async (): Promise<Candidate[]> => {
@@ -128,13 +128,22 @@ export const sendPreForm = async (candidateId: string): Promise<any> => {
   return response.data;
 };
 
-export const getHRInterview = async (candidateId: string): Promise<HRInterviewData> => {
-  const response = await request('GET', `/candidates/${candidateId}/hr-interview`);
-  return response.data;
+export const getBranchInterview = async (candidateId: string): Promise<BranchInterviewData> => {
+  const response = await request('GET', `/candidates/${candidateId}/branch-interview`);
+  return response as BranchInterviewData;
 };
 
-export const submitHRInterview = async (candidateId: string, data: HRInterviewData): Promise<HRInterviewData> => {
-  const response = await request('POST', `/candidates/${candidateId}/hr-interview`, data);
+export const submitBranchInterview = async (candidateId: string, data: BranchInterviewData): Promise<BranchInterviewData> => {
+  // Use PATCH for submitting branch interview as per new router
+  const response = await request('PATCH', `/candidates/${candidateId}/branch-interview`, data);
+  return response as BranchInterviewData;
+};
+
+export const sendBranchInterviewInvite = async (
+  candidateId: string,
+  variables: Record<string, string>
+): Promise<{ status: string; message: string }> => {
+  const response = await request('POST', `/candidates/${candidateId}/branch-interview/send-invite`, { variables });
   return response.data;
 };
 
@@ -146,13 +155,7 @@ export const sendWhatsAppInvite = async (
   return response.data;
 };
 
-export const sendHRInterviewInvite = async (
-  candidateId: string,
-  variables: Record<string, string>
-): Promise<any> => {
-  const response = await request('POST', `/candidates/${candidateId}/hr-interview/send-invite`, { variables });
-  return response.data;
-};
+
 
 export const getActivityLogs = async (candidateId: string): Promise<ActivityLog[]> => {
   const response = await request('GET', `/candidates/${candidateId}/activity-logs`);

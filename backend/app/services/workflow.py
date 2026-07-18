@@ -46,9 +46,8 @@ def transition(
         standard_stages = [
             PipelineStage.SCREENING,
             PipelineStage.CANDIDATE_FORM,
-            PipelineStage.HR_INTERVIEW,
-            PipelineStage.DEPARTMENT_INTERVIEW,
-            PipelineStage.BRANCH_EVALUATION,
+            PipelineStage.BRANCH_INTERVIEW,
+            PipelineStage.TEST,
             PipelineStage.FINAL_APPROVAL,
             PipelineStage.HIRED
         ]
@@ -60,30 +59,15 @@ def transition(
         for i in range(target_idx + 1):
             s = standard_stages[i]
             
-            if s == PipelineStage.HR_INTERVIEW:
-                existing = db.scalar(sa.select(Evaluation).where(
-                    sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == EvaluationType.BRANCH_HR)
-                ))
-                if not existing:
-                    db.add(Evaluation(
-                        candidate_id=candidate.id,
-                        type=EvaluationType.BRANCH_HR,
-                        status=InterviewStatus.PENDING_SCHEDULE
-                    ))
+            if s == PipelineStage.BRANCH_INTERVIEW:
+                # We do not initialize BranchInterview here because it's its own independent table
+                # (unless they were using Evaluation table for it, but the new architecture uses BranchInterview table)
+                # However, this code was historically creating Evaluation records for BRANCH_HR and DEPT_HEAD.
+                # Since we replaced those with BranchInterview table, we can skip creating Evaluation records.
+                pass
 
-            elif s == PipelineStage.DEPARTMENT_INTERVIEW:
-                existing = db.scalar(sa.select(Evaluation).where(
-                    sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == EvaluationType.DEPT_HEAD)
-                ))
-                if not existing:
-                    db.add(Evaluation(
-                        candidate_id=candidate.id,
-                        type=EvaluationType.DEPT_HEAD,
-                        status=InterviewStatus.PENDING_SCHEDULE
-                    ))
-
-            elif s == PipelineStage.BRANCH_EVALUATION:
-                for etype in [EvaluationType.GM_LEVEL, EvaluationType.TECHNICAL_TEST]:
+            elif s == PipelineStage.TEST:
+                for etype in [EvaluationType.TECHNICAL_TEST]:
                     existing = db.scalar(sa.select(Evaluation).where(
                         sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == etype)
                     ))

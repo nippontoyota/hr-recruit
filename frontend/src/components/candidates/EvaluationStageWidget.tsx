@@ -459,7 +459,7 @@ export function EvaluationStageWidget({
                   </div>
                   )}
 
-                  {isCompleted && remarksId !== ev.id ? (
+                  {isCompleted && remarksId !== ev.id && ev.type !== 'TECHNICAL_TEST' ? (
                     <div className="mt-4 p-5 bg-background border border-border/80 rounded-xl shadow-sm">
                       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border/50 pb-4 mb-4">
                          <div>
@@ -529,18 +529,21 @@ export function EvaluationStageWidget({
                          </p>
                       </div>
                     </div>
-                  ) : (
+                  ) : null}
+
+                  {ev.type === 'TECHNICAL_TEST' ? (
+                    <TechnicalTestPaperWidget 
+                      ev={ev} 
+                      candidate={candidate} 
+                      technicalQuestions={technicalQuestions} 
+                      loadingQuestions={loadingQuestions} 
+                      handleInstantWhatsAppShare={handleInstantWhatsAppShare} 
+                      handleCopyLink={handleCopyLink}
+                      remarksId={remarksId} 
+                    />
+                  ) : !isCompleted ? (
                     <>
-                      {ev.type === 'TECHNICAL_TEST' ? (
-                        <TechnicalTestPaperWidget 
-                          ev={ev} 
-                          candidate={candidate} 
-                          technicalQuestions={technicalQuestions} 
-                          loadingQuestions={loadingQuestions} 
-                          handleInstantWhatsAppShare={handleInstantWhatsAppShare} 
-                          remarksId={remarksId} 
-                        />
-                      ) : ev.scheduled_time && !schedulingId && !remarksId ? (
+                      {ev.scheduled_time && !schedulingId && !remarksId ? (
                         <div className="mt-5 p-4 bg-background border border-border rounded-xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 shadow-sm">
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-6 flex-1 w-full">
                               {/* Date */}
@@ -606,7 +609,7 @@ export function EvaluationStageWidget({
                         )
                       )}
                     </>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Scheduling Forms */}
@@ -1148,8 +1151,9 @@ function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQu
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {technicalQuestions?.map((q, idx) => {
+                                  {technicalQuestions?.map((q: any, idx: number) => {
                                     const submittedAns = ev.scores?.candidate_answers?.[q.id];
+                                    const qScore = ev.scores?.question_scores?.[String(q.id)];
                                     return (
                                       <tr key={q.id || idx}>
                                         <td className="border-2 border-black text-center align-top py-1.5 text-xs font-semibold text-gray-800">{idx + 1}</td>
@@ -1179,6 +1183,17 @@ function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQu
                                         </td>
                                         <td className="border-2 border-black text-center align-middle font-bold text-[13px] text-gray-800">1</td>
                                         <td className="border-2 border-black text-center align-middle relative">
+                                          {qScore !== undefined ? (
+                                            <span
+                                              className="font-bold text-lg"
+                                              style={{
+                                                color: qScore === 1 ? '#16a34a' : '#dc2626',
+                                                fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif'
+                                              }}
+                                            >
+                                              {qScore}
+                                            </span>
+                                          ) : null}
                                         </td>
                                       </tr>
                                     );

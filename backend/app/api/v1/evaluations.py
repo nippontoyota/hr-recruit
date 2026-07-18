@@ -41,6 +41,7 @@ from app.schemas.evaluation import (
     EvaluationTokenOut,
     EvaluationWhatsAppInvite,
     TechnicalQuestionOut,
+    EvaluationCreate,
 )
 from app.services.workflow import transition
 from app.services import storage
@@ -81,10 +82,9 @@ def get_department_questions(
     return questions
 
 
-from fastapi_cache.decorator import cache
+
 
 @router.get("/candidate/{candidate_id}", response_model=list[EvaluationOut])
-@cache(expire=30)
 def get_candidate_evaluations(
     candidate_id: UUID,
     db: Session = Depends(get_db),
@@ -96,10 +96,8 @@ def get_candidate_evaluations(
         
     # Auto-initialize evaluations based on current stage for backward compatibility
     stage_to_types = {
-        PipelineStage.HR_INTERVIEW: [EvaluationType.BRANCH_HR],
-        PipelineStage.DEPARTMENT_INTERVIEW: [EvaluationType.DEPT_HEAD],
-        PipelineStage.BRANCH_EVALUATION: [EvaluationType.GM_LEVEL, EvaluationType.TECHNICAL_TEST],
-        PipelineStage.FINAL_APPROVAL: [EvaluationType.HQ_INTERVIEW],
+        PipelineStage.BRANCH_INTERVIEW: [EvaluationType.BRANCH_HR, EvaluationType.DEPT_HEAD],
+        PipelineStage.TEST: [EvaluationType.TECHNICAL_TEST],
     }
     
     req_types = stage_to_types.get(candidate.current_stage, [])
@@ -123,6 +121,51 @@ def get_candidate_evaluations(
     ).all()
     return evals
 
+@router.post("/candidate/{candidate_id}", response_model=EvaluationOut)
+def create_evaluation(
+    candidate_id: UUID,
+    body: EvaluationCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
+):
+    candidate = db.get(Candidate, candidate_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+        
+    scores = {}
+    if body.interviewer_name:
+        scores["interviewer_name"] = body.interviewer_name
+    if body.interviewer_designation:
+        scores["interviewer_designation"] = body.interviewer_designation
+        
+    evaluation = Evaluation(
+        candidate_id=candidate_id,
+        type=body.type,
+        status=InterviewStatus.PENDING_SCHEDULE,
+        scores=scores if scores else None
+    )
+    db.add(evaluation)
+    db.commit()
+    db.refresh(evaluation)
+    return evaluation
+
+
+@router.delete("/{eval_id}")
+def delete_evaluation(
+    eval_id: UUID,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
+):
+    evaluation = db.get(Evaluation, eval_id)
+    if not evaluation:
+        raise HTTPException(status_code=404, detail="Evaluation not found")
+        
+    if evaluation.type in (EvaluationType.BRANCH_HR, EvaluationType.DEPT_HEAD):
+        raise HTTPException(status_code=400, detail="Cannot delete mandatory evaluations")
+        
+    db.delete(evaluation)
+    db.commit()
+    return {"status": "success"}
 
 
 @router.post("/{eval_id}/schedule", response_model=EvaluationOut)
@@ -211,7 +254,7 @@ def generate_evaluation_token(
         evaluation_id=eval_id,
         token=token_str,
         is_used=False,
-        expires_at=datetime.now(UTC) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(minutes=10),
         test_data=test_data
     )
     db.add(new_token)
@@ -269,6 +312,29 @@ def submit_scorecard(
             user=current_user,
             remarks=f"Placed on hold during {evaluation.type.value.replace('_', ' ').title()} evaluation."
         )
+    elif body.verdict == EvaluationVerdict.SELECTED and candidate.stage == PipelineStage.BRANCH_INTERVIEW:
+        # Check if both HR and Dept are evaluated
+        evals = db.scalars(
+            select(Evaluation).where(
+                Evaluation.candidate_id == candidate.id,
+                Evaluation.type.in_([EvaluationType.BRANCH_HR, EvaluationType.DEPT_HEAD])
+            )
+        ).all()
+        # If we have both and both are evaluated/selected
+        hr_eval = next((e for e in evals if e.type == EvaluationType.BRANCH_HR), None)
+        dept_eval = next((e for e in evals if e.type == EvaluationType.DEPT_HEAD), None)
+        
+        if hr_eval and dept_eval:
+            if hr_eval.status == InterviewStatus.EVALUATED and dept_eval.status == InterviewStatus.EVALUATED:
+                if hr_eval.verdict == EvaluationVerdict.SELECTED and dept_eval.verdict == EvaluationVerdict.SELECTED:
+                    transition(
+                        db=db,
+                        candidate=candidate,
+                        target_stage=PipelineStage.TEST,
+                        user=current_user,
+                        remarks="Branch Interview completed by both HR and Department."
+                    )
+        
         
     # Auto transition to Hired for HQ Interview
     if evaluation.type == EvaluationType.HQ_INTERVIEW and body.verdict == EvaluationVerdict.SELECTED:
@@ -432,7 +498,28 @@ def submit_public_evaluation(
                 user=system_user,
                 remarks=remarks
             )
-            
+    elif body.verdict == EvaluationVerdict.SELECTED and candidate.stage == PipelineStage.BRANCH_INTERVIEW:
+        evals = db.scalars(
+            select(Evaluation).where(
+                Evaluation.candidate_id == candidate.id,
+                Evaluation.type.in_([EvaluationType.BRANCH_HR, EvaluationType.DEPT_HEAD])
+            )
+        ).all()
+        hr_eval = next((e for e in evals if e.type == EvaluationType.BRANCH_HR), None)
+        dept_eval = next((e for e in evals if e.type == EvaluationType.DEPT_HEAD), None)
+        
+        if hr_eval and dept_eval:
+            if hr_eval.status == InterviewStatus.EVALUATED and dept_eval.status == InterviewStatus.EVALUATED:
+                if hr_eval.verdict == EvaluationVerdict.SELECTED and dept_eval.verdict == EvaluationVerdict.SELECTED:
+                    system_user = db.get(User, candidate.assigned_hr_user_id) if candidate.assigned_hr_user_id else None
+                    if system_user:
+                        transition(
+                            db=db,
+                            candidate=candidate,
+                            target_stage=PipelineStage.TEST,
+                            user=system_user,
+                            remarks="Branch Interview completed by both HR and Department via public link."
+                        )
     db.commit()
     return {"status": "success", "message": "Evaluation scorecard submitted"}
 
@@ -488,7 +575,7 @@ def submit_public_test(
             EvaluationToken.token == token,
             EvaluationToken.is_used.is_(False),
             EvaluationToken.expires_at > datetime.now(UTC)
-        ).with_for_update()
+        )
     )
     if not token_row:
         raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
@@ -500,17 +587,39 @@ def submit_public_test(
     candidate = db.get(Candidate, evaluation.candidate_id)
     dept = _get_candidate_department(candidate.position_applied_for)
     
+    answers_map = token_row.test_data.get("answers", {})
+    correct_count = 0
+    total_count = len(answers_map) if answers_map else 0
+    question_scores = {}
+    
+    for q_id, correct_ans in answers_map.items():
+        cand_ans = body.answers.get(q_id)
+        if cand_ans and cand_ans == correct_ans:
+            correct_count += 1
+            question_scores[q_id] = 1
+        else:
+            question_scores[q_id] = 0
+            
+    percentage = int((correct_count / total_count) * 100) if total_count > 0 else 0
+    
     evaluation.scores = {
-        "candidate_answers": body.answers
+        "candidate_answers": body.answers,
+        "question_scores": question_scores,
+        "correct_answers": correct_count,
+        "total_questions": total_count,
+        "percentage": percentage
     }
+    
+    evaluation.status = InterviewStatus.EVALUATED
+    evaluation.verdict = EvaluationVerdict.PASS if percentage >= 50 else EvaluationVerdict.FAIL
     
     token_row.is_used = True
     
     db.add(ActivityLog(
         candidate_id=candidate.id,
         activity_type=ActivityType.FORM,
-        title="Technical Test Submitted",
-        description="Candidate has submitted the online technical test. Awaiting manual evaluation.",
+        title="Technical Test Auto-Evaluated",
+        description=f"Candidate scored {percentage}% ({correct_count}/{total_count}). System auto-assigned {evaluation.verdict.value} verdict.",
         created_by_user_id=None
     ))
     

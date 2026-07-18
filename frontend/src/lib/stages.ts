@@ -15,10 +15,8 @@ export function stageColor(stage: PipelineStage): string {
       return 'bg-sky-100 text-sky-700 border-sky-300 border-dashed';
     case 'CANDIDATE_FORM':
       return 'bg-purple-100 text-purple-700 border-purple-300 border-dashed';
-    case 'HR_INTERVIEW':
+    case 'BRANCH_INTERVIEW':
       return 'bg-indigo-100 text-indigo-700 border-indigo-300 border-dashed';
-    case 'DEPARTMENT_INTERVIEW':
-      return 'bg-pink-100 text-pink-700 border-pink-300 border-dashed';
     case 'FINAL_APPROVAL':
       return 'bg-teal-100 text-teal-700 border-teal-300 border-dashed';
     case 'REJECTED':
@@ -36,8 +34,7 @@ export function getStageBadgeVariant(stage: PipelineStage | string): BadgeProps[
   if (stage === 'ON_HOLD') return 'warning';
   if (stage === 'SCREENING') return 'sky';
   if (stage === 'CANDIDATE_FORM') return 'purple';
-  if (stage === 'HR_INTERVIEW') return 'indigo';
-  if (stage === 'DEPARTMENT_INTERVIEW') return 'pink';
+  if (stage === 'BRANCH_INTERVIEW') return 'indigo';
   if (stage === 'FINAL_APPROVAL') return 'teal';
   return 'secondary';
 }

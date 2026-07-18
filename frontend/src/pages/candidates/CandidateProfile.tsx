@@ -15,13 +15,14 @@ import { PreFormStatus } from '../../components/candidates/PreFormStatus';
 import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPreviewPanel';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { EvaluationStageWidget } from '../../components/candidates/EvaluationStageWidget';
+import { BranchInterviewDashboard } from '../../components/candidates/BranchInterviewDashboard';
 import { FinalApprovalWidget } from '../../components/candidates/FinalApprovalWidget';
 import { ActivityTimeline } from '../../components/candidates/ActivityTimeline';
 import { extractError } from '../../lib/utils';
 
 
-const LINEAR_STAGES: PipelineStage[] = [
-  'SCREENING', 'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW', 'BRANCH_EVALUATION', 'FINAL_APPROVAL', 'HIRED'
+const ALL_STAGES: PipelineStage[] = [
+  'SCREENING', 'CANDIDATE_FORM', 'BRANCH_INTERVIEW', 'TEST', 'FINAL_APPROVAL', 'HIRED'
 ];
 
 
@@ -129,14 +130,13 @@ export default function CandidateProfile() {
     // Prevent accidentally navigating into side/terminal states via the stepper
     if (clickedStage === 'REJECTED' || clickedStage === 'ON_HOLD' || clickedStage === 'HIRED') return;
     
-    const currentIdx = LINEAR_STAGES.indexOf(candidate.current_stage);
-    const clickedIdx = LINEAR_STAGES.indexOf(clickedStage);
+    // We don't need currentStageIdx here anymore since we do ALL_STAGES.indexOf inline
 
     // Always update the viewed tab
     setViewedStage(clickedStage);
 
     // Only update the database if we are moving FORWARD in the pipeline
-    if (clickedIdx > currentIdx) {
+    if (ALL_STAGES.indexOf(clickedStage) > ALL_STAGES.indexOf(candidate.current_stage)) {
       setIsUpdating(true);
       try {
         await updateCandidateStage(candidate.id, clickedStage, '');
@@ -215,12 +215,12 @@ export default function CandidateProfile() {
     );
   }
 
-
   const actualStage = candidate.current_stage;
+
+
   const stageToView = viewedStage || actualStage;
   const showWhatsAppSidebar = stageToView === 'CANDIDATE_FORM' && candidate.pre_form_status !== 'SUBMITTED';
-
-  const stepperStages = LINEAR_STAGES.filter((s): s is Exclude<PipelineStage, 'HIRED'> => s !== 'HIRED');
+  const stepperStages = ALL_STAGES.filter((s): s is Exclude<PipelineStage, 'HIRED'> => s !== 'HIRED');
   const viewedIdx = stepperStages.findIndex((s) => s === stageToView);
   const isPrevDisabled = viewedIdx <= 0 || isUpdating;
   const isNextDisabled = viewedIdx === -1 || viewedIdx >= stepperStages.length - 1 || isUpdating;
@@ -240,25 +240,18 @@ export default function CandidateProfile() {
       completedStages.push('CANDIDATE_FORM');
     }
     
-    // 3. HR_INTERVIEW
+    // 3. BRANCH_INTERVIEW
     const hrEval = evaluations.find(e => e.type === 'BRANCH_HR');
     if (hrEval && hrEval.verdict) {
-      if (hrEval.verdict === 'ON_HOLD') heldStages.push('HR_INTERVIEW');
-      else completedStages.push('HR_INTERVIEW');
+      if (hrEval.verdict === 'ON_HOLD') heldStages.push('BRANCH_INTERVIEW');
+      else completedStages.push('BRANCH_INTERVIEW');
     }
     
-    // 4. DEPARTMENT_INTERVIEW
-    const deptEval = evaluations.find(e => e.type === 'DEPT_HEAD');
-    if (deptEval && deptEval.verdict) {
-      if (deptEval.verdict === 'ON_HOLD') heldStages.push('DEPARTMENT_INTERVIEW');
-      else completedStages.push('DEPARTMENT_INTERVIEW');
-    }
-    
-    // 5. BRANCH_EVALUATION
-    const gmEval = evaluations.find(e => e.type === 'GM_LEVEL');
-    if (gmEval && gmEval.verdict) {
-      if (gmEval.verdict === 'ON_HOLD') heldStages.push('BRANCH_EVALUATION');
-      else completedStages.push('BRANCH_EVALUATION');
+    // 5. TEST
+    const testEval = evaluations.find(e => e.type === 'TECHNICAL_TEST');
+    if (testEval && testEval.verdict) {
+      if (testEval.verdict === 'ON_HOLD') heldStages.push('TEST');
+      else completedStages.push('TEST');
     }
     
     // 6. FINAL_APPROVAL
@@ -274,8 +267,8 @@ export default function CandidateProfile() {
     }
 
     // A stage is skipped if it is not completed and not held, but the candidate's current stage is past it in the linear sequence!
-    const currentIdx = LINEAR_STAGES.indexOf(candidate.current_stage);
-    LINEAR_STAGES.forEach((stage, idx) => {
+    const currentIdx = ALL_STAGES.indexOf(candidate.current_stage);
+    ALL_STAGES.forEach((stage, idx) => {
       if (idx < currentIdx && !completedStages.includes(stage) && !heldStages.includes(stage)) {
         skippedStages.push(stage);
       }
@@ -526,31 +519,15 @@ export default function CandidateProfile() {
               <WhatsAppPreviewPanel candidate={candidate} className="lg:hidden mt-6 rounded-xl border border-border overflow-hidden" />
             )}
 
-            {stageToView === 'HR_INTERVIEW' && (
-              <EvaluationStageWidget
+            {stageToView === 'BRANCH_INTERVIEW' && (
+              <BranchInterviewDashboard
                 candidate={candidate}
-                evalTypes={['BRANCH_HR']}
-                title="HR Interview Evaluation"
                 onUpdate={handleUpdate}
               />
             )}
 
-            {stageToView === 'DEPARTMENT_INTERVIEW' && (
-              <EvaluationStageWidget
-                candidate={candidate}
-                evalTypes={['DEPT_HEAD']}
-                title="Department Head Evaluation"
-                onUpdate={handleUpdate}
-              />
-            )}
-
-            {stageToView === 'BRANCH_EVALUATION' && (
-              <EvaluationStageWidget
-                candidate={candidate}
-                evalTypes={['GM_LEVEL', 'TECHNICAL_TEST']}
-                title="Branch General Manager Evaluation"
-                onUpdate={handleUpdate}
-              />
+            {stageToView === 'TEST' && (
+              <EvaluationStageWidget candidate={candidate} evalTypes={['TECHNICAL_TEST']} title="" onUpdate={handleUpdate} />
             )}
 
             {stageToView === 'FINAL_APPROVAL' && (
@@ -576,7 +553,7 @@ export default function CandidateProfile() {
                     onChange={(e) => setResumeStage(e.target.value as PipelineStage)}
                     className="flex-1 w-full sm:w-auto bg-background border border-border rounded-lg px-3 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-warning/40"
                   >
-                    {LINEAR_STAGES.filter(s => s !== 'HIRED').map(s => (
+                    {ALL_STAGES.filter(s => s !== 'HIRED').map(s => (
                       <option key={s} value={s}>{stageLabel(s)}</option>
                     ))}
                   </select>
@@ -693,9 +670,9 @@ export default function CandidateProfile() {
               >
                 <option value="SCREENING">Screening</option>
                 <option value="CANDIDATE_FORM">Candidate Form</option>
-                <option value="HR_INTERVIEW">HR Interview</option>
-                <option value="DEPARTMENT_INTERVIEW">Department Interview</option>
-                <option value="BRANCH_EVALUATION">Branch Evaluation</option>
+                <option value="BRANCH_INTERVIEW">HR Interview</option>
+
+                <option value="TEST">Technical Test</option>
                 <option value="FINAL_APPROVAL">Final Approval</option>
                 <option value="ON_HOLD">On Hold</option>
                 <option value="REJECTED">Rejected</option>

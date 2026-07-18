@@ -4,6 +4,10 @@ from pydantic import BaseModel, ConfigDict
 from app.models.enums import EvaluationType, InterviewStatus, InterviewMode, EvaluationVerdict
 
 
+class EvaluationCreate(BaseModel):
+    type: EvaluationType
+    interviewer_name: str | None = None
+    interviewer_designation: str | None = None
 class TechnicalQuestionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
