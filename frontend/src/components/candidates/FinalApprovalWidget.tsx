@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { LoadingSpinner } from '../ui';
 import { CandidateSummaryDocument } from './CandidateSummaryDocument';
 import { EvaluationStageWidget } from './EvaluationStageWidget';
@@ -37,18 +38,25 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
   return (
     <div className="space-y-6">
       {/* Tabs Header */}
-      <div className="flex bg-white rounded-xl shadow-sm border border-border p-1 gap-1 overflow-x-auto">
+      <div className="flex bg-muted/30 p-1 rounded-xl mb-6 relative border border-border/50 overflow-x-auto">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              "flex-1 min-w-[200px] px-4 py-3 text-sm font-semibold rounded-lg transition-all",
+              "relative flex-1 min-w-[200px] px-4 py-3 text-sm font-semibold rounded-lg transition-colors z-10",
               activeTab === tab.id
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "text-white"
+                : "text-muted-foreground hover:text-foreground/80"
             )}
           >
+            {activeTab === tab.id && (
+              <motion.div
+                layoutId="final-approval-tab-toggle"
+                className="absolute inset-0 bg-primary shadow-md border border-primary rounded-lg -z-10"
+                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+              />
+            )}
             {tab.label}
           </button>
         ))}
