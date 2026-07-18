@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, Link, Clipboard, UserCheck, FileText, CheckCircle, Star, Send, Video, Clock, CheckCheck, ArrowLeft, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -6,6 +6,7 @@ import { Button, LoadingSpinner, Modal, Input } from '../ui';
 import { getCandidateEvaluations, scheduleEvaluation, generateEvaluationToken, submitScorecardDirect, sendEvaluationWhatsAppInvite, getDepartmentQuestions } from '../../api/evaluations';
 import type { Candidate, Evaluation, EvaluationVerdict, User } from '../../types';
 import { cn, extractError } from '../../lib/utils';
+import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../../auth/AuthContext';
 
 
@@ -380,20 +381,20 @@ export function EvaluationStageWidget({
         <h2 className="text-xl font-bold text-foreground mb-4">{title}</h2>
         
         {evalTypes.length > 1 && (
-          <div className="flex bg-muted/30 p-1 rounded-xl mb-6 w-fit relative border border-border/50">
+          <div className="flex bg-muted/30 p-1 rounded-xl mb-6 w-fit mx-auto relative border border-border/50">
             {evalTypes.map((type) => (
               <button
                 key={type}
                 onClick={() => setActiveType(type)}
                 className={cn(
                   "relative px-6 py-2.5 text-sm font-bold rounded-lg transition-colors z-10",
-                  activeType === type ? "text-foreground" : "text-muted-foreground hover:text-foreground/80"
+                  activeType === type ? "text-white" : "text-muted-foreground hover:text-foreground/80"
                 )}
               >
                 {activeType === type && (
                   <motion.div
                     layoutId={`eval-toggle-${title.replace(/\s+/g, '-')}`}
-                    className="absolute inset-0 bg-background shadow-sm border border-border rounded-lg -z-10"
+                    className="absolute inset-0 bg-primary shadow-md border border-primary rounded-lg -z-10"
                     transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                   />
                 )}
@@ -505,110 +506,14 @@ export function EvaluationStageWidget({
                   ) : (
                     <>
                       {ev.type === 'TECHNICAL_TEST' ? (
-                        <div className="mt-5 bg-white shadow-xl rounded-sm w-full max-w-4xl mx-auto text-black font-sans relative overflow-hidden ring-1 ring-black/5">
-                          {/* Floating Actions */}
-                          {!remarksId && (
-                            <div className="absolute top-4 right-4 flex gap-2 print:hidden z-10">
-                              <button type="button" onClick={() => window.print()} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded shadow-md transition-colors whitespace-nowrap">
-                                <FileText className="w-3.5 h-3.5" /> Print Paper
-                              </button>
-                              <button type="button" onClick={() => handleInstantWhatsAppShare(ev)} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded shadow-md transition-colors whitespace-nowrap">
-                                <img src="/whatsapp.webp" alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> Send Link
-                              </button>
-                            </div>
-                          )}
-
-                          <div className="p-4 pb-8">
-                            {/* Header Section */}
-                            <div className="flex justify-between items-start border-2 border-black border-b-0">
-                              <div className="p-2">
-                                <h1 className="font-bold text-xl tracking-widest uppercase mb-1">Toyota</h1>
-                                <h2 className="font-semibold text-[10px] uppercase">Motor Corporation</h2>
-                                <p className="text-[9px] italic mt-1 text-gray-700">For candidates with one year experience and above</p>
-                              </div>
-                              <div className="border-l-2 border-black flex flex-col w-40 text-xs">
-                                <div className="border-b-2 border-black p-1 text-center font-bold tracking-wide">Series B</div>
-                                <div className="border-b-2 border-black p-1 text-center font-bold text-[10px] tracking-wide">Version 2020.1</div>
-                                <div className="border-b-2 border-black p-1 font-medium flex justify-between"><span>Date:</span> <span className="underline decoration-dashed underline-offset-4 text-gray-800 flex-1 ml-1 text-right">{new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())}</span></div>
-                                <div className="p-1 font-medium flex justify-between"><span>Time:</span> <span className="underline decoration-dashed underline-offset-4 text-gray-800 flex-1 ml-1 text-right">{new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())}</span></div>
-                              </div>
-                            </div>
-                            
-                            <div className="border-2 border-black border-b-0 p-1 text-center font-bold uppercase tracking-widest text-xs ">
-                              Human Resources Department
-                            </div>
-                            
-                            <div className="border-2 border-black border-b-0 p-2 text-xs flex flex-col gap-2">
-                              <div className="flex items-end">
-                                <span className="w-32 font-semibold">Name of the Candidate:</span>
-                                <span className="flex-1 border-b-2 border-black text-sm pl-2 pb-0.5 text-blue-900" style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif' }}>{candidate.full_name}</span>
-                              </div>
-                              <div className="flex items-end">
-                                <span className="w-32 font-semibold">Position Applied For:</span>
-                                <span className="flex-1 border-b-2 border-black text-sm pl-2 pb-0.5 text-blue-900" style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif' }}>{candidate.position_applied_for}</span>
-                              </div>
-                            </div>
-                            
-                            <div className="border-2 border-black p-1 text-center font-bold uppercase tracking-widest text-xs ">
-                              Question Paper - {candidate.position_applied_for || 'Call Centre'}
-                            </div>
-
-                            {/* Questions Table */}
-                            {loadingQuestions ? (
-                              <div className="flex justify-center py-12 border-x-2 border-b-2 border-black"><LoadingSpinner size="md" /></div>
-                            ) : technicalQuestions?.length === 0 ? (
-                              <div className="text-center py-12 border-x-2 border-b-2 border-black text-gray-500 font-semibold">No questions found.</div>
-                            ) : (
-                              <table className="w-full border-collapse border-2 border-t-0 border-black text-sm">
-                                <thead>
-                                  <tr>
-                                    <th className="border-2 border-t-0 border-black w-8 p-0"></th>
-                                    <th className="border-2 border-t-0 border-black p-0"></th>
-                                    <th className="border-2 border-t-0 border-black w-12 text-center text-[10px] p-1 leading-tight">Max.<br/>Marks</th>
-                                    <th className="border-2 border-t-0 border-black w-14 text-center text-[10px] p-1 leading-tight">Marks<br/>Obtained</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {technicalQuestions?.map((q, idx) => {
-                                    const submittedAns = ev.scores?.candidate_answers?.[q.id];
-                                    return (
-                                      <tr key={q.id || idx}>
-                                        <td className="border-2 border-black text-center align-top py-1.5 text-xs font-semibold text-gray-800">{idx + 1}</td>
-                                        <td className="border-2 border-black p-0 align-top">
-                                          <div className="border-b-2 border-black p-1.5 text-[13px] font-bold text-gray-900 leading-snug">
-                                            {q.text}
-                                          </div>
-                                          <div className="p-1.5 min-h-[2.5rem] text-gray-800 flex flex-col justify-center">
-                                            {q.options && Object.keys(q.options).length > 0 ? (
-                                              <div className="flex flex-col gap-1.5">
-                                                {Object.entries(q.options).map(([key, val]) => (
-                                                  <div key={key} className={cn("flex gap-1.5 text-[11px]", submittedAns === key ? "font-bold text-black" : "")}>
-                                                    <span className="font-semibold w-4">{key}.</span> 
-                                                    <span>{val as React.ReactNode}</span>
-                                                    {submittedAns === key && (
-                                                      <span className="ml-1 italic text-green-700 font-bold text-sm leading-none align-middle" style={{ transform: 'rotate(-10deg)', display: 'inline-block' }}>✓</span>
-                                                    )}
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            ) : (
-                                              <div className="text-gray-500 italic h-6 flex items-end">
-                                                {submittedAns ? <span className="text-blue-900 font-semibold text-sm leading-none block border-b border-dashed border-gray-400 w-full pb-0.5" style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif' }}>{submittedAns}</span> : ""}
-                                              </div>
-                                            )}
-                                          </div>
-                                        </td>
-                                        <td className="border-2 border-black text-center align-middle font-bold text-[13px] text-gray-800">1</td>
-                                        <td className="border-2 border-black text-center align-middle relative">
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            )}
-                          </div>
-                        </div>
+                        <TechnicalTestPaperWidget 
+                          ev={ev} 
+                          candidate={candidate} 
+                          technicalQuestions={technicalQuestions} 
+                          loadingQuestions={loadingQuestions} 
+                          handleInstantWhatsAppShare={handleInstantWhatsAppShare} 
+                          remarksId={remarksId} 
+                        />
                       ) : ev.scheduled_time && !schedulingId && !remarksId ? (
                         <div className="mt-5 p-4 bg-background border border-border rounded-xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 shadow-sm">
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-6 flex-1 w-full">
@@ -1140,6 +1045,122 @@ Nippon Toyota`;
         </div>
       </Modal>
 
+    </div>
+  );
+}
+
+
+function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQuestions, handleInstantWhatsAppShare, remarksId }: any) {
+  const printRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `TechnicalTest_${candidate.full_name}`,
+  });
+
+  return (
+    <div className="mt-5 bg-white shadow-xl rounded-sm w-full max-w-4xl mx-auto text-black font-sans relative overflow-hidden ring-1 ring-black/5" ref={printRef}>
+                          {/* Floating Actions */}
+                          {!remarksId && (
+                            <div className="absolute top-4 right-4 flex gap-2 print:hidden z-10">
+                              <button type="button" onClick={() => handlePrint()} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded shadow-md transition-colors whitespace-nowrap">
+                                <FileText className="w-3.5 h-3.5" /> Print Paper
+                              </button>
+                              <button type="button" onClick={() => handleInstantWhatsAppShare(ev)} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded shadow-md transition-colors whitespace-nowrap">
+                                <img src="/whatsapp.webp" alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> Send Link
+                              </button>
+                            </div>
+                          )}
+
+                          <div className="p-1">
+                            {/* Header Section */}
+                            <div className="flex justify-between items-start border-2 border-black border-b-0">
+                              <div className="p-1">
+                                <h1 className="font-bold text-xl tracking-widest uppercase mb-0 leading-none">Toyota</h1>
+                                <h2 className="font-semibold text-[9px] uppercase leading-tight">Motor Corporation</h2>
+                                <p className="text-[8px] italic mt-0.5 text-gray-700">For candidates with one year experience and above</p>
+                              </div>
+                              <div className="border-l-2 border-black flex flex-col w-32 text-[10px]">
+                                <div className="border-b-2 border-black p-0.5 text-center font-bold tracking-wide">Series B</div>
+                                <div className="border-b-2 border-black p-0.5 text-center font-bold text-[9px] tracking-wide">Version 2020.1</div>
+                                <div className="border-b-2 border-black p-0.5 font-medium flex justify-between"><span>Date:</span> <span className="underline decoration-dashed underline-offset-4 text-gray-800 flex-1 ml-1 text-right">{new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())}</span></div>
+                                <div className="p-0.5 font-medium flex justify-between"><span>Time:</span> <span className="underline decoration-dashed underline-offset-4 text-gray-800 flex-1 ml-1 text-right">{new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())}</span></div>
+                              </div>
+                            </div>
+                            
+                            <div className="border-2 border-black border-b-0 p-0.5 text-center font-bold uppercase tracking-widest text-[11px] ">
+                              Human Resources Department
+                            </div>
+                            
+                            <div className="border-2 border-black border-b-0 p-1 text-[11px] flex flex-col gap-1">
+                              <div className="flex items-end">
+                                <span className="w-28 font-semibold">Name of the Candidate:</span>
+                                <span className="flex-1 border-b-2 border-black text-xs pl-2 pb-0.5 text-blue-900" style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif' }}>{candidate.full_name}</span>
+                              </div>
+                              <div className="flex items-end">
+                                <span className="w-28 font-semibold">Position Applied For:</span>
+                                <span className="flex-1 border-b-2 border-black text-xs pl-2 pb-0.5 text-blue-900" style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif' }}>{candidate.position_applied_for}</span>
+                              </div>
+                            </div>
+                            
+                            <div className="border-2 border-black p-0.5 text-center font-bold uppercase tracking-widest text-[11px] ">
+                              Question Paper - {candidate.position_applied_for || 'Call Centre'}
+                            </div>
+
+                            {/* Questions Table */}
+                            {loadingQuestions ? (
+                              <div className="flex justify-center py-12 border-x-2 border-b-2 border-black"><LoadingSpinner size="md" /></div>
+                            ) : technicalQuestions?.length === 0 ? (
+                              <div className="text-center py-12 border-x-2 border-b-2 border-black text-gray-500 font-semibold">No questions found.</div>
+                            ) : (
+                              <table className="w-full border-collapse border-2 border-t-0 border-black text-sm">
+                                <thead>
+                                  <tr>
+                                    <th className="border-2 border-t-0 border-black w-8 p-0"></th>
+                                    <th className="border-2 border-t-0 border-black p-0"></th>
+                                    <th className="border-2 border-t-0 border-black w-12 text-center text-[10px] p-1 leading-tight">Max.<br/>Marks</th>
+                                    <th className="border-2 border-t-0 border-black w-14 text-center text-[10px] p-1 leading-tight">Marks<br/>Obtained</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {technicalQuestions?.map((q, idx) => {
+                                    const submittedAns = ev.scores?.candidate_answers?.[q.id];
+                                    return (
+                                      <tr key={q.id || idx}>
+                                        <td className="border-2 border-black text-center align-top py-1.5 text-xs font-semibold text-gray-800">{idx + 1}</td>
+                                        <td className="border-2 border-black p-0 align-top">
+                                          <div className="border-b-2 border-black p-1 text-[12px] font-bold text-gray-900 leading-snug">
+                                            {q.text}
+                                          </div>
+                                          <div className="p-1 min-h-[2rem] text-gray-800 flex flex-col justify-center">
+                                            {q.options && Object.keys(q.options).length > 0 ? (
+                                              <div className="flex flex-col gap-1.5">
+                                                {Object.entries(q.options).map(([key, val]) => (
+                                                  <div key={key} className={cn("flex gap-1.5 text-[11px]", submittedAns === key ? "font-bold text-black" : "")}>
+                                                    <span className="font-semibold w-4">{key}.</span> 
+                                                    <span>{val as React.ReactNode}</span>
+                                                    {submittedAns === key && (
+                                                      <span className="ml-1 italic text-green-700 font-bold text-sm leading-none align-middle" style={{ transform: 'rotate(-10deg)', display: 'inline-block' }}>✓</span>
+                                                    )}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            ) : (
+                                              <div className="text-gray-500 italic h-4 flex items-end">
+                                                {submittedAns ? <span className="text-blue-900 font-semibold text-sm leading-none block border-b border-dashed border-gray-400 w-full pb-0.5" style={{ fontFamily: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", sans-serif' }}>{submittedAns}</span> : ""}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td className="border-2 border-black text-center align-middle font-bold text-[13px] text-gray-800">1</td>
+                                        <td className="border-2 border-black text-center align-middle relative">
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
     </div>
   );
 }

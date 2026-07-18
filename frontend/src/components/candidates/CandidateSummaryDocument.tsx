@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useReactToPrint } from 'react-to-print';
 import { getDepartmentQuestions } from '../../api/evaluations';
 import type { Candidate, Evaluation } from '../../types';
 
@@ -16,6 +17,12 @@ const formatDate = (dateStr?: string) => {
 
 export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButton = false }: CandidateSummaryDocumentProps) {
   const [questions, setQuestions] = useState<any[]>([]);
+  const componentRef = useRef<HTMLDivElement>(null);
+
+  const handlePrint = useReactToPrint({
+    contentRef: componentRef,
+    documentTitle: `CSS_${candidate.full_name}`,
+  });
 
   useEffect(() => {
     if (candidate?.position_applied_for) {
@@ -57,14 +64,15 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
 
       {!hidePrintButton && (
         <div className="text-center py-4 no-print bg-white border-b sticky top-0 z-50 shadow-sm">
-          <button onClick={() => window.print()} className="bg-primary text-primary-foreground px-6 py-2 rounded-md font-semibold cursor-pointer shadow-sm">
+          <button onClick={() => handlePrint()} className="bg-primary text-primary-foreground px-6 py-2 rounded-md font-semibold cursor-pointer shadow-sm">
             Print Form
           </button>
         </div>
       )}
 
+      <div ref={componentRef} className="print-contents-wrapper">
       {/* --- PAGE 1: Candidate Summary Sheet --- */}
-      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-8 p-[10mm] shadow-sm border border-gray-100 box-border relative page-break">
+      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-4 p-[5mm] shadow-sm border border-gray-100 box-border relative page-break">
         
         {/* Header Table */}
         <table className="print-table mb-0 border-b-0">
@@ -72,10 +80,7 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
             <tr>
               <td rowSpan={2} className="w-16 text-center font-bold text-xl border-r-0" style={{borderBottom: 0}}>
                 <div className="flex items-center justify-center">
-                   <div className="w-10 h-10 border-2 border-black rounded-full flex items-center justify-center relative overflow-hidden">
-                      <div className="w-6 h-4 border-2 border-black rounded-[50%] absolute"></div>
-                      <div className="w-4 h-6 border-2 border-black rounded-[50%] absolute"></div>
-                   </div>
+                   <img src="/nippon-toyota-logo.png" alt="Nippon Toyota" className="w-20 object-contain" />
                 </div>
               </td>
               <td rowSpan={2} className="font-bold text-base text-left border-l-0" style={{borderBottom: 0}}>
@@ -383,14 +388,11 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
       </div>
 
       {/* --- PAGE 2: Salary Proposal --- */}
-      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-8 p-[10mm] shadow-sm border border-gray-100 box-border relative page-break">
+      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-4 p-[5mm] shadow-sm border border-gray-100 box-border relative page-break">
          {/* Logo */}
          <div className="flex justify-between items-start mb-4">
              <div className="flex items-center">
-                <div className="w-12 h-12 border-[3px] border-black rounded-full flex items-center justify-center relative overflow-hidden mr-2">
-                  <div className="w-8 h-5 border-[3px] border-black rounded-[50%] absolute"></div>
-                  <div className="w-5 h-8 border-[3px] border-black rounded-[50%] absolute"></div>
-                </div>
+                <img src="/nippon-toyota-logo.png" alt="Nippon Toyota Logo" className="w-12 h-12 object-contain mr-2" />
                 <div className="font-bold text-xs mt-4">NIPPON MOTORS PVT LTD,KALAMASSERY</div>
              </div>
              <div className="border border-black px-2 py-1 text-[10px] mt-2">N/24/2083</div>
@@ -526,11 +528,9 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
 
          <div className="flex justify-between mt-8 mb-16 text-sm px-2">
              <div className="relative pt-8 w-40 text-center">
-                <div className="absolute top-0 left-0 w-full font-serif italic text-blue-800 text-3xl font-bold opacity-70">HRD 04/07/26</div>
                 <div className="text-left font-normal text-[11px] mb-8 relative z-10">Prepared By</div>
                 <div className="border-b border-black w-32 mb-1"></div>
                 <div className="text-left font-normal text-[11px]">HRD</div>
-                <div className="text-left font-normal text-[11px]">04-07-2026</div>
              </div>
              <div className="w-48">
                 <div className="text-left font-normal text-[11px] mb-12">Checked By</div>
@@ -548,13 +548,10 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
       </div>
 
       {/* --- PAGE 3: Background Verification --- */}
-      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-8 p-[10mm] shadow-sm border border-gray-100 box-border relative page-break">
+      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-4 p-[5mm] shadow-sm border border-gray-100 box-border relative page-break">
          {/* Logo */}
          <div className="flex items-center mb-1 border border-black p-1 pb-0 border-b-0 w-full bg-gray">
-             <div className="w-8 h-8 border-2 border-black rounded-full flex items-center justify-center relative overflow-hidden mr-2 bg-white ml-8">
-                <div className="w-5 h-3 border-2 border-black rounded-[50%] absolute"></div>
-                <div className="w-3 h-5 border-2 border-black rounded-[50%] absolute"></div>
-             </div>
+             <img src="/nippon-toyota-logo.png" alt="Nippon Toyota Logo" className="w-8 h-8 object-contain mr-2 ml-8 bg-white" />
              <div className="font-bold text-xl tracking-wide ml-4">TOYOTA<br/><span className="text-[10px] font-normal tracking-normal -mt-1 block">NIPPON MOTOR CORPORATION (P) LTD.</span></div>
          </div>
 
@@ -748,15 +745,10 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
       </div>
 
       {/* --- PAGE 4: Information Required from Applicants --- */}
-      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-8 p-[10mm] shadow-sm border border-gray-100 box-border relative page-break">
+      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-4 p-[5mm] shadow-sm border border-gray-100 box-border relative page-break">
          <div className="flex border border-black p-2 mb-1">
-             <div className="w-[20%] flex flex-col items-center justify-center border-r border-black pr-2 relative">
-                 <div className="absolute top-1 left-2 font-bold text-[30px] font-serif tracking-tighter opacity-50">K</div>
-                 <div className="w-8 h-8 border-2 border-black rounded-full flex items-center justify-center relative overflow-hidden mb-1 bg-white z-10">
-                    <div className="w-5 h-3 border-2 border-black rounded-[50%] absolute"></div>
-                    <div className="w-3 h-5 border-2 border-black rounded-[50%] absolute"></div>
-                 </div>
-                 <div className="font-bold text-[5px] text-center z-10">NIPPON TOYOTA</div>
+             <div className="w-[20%] flex flex-col items-center justify-center border-r border-black pr-2 relative py-1">
+                 <img src="/nippon-toyota-logo.png" alt="Nippon Toyota" className="w-24 object-contain" />
              </div>
              <div className="w-[60%] flex flex-col items-center justify-center px-2 text-center border-r border-black">
                  <div className="font-bold text-base mb-1 tracking-wide">NIPPON MOTOR CORPORATION PVT LTD</div>
@@ -963,7 +955,7 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
       </div>
 
       {/* --- PAGE 5: Information Required from Applicants (Part 2) --- */}
-      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-8 p-[10mm] shadow-sm border border-gray-100 box-border relative page-break">
+      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-4 p-[5mm] shadow-sm border border-gray-100 box-border relative page-break">
          
          <div className="font-bold text-center text-lg mb-0 bg-gray py-1 border border-black border-b-0">Family Details</div>
          <table className="print-table mb-2">
@@ -1074,7 +1066,7 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
       </div>
 
       {/* --- PAGE 6: Employment Record (Part 2) & Declaration --- */}
-      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-8 p-[10mm] shadow-sm border border-gray-100 box-border relative page-break">
+      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-4 p-[5mm] shadow-sm border border-gray-100 box-border relative page-break">
          <div className="font-bold text-center text-lg bg-gray py-1 border border-black border-b-0">Employment Record</div>
          <table className="print-table mb-2">
             <tbody>
@@ -1192,7 +1184,7 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
       </div>
 
       {/* --- PAGE 7: Regional HR Comments --- */}
-      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-8 p-[10mm] shadow-sm border border-gray-100 box-border relative page-break flex flex-col justify-between">
+      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-4 p-[5mm] shadow-sm border border-gray-100 box-border relative page-break flex flex-col justify-between">
          <div className="flex-1 w-full"></div>
 
          <table className="print-table mb-0 border-b-[3px] border-black border-r-[3px]">
@@ -1243,7 +1235,7 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
       </div>
 
       {/* --- PAGE 8: Interview Panel Suggestion --- */}
-      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-8 p-[10mm] shadow-sm border border-gray-100 box-border relative page-break">
+      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-4 p-[5mm] shadow-sm border border-gray-100 box-border relative page-break">
          <table className="print-table mb-0 border-b-2 border-black border-r-2">
             <tbody>
               <tr><td colSpan={6} className="bg-gray font-bold text-center py-2 text-sm tracking-wide">INTERVIEW PANEL SUGGESTION</td></tr>
@@ -1312,7 +1304,7 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
       </div>
 
       {/* --- PAGE 9: Resume / Biodata Placeholder --- */}
-      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-8 p-[10mm] shadow-sm border border-gray-100 box-border relative page-break flex flex-col items-center justify-center">
+      <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-4 p-[5mm] shadow-sm border border-gray-100 box-border relative page-break flex flex-col items-center justify-center">
          <div className="border-4 border-dashed border-gray-300 w-full h-full rounded-2xl flex flex-col items-center justify-center text-gray-400 p-12 text-center space-y-4">
              <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                  <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -1326,47 +1318,47 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
 
       {/* --- PAGE 10+: Technical Test Question Paper --- */}
       {questions.length > 0 && (
-         <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-8 p-[10mm] shadow-sm border border-gray-100 box-border relative page-break flex flex-col">
-            <div className="flex justify-between items-start mb-4 relative font-serif">
-              <div className="pt-2">
-                <h1 className="text-3xl font-black uppercase tracking-tighter leading-none mb-1 text-black">TOYOTA</h1>
-                <h2 className="text-sm font-bold uppercase tracking-widest text-gray-700 leading-tight">Motor Corporation</h2>
-                <p className="text-[10px] mt-4 italic text-gray-600">*candidates with one year experience and above</p>
+         <div className="print-container mx-auto w-[210mm] min-h-[297mm] bg-white mb-4 p-[10mm] shadow-sm border border-gray-100 box-border relative page-break flex flex-col font-sans text-black text-[16px] leading-normal">
+            <div className="flex justify-between items-start mb-1 relative font-sans">
+              <div className="pt-0">
+                <h1 className="text-xl font-black uppercase tracking-tighter leading-none mb-0 text-black">TOYOTA</h1>
+                <h2 className="text-xs font-bold uppercase tracking-widest text-gray-700 leading-tight">Motor Corporation</h2>
+                <p className="text-[9px] mt-1 italic text-gray-600">*candidates with one year experience and above</p>
               </div>
               <div className="border-[2px] border-black w-[220px]">
-                <div className="border-b-[2px] border-black text-center font-bold py-1 bg-gray-100">Series B</div>
-                <div className="border-b-[2px] border-black text-center font-bold py-0.5 text-sm">Version 2020.1</div>
-                <div className="px-2 py-0.5 border-b border-black text-sm flex gap-1">
+                <div className="border-b-[2px] border-black text-center font-bold py-0 bg-gray-100 text-xs">Series B</div>
+                <div className="border-b-[2px] border-black text-center font-bold py-0 text-[10px]">Version 2020.1</div>
+                <div className="px-2 py-0 border-b border-black text-[10px] flex gap-1">
                   <span className="font-semibold">Date:</span>
-                  <span className="flex-1 border-b border-gray-400 mt-3"></span>
+                  <span className="flex-1 border-b border-gray-400 mt-2"></span>
                 </div>
-                <div className="px-2 py-0.5 text-sm flex gap-1">
+                <div className="px-2 py-0 text-[10px] flex gap-1">
                   <span className="font-semibold">Time:</span>
-                  <span className="flex-1 border-b border-gray-400 mt-3"></span>
+                  <span className="flex-1 border-b border-gray-400 mt-2"></span>
                 </div>
               </div>
             </div>
 
-            <div className="border-b-[2px] border-black pb-1 mb-2 text-center font-serif">
-              <h2 className="text-xl font-bold uppercase text-black">Human Resources Department</h2>
+            <div className="border-b-[2px] border-black pb-0.5 mb-1 text-center font-sans">
+              <h2 className="text-[12px] font-bold uppercase text-black">Human Resources Department</h2>
             </div>
 
-            <div className="border-b-[2px] border-black pb-1 mb-2 font-serif">
-              <div className="flex text-[15px] mb-2 px-1">
+            <div className="border-b-[2px] border-black pb-0.5 mb-1 font-sans">
+              <div className="flex text-[11px] mb-0.5 px-1">
                 <span className="font-semibold mr-2 whitespace-nowrap text-black">Name of the Candidate:</span>
                 <span className="flex-1 font-medium font-sans uppercase border-b border-gray-400 leading-tight flex items-end text-black">{candidate.full_name}</span>
               </div>
-              <div className="flex text-[15px] px-1">
+              <div className="flex text-[11px] px-1">
                 <span className="font-semibold mr-2 whitespace-nowrap text-black">Position Applied For:</span>
                 <span className="flex-1 font-medium font-sans uppercase border-b border-gray-400 leading-tight flex items-end text-black">{candidate.position_applied_for}</span>
               </div>
             </div>
 
-            <div className="border-b-[2px] border-black pb-1 mb-4 text-center font-serif">
-              <h3 className="text-lg font-bold text-black">Question Paper - {candidate.position_applied_for}</h3>
+            <div className="border-b-[2px] border-black pb-0.5 mb-1 text-center font-sans">
+              <h3 className="text-[12px] font-bold text-black">Question Paper - {candidate.position_applied_for}</h3>
             </div>
 
-            <table className="w-full border-collapse border-[2px] border-black text-[13px] leading-snug table-fixed font-serif text-black">
+            <table className="w-full border-collapse border-[2px] border-black text-[13px] leading-snug ">
               <thead>
                 <tr className="border-b-[2px] border-black">
                   <th className="border-r-[2px] border-black w-10"></th>
@@ -1378,8 +1370,8 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
               <tbody>
                 {questions.map((q, idx) => (
                   <tr key={q.id} className="border-b-[2px] border-black">
-                    <td className="border-r-[2px] border-black text-center align-top pt-2 font-medium">{idx + 1}</td>
-                    <td className="border-r-[2px] border-black p-2 align-top">
+                    <td className="border-r-[2px] border-black text-center align-top pt-1 font-medium">{idx + 1}</td>
+                    <td className="border-r-[2px] border-black p-1 align-top">
                       <div className="font-bold mb-1">{q.text}</div>
                       {Object.keys(q.options || {}).length > 0 ? (
                         <div className="pl-1 text-xs">
@@ -1391,7 +1383,7 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
                           ))}
                         </div>
                       ) : (
-                        <div className="h-10"></div>
+                        <div className="h-6"></div>
                       )}
                     </td>
                     <td className="border-r-[2px] border-black text-center align-middle font-bold text-[14px]">1</td>
@@ -1403,6 +1395,7 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
          </div>
       )}
 
+    </div>
     </div>
   );
 }

@@ -9,11 +9,11 @@ connect_args: dict = {}
 if "supabase" in settings.database_url.lower():
     connect_args["sslmode"] = "require"
 
+from sqlalchemy.pool import NullPool
+
 engine = create_engine(
     settings.database_url,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=5,
+    poolclass=NullPool,
     connect_args=connect_args,
 )
 

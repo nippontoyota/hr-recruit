@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useReactToPrint } from 'react-to-print';
 import { Button, Input, Modal } from '../ui';
 import { CheckCircle2, Pencil, Printer, Save, X, RefreshCw, Link, Send } from 'lucide-react';
 import type { Candidate } from '../../types';
 import { toast } from 'sonner';
-import { ResumeButton } from './ResumeButton';
 import { updateCandidateRawData, sendPostForm } from '../../api/candidates';
 import { copyToClipboard } from '../../lib/clipboard';
 import { WhatsAppPreviewPanel } from './WhatsAppPreviewPanel';
+import { cn } from '../../lib/utils';
 
 interface PostFormStatusProps {
   candidate: Candidate;
@@ -31,6 +32,12 @@ function formatFieldValue(value: unknown): string {
 }
 
 export function PostFormStatus({ candidate, onUpdate }: PostFormStatusProps) {
+  const componentRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({
+    contentRef: componentRef,
+    documentTitle: `PostForm_${candidate.full_name}`,
+  });
+
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, any>>({});
@@ -90,33 +97,40 @@ export function PostFormStatus({ candidate, onUpdate }: PostFormStatusProps) {
     }));
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+
 
   if (status === 'SUBMITTED') {
     return (
-      <div className="py-8 w-full max-w-4xl mx-auto print-container">
+      <div ref={componentRef} className="py-8 w-full max-w-4xl mx-auto print-container">
         <div className="flex flex-col items-center mb-8 no-print">
           <CheckCircle2 className="w-10 h-10 text-success mb-3" />
           <h3 className="text-2xl font-bold text-foreground">Form Submitted</h3>
           <p className="text-text-secondary mt-1">Post-interview responses from the candidate</p>
-          {candidate.has_resume && (
-            <div className="mt-4">
-              <ResumeButton
-                candidateId={candidate.id}
-                candidateName={candidate.full_name}
-                hasResume={candidate.has_resume}
-              />
-            </div>
-          )}
         </div>
 
         {/* Print Header Visible Only on Print */}
-        <div className="hidden print-header mb-8 pb-4 border-b border-border">
-          <h2 className="text-2xl font-bold mb-2">Candidate Information Form</h2>
-          <p className="text-text-secondary">Candidate: {candidate.full_name}</p>
-          <p className="text-text-secondary text-sm">Submitted on: {candidate.post_form_submitted_at ? new Date(candidate.post_form_submitted_at).toLocaleDateString() : '-'}</p>
+        <div className="hidden print-header mb-8 border-b-2 border-black pb-6 font-sans">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h1 className="text-3xl font-black uppercase tracking-tight text-black mb-1">Nippon Toyota</h1>
+              <h2 className="text-sm font-bold uppercase tracking-widest text-gray-700">Human Resources Department</h2>
+            </div>
+            <img src="/nippon-toyota-logo.png" alt="Toyota Logo" className="h-12 object-contain" />
+          </div>
+          
+          <div className="bg-gray-100 p-4 border border-black/20 rounded-lg">
+            <h2 className="text-xl font-bold text-black uppercase tracking-wide mb-3 text-center border-b border-black/10 pb-2">Candidate Information Form</h2>
+            <div className="flex justify-between text-sm font-medium">
+              <div>
+                <span className="text-gray-500 uppercase text-xs font-bold mr-2">Candidate Name:</span>
+                <span className="text-black text-base">{candidate.full_name}</span>
+              </div>
+              <div>
+                <span className="text-gray-500 uppercase text-xs font-bold mr-2">Submitted On:</span>
+                <span className="text-black text-base">{candidate.post_form_submitted_at ? new Date(candidate.post_form_submitted_at).toLocaleDateString() : '-'}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {formEntries.length > 0 ? (
@@ -126,11 +140,11 @@ export function PostFormStatus({ candidate, onUpdate }: PostFormStatusProps) {
               <div className="flex items-center gap-2">
                 {!isEditing ? (
                   <>
-                    <Button variant="secondary" size="sm" onClick={handlePrint} className="h-8">
+                    <Button variant="ghost" size="sm" onClick={handlePrint} className="h-8 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 font-semibold">
                       <Printer className="w-4 h-4 mr-1.5" />
                       Print
                     </Button>
-                    <Button variant="secondary" size="sm" onClick={handleEditToggle} className="h-8">
+                    <Button variant="ghost" size="sm" onClick={handleEditToggle} className="h-8 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-semibold">
                       <Pencil className="w-4 h-4 mr-1.5" />
                       Edit
                     </Button>
@@ -150,23 +164,40 @@ export function PostFormStatus({ candidate, onUpdate }: PostFormStatusProps) {
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6 p-6 print-grid">
-              {formEntries.map(([key, value]) => (
-                <div key={key} className="print-item">
-                  <p className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">
-                    {formatFieldKey(key)}
-                  </p>
-                  {isEditing ? (
-                    <Input 
-                      value={editData[key] !== undefined && editData[key] !== null ? String(editData[key]) : ''}
-                      onChange={(e) => handleChange(key, e.target.value)}
-                      className="h-8 text-sm"
-                    />
-                  ) : (
-                    <p className="text-sm text-foreground font-medium break-words">{formatFieldValue(value)}</p>
-                  )}
-                </div>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5 p-6 print:p-2 print:grid-cols-3 print:gap-x-4 print:gap-y-3 print-grid">
+              {formEntries.map(([key, value]) => {
+                const strVal = String(value);
+                const isLongText = strVal.length > 50 || strVal.includes('\n');
+                return (
+                  <div 
+                    key={key} 
+                    className={cn(
+                      "flex flex-col gap-1 rounded-xl p-3.5 border border-border/30 bg-muted/5 hover:bg-muted/10 transition-colors print-item",
+                      isLongText && "col-span-1 md:col-span-2 lg:col-span-3 bg-muted/20 border-border/50",
+                      "print:p-1 print:gap-1 print:bg-transparent print:border-none"
+                    )}
+                  >
+                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-wider block print:text-[10px] print:text-black">
+                      {formatFieldKey(key)}
+                    </span>
+                    {isEditing ? (
+                      <Input 
+                        value={editData[key] !== undefined && editData[key] !== null ? String(editData[key]) : ''}
+                        onChange={(e) => handleChange(key, e.target.value)}
+                        className="h-9 text-sm w-full bg-white border-primary/40 focus:border-primary shadow-sm"
+                      />
+                    ) : (
+                      <div className={cn(
+                        "w-full rounded-md border border-border/50 bg-white px-3 py-2 text-sm text-foreground font-medium shadow-sm break-words",
+                        isLongText && "min-h-[80px]",
+                        "print:py-1.5 print:px-3 print:text-xs print:font-bold print:shadow-none print:border-black/30 print:min-h-0"
+                      )}>
+                        {formatFieldValue(value)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : candidate.profile ? (
