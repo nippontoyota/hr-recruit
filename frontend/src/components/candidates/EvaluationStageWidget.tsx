@@ -546,6 +546,7 @@ export function EvaluationStageWidget({
                       loadingQuestions={loadingQuestions} 
                       handleInstantWhatsAppShare={handleInstantWhatsAppShare} 
                       handleCopyLink={handleCopyLink}
+                      copiedId={copiedId}
                       remarksId={remarksId} 
                     />
                   ) : !isCompleted ? (
@@ -1086,7 +1087,7 @@ Nippon Toyota`;
 }
 
 
-function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQuestions, handleInstantWhatsAppShare, remarksId }: any) {
+function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQuestions, handleInstantWhatsAppShare, handleCopyLink, copiedId, remarksId }: any) {
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -1094,19 +1095,36 @@ function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQu
   });
 
   return (
-    <div className="mt-5 bg-white shadow-xl rounded-sm w-full max-w-4xl mx-auto text-black font-sans relative overflow-hidden ring-1 ring-black/5" ref={printRef}>
-                          {/* Floating Actions */}
-                          {!remarksId && (
-                            <div className="absolute top-4 right-4 flex gap-2 print:hidden z-10">
-                              <button type="button" onClick={() => handlePrint()} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded shadow-md transition-colors whitespace-nowrap">
-                                <FileText className="w-3.5 h-3.5" /> Print Paper
-                              </button>
-                              <button type="button" onClick={() => handleInstantWhatsAppShare(ev)} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded shadow-md transition-colors whitespace-nowrap">
-                                <img src="/whatsapp.webp" alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> Send Link
-                              </button>
-                            </div>
-                          )}
+    <div>
+      {/* Action Buttons — outside QP so they don't print */}
+      {!remarksId && (
+        <div className="flex gap-2 justify-end mb-3 print:hidden">
+          <button
+            type="button"
+            onClick={() => handleCopyLink(ev.id, true)}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-foreground bg-background border border-border hover:bg-muted rounded shadow-sm transition-colors whitespace-nowrap"
+          >
+            {copiedId === ev.id ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <Link className="w-3.5 h-3.5" />}
+            {copiedId === ev.id ? 'Copied!' : 'Copy Test Link'}
+          </button>
+          <button
+            type="button"
+            onClick={() => handlePrint()}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded shadow-md transition-colors whitespace-nowrap"
+          >
+            <FileText className="w-3.5 h-3.5" /> Print Paper
+          </button>
+          <button
+            type="button"
+            onClick={() => handleInstantWhatsAppShare(ev)}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded shadow-md transition-colors whitespace-nowrap"
+          >
+            <img src="/whatsapp.webp" alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> Send Link
+          </button>
+        </div>
+      )}
 
+      <div className="bg-white shadow-xl rounded-sm w-full max-w-4xl mx-auto text-black font-sans relative overflow-hidden ring-1 ring-black/5" ref={printRef}>
                           <div className="p-1">
                             {/* Header Section */}
                             <div className="flex justify-between items-start border-2 border-black border-b-0">
@@ -1209,6 +1227,7 @@ function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQu
                               </table>
                             )}
                           </div>
+      </div>
     </div>
   );
 }
