@@ -414,6 +414,13 @@ export function EvaluationStageWidget({
               </motion.div>
             ) : evaluations
               .filter((ev) => evalTypes.length === 1 || ev.type === activeType)
+              // Deduplicate: for TECHNICAL_TEST only keep the first (prefer EVALUATED status)
+              .filter((ev, _idx, arr) => {
+                if (ev.type !== 'TECHNICAL_TEST') return true;
+                const techEvals = arr.filter(e => e.type === 'TECHNICAL_TEST');
+                const preferred = techEvals.find(e => e.status === 'EVALUATED') ?? techEvals[0];
+                return ev.id === preferred?.id;
+              })
               .map((ev) => {
                 const isCompleted = ev.status === 'EVALUATED';
                 return (

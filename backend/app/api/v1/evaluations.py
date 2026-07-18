@@ -131,6 +131,17 @@ def create_evaluation(
     candidate = db.get(Candidate, candidate_id)
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # Prevent duplicate TECHNICAL_TEST evaluations per candidate
+    if body.type == EvaluationType.TECHNICAL_TEST:
+        existing = db.scalar(
+            select(Evaluation).where(
+                Evaluation.candidate_id == candidate_id,
+                Evaluation.type == EvaluationType.TECHNICAL_TEST,
+            )
+        )
+        if existing:
+            return existing
         
     scores = {}
     if body.interviewer_name:
