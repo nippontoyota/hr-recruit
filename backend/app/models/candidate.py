@@ -28,9 +28,10 @@ class Candidate(Base):
     current_stage: Mapped[PipelineStage] = mapped_column(
         Enum(PipelineStage, name="pipeline_stage", schema=SCHEMA, create_type=False),
         nullable=False,
-        default=PipelineStage.SCREENING,
+        default=PipelineStage.CANDIDATE_FORM,
         index=True,
     )
+    department: Mapped[str | None] = mapped_column(String(255), nullable=True)
     branch_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_duplicate_flagged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     duplicate_of_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -47,6 +48,13 @@ class Candidate(Base):
     )
     is_head_office_hire: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False, nullable=False)
     interviewer_assignments: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    
+    # Visit Scheduling Fields
+    visit_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    visit_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    visit_time: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    visit_maps_link: Mapped[str | None] = mapped_column(String, nullable=True)
+    visit_instructions: Mapped[str | None] = mapped_column(String, nullable=True)
     
     # Pre-Form Tracking
     pre_form_token: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
@@ -76,5 +84,5 @@ class Candidate(Base):
     communications: Mapped[List["Communication"]] = relationship("Communication", back_populates="candidate", cascade="all, delete-orphan")
     followups: Mapped[List["FollowUp"]] = relationship("FollowUp", back_populates="candidate", cascade="all, delete-orphan")
     evaluations: Mapped[List["Evaluation"]] = relationship("Evaluation", back_populates="candidate", cascade="all, delete-orphan")
-    screening: Mapped["CandidateScreening"] = relationship("CandidateScreening", uselist=False, cascade="all, delete-orphan")
+    # screening: Mapped["CandidateScreening"] = relationship("CandidateScreening", uselist=False, cascade="all, delete-orphan")
 

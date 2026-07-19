@@ -21,6 +21,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
   const [source, setSource] = useState('');
   const [sourceDetails, setSourceDetails] = useState('');
   const [position, setPosition] = useState('');
+  const [department, setDepartment] = useState('');
   const [branchLocation, setBranchLocation] = useState('');
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   
@@ -35,6 +36,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
     setSource('WALK_IN');
     setSourceDetails('Walk-in candidate');
     setPosition('Sales Executive');
+    setDepartment('Sales');
     setBranchLocation('Kalamassery');
     const blob = new Blob(['%PDF-1.4 ... dummy pdf content ...'], { type: 'application/pdf' });
     const dummyFile = new File([blob], 'dummy_resume.pdf', { type: 'application/pdf' });
@@ -48,6 +50,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
     setSource('');
     setSourceDetails('');
     setPosition('');
+    setDepartment('');
     setBranchLocation('');
     setResumeFile(null);
     setFormError('');
@@ -94,6 +97,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
         source: source || 'Unknown',
         source_reference: sourceDetails.trim() || undefined,
         position_applied_for: position.trim(),
+        department: department.trim() || undefined,
         branch_location: branchLocation || undefined,
       } as any);
 
@@ -202,7 +206,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
             />
           </div>
           
-          <div className="col-span-2">
+          <div className="col-span-2 sm:col-span-1">
             <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
               Position Applied For <span className="text-text-primary">*</span>
             </label>
@@ -211,6 +215,18 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
               onChange={(e) => setPosition(e.target.value)}
               placeholder="e.g. Sales Executive"
               required
+              maxLength={100}
+            />
+          </div>
+
+          <div className="col-span-2 sm:col-span-1">
+            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
+              Department
+            </label>
+            <Input
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              placeholder="e.g. Sales"
               maxLength={100}
             />
           </div>

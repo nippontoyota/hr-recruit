@@ -14,7 +14,7 @@ from app.models.stage_history import StageHistory
 from app.models.user import User
 from app.models.communication import Communication
 from app.models.enums import CommunicationType, CommunicationDirection, CommunicationStatus
-from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, CandidateScreeningOut, CandidateScreeningCreate, ScreeningSubmitResponse, WhatsAppInviteCreate
+from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, VisitScheduleUpdate, WhatsAppInviteCreate
 from app.services.workflow import transition
 from app.services.doubletick import send_template
 
@@ -128,75 +128,37 @@ def get_activity_logs(
     get_candidate_for_user(db, id, user)
     return list(db.scalars(select(ActivityLog).where(ActivityLog.candidate_id == id).order_by(ActivityLog.created_at.desc())))
 
-from fastapi_cache.decorator import cache
-
-@router.get("/{id}/screening", response_model=CandidateScreeningOut)
-@cache(expire=30)
-def get_screening(
+@router.patch("/{id}/visit-schedule", response_model=CandidateOut)
+def update_visit_schedule(
     id: UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
-):
-    get_candidate_for_user(db, id, user)
-    row = db.scalar(select(CandidateScreening).where(CandidateScreening.candidate_id == id))
-    if not row:
-        raise HTTPException(status_code=404, detail="Screening data not found.")
-    return row
-
-@router.post("/{id}/screening", response_model=ScreeningSubmitResponse)
-def submit_screening(
-    id: UUID,
-    body: CandidateScreeningCreate,
+    body: VisitScheduleUpdate,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
     candidate = get_candidate_for_user(db, id, user)
-    screening = db.scalar(select(CandidateScreening).where(CandidateScreening.candidate_id == id))
-    if not screening:
-        screening = CandidateScreening(candidate_id=id)
-        db.add(screening)
-
-    screening.status = body.status
-    screening.call_completed = body.call_completed
-    screening.interest_confirmed = body.interest_confirmed
-    screening.salary_discussed = body.salary_discussed
-    screening.notice_period_discussed = body.notice_period_discussed
-    screening.basic_eligibility_checked = body.basic_eligibility_checked
-    screening.remarks = body.remarks
-    screening.pending_reason = body.pending_reason
-    screening.follow_up_date = body.follow_up_date
-    screening.visit_branch = body.visit_branch
-    screening.branch_visit_date = body.branch_visit_date
-    screening.maps_link = body.maps_link
-    screening.extra_instructions = body.extra_instructions
+    
+    if body.visit_branch is not None:
+        candidate.visit_branch = body.visit_branch
+    if body.visit_date is not None:
+        candidate.visit_date = body.visit_date
+    if body.visit_time is not None:
+        candidate.visit_time = body.visit_time
+    if body.visit_maps_link is not None:
+        candidate.visit_maps_link = body.visit_maps_link
+    if body.visit_instructions is not None:
+        candidate.visit_instructions = body.visit_instructions
 
     log = ActivityLog(
         candidate_id=id,
-        activity_type=ActivityType.CALL,
-        title="Screening Updated",
-        description=f"Status: {body.status.value}. Remarks: {body.remarks or 'None'}",
+        activity_type=ActivityType.SYSTEM,
+        title="Visit Schedule Updated",
+        description=f"Visit schedule updated. Branch: {candidate.visit_branch}, Date: {candidate.visit_date}",
         created_by_user_id=user.id,
     )
     db.add(log)
-
-    updated_candidate: Candidate | None = None
-    if body.status == ScreeningStatus.QUALIFIED:
-        _issue_pre_form(db, candidate, user)
-        _store_whatsapp_invite(db, candidate, body, user)
-        db.flush()
-        db.refresh(candidate)
-        updated_candidate = candidate
-
     db.commit()
-    db.refresh(screening)
-    if updated_candidate:
-        db.refresh(updated_candidate)
-
-    candidate_out = None
-    if updated_candidate:
-        candidate_out = to_candidate_out(updated_candidate, id in resume_candidate_ids(db, [id]))
-
-    return ScreeningSubmitResponse(screening=screening, candidate=candidate_out)
+    db.refresh(candidate)
+    return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]))
 
 @router.post("/{id}/pre-form/send", response_model=CandidateOut)
 def send_pre_form(
@@ -319,5 +281,7 @@ def send_whatsapp_invite(
     if status == CommunicationStatus.FAILED:
         raise HTTPException(status_code=400, detail=f"Failed to send WhatsApp invite: {err_msg}")
         
+    _store_whatsapp_invite(db, candidate, user)
+    db.commit()
     return {"status": "success", "message_id": external_message_id}
 

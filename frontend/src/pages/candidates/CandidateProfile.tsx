@@ -3,14 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
 import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History, Printer, Edit2 } from 'lucide-react';
-import { getCandidateById, updateCandidateStage, unholdCandidate, getScreening } from '../../api/candidates';
+import { getCandidateById, updateCandidateStage, unholdCandidate } from '../../api/candidates';
 import { getCandidateEvaluations } from '../../api/evaluations';
 import type { Candidate, PipelineStage } from '../../types';
 import { toast } from 'sonner';
 import { validateRejectRemarks } from '../../lib/validation';
 import { stageLabel, stageColor } from '../../lib/stages';
 import { cn } from '../../lib/utils';
-import { ScreeningChecklist } from '../../components/candidates/ScreeningChecklist';
 import { PreFormStatus } from '../../components/candidates/PreFormStatus';
 import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPreviewPanel';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
@@ -21,7 +20,7 @@ import { extractError } from '../../lib/utils';
 
 
 const LINEAR_STAGES: PipelineStage[] = [
-  'SCREENING', 'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW', 'BRANCH_EVALUATION', 'FINAL_APPROVAL', 'HIRED'
+  'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW', 'BRANCH_EVALUATION', 'FINAL_APPROVAL', 'HIRED'
 ];
 
 
@@ -39,7 +38,6 @@ export default function CandidateProfile() {
   const [error, setError] = useState<string | null>(null);
 
   const [evaluations, setEvaluations] = useState<any[]>([]);
-  const [screening, setScreening] = useState<any>(null);
 
 
 
@@ -48,10 +46,10 @@ export default function CandidateProfile() {
   const [isRejecting, setIsRejecting] = useState(false);
   
   const [showEditStageModal, setShowEditStageModal] = useState(false);
-  const [editStageSelection, setEditStageSelection] = useState<PipelineStage>('SCREENING');
+  const [editStageSelection, setEditStageSelection] = useState<PipelineStage>('CANDIDATE_FORM');
   const [editStageRemarks, setEditStageRemarks] = useState('');
   const [isEditingStage, setIsEditingStage] = useState(false);
-  const [resumeStage, setResumeStage] = useState<PipelineStage>('SCREENING');
+  const [resumeStage, setResumeStage] = useState<PipelineStage>('CANDIDATE_FORM');
   const [isResuming, setIsResuming] = useState(false);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
   const [viewedStage, setViewedStage] = useState<PipelineStage | null>(null);
@@ -77,17 +75,15 @@ export default function CandidateProfile() {
         setIsUpdating(true);
       }
       
-      const [res, evals, screen] = await Promise.all([
+      const [res, evals] = await Promise.all([
         getCandidateById(id),
         getCandidateEvaluations(id).catch(() => []),
-        getScreening(id).catch(() => null)
       ]);
       
       if (res) {
         profileCache[id] = res;
         setCandidate(res);
         setEvaluations(evals);
-        setScreening(screen);
       } else {
         setError('Candidate not found.');
       }
@@ -230,12 +226,7 @@ export default function CandidateProfile() {
   const heldStages: PipelineStage[] = [];
 
   if (candidate) {
-    // 1. SCREENING
-    if (screening && (screening.status === 'QUALIFIED' || screening.status === 'REJECTED')) {
-      completedStages.push('SCREENING');
-    }
-    
-    // 2. CANDIDATE_FORM
+    // 1. CANDIDATE_FORM
     if (candidate.pre_form_status === 'SUBMITTED') {
       completedStages.push('CANDIDATE_FORM');
     }
@@ -511,13 +502,6 @@ export default function CandidateProfile() {
           )}
 
           <div className={cn("transition-opacity duration-300", isUpdating ? "opacity-50 pointer-events-none" : "opacity-100")}>
-            {stageToView === 'SCREENING' && (
-              <ScreeningChecklist
-                candidateId={candidate.id}
-                onUpdate={handleUpdate}
-              />
-            )}
-
             {stageToView === 'CANDIDATE_FORM' && (
               <PreFormStatus candidate={candidate} onUpdate={handleUpdate} />
             )}
@@ -691,7 +675,6 @@ export default function CandidateProfile() {
                 onChange={(e) => setEditStageSelection(e.target.value as PipelineStage)}
                 className="w-full bg-background border border-border rounded-[10px] p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
               >
-                <option value="SCREENING">Screening</option>
                 <option value="CANDIDATE_FORM">Candidate Form</option>
                 <option value="HR_INTERVIEW">HR Interview</option>
                 <option value="DEPARTMENT_INTERVIEW">Department Interview</option>

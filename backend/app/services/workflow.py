@@ -44,7 +44,6 @@ def transition(
         # We will loop through the standard stages up to the target_stage
         # and initialize evaluations for any skipped stages.
         standard_stages = [
-            PipelineStage.SCREENING,
             PipelineStage.CANDIDATE_FORM,
             PipelineStage.HR_INTERVIEW,
             PipelineStage.DEPARTMENT_INTERVIEW,

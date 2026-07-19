@@ -20,7 +20,7 @@ from app.models.document import Document
 from app.models.enums import DocumentType, PipelineStage, UserRole, ActivityType, ScreeningStatus, FormStatus
 from app.models.stage_history import StageHistory
 from app.models.user import User
-from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, CandidateScreeningCreate, CandidateProfileRawDataUpdate
+from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, CandidateProfileRawDataUpdate
 from app.services import storage
 from app.services.workflow import transition
 
@@ -128,7 +128,6 @@ def _issue_post_form(db: Session, candidate: Candidate, user: User) -> None:
 def _store_whatsapp_invite(
     db: Session,
     candidate: Candidate,
-    body: CandidateScreeningCreate,
     user: User,
 ) -> None:
     profile = db.scalar(select(CandidateProfile).where(CandidateProfile.candidate_id == candidate.id))
@@ -137,18 +136,20 @@ def _store_whatsapp_invite(
         db.add(profile)
 
     visit_display = ""
-    if body.branch_visit_date:
-        visit_display = body.branch_visit_date.strftime("%A, %d %B %Y")
+    if candidate.visit_date:
+        visit_display = candidate.visit_date.strftime("%A, %d %B %Y")
+    if candidate.visit_time:
+        visit_display += f" at {candidate.visit_time}"
 
     invite = {
         "candidateName": candidate.full_name,
         "position": candidate.position_applied_for or "",
         "formLink": share_url_for_token(candidate.pre_form_token) or "",
-        "branchName": body.visit_branch or candidate.branch_location or "",
+        "branchName": candidate.visit_branch or candidate.branch_location or "",
         "visitDate": visit_display,
-        "mapsLink": body.maps_link or "",
+        "mapsLink": candidate.visit_maps_link or "",
         "recruiterName": user.full_name,
-        "extraInstructions": body.extra_instructions or "",
+        "extraInstructions": candidate.visit_instructions or "",
     }
     raw = dict(profile.raw_data or {})
     raw["whatsapp_invite"] = invite
@@ -156,6 +157,8 @@ def _store_whatsapp_invite(
 
 
 def create_candidate(db: Session, body: CandidateCreate, user_id: UUID | None, created_via_public_apply: bool = False) -> Candidate:
+    from app.core.security import generate_secure_token
+    
     match = [Candidate.phone == body.phone]
     if body.email:
         match.append(Candidate.email == body.email)
@@ -169,25 +172,23 @@ def create_candidate(db: Session, body: CandidateCreate, user_id: UUID | None, c
             source=body.source,
             source_reference=body.source_reference,
             position_applied_for=body.position_applied_for,
+            department=body.department,
             branch_location=body.branch_location,
             assigned_hr_user_id=body.assigned_hr_user_id,
             is_duplicate_flagged=dup is not None,
             duplicate_of_candidate_id=dup.id if dup else None,
-            pre_form_status=FormStatus.NOT_SENT,
+            current_stage=PipelineStage.CANDIDATE_FORM,
+            pre_form_status=FormStatus.SENT,
+            pre_form_token=generate_secure_token(),
+            pre_form_sent_at=datetime.now(UTC),
         )
         db.add(row)
         db.flush()
         
-        screening = CandidateScreening(
-            candidate_id=row.id,
-            status=ScreeningStatus.PENDING,
-        )
-        db.add(screening)
-        
         profile = CandidateProfile(candidate_id=row.id)
         db.add(profile)
         
-        log_desc = "Candidate applied via public form." if created_via_public_apply else "Candidate created manually in SCREENING stage."
+        log_desc = "Candidate applied via public form." if created_via_public_apply else "Candidate created manually. Form link generated."
         log = ActivityLog(
             candidate_id=row.id,
             activity_type=ActivityType.SYSTEM,
@@ -197,7 +198,7 @@ def create_candidate(db: Session, body: CandidateCreate, user_id: UUID | None, c
         )
         db.add(log)
         
-        db.add(StageHistory(candidate_id=row.id, to_stage=PipelineStage.SCREENING, changed_by_user_id=user_id))
+        db.add(StageHistory(candidate_id=row.id, to_stage=PipelineStage.CANDIDATE_FORM, changed_by_user_id=user_id))
         db.commit()
         db.refresh(row)
         return row
@@ -345,7 +346,7 @@ def list_candidates(
         UserRole.HQ_STAFF, UserRole.LOCAL_HR
     )),
 ):
-    q = select(Candidate).options(joinedload(Candidate.profile), joinedload(Candidate.screening)).order_by(Candidate.created_at.desc())
+    q = select(Candidate).options(joinedload(Candidate.profile)).order_by(Candidate.created_at.desc())
     if stage:
         q = q.where(Candidate.current_stage == stage)
         
@@ -418,7 +419,7 @@ def get_candidate(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
-    row = db.scalar(select(Candidate).options(joinedload(Candidate.profile), joinedload(Candidate.screening)).where(Candidate.id == id))
+    row = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.id == id))
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
     assert_candidate_access(user, row)

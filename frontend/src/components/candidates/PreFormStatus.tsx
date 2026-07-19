@@ -304,7 +304,7 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
             <p className="text-sm text-muted-foreground mt-0.5">
               {status === 'SENT'
                 ? 'Link generated. Share via WhatsApp using the preview on the right.'
-                : 'Waiting for form link generation.'}
+                : 'Form link is ready to be sent.'}
             </p>
           </div>
         </div>
@@ -356,7 +356,7 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Form link will appear here after screening acceptance.</p>
+            <p className="text-sm text-muted-foreground">Form link will appear here.</p>
             <Button
               variant="secondary"
               size="sm"

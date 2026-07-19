@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { cn, extractError } from '../../lib/utils';
 
 const PIPELINE_STAGES: PipelineStage[] = [
-  'SCREENING', 'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW',
+  'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW',
   'BRANCH_EVALUATION', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD',
 ];
 
@@ -88,11 +88,9 @@ export default function CandidatesList() {
 
   const filteredCandidates = candidates.filter((c) => {
     if (activeTab === 'UPDATES') {
-      if (c.current_stage !== 'SCREENING') return false;
-      if (!c.screening || c.screening.status !== 'PENDING' || !c.screening.follow_up_date) return false;
-      const followUp = new Date(c.screening.follow_up_date);
-      const today = new Date();
-      if (followUp > today) return false;
+      if (c.current_stage === 'CANDIDATE_FORM' && c.pre_form_status === 'SUBMITTED') return true;
+      if (c.current_stage === 'HR_INTERVIEW' && !c.has_resume) return true;
+      return false;
     }
 
     const q = searchQuery.toLowerCase();

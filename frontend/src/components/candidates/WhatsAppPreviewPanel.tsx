@@ -154,14 +154,14 @@ export function WhatsAppPreviewPanel({ candidate, className, inviteType = 'pre' 
     <>
       <aside
         className={cn(
-          'w-full lg:w-[480px] xl:w-[520px] shrink-0 border-l border-border bg-[#f7f8fa] relative flex flex-col min-h-0 overflow-hidden',
+          'w-full lg:w-[480px] xl:w-[520px] shrink-0 border-l border-border bg-[#f7f8fa] flex flex-col min-h-0 overflow-hidden',
           className
         )}
       >
-        {/* Floating Header */}
-        <div className="absolute top-0 inset-x-0 z-30 px-6 pt-5 pb-4 flex items-center justify-between bg-white/60 backdrop-blur-xl border-b border-black/5 shadow-sm">
+        {/* Header */}
+        <div className="shrink-0 px-6 pt-5 pb-4 flex items-center justify-between bg-white/80 backdrop-blur-xl border-b border-black/5">
           <div>
-            <h2 className="text-xl font-bold text-foreground drop-shadow-sm">Live Preview</h2>
+            <h2 className="text-xl font-bold text-foreground">Live Preview</h2>
             <p className="mt-0.5 text-sm text-muted-foreground font-medium">
               Candidate&apos;s perspective
             </p>
@@ -176,86 +176,81 @@ export function WhatsAppPreviewPanel({ candidate, className, inviteType = 'pre' 
           </button>
         </div>
 
-        {/* Full-size Phone Mockup */}
-        <div className="absolute inset-0 z-10 flex justify-center py-8">
-          <div className="relative flex w-full max-w-[380px] h-full flex-col overflow-hidden rounded-[48px] border-[14px] border-[#111] bg-[#EFE6DD] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.4)]">
-            <div className="absolute top-[-2px] left-1/2 -translate-x-1/2 h-[28px] w-[140px] bg-[#111] rounded-b-[20px] z-20 flex items-center justify-center gap-3 pb-1">
-              <div className="h-[10px] w-[10px] rounded-full bg-[#18181b] shadow-[inset_0_1px_2px_rgba(255,255,255,0.05)] border border-white/5"></div>
-              <div className="h-[6px] w-[44px] rounded-full bg-[#18181b] shadow-[inset_0_1px_2px_rgba(255,255,255,0.05)] border border-white/5"></div>
-            </div>
+        {/* Phone Mockup — fills remaining space */}
+        <div className="flex-1 min-h-0 flex justify-center px-6 py-4 overflow-hidden">
+          <div className="relative flex w-full max-w-[340px] h-full flex-col overflow-hidden rounded-[38px] border-[6px] border-[#18181b] bg-[#efeae2] shadow-[0_20px_40px_rgba(17,24,39,0.2)]">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[20px] w-[110px] bg-[#18181b] rounded-b-[16px] z-20"></div>
 
-            <div className="flex h-[80px] shrink-0 items-end justify-between gap-1 bg-[#008069] px-3 pb-3 text-white z-10 shadow-md relative pt-6">
+            <div className="flex h-[64px] shrink-0 items-center justify-between gap-1 bg-[#075E54] px-2 pt-4 text-white z-10 shadow-sm relative">
               <div className="flex items-center gap-1 cursor-pointer">
-                <div className="flex items-center text-white" aria-label="Back">
+                <div className="flex items-center text-white ml-0.5" aria-label="Back">
                   <ArrowLeft className="h-5 w-5 shrink-0" aria-hidden="true" />
                 </div>
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ml-0.5 border border-white/20 shadow-sm">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ml-0.5 border border-white/20">
                   <img src="/toyota-HR-profile.jpeg" alt="" className="h-full w-full object-cover" />
                 </div>
-                <div className="min-w-0 text-left ml-2.5">
-                  <p className="truncate text-[16px] font-semibold leading-tight tracking-tight">Nippon Toyota HR</p>
-                  <p className="text-[12px] leading-tight text-white/80 font-medium">Official Business Account</p>
+                <div className="min-w-0 text-left ml-2">
+                  <p className="truncate text-[15px] font-medium leading-tight">Nippon Toyota HR</p>
+                  <p className="text-[11px] leading-tight text-white/90">Official Business Account</p>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-white mr-1 mb-1">
-                <Video className="h-[22px] w-[22px]" fill="currentColor" strokeWidth={0} />
-                <Phone className="h-[19px] w-[19px]" fill="currentColor" strokeWidth={0} />
+              <div className="flex items-center gap-3.5 text-white mr-2">
+                <Video className="h-5 w-5" fill="currentColor" strokeWidth={0} />
+                <Phone className="h-[18px] w-[18px]" fill="currentColor" strokeWidth={0} />
                 <MoreVertical className="h-5 w-5" />
               </div>
             </div>
 
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#EFE6DD]">
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#efeae2]">
               <div
-                className="pointer-events-none absolute inset-0 opacity-[0.4]"
+                className="pointer-events-none absolute inset-0 opacity-[0.25]"
                 style={{
                   backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")',
-                  backgroundSize: '360px',
+                  backgroundSize: '300px',
                   backgroundRepeat: 'repeat',
                 }}
               />
 
-              <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-6 flex flex-col gap-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                <div className="mx-auto w-fit rounded-lg bg-[#F5F8FA] px-3 py-1.5 text-[11.5px] uppercase tracking-wider font-semibold text-[#54656F] shadow-sm ring-1 ring-black/5">
+              <div className="relative z-10 min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-4 flex flex-col gap-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="mx-auto w-fit rounded-lg bg-[#E1F3FB] px-3 py-1.5 text-[11px] uppercase tracking-wide font-medium text-[#55656E] shadow-sm">
                   TODAY
                 </div>
 
-                <div className="relative max-w-[88%] animate-in slide-in-from-bottom-2 fade-in duration-300 rounded-2xl rounded-tl-sm bg-white p-3 text-left text-[15px] leading-relaxed text-[#111B21] shadow-sm ring-1 ring-black/5 mt-2 mb-4">
-                  <svg viewBox="0 0 8 13" width="8" height="13" className="absolute -left-[8px] top-0 text-white fill-current drop-shadow-sm">
-                    <path d="M5.188 1H0v11.156l4.969-4.72c1.781-1.687 3.031-4.03 3.031-6.436z" />
-                  </svg>
+                <div className="relative max-w-[88%] rounded-xl rounded-tl-sm bg-white px-2.5 py-2 text-left text-[14.5px] leading-[1.3] text-[#111b21] shadow-sm mt-1">
+                  <span className="absolute -left-2 top-0 h-0 w-0 border-r-[10px] border-t-[12px] border-r-white border-t-transparent" />
                   <div className="whitespace-pre-wrap break-words pb-4">
                     <WhatsAppMessageBody text={message} />
                   </div>
-                  <div className="absolute bottom-1.5 right-2.5 flex items-center gap-1.5">
-                    <p className="text-[11px] font-medium text-[#667781] whitespace-nowrap">{new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date()).toLowerCase()}</p>
-                    <CheckCheck className="h-4 w-4 text-[#53BDEB]" strokeWidth={2.5} />
+                  <div className="absolute bottom-1 right-2 flex items-center gap-1">
+                    <p className="text-[10px] text-[#667781] whitespace-nowrap">{new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date()).toLowerCase()}</p>
+                    <CheckCheck className="h-[15px] w-[15px] text-[#34B7F1]" strokeWidth={2.5} />
                   </div>
                 </div>
               </div>
 
-              <div className="absolute bottom-0 inset-x-0 z-10 flex shrink-0 items-end gap-2 p-3 bg-gradient-to-t from-[#EFE6DD] via-[#EFE6DD] to-transparent pb-6 pt-12 pointer-events-none">
-                <div className="flex min-h-[44px] flex-1 items-center gap-2 rounded-[22px] bg-white px-3 py-1 shadow-sm ring-1 ring-black/5 pointer-events-auto">
-                  <div className="p-1 text-[#8696A0] hover:text-[#54656F] transition-colors"><Smile className="h-6 w-6" /></div>
-                  <div className="flex-1 text-[15px] text-[#8696A0] px-1 py-1 font-medium">Message</div>
-                  <div className="p-1 text-[#8696A0] hover:text-[#54656F] transition-colors"><Paperclip className="h-5 w-5" /></div>
-                  <div className="p-1 text-[#8696A0] hover:text-[#54656F] transition-colors"><Camera className="h-6 w-6" /></div>
+              <div className="relative z-10 flex shrink-0 items-end gap-1.5 p-2 bg-transparent pb-3">
+                <div className="flex min-h-[42px] flex-1 items-center gap-2 rounded-full bg-white px-2 py-1 shadow-sm">
+                  <div className="p-1.5 text-[#8696A0]"><Smile className="h-[22px] w-[22px]" /></div>
+                  <div className="flex-1 text-[15px] text-[#8696A0] px-1 py-1">Message</div>
+                  <div className="p-1.5 text-[#8696A0]"><Paperclip className="h-5 w-5" /></div>
+                  <div className="p-1.5 text-[#8696A0]"><Camera className="h-[22px] w-[22px]" /></div>
                 </div>
-                <div className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full bg-[#00A884] text-white shadow-md hover:bg-[#008F6F] transition-colors cursor-pointer pointer-events-auto">
-                  <Send className="h-5 w-5 mr-0.5" fill="currentColor" strokeWidth={0} />
+                <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-[#00a884] text-white shadow-sm mb-[2px]">
+                  <Send className="h-[18px] w-[18px] mr-0.5" fill="currentColor" strokeWidth={0} />
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Floating Footer */}
-        <div className="absolute bottom-0 inset-x-0 z-30 p-5 bg-white/60 backdrop-blur-xl border-t border-black/5 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+        {/* Footer */}
+        <div className="shrink-0 border-t border-border bg-white p-4">
           <Button
-            className="w-full !bg-[#08796b] hover:!bg-[#06685c] h-12 text-[15px] rounded-xl shadow-lg shadow-[#08796b]/20"
+            className="w-full !bg-[#08796b] hover:!bg-[#06685c]"
             onClick={() => setIsConfirming(true)}
             isLoading={isSending}
           >
-            <Send className="mr-2 h-5 w-5" />
+            <Send className="mr-2 h-4 w-4" />
             Send to candidate
           </Button>
         </div>

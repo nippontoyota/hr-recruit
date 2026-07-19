@@ -19,6 +19,7 @@ class CandidateCreate(BaseModel):
     source: str = "Unknown"
     source_reference: str | None = None
     position_applied_for: str = "Unknown"
+    department: str | None = None
     branch_location: str | None = Field(
         default=None,
         validation_alias=AliasChoices("branch_location", "branch_name"),
@@ -444,6 +445,7 @@ class CandidateOut(BaseModel):
     source: str
     source_reference: str | None
     position_applied_for: str
+    department: str | None = None
     share_url: str | None = None
     pre_form_status: FormStatus
     pre_form_sent_at: datetime | None
@@ -454,6 +456,11 @@ class CandidateOut(BaseModel):
     post_share_url: str | None = None
     current_stage: PipelineStage
     branch_location: str | None
+    visit_branch: str | None = None
+    visit_date: datetime | None = None
+    visit_time: str | None = None
+    visit_maps_link: str | None = None
+    visit_instructions: str | None = None
     profile: CandidateProfileOut | None = None
     is_duplicate_flagged: bool
     duplicate_of_candidate_id: UUID | None
@@ -477,6 +484,14 @@ class StageChange(BaseModel):
         if self.to_stage == PipelineStage.REJECTED:
             v.validate_reject_remarks(self.remarks)
         return self
+
+
+class VisitScheduleUpdate(BaseModel):
+    visit_branch: str | None = None
+    visit_date: datetime | None = None
+    visit_time: str | None = None
+    visit_maps_link: str | None = None
+    visit_instructions: str | None = None
 
 
 class StageHistoryOut(BaseModel):

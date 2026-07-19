@@ -108,18 +108,8 @@ export const deleteCandidate = async (candidateId: string): Promise<void> => {
   await request('DELETE', `/candidates/${candidateId}`);
 };
 
-export const getScreening = async (candidateId: string): Promise<any> => {
-  const response = await request('GET', `/candidates/${candidateId}/screening`);
-  return response.data;
-};
-
-export interface ScreeningSubmitResponse {
-  screening: Record<string, unknown>;
-  candidate?: Candidate;
-}
-
-export const submitScreening = async (candidateId: string, data: Record<string, unknown>): Promise<ScreeningSubmitResponse> => {
-  const response = await request('POST', `/candidates/${candidateId}/screening`, data);
+export const updateVisitSchedule = async (candidateId: string, data: Record<string, unknown>): Promise<Candidate> => {
+  const response = await request('PATCH', `/candidates/${candidateId}/visit-schedule`, data);
   return response.data;
 };
 
