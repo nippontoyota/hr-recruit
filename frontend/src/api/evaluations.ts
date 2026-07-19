@@ -6,6 +6,25 @@ export const getCandidateEvaluations = async (candidateId: string): Promise<Eval
   return response.data;
 };
 
+export const createEvaluation = async (
+  candidateId: string, 
+  type: string, 
+  interviewerName?: string, 
+  interviewerDesignation?: string
+): Promise<Evaluation> => {
+  const response = await request('POST', `/evaluations/candidate/${candidateId}`, { 
+    type, 
+    interviewer_name: interviewerName, 
+    interviewer_designation: interviewerDesignation 
+  });
+  return response.data;
+};
+
+export const deleteEvaluation = async (evalId: string): Promise<any> => {
+  const response = await request('DELETE', `/evaluations/${evalId}`);
+  return response.data;
+};
+
 export const scheduleEvaluation = async (
   evalId: string,
   data: {

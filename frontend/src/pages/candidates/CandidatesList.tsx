@@ -13,8 +13,8 @@ import { toast } from 'sonner';
 import { cn, extractError } from '../../lib/utils';
 
 const PIPELINE_STAGES: PipelineStage[] = [
-  'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW',
-  'BRANCH_EVALUATION', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD',
+  'SCREENING', 'CANDIDATE_FORM', 'BRANCH_INTERVIEW',
+  'TEST', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD',
 ];
 
 function formatDate(dateStr: string): string {

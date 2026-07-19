@@ -20,13 +20,17 @@ class UserRole(str, enum.Enum):
 class PipelineStage(str, enum.Enum):
     SCREENING = "SCREENING"
     CANDIDATE_FORM = "CANDIDATE_FORM"
-    HR_INTERVIEW = "HR_INTERVIEW"
-    DEPARTMENT_INTERVIEW = "DEPARTMENT_INTERVIEW"
-    BRANCH_EVALUATION = "BRANCH_EVALUATION"
+    BRANCH_INTERVIEW = "BRANCH_INTERVIEW"
+    TEST = "TEST"
     FINAL_APPROVAL = "FINAL_APPROVAL"
     HIRED = "HIRED"
     REJECTED = "REJECTED"
     ON_HOLD = "ON_HOLD"
+    
+    # Deprecated stages (kept for SQLAlchemy pg_enum mapping compatibility)
+    DEPARTMENT_INTERVIEW = "DEPARTMENT_INTERVIEW"
+    BRANCH_EVALUATION = "BRANCH_EVALUATION"
+    HR_INTERVIEW = "HR_INTERVIEW"
 
 
 class FormStatus(str, enum.Enum):

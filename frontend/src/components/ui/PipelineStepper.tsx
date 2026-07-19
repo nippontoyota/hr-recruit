@@ -4,7 +4,6 @@ import {
   ClipboardList, 
   FileText, 
   Users, 
-  Building2, 
   ShieldCheck, 
   Check,
   Pause
@@ -27,8 +26,7 @@ interface PipelineStepperProps {
 const STAGE_ICONS: Record<string, React.ElementType> = {
   'SCREENING': ClipboardList,
   'CANDIDATE_FORM': FileText,
-  'HR_INTERVIEW': Users,
-  'DEPARTMENT_INTERVIEW': Building2,
+  'BRANCH_INTERVIEW': Users,
   'FINAL_APPROVAL': ShieldCheck,
 };
 
