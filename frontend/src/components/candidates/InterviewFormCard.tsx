@@ -244,21 +244,11 @@ export function InterviewFormCard({ ev, index, candidate, onUpdate }: InterviewF
       {showForm && (
         <div className="mt-3">
           <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="space-y-4 mt-2">
-            
-            <div className="flex justify-end items-center mb-2">
-              <button 
-                type="button" 
-                onClick={handleInstantWhatsAppShare} 
-                disabled={sendingInvite} 
-                className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded-sm transition-all shadow-sm whitespace-nowrap disabled:opacity-50"
-              >
-                <img src="/whatsapp.webp" alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> Send Meeting Link
-              </button>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start mt-2">
-              <div className="flex flex-col gap-4">
-                <div className="flex justify-end -mb-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+              <div className="flex flex-col gap-3">
+                <div className="flex justify-start mb-1">
+
                   <button
                     type="button"
                     onClick={() => {
@@ -309,7 +299,7 @@ export function InterviewFormCard({ ev, index, candidate, onUpdate }: InterviewF
                       type="button"
                       onClick={handleSubmitScorecard} 
                       disabled={submitting}
-                      className="bg-[#075E54] hover:bg-[#064e46] text-white px-5 py-2.5 rounded-lg font-bold uppercase tracking-widest text-[11px] shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center min-w-[160px]"
+                      className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-lg font-bold uppercase tracking-widest text-[11px] shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center min-w-[160px]"
                     >
                       {submitting ? 'SAVING...' : 'SAVE EVALUATION'}
                     </button>
@@ -318,28 +308,46 @@ export function InterviewFormCard({ ev, index, candidate, onUpdate }: InterviewF
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 pt-2">
-              <div className="flex items-center gap-10">
-                <label className="flex items-center gap-2 cursor-pointer group">
-                  <div className={cn("w-6 h-6 border-2 flex items-center justify-center shrink-0 transition-colors", verdict === 'SELECTED' ? "border-success bg-success/10" : "border-border bg-background group-hover:border-success/50")}>
-                    {verdict === 'SELECTED' && <Check className="w-5 h-5 text-success stroke-[3]" />}
-                  </div>
-                  <span className="text-sm font-bold uppercase tracking-wider text-foreground">Selected</span>
+            <div className="flex flex-col gap-2 pt-2">
+              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Final Verdict</label>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className={cn(
+                  "flex items-center gap-2 px-4 py-2 border rounded-md cursor-pointer transition-all",
+                  verdict === 'SELECTED' 
+                    ? "border-success bg-success/5" 
+                    : "border-border bg-background hover:bg-muted/50"
+                )}>
                   <input type="radio" className="hidden" checked={verdict === 'SELECTED'} onChange={() => setVerdict('SELECTED')} />
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer group">
-                  <div className={cn("w-6 h-6 border-2 flex items-center justify-center shrink-0 transition-colors", verdict === 'ON_HOLD' ? "border-success bg-success/10" : "border-border bg-background group-hover:border-success/50")}>
-                    {verdict === 'ON_HOLD' && <Check className="w-5 h-5 text-success stroke-[3]" />}
+                  <div className={cn("w-4 h-4 border rounded flex items-center justify-center transition-colors", verdict === 'SELECTED' ? "bg-success border-success text-white" : "border-muted-foreground/30")}>
+                    {verdict === 'SELECTED' && <Check className="w-3 h-3 stroke-[3]" />}
                   </div>
-                  <span className="text-sm font-bold uppercase tracking-wider text-foreground">Hold</span>
+                  <span className={cn("text-xs font-bold uppercase tracking-wider", verdict === 'SELECTED' ? "text-success" : "text-muted-foreground")}>Selected</span>
+                </label>
+                
+                <label className={cn(
+                  "flex items-center gap-2 px-4 py-2 border rounded-md cursor-pointer transition-all",
+                  verdict === 'ON_HOLD' 
+                    ? "border-warning bg-warning/5" 
+                    : "border-border bg-background hover:bg-muted/50"
+                )}>
                   <input type="radio" className="hidden" checked={verdict === 'ON_HOLD'} onChange={() => setVerdict('ON_HOLD')} />
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer group">
-                  <div className={cn("w-6 h-6 border-2 flex items-center justify-center shrink-0 transition-colors", verdict === 'REJECTED' ? "border-success bg-success/10" : "border-border bg-background group-hover:border-success/50")}>
-                    {verdict === 'REJECTED' && <Check className="w-5 h-5 text-success stroke-[3]" />}
+                  <div className={cn("w-4 h-4 border rounded flex items-center justify-center transition-colors", verdict === 'ON_HOLD' ? "bg-warning border-warning text-white" : "border-muted-foreground/30")}>
+                    {verdict === 'ON_HOLD' && <Check className="w-3 h-3 stroke-[3]" />}
                   </div>
-                  <span className="text-sm font-bold uppercase tracking-wider text-foreground">Rejected</span>
+                  <span className={cn("text-xs font-bold uppercase tracking-wider", verdict === 'ON_HOLD' ? "text-warning" : "text-muted-foreground")}>Hold</span>
+                </label>
+                
+                <label className={cn(
+                  "flex items-center gap-2 px-4 py-2 border rounded-md cursor-pointer transition-all",
+                  verdict === 'REJECTED' 
+                    ? "border-danger bg-danger/5" 
+                    : "border-border bg-background hover:bg-muted/50"
+                )}>
                   <input type="radio" className="hidden" checked={verdict === 'REJECTED'} onChange={() => setVerdict('REJECTED')} />
+                  <div className={cn("w-4 h-4 border rounded flex items-center justify-center transition-colors", verdict === 'REJECTED' ? "bg-danger border-danger text-white" : "border-muted-foreground/30")}>
+                    {verdict === 'REJECTED' && <Check className="w-3 h-3 stroke-[3]" />}
+                  </div>
+                  <span className={cn("text-xs font-bold uppercase tracking-wider", verdict === 'REJECTED' ? "text-danger" : "text-muted-foreground")}>Rejected</span>
                 </label>
               </div>
             </div>
