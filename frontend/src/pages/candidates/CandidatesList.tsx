@@ -4,7 +4,7 @@ import { PageHeader } from '../../components/layout/PageHeader';
 import { Button, Modal, LoadingSpinner, EmptyState, Badge } from '../../components/ui';
 import { Plus, Link, RefreshCw, Trash, Search, X, CheckSquare, Square, Minus, Play } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
-import { getCandidates, deleteCandidate, unholdCandidate } from '../../api/candidates';
+import { getCandidates, deleteCandidate, bulkDeleteCandidates, unholdCandidate } from '../../api/candidates';
 import { getStageBadgeVariant, stageLabel, formatSource } from '../../lib/stages';
 import type { Candidate, PipelineStage } from '../../types';
 import { AddCandidateForm } from '../../components/candidates/AddCandidateForm';
@@ -70,14 +70,12 @@ export default function CandidatesList() {
 
   useEffect(() => {
     fetchCandidatesList(true);
-    const intervalId = setInterval(() => fetchCandidatesList(false), 10000);
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') fetchCandidatesList(false);
     };
     window.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('focus', handleVisibility);
     return () => {
-      clearInterval(intervalId);
       window.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', handleVisibility);
     };
@@ -88,11 +86,9 @@ export default function CandidatesList() {
 
   const filteredCandidates = candidates.filter((c) => {
     if (activeTab === 'UPDATES') {
-      if (c.current_stage !== 'SCREENING') return false;
-      if (!c.screening || c.screening.status !== 'PENDING' || !c.screening.follow_up_date) return false;
-      const followUp = new Date(c.screening.follow_up_date);
-      const today = new Date();
-      if (followUp > today) return false;
+      if (c.current_stage === 'CANDIDATE_FORM' && c.pre_form_status === 'SUBMITTED') return true;
+      if (c.current_stage === 'HR_INTERVIEW' && !c.has_resume) return true;
+      return false;
     }
 
     const q = searchQuery.toLowerCase();
@@ -181,29 +177,24 @@ export default function CandidatesList() {
   const handleBulkDelete = async () => {
     setIsBulkDeleting(true);
     const ids = [...selectedIds];
-    const failed: string[] = [];
-    let deletedCount = 0;
     
-    // Process sequentially to prevent backend deadlocks and thread pool exhaustion
-    for (const id of ids) {
-      try {
-        await deleteCandidate(id);
-        deletedCount++;
-      } catch (err) {
-        failed.push(id);
+    try {
+      const { success_count, failed_ids } = await bulkDeleteCandidates(ids);
+      
+      await fetchCandidatesList();
+      // Keep failed ones selected so HR can retry
+      setSelectedIds(new Set(failed_ids));
+      setShowBulkDeleteConfirm(false);
+      
+      if (failed_ids.length === 0) {
+        toast.success(`${success_count} candidate${success_count > 1 ? 's' : ''} deleted`);
+      } else {
+        toast.error(`${success_count} deleted, ${failed_ids.length} failed — still selected`);
       }
-    }
-    
-    await fetchCandidatesList();
-    // Keep failed ones selected so HR can retry
-    setSelectedIds(new Set(failed));
-    setShowBulkDeleteConfirm(false);
-    setIsBulkDeleting(false);
-    
-    if (failed.length === 0) {
-      toast.success(`${deletedCount} candidate${deletedCount > 1 ? 's' : ''} deleted`);
-    } else {
-      toast.error(`${deletedCount} deleted, ${failed.length} failed — still selected`);
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to bulk delete candidates'));
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -227,10 +218,6 @@ export default function CandidatesList() {
         description={activeTab === 'UPDATES' ? 'Candidates needing your attention' : 'All applicants linked to your recruiter profile. Click a row to open the full profile and manage pipeline stages.'}
         action={
           <div className="flex gap-3">
-            <Button variant="secondary" onClick={handleCopyLink}>
-              <Link className="w-4 h-4 mr-2" />
-              {copied ? 'Copied!' : 'Copy Recruiter Link'}
-            </Button>
             <Button onClick={() => setIsAddOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Candidate

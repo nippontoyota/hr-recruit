@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import or_, select, cast, String, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
+from pydantic import BaseModel
 import os
 
 from app.core.config import settings
@@ -20,7 +21,7 @@ from app.models.document import Document
 from app.models.enums import DocumentType, PipelineStage, UserRole, ActivityType, ScreeningStatus, FormStatus
 from app.models.stage_history import StageHistory
 from app.models.user import User
-from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, CandidateScreeningCreate, CandidateProfileRawDataUpdate
+from app.schemas.candidate import CandidateCreate, CandidateOut, CandidateListOut, DocumentOut, CandidateProfileRawDataUpdate
 from app.services import storage
 from app.services.workflow import transition
 
@@ -72,6 +73,14 @@ def to_candidate_out(row: Candidate, has_resume: bool) -> CandidateOut:
     share_url = share_url_for_token(row.pre_form_token)
     post_share_url = f"{settings.public_app_url}/#/post-form/{row.post_form_token}" if row.post_form_token else None
     return CandidateOut.model_validate(row).model_copy(
+        update={"has_resume": has_resume, "is_rejoining": False, "share_url": share_url, "post_share_url": post_share_url}
+    )
+
+def to_candidate_list_out(row: Candidate, has_resume: bool) -> CandidateListOut:
+    from app.core.config import settings
+    share_url = share_url_for_token(row.pre_form_token)
+    post_share_url = f"{settings.public_app_url}/#/post-form/{row.post_form_token}" if row.post_form_token else None
+    return CandidateListOut.model_validate(row).model_copy(
         update={"has_resume": has_resume, "is_rejoining": False, "share_url": share_url, "post_share_url": post_share_url}
     )
 
@@ -128,7 +137,6 @@ def _issue_post_form(db: Session, candidate: Candidate, user: User) -> None:
 def _store_whatsapp_invite(
     db: Session,
     candidate: Candidate,
-    body: CandidateScreeningCreate,
     user: User,
 ) -> None:
     profile = db.scalar(select(CandidateProfile).where(CandidateProfile.candidate_id == candidate.id))
@@ -137,18 +145,20 @@ def _store_whatsapp_invite(
         db.add(profile)
 
     visit_display = ""
-    if body.branch_visit_date:
-        visit_display = body.branch_visit_date.strftime("%A, %d %B %Y")
+    if candidate.visit_date:
+        visit_display = candidate.visit_date.strftime("%A, %d %B %Y")
+    if candidate.visit_time:
+        visit_display += f" at {candidate.visit_time}"
 
     invite = {
         "candidateName": candidate.full_name,
         "position": candidate.position_applied_for or "",
         "formLink": share_url_for_token(candidate.pre_form_token) or "",
-        "branchName": body.visit_branch or candidate.branch_location or "",
+        "branchName": candidate.visit_branch or candidate.branch_location or "",
         "visitDate": visit_display,
-        "mapsLink": body.maps_link or "",
+        "mapsLink": candidate.visit_maps_link or "",
         "recruiterName": user.full_name,
-        "extraInstructions": body.extra_instructions or "",
+        "extraInstructions": candidate.visit_instructions or "",
     }
     raw = dict(profile.raw_data or {})
     raw["whatsapp_invite"] = invite
@@ -156,6 +166,8 @@ def _store_whatsapp_invite(
 
 
 def create_candidate(db: Session, body: CandidateCreate, user_id: UUID | None, created_via_public_apply: bool = False) -> Candidate:
+    from app.core.security import generate_secure_token
+    
     match = [Candidate.phone == body.phone]
     if body.email:
         match.append(Candidate.email == body.email)
@@ -169,25 +181,23 @@ def create_candidate(db: Session, body: CandidateCreate, user_id: UUID | None, c
             source=body.source,
             source_reference=body.source_reference,
             position_applied_for=body.position_applied_for,
+            department=body.department,
             branch_location=body.branch_location,
             assigned_hr_user_id=body.assigned_hr_user_id,
             is_duplicate_flagged=dup is not None,
             duplicate_of_candidate_id=dup.id if dup else None,
-            pre_form_status=FormStatus.NOT_SENT,
+            current_stage=PipelineStage.CANDIDATE_FORM,
+            pre_form_status=FormStatus.SENT,
+            pre_form_token=generate_secure_token(),
+            pre_form_sent_at=datetime.now(UTC),
         )
         db.add(row)
         db.flush()
         
-        screening = CandidateScreening(
-            candidate_id=row.id,
-            status=ScreeningStatus.PENDING,
-        )
-        db.add(screening)
-        
         profile = CandidateProfile(candidate_id=row.id)
         db.add(profile)
         
-        log_desc = "Candidate applied via public form." if created_via_public_apply else "Candidate created manually in SCREENING stage."
+        log_desc = "Candidate applied via public form." if created_via_public_apply else "Candidate created manually. Form link generated."
         log = ActivityLog(
             candidate_id=row.id,
             activity_type=ActivityType.SYSTEM,
@@ -197,7 +207,7 @@ def create_candidate(db: Session, body: CandidateCreate, user_id: UUID | None, c
         )
         db.add(log)
         
-        db.add(StageHistory(candidate_id=row.id, to_stage=PipelineStage.SCREENING, changed_by_user_id=user_id))
+        db.add(StageHistory(candidate_id=row.id, to_stage=PipelineStage.CANDIDATE_FORM, changed_by_user_id=user_id))
         db.commit()
         db.refresh(row)
         return row
@@ -332,7 +342,7 @@ async def _save_resume_for_candidate(
     return _document_out(doc)
 
 
-@router.get("", response_model=list[CandidateOut])
+@router.get("", response_model=list[CandidateListOut])
 def list_candidates(
     stage: PipelineStage | None = None,
     skip: int = 0,
@@ -345,7 +355,7 @@ def list_candidates(
         UserRole.HQ_STAFF, UserRole.LOCAL_HR
     )),
 ):
-    q = select(Candidate).options(joinedload(Candidate.profile), joinedload(Candidate.screening)).order_by(Candidate.created_at.desc())
+    q = select(Candidate).order_by(Candidate.created_at.desc())
     if stage:
         q = q.where(Candidate.current_stage == stage)
         
@@ -397,7 +407,7 @@ def list_candidates(
     q = q.offset(skip).limit(limit)
     rows = list(db.scalars(q).all())
     with_resume = resume_candidate_ids(db, [row.id for row in rows])
-    return [to_candidate_out(row, row.id in with_resume) for row in rows]
+    return [to_candidate_list_out(row, row.id in with_resume) for row in rows]
 
 
 @router.post("", response_model=CandidateOut, status_code=201)
@@ -418,7 +428,7 @@ def get_candidate(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
 ):
-    row = db.scalar(select(Candidate).options(joinedload(Candidate.profile), joinedload(Candidate.screening)).where(Candidate.id == id))
+    row = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.id == id))
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
     assert_candidate_access(user, row)
@@ -493,5 +503,49 @@ def delete_candidate_endpoint(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="Cannot delete candidate due to existing references.")
+
+class BulkDeleteRequest(BaseModel):
+    candidate_ids: list[UUID]
+
+@router.post("/bulk-delete", status_code=200)
+def bulk_delete_candidates_endpoint(
+    request: BulkDeleteRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+):
+    success_count = 0
+    failed_ids = []
+
+    for cid in request.candidate_ids:
+        try:
+            row = get_candidate_for_user(db, cid, user)
+            
+            docs = db.scalars(select(Document).where(Document.candidate_id == cid)).all()
+            for doc in docs:
+                if doc.storage_path:
+                    try:
+                        storage.delete_object(doc.storage_path)
+                    except Exception as e:
+                        print(f"Failed to delete {doc.storage_path}: {e}")
+                db.delete(doc)
+                
+            histories = db.scalars(select(StageHistory).where(StageHistory.candidate_id == cid)).all()
+            for h in histories:
+                db.delete(h)
+                
+            duplicates = db.scalars(select(Candidate).where(Candidate.duplicate_of_candidate_id == cid)).all()
+            for dup in duplicates:
+                dup.duplicate_of_candidate_id = None
+                dup.is_duplicate_flagged = False
+                        
+            db.delete(row)
+            db.commit()
+            success_count += 1
+        except Exception as e:
+            db.rollback()
+            print(f"Failed to delete candidate {cid}: {e}")
+            failed_ids.append(cid)
+
+    return {"success_count": success_count, "failed_ids": failed_ids}
 
 
