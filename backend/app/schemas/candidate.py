@@ -473,6 +473,44 @@ class CandidateOut(BaseModel):
     is_rejoining: bool = False
     screening: "CandidateScreeningOut | None" = None
 
+class CandidateListOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    candidate_id: str
+    full_name: str
+    phone: str
+    email: str | None
+    source: str
+    source_reference: str | None
+    position_applied_for: str
+    department: str | None = None
+    share_url: str | None = None
+    pre_form_status: FormStatus
+    pre_form_sent_at: datetime | None
+    pre_form_submitted_at: datetime | None
+    post_form_status: FormStatus | None = None
+    post_form_sent_at: datetime | None = None
+    post_form_submitted_at: datetime | None = None
+    post_share_url: str | None = None
+    current_stage: PipelineStage
+    branch_location: str | None
+    visit_branch: str | None = None
+    visit_date: datetime | None = None
+    visit_time: str | None = None
+    visit_maps_link: str | None = None
+    visit_instructions: str | None = None
+    is_duplicate_flagged: bool
+    duplicate_of_candidate_id: UUID | None
+    assigned_hr_user_id: UUID | None
+    assigned_manager_id: UUID | None
+    assigned_gm_id: UUID | None
+    applied_at: datetime
+    created_at: datetime
+    updated_at: datetime
+    has_resume: bool = False
+    is_rejoining: bool = False
+
 
 class StageChange(BaseModel):
     to_stage: PipelineStage

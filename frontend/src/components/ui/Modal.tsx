@@ -43,7 +43,7 @@ export const Modal = ({ isOpen, onClose, title, description, size = 'full', chil
                   size === 'lg' && "w-[90vw] max-w-4xl max-h-[90vh]",
                   size === 'md' && "w-[90vw] max-w-2xl max-h-[90vh]",
                   size === 'sm' && "w-[90vw] max-w-md max-h-[90vh]",
-                  "bg-surface border border-dashed border-border rounded-none overflow-hidden"
+                  "bg-surface border border-dashed border-border rounded-none"
                 )}
               >
                 {/* Header */}
@@ -69,7 +69,7 @@ export const Modal = ({ isOpen, onClose, title, description, size = 'full', chil
                 </div>
 
                 {/* Body */}
-                <div className="relative flex-1 overflow-hidden bg-background">
+                <div className="relative flex-1 bg-background">
                   {children}
                 </div>
               </motion.div>

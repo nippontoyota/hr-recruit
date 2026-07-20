@@ -108,6 +108,11 @@ export const deleteCandidate = async (candidateId: string): Promise<void> => {
   await request('DELETE', `/candidates/${candidateId}`);
 };
 
+export const bulkDeleteCandidates = async (candidateIds: string[]): Promise<{ success_count: number; failed_ids: string[] }> => {
+  const response = await request('POST', `/candidates/bulk-delete`, { candidate_ids: candidateIds });
+  return response.data;
+};
+
 export const updateVisitSchedule = async (candidateId: string, data: Record<string, unknown>): Promise<Candidate> => {
   const response = await request('PATCH', `/candidates/${candidateId}/visit-schedule`, data);
   return response.data;

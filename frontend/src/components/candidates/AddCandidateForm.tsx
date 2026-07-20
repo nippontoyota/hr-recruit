@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Input, Select, Modal } from '../ui';
-import { UploadCloud, AlertTriangle, ArrowRight } from 'lucide-react';
-import { createCandidate, uploadResume } from '../../api/candidates';
+import { AlertTriangle, ArrowRight } from 'lucide-react';
+import { createCandidate } from '../../api/candidates';
 import { NIPPON_BRANCHES } from '../../types';
-import { validateResumeFile } from '../../lib/validation';
 import { validateBasicCandidateForm } from '../../lib/validatePreForm';
 
 interface AddCandidateFormProps {
@@ -17,13 +16,9 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
   const navigate = useNavigate();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [source, setSource] = useState('');
-  const [sourceDetails, setSourceDetails] = useState('');
   const [position, setPosition] = useState('');
   const [department, setDepartment] = useState('');
   const [branchLocation, setBranchLocation] = useState('');
-  const [resumeFile, setResumeFile] = useState<File | null>(null);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
@@ -32,27 +27,17 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
   const handleAutofill = () => {
     setFullName('Amit Patel');
     setPhone('9876543211');
-    setEmail('amit.patel@example.test');
-    setSource('WALK_IN');
-    setSourceDetails('Walk-in candidate');
     setPosition('Sales Executive');
     setDepartment('Sales');
     setBranchLocation('Kalamassery');
-    const blob = new Blob(['%PDF-1.4 ... dummy pdf content ...'], { type: 'application/pdf' });
-    const dummyFile = new File([blob], 'dummy_resume.pdf', { type: 'application/pdf' });
-    setResumeFile(dummyFile);
   };
 
   const resetForm = () => {
     setFullName('');
     setPhone('');
-    setEmail('');
-    setSource('');
-    setSourceDetails('');
     setPosition('');
     setDepartment('');
     setBranchLocation('');
-    setResumeFile(null);
     setFormError('');
     setDuplicateWarning(null);
   };
@@ -68,20 +53,14 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
     const validationError = validateBasicCandidateForm({
       fullName,
       phone,
-      email,
+      email: '',
       emailRequired: false,
       position,
-      source: source || undefined,
+      source: 'OTHER',
       sourceRequired: false,
     });
     if (validationError) {
       setFormError(validationError);
-      return;
-    }
-
-    const resumeError = validateResumeFile(resumeFile);
-    if (resumeError.ok === false) {
-      setFormError(resumeError.message);
       return;
     }
 
@@ -93,17 +72,13 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
       const newCandidate = await createCandidate({
         full_name: fullName.trim(),
         phone: normalizedPhone,
-        email: email.trim() || undefined,
-        source: source || 'Unknown',
-        source_reference: sourceDetails.trim() || undefined,
+        email: undefined,
+        source: 'OTHER',
+        source_reference: undefined,
         position_applied_for: position.trim(),
         department: department.trim() || undefined,
         branch_location: branchLocation || undefined,
       } as any);
-
-      if (resumeFile) {
-        await uploadResume(newCandidate.id, resumeFile);
-      }
 
       if (newCandidate.is_duplicate_flagged) {
         setDuplicateWarning({
@@ -233,17 +208,6 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
 
           <div className="col-span-2 sm:col-span-1">
             <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
-              Email Address
-            </label>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          
-          <div className="col-span-2 sm:col-span-1">
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
               Branch Location
             </label>
             <Select
@@ -257,55 +221,6 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
             </Select>
           </div>
 
-          <div className="col-span-2 sm:col-span-1">
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
-              Source
-            </label>
-            <Select
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-            >
-              <option value="">Select source</option>
-              <option value="WALK_IN">Walk-In</option>
-              <option value="INDEED">Indeed</option>
-              <option value="REFERRAL">Referral</option>
-              <option value="CAMPUS">Campus</option>
-              <option value="OTHER">Other</option>
-            </Select>
-          </div>
-          
-          <div className="col-span-2 sm:col-span-1">
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
-              Source Reference
-            </label>
-            <Input
-              value={sourceDetails}
-              onChange={(e) => setSourceDetails(e.target.value)}
-              maxLength={255}
-            />
-          </div>
-
-          <div className="col-span-2">
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-2">
-              Upload Resume
-            </label>
-            <div className="border border-border p-3 bg-surface rounded-[10px] text-center relative hover:bg-muted/50 transition-colors flex items-center justify-center gap-3">
-              <input
-                type="file"
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                accept=".pdf,.doc,.docx"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setResumeFile(e.target.files[0]);
-                  }
-                }}
-              />
-              <UploadCloud className="w-5 h-5 text-text-secondary pointer-events-none" />
-              <span className="text-sm font-medium text-text-primary pointer-events-none">
-                {resumeFile ? resumeFile.name : 'Select PDF or Word resume'}
-              </span>
-            </div>
-          </div>
         </div>
 
         {formError && (

@@ -14,14 +14,13 @@ import { PreFormStatus } from '../../components/candidates/PreFormStatus';
 import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPreviewPanel';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { EvaluationStageWidget } from '../../components/candidates/EvaluationStageWidget';
-import { BranchInterviewDashboard } from '../../components/candidates/BranchInterviewDashboard';
 import { FinalApprovalWidget } from '../../components/candidates/FinalApprovalWidget';
 import { ActivityTimeline } from '../../components/candidates/ActivityTimeline';
 import { extractError } from '../../lib/utils';
 
 
-const ALL_STAGES: PipelineStage[] = [
-  'SCREENING', 'CANDIDATE_FORM', 'BRANCH_INTERVIEW', 'TEST', 'FINAL_APPROVAL', 'HIRED'
+const LINEAR_STAGES: PipelineStage[] = [
+  'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW', 'BRANCH_EVALUATION', 'FINAL_APPROVAL', 'HIRED'
 ];
 
 
@@ -31,7 +30,7 @@ const profileCache: Record<string, Candidate> = {};
 export default function CandidateProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  
+
   const cachedCandidate = id ? profileCache[id] : null;
   const [candidate, setCandidate] = useState<Candidate | null>(cachedCandidate);
   const [initialLoading, setInitialLoading] = useState(!cachedCandidate);
@@ -45,7 +44,7 @@ export default function CandidateProfile() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
-  
+
   const [showEditStageModal, setShowEditStageModal] = useState(false);
   const [editStageSelection, setEditStageSelection] = useState<PipelineStage>('CANDIDATE_FORM');
   const [editStageRemarks, setEditStageRemarks] = useState('');
@@ -75,12 +74,12 @@ export default function CandidateProfile() {
       } else if (showLoading) {
         setIsUpdating(true);
       }
-      
+
       const [res, evals] = await Promise.all([
         getCandidateById(id),
         getCandidateEvaluations(id).catch(() => []),
       ]);
-      
+
       if (res) {
         profileCache[id] = res;
         setCandidate(res);
@@ -125,14 +124,15 @@ export default function CandidateProfile() {
     if (!candidate) return;
     // Prevent accidentally navigating into side/terminal states via the stepper
     if (clickedStage === 'REJECTED' || clickedStage === 'ON_HOLD' || clickedStage === 'HIRED') return;
-    
-    // We don't need currentStageIdx here anymore since we do ALL_STAGES.indexOf inline
+
+    const currentIdx = LINEAR_STAGES.indexOf(candidate.current_stage);
+    const clickedIdx = LINEAR_STAGES.indexOf(clickedStage);
 
     // Always update the viewed tab
     setViewedStage(clickedStage);
 
     // Only update the database if we are moving FORWARD in the pipeline
-    if (ALL_STAGES.indexOf(clickedStage) > ALL_STAGES.indexOf(candidate.current_stage)) {
+    if (clickedIdx > currentIdx) {
       setIsUpdating(true);
       try {
         await updateCandidateStage(candidate.id, clickedStage, '');
@@ -149,7 +149,7 @@ export default function CandidateProfile() {
     if (!candidate) return;
     const validation = validateRejectRemarks(rejectRemarks);
     if (!validation.ok) {
-      toast.error((validation as { ok: false; message: string }).message);
+      toast.error(validation.message);
       return;
     }
     setIsRejecting(true);
@@ -211,12 +211,12 @@ export default function CandidateProfile() {
     );
   }
 
+
   const actualStage = candidate.current_stage;
-
-
   const stageToView = viewedStage || actualStage;
   const showWhatsAppSidebar = stageToView === 'CANDIDATE_FORM' && candidate.pre_form_status !== 'SUBMITTED';
-  const stepperStages = ALL_STAGES.filter((s): s is Exclude<PipelineStage, 'HIRED'> => s !== 'HIRED');
+
+  const stepperStages = LINEAR_STAGES.filter((s): s is Exclude<PipelineStage, 'HIRED'> => s !== 'HIRED');
   const viewedIdx = stepperStages.findIndex((s) => s === stageToView);
   const isPrevDisabled = viewedIdx <= 0 || isUpdating;
   const isNextDisabled = viewedIdx === -1 || viewedIdx >= stepperStages.length - 1 || isUpdating;
@@ -230,36 +230,43 @@ export default function CandidateProfile() {
     if (candidate.pre_form_status === 'SUBMITTED') {
       completedStages.push('CANDIDATE_FORM');
     }
-    
-    // 3. BRANCH_INTERVIEW
+
+    // 3. HR_INTERVIEW
     const hrEval = evaluations.find(e => e.type === 'BRANCH_HR');
     if (hrEval && hrEval.verdict) {
-      if (hrEval.verdict === 'ON_HOLD') heldStages.push('BRANCH_INTERVIEW');
-      else completedStages.push('BRANCH_INTERVIEW');
+      if (hrEval.verdict === 'ON_HOLD') heldStages.push('HR_INTERVIEW');
+      else completedStages.push('HR_INTERVIEW');
     }
-    
-    // 5. TEST
-    const testEval = evaluations.find(e => e.type === 'TECHNICAL_TEST');
-    if (testEval && testEval.verdict) {
-      if (testEval.verdict === 'ON_HOLD') heldStages.push('TEST');
-      else completedStages.push('TEST');
+
+    // 4. DEPARTMENT_INTERVIEW
+    const deptEval = evaluations.find(e => e.type === 'DEPT_HEAD');
+    if (deptEval && deptEval.verdict) {
+      if (deptEval.verdict === 'ON_HOLD') heldStages.push('DEPARTMENT_INTERVIEW');
+      else completedStages.push('DEPARTMENT_INTERVIEW');
     }
-    
+
+    // 5. BRANCH_EVALUATION
+    const gmEval = evaluations.find(e => e.type === 'GM_LEVEL');
+    if (gmEval && gmEval.verdict) {
+      if (gmEval.verdict === 'ON_HOLD') heldStages.push('BRANCH_EVALUATION');
+      else completedStages.push('BRANCH_EVALUATION');
+    }
+
     // 6. FINAL_APPROVAL
     const hqEval = evaluations.find(e => e.type === 'HQ_INTERVIEW');
     if (hqEval && hqEval.verdict) {
       if (hqEval.verdict === 'ON_HOLD') heldStages.push('FINAL_APPROVAL');
       else completedStages.push('FINAL_APPROVAL');
     }
-    
+
     // 7. HIRED
     if (candidate.current_stage === 'HIRED') {
       completedStages.push('HIRED');
     }
 
     // A stage is skipped if it is not completed and not held, but the candidate's current stage is past it in the linear sequence!
-    const currentIdx = ALL_STAGES.indexOf(candidate.current_stage);
-    ALL_STAGES.forEach((stage, idx) => {
+    const currentIdx = LINEAR_STAGES.indexOf(candidate.current_stage);
+    LINEAR_STAGES.forEach((stage, idx) => {
       if (idx < currentIdx && !completedStages.includes(stage) && !heldStages.includes(stage)) {
         skippedStages.push(stage);
       }
@@ -456,9 +463,9 @@ export default function CandidateProfile() {
               </Button>
 
               <div className="flex-1 min-w-0">
-                <PipelineStepper 
-                  stages={stepperStages} 
-                  currentStage={stageToView} 
+                <PipelineStepper
+                  stages={stepperStages}
+                  currentStage={stageToView}
                   actualStage={actualStage}
                   onStageClick={handleStageClick}
                   isLoading={isUpdating}
@@ -503,15 +510,31 @@ export default function CandidateProfile() {
               <WhatsAppPreviewPanel candidate={candidate} className="lg:hidden mt-6 rounded-xl border border-border overflow-hidden" />
             )}
 
-            {stageToView === 'BRANCH_INTERVIEW' && (
-              <BranchInterviewDashboard
+            {stageToView === 'HR_INTERVIEW' && (
+              <EvaluationStageWidget
                 candidate={candidate}
+                evalTypes={['BRANCH_HR']}
+                title="HR Interview Evaluation"
                 onUpdate={handleUpdate}
               />
             )}
 
-            {stageToView === 'TEST' && (
-              <EvaluationStageWidget candidate={candidate} evalTypes={['TECHNICAL_TEST']} title="" onUpdate={handleUpdate} />
+            {stageToView === 'DEPARTMENT_INTERVIEW' && (
+              <EvaluationStageWidget
+                candidate={candidate}
+                evalTypes={['DEPT_HEAD']}
+                title="Department Head Evaluation"
+                onUpdate={handleUpdate}
+              />
+            )}
+
+            {stageToView === 'BRANCH_EVALUATION' && (
+              <EvaluationStageWidget
+                candidate={candidate}
+                evalTypes={['GM_LEVEL', 'TECHNICAL_TEST']}
+                title="Branch General Manager Evaluation"
+                onUpdate={handleUpdate}
+              />
             )}
 
             {stageToView === 'FINAL_APPROVAL' && (
@@ -537,7 +560,7 @@ export default function CandidateProfile() {
                     onChange={(e) => setResumeStage(e.target.value as PipelineStage)}
                     className="flex-1 w-full sm:w-auto bg-background border border-border rounded-lg px-3 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-warning/40"
                   >
-                    {ALL_STAGES.filter(s => s !== 'HIRED').map(s => (
+                    {LINEAR_STAGES.filter(s => s !== 'HIRED').map(s => (
                       <option key={s} value={s}>{stageLabel(s)}</option>
                     ))}
                   </select>
@@ -577,7 +600,7 @@ export default function CandidateProfile() {
           </div>
         </div>
 
-        </div>
+      </div>
 
       {showWhatsAppSidebar && (
         <WhatsAppPreviewPanel candidate={candidate} className="hidden lg:flex sticky top-0 h-screen" />
@@ -647,15 +670,15 @@ export default function CandidateProfile() {
               <label className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
                 New Stage
               </label>
-              <select 
-                value={editStageSelection} 
+              <select
+                value={editStageSelection}
                 onChange={(e) => setEditStageSelection(e.target.value as PipelineStage)}
                 className="w-full bg-background border border-border rounded-[10px] p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
               >
                 <option value="CANDIDATE_FORM">Candidate Form</option>
-                <option value="BRANCH_INTERVIEW">HR Interview</option>
-
-                <option value="TEST">Technical Test</option>
+                <option value="HR_INTERVIEW">HR Interview</option>
+                <option value="DEPARTMENT_INTERVIEW">Department Interview</option>
+                <option value="BRANCH_EVALUATION">Branch Evaluation</option>
                 <option value="FINAL_APPROVAL">Final Approval</option>
                 <option value="ON_HOLD">On Hold</option>
                 <option value="REJECTED">Rejected</option>
