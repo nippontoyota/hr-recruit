@@ -1,12 +1,14 @@
 import React from 'react';
 import { cn } from '../../lib/utils';
 import { 
-  ClipboardList, 
-  FileText, 
-  Users, 
-  ShieldCheck, 
+  UserCheck, 
+  Mail, 
+  MessagesSquare, 
+  BadgeCheck,
+  Code2, 
   Check,
-  Pause
+  Pause,
+  CircleDashed
 } from 'lucide-react';
 import type { PipelineStage } from '../../types';
 import { stageLabel } from '../../lib/stages';
@@ -24,10 +26,11 @@ interface PipelineStepperProps {
 }
 
 const STAGE_ICONS: Record<string, React.ElementType> = {
-  'SCREENING': ClipboardList,
-  'CANDIDATE_FORM': FileText,
-  'BRANCH_INTERVIEW': Users,
-  'FINAL_APPROVAL': ShieldCheck,
+  'SCREENING': UserCheck,
+  'CANDIDATE_FORM': Mail,
+  'BRANCH_INTERVIEW': MessagesSquare,
+  'TEST': Code2,
+  'FINAL_APPROVAL': BadgeCheck,
 };
 
 export function PipelineStepper({ 
@@ -58,9 +61,6 @@ export function PipelineStepper({
     <div className="w-full py-2">
       {/* Mobile view: simple text-based progress */}
       <div className="flex flex-col items-center gap-1 md:hidden py-1 select-none">
-        <span className="text-[10px] font-extrabold uppercase tracking-widest text-success">
-          Step {activeIndex + 1} of {stages.length}
-        </span>
         <span className="text-sm font-bold text-foreground text-center">
           {isTerminalStage ? 'Completed' : stageLabel(actualStage)}
         </span>
@@ -97,7 +97,7 @@ export function PipelineStepper({
           const isCurrentActual = index === activeIndex && actualStage !== 'ON_HOLD' && actualStage !== 'REJECTED';
           const isCurrentViewed = index === viewedIndex;
           
-          const Icon = STAGE_ICONS[stage] || FileText;
+          const Icon = STAGE_ICONS[stage] || CircleDashed;
           const isClickable = !isLoading && !isTerminalStage && !isCurrentViewed;
 
           return (
@@ -122,11 +122,11 @@ export function PipelineStepper({
               <motion.button
                 disabled={!isClickable}
                 onClick={() => isClickable && onStageClick(stage)}
-                whileHover={isClickable && !isCurrentViewed ? { scale: 1.1, y: -2 } : {}}
+                whileHover={{}}
                 whileTap={isClickable && !isCurrentViewed ? { scale: 0.95 } : {}}
                 className={cn(
                   "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 relative bg-background border-2",
-                  isCurrentViewed ? "ring-2 ring-primary ring-offset-2 scale-105" : "",
+                  isCurrentViewed ? "ring-2 ring-primary ring-offset-2 scale-105 shadow-md" : "",
                   isCompleted ? "border-success bg-success/5 text-success shadow-sm" :
                   isHeld ? "border-warning bg-warning/5 text-warning shadow-sm ring-2 ring-warning/30" :
                   isSkipped ? "border-warning border-dashed bg-warning/5 text-warning shadow-sm" :
@@ -174,10 +174,10 @@ export function PipelineStepper({
                   "text-[9px] font-bold uppercase tracking-wider mb-0.5 transition-colors duration-300",
                   isCurrentViewed ? "text-primary font-extrabold" :
                   isCurrentActual ? "text-success" :
-                  (isSkipped || isHeld) ? "text-warning" : 
+                  isHeld ? "text-warning" : 
                   "text-muted-foreground/60"
                 )}>
-                  {isHeld ? "On Hold" : isSkipped ? "Skipped" : isCompleted ? "Completed" : `Step ${index + 1}`}
+                  {isHeld ? "On Hold" : isCompleted ? "Completed" : ""}
                 </span>
                 <span className={cn(
                   "text-[11px] font-semibold text-center w-24 text-balance leading-tight transition-colors duration-300",

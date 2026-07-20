@@ -678,13 +678,13 @@ def send_evaluation_whatsapp_invite(
         else:
             template_name = "nippon_hr_interview_invite"
     
+    external_message_id = None
     try:
         res = send_template(
             to_phone=body.to_phone,
             template_name=template_name,
             placeholders=placeholders,
         )
-        external_message_id = None
         messages = res.get("messages", [])
         if messages:
             external_message_id = messages[0].get("id")

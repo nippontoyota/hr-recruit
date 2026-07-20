@@ -62,6 +62,7 @@ export interface Candidate {
   current_stage: PipelineStage;
   screening?: CandidateScreening;
   branch_location?: string;
+  interviewer_assignments?: Record<string, string>;
   profile?: CandidateProfile;
   is_duplicate_flagged: boolean;
   duplicate_of_candidate_id?: string;

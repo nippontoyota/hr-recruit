@@ -506,8 +506,7 @@ export default function CandidateProfile() {
             {stageToView === 'BRANCH_INTERVIEW' && (
               <EvaluationStageWidget
                 candidate={candidate}
-                evalTypes={['BRANCH_HR']}
-                title="Branch HR Interview Evaluation"
+                evalTypes={['BRANCH_HR', 'DEPT_HEAD']}
                 onUpdate={handleUpdate}
               />
             )}
@@ -516,7 +515,6 @@ export default function CandidateProfile() {
               <EvaluationStageWidget
                 candidate={candidate}
                 evalTypes={['TECHNICAL_TEST']}
-                title="Technical Test Evaluation"
                 onUpdate={handleUpdate}
               />
             )}
@@ -660,7 +658,7 @@ export default function CandidateProfile() {
                 className="w-full bg-background border border-border rounded-[10px] p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
               >
                 <option value="CANDIDATE_FORM">CALL LETTER</option>
-                <option value="BRANCH_INTERVIEW">Branch Interview</option>
+                <option value="BRANCH_INTERVIEW">INTERVIEW</option>
                 <option value="TEST">Technical Test</option>
                 <option value="FINAL_APPROVAL">Final Approval</option>
                 <option value="ON_HOLD">On Hold</option>

@@ -42,6 +42,7 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
   
   // Aggregate Evaluations
   const hrEval = evaluations.find(e => e.type === 'BRANCH_HR' || e.type === 'HQ_INTERVIEW');
+  const deptEvals = evaluations.filter(e => e.type === 'DEPT_HEAD');
   
   return (
     <div className="bg-white text-black font-sans text-xs print:bg-white pb-12 print:pb-0">
@@ -1201,33 +1202,34 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
                  <td className="w-16">Gained</td>
               </tr>
               <tr className="h-10 text-center">
-                 <td rowSpan={4}></td>
-                 <td rowSpan={4} className="align-bottom pb-2 border-r">
-                    <div className="flex justify-center space-x-6 text-[10px]">
-                       <span className="flex items-center">Selected <div className="w-4 h-4 border border-black ml-2"></div></span>
-                       <span className="flex items-center">Hold <div className="w-4 h-4 border border-black ml-2"></div></span>
-                       <span className="flex items-center">Rejected <div className="w-4 h-4 border border-black ml-2"></div></span>
+                 <td rowSpan={4} className="font-bold text-xs whitespace-pre-line px-1">{hrEval?.scores?.interviewer_name || candidate?.interviewer_assignments?.BRANCH_HR || ''}</td>
+                 <td rowSpan={4} className="align-bottom pb-2 border-r relative px-2">
+                    <div className="absolute top-2 left-2 right-2 text-left text-[9px] font-medium whitespace-pre-wrap">{hrEval?.remarks}</div>
+                    <div className="absolute bottom-2 left-0 w-full flex justify-center space-x-6 text-[10px]">
+                       <span className="flex items-center">Selected <div className="w-4 h-4 border border-black ml-2 relative">{hrEval?.verdict === 'SELECTED' && <span className="absolute inset-0 flex items-center justify-center font-bold text-lg leading-none mb-1">✓</span>}</div></span>
+                       <span className="flex items-center">Hold <div className="w-4 h-4 border border-black ml-2 relative">{hrEval?.verdict === 'ON_HOLD' && <span className="absolute inset-0 flex items-center justify-center font-bold text-lg leading-none mb-1">✓</span>}</div></span>
+                       <span className="flex items-center">Rejected <div className="w-4 h-4 border border-black ml-2 relative">{hrEval?.verdict === 'REJECTED' && <span className="absolute inset-0 flex items-center justify-center font-bold text-lg leading-none mb-1">✓</span>}</div></span>
                     </div>
                  </td>
                  <td>Attitude</td>
                  <td className="bg-gray">4</td>
-                 <td></td>
-                 <td rowSpan={4}></td>
+                 <td className="font-bold text-sm">{hrEval?.scores?.attitude}</td>
+                 <td rowSpan={4} className="align-bottom pb-2 text-[9px] font-bold">{hrEval?.created_at ? formatDate(hrEval.created_at) : ''}</td>
               </tr>
               <tr className="h-10 text-center">
                  <td>Communication</td>
                  <td className="bg-gray">3</td>
-                 <td></td>
+                 <td className="font-bold text-sm">{hrEval?.scores?.communication}</td>
               </tr>
               <tr className="h-10 text-center">
                  <td>Knowledge</td>
                  <td className="bg-gray">3</td>
-                 <td></td>
+                 <td className="font-bold text-sm">{hrEval?.scores?.knowledge}</td>
               </tr>
               <tr className="h-10 text-center">
                  <td className="bg-gray font-bold">Total</td>
                  <td className="bg-gray font-bold">10</td>
-                 <td className="bg-gray font-bold"></td>
+                 <td className="bg-gray font-bold text-sm">{hrEval?.scores?.total_score}</td>
               </tr>
             </tbody>
          </table>
@@ -1250,39 +1252,43 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
                  <td className="w-[8%]">Gained</td>
               </tr>
               
-              {[...Array(5)].map((_, i) => (
+              {[...Array(5)].map((_, i) => {
+                 const dev = deptEvals[i];
+                 return (
                  <React.Fragment key={i}>
                   <tr className="h-8 text-center text-[10px]">
-                     <td rowSpan={4} className="font-bold text-xs whitespace-pre-line"></td>
-                     <td rowSpan={4} className="border-r relative">
+                     <td rowSpan={4} className="font-bold text-xs whitespace-pre-line px-1">{dev?.scores?.interviewer_name || candidate?.interviewer_assignments?.DEPT_HEAD || ''}</td>
+                     <td rowSpan={4} className="border-r relative px-2">
+                        <div className="absolute top-2 left-2 right-2 text-left text-[9px] font-medium whitespace-pre-wrap">{dev?.remarks}</div>
                         <div className="absolute bottom-2 left-0 w-full flex justify-center space-x-6 text-[10px]">
-                           <span className="flex items-center">Selected <div className="w-4 h-4 border border-black ml-2 relative"></div></span>
-                           <span className="flex items-center">Hold <div className="w-4 h-4 border border-black ml-2"></div></span>
-                           <span className="flex items-center">Rejected <div className="w-4 h-4 border border-black ml-2"></div></span>
+                           <span className="flex items-center">Selected <div className="w-4 h-4 border border-black ml-2 relative">{dev?.verdict === 'SELECTED' && <span className="absolute inset-0 flex items-center justify-center font-bold text-lg leading-none mb-1">✓</span>}</div></span>
+                           <span className="flex items-center">Hold <div className="w-4 h-4 border border-black ml-2 relative">{dev?.verdict === 'ON_HOLD' && <span className="absolute inset-0 flex items-center justify-center font-bold text-lg leading-none mb-1">✓</span>}</div></span>
+                           <span className="flex items-center">Rejected <div className="w-4 h-4 border border-black ml-2 relative">{dev?.verdict === 'REJECTED' && <span className="absolute inset-0 flex items-center justify-center font-bold text-lg leading-none mb-1">✓</span>}</div></span>
                         </div>
                      </td>
                      <td>Attitude</td>
                      <td className="bg-gray">4</td>
-                     <td className="font-bold text-sm"></td>
-                     <td rowSpan={4} className="align-bottom pb-2 text-xs font-bold"></td>
+                     <td className="font-bold text-sm">{dev?.scores?.attitude}</td>
+                     <td rowSpan={4} className="align-bottom pb-2 text-[9px] font-bold">{dev?.created_at ? formatDate(dev.created_at) : ''}</td>
                   </tr>
                   <tr className="h-8 text-center text-[10px]">
                      <td>Communication</td>
                      <td className="bg-gray">3</td>
-                     <td className="font-bold text-sm"></td>
+                     <td className="font-bold text-sm">{dev?.scores?.communication}</td>
                   </tr>
                   <tr className="h-8 text-center text-[10px]">
                      <td>Knowledge</td>
                      <td className="bg-gray">3</td>
-                     <td className="font-bold text-sm"></td>
+                     <td className="font-bold text-sm">{dev?.scores?.knowledge}</td>
                   </tr>
                   <tr className="h-8 text-center text-[10px]">
                      <td className="bg-gray font-bold">Total</td>
                      <td className="bg-gray font-bold">10</td>
-                     <td className="bg-gray font-bold text-sm"></td>
+                     <td className="bg-gray font-bold text-sm">{dev?.scores?.total_score}</td>
                   </tr>
                  </React.Fragment>
-              ))}
+                 );
+              })}
 
               <tr className="bg-gray font-bold text-center text-xs">
                  <td colSpan={5} className="py-2">CMD Comment</td>
