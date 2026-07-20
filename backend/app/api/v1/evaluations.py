@@ -171,8 +171,16 @@ def delete_evaluation(
     if not evaluation:
         raise HTTPException(status_code=404, detail="Evaluation not found")
         
-    if evaluation.type in (EvaluationType.BRANCH_HR, EvaluationType.DEPT_HEAD):
-        raise HTTPException(status_code=400, detail="Cannot delete mandatory evaluations")
+    if evaluation.type == EvaluationType.BRANCH_HR:
+        raise HTTPException(status_code=400, detail="Cannot delete HR interview")
+        
+    if evaluation.type == EvaluationType.DEPT_HEAD:
+        count = db.query(Evaluation).filter(
+            Evaluation.candidate_id == evaluation.candidate_id, 
+            Evaluation.type == EvaluationType.DEPT_HEAD
+        ).count()
+        if count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot delete the mandatory department interview")
         
     db.delete(evaluation)
     db.commit()

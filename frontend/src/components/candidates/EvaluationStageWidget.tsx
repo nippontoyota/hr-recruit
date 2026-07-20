@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, FileText, CheckCircle, Check, Star, Loader2 } from 'lucide-react';
+import { Link, FileText, CheckCircle, Star, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, LoadingSpinner, Modal, EmptyState } from '../ui';
+import { InterviewFormCard } from './InterviewFormCard';
 import { getCandidateEvaluations, scheduleEvaluation, generateEvaluationToken, submitScorecardDirect, sendEvaluationWhatsAppInvite, createEvaluation } from '../../api/evaluations';
 import type { Candidate, Evaluation, EvaluationVerdict } from '../../types';
 import { cn, extractError } from '../../lib/utils';
@@ -17,6 +18,7 @@ interface EvaluationStageWidgetProps {
 
 // Simple global cache to allow stale-while-revalidate (instant loading)
 const evaluationsCache: Record<string, Evaluation[]> = {};
+
 
 export function EvaluationStageWidget({
   candidate,
@@ -55,14 +57,13 @@ export function EvaluationStageWidget({
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const [sendingInvite, setSendingInvite] = useState(false);
+
 
 
   // Schedule functionality removed for simpler UI
 
   // Remarks form state
   const [verdict, setVerdict] = useState<EvaluationVerdict | null>(null);
-  const [remarksText, setRemarksText] = useState('');
   const [attitudeScore, setAttitudeScore] = useState(0);
   const [commScore, setCommScore] = useState(0);
   const [knowledgeScore, setKnowledgeScore] = useState(0);
@@ -244,31 +245,7 @@ export function EvaluationStageWidget({
   };
 
 
-  const StarInput = ({ label, val, setVal, maxStars = 5 }: { label: string; val: number; setVal: (v: number) => void; maxStars?: number }) => (
-    <div className="flex flex-col">
-      <div className="flex justify-between items-center mb-1">
-        <span className="text-[10px] font-bold text-foreground uppercase tracking-wider">{label}</span>
-        <span className="text-xs font-semibold text-muted-foreground">{val}/{maxStars}</span>
-      </div>
-      <div className="flex items-center justify-start gap-1.5">
-        {Array.from({ length: maxStars }, (_, i) => i + 1).map((star) => (
-          <button
-            type="button"
-            key={star}
-            onClick={() => setVal(star)}
-            className="p-0.5 transition-transform hover:scale-110 focus:outline-none"
-          >
-            <Star
-              className={cn(
-                "w-8 h-8 transition-all duration-200",
-                star <= val ? "fill-amber-400 text-amber-500 drop-shadow-sm" : "fill-muted text-muted-foreground/30"
-              )}
-            />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+
 
   if (loading) {
     return (
@@ -304,6 +281,18 @@ export function EvaluationStageWidget({
                 return ev.id === preferred?.id;
               })
               .map((ev) => {
+                if (ev.type !== 'TECHNICAL_TEST') {
+                  return (
+                    <InterviewFormCard 
+                      key={ev.id} 
+                      ev={ev} 
+                      index={evaluations.filter(e => e.type === ev.type).findIndex(e => e.id === ev.id)} 
+                      candidate={candidate} 
+                      onUpdate={() => { fetchEvaluations(); onUpdate(); }} 
+                    />
+                  );
+                }
+
                 const isCompleted = ev.status === 'EVALUATED';
                 return (
                   <motion.div 
@@ -312,107 +301,21 @@ export function EvaluationStageWidget({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="flex flex-col justify-between py-2"
+                    className="flex flex-col justify-between p-6 bg-background border border-border shadow-sm rounded-xl mb-4"
                   >
-                <div>
-                  {ev.type !== 'TECHNICAL_TEST' && (
-                  <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 gap-3">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-bold text-lg uppercase tracking-wider text-foreground">
-                        {ev.type === 'BRANCH_HR' ? 'HR INTERVIEW' : ev.type === 'DEPT_HEAD' ? 'DEPARTMENT INTERVIEW' : ev.type.replace(/_/g, ' ')}
-                      </h3>
-                      {isCompleted && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm whitespace-nowrap bg-success/10 text-success border-success/20">
-                          Evaluated
-                        </span>
-                      )}
-                    </div>
-
-                    {!isCompleted && (
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <button type="button" onClick={() => {
-                          const meetLink = `https://meet.google.com/${Math.random().toString(36).substring(2, 5)}-${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 5)}`;
-                          handleInstantWhatsAppShare({ ...ev, interview_mode: 'ONLINE', location_or_link: meetLink } as any);
-                        }} disabled={sendingInvite} className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded-sm transition-all shadow-sm whitespace-nowrap disabled:opacity-50 uppercase tracking-wider">
-                          <img src="/whatsapp.webp" alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> SEND GMEET LINK
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  )}
-
-                  {isCompleted && remarksId !== ev.id && ev.type !== 'TECHNICAL_TEST' ? (
-                    <div className="mt-4 p-5 bg-background border border-border/80 rounded-xl shadow-sm">
-                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-border/50 pb-4 mb-4">
-                         <div>
-                            <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Final Verdict</span>
-                            <div className="flex items-center gap-2">
-                              <span className={cn("px-2.5 py-1 rounded-md text-[11px] font-bold border uppercase shadow-xs",
-                                 ev.verdict === 'SELECTED' || ev.verdict === 'PASS' ? "bg-success/10 text-success border-success/30" :
-                                   ev.verdict === 'ON_HOLD' ? "bg-warning/10 text-warning border-warning/30" :
-                                     "bg-danger/10 text-danger border-danger/30"
-                               )}>
-                                 {ev.verdict?.replace(/_/g, ' ') || 'EVALUATED'}
-                              </span>
-                              {ev.verdict === 'ON_HOLD' && (
-                                <button type="button" onClick={() => {
-                                  setVerdict(ev.verdict as EvaluationVerdict);
-                                  setTestVerdict(ev.verdict as EvaluationVerdict);
-                                  setRemarksText(ev.remarks || '');
-                                  setTestRemarks(ev.remarks || '');
-                                    if (ev.scores) {
-                                      setAttitudeScore((ev.scores as any).attitude || 0);
-                                      setCommScore((ev.scores as any).communication || 0);
-                                      setKnowledgeScore((ev.scores as any).knowledge || 0);
-                                      setTestScore((ev.scores as any).percentage?.toString() || '');
-                                    }
-                                  setRemarksId(ev.id);
-                                }} className="text-[10px] font-bold text-primary hover:underline px-2 py-1">
-                                  Edit
-                                </button>
-                              )}
-                            </div>
-                         </div>
-                         {ev.scores?.percentage !== undefined && (
-                            <div className="text-right">
-                              <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Test Score</span>
-                              <span className="text-xl font-black text-foreground tracking-tight">
-                                {ev.scores.percentage}%
-                              </span>
-                              {ev.scores.correct_answers !== undefined && (
-                                <span className="text-xs text-muted-foreground ml-1 font-semibold">({ev.scores.correct_answers}/{ev.scores.total_questions})</span>
-                              )}
-                            </div>
-                         )}
-                      </div>
-                      
-                      {ev.scores && ev.scores.technical !== undefined && (
-                         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-5 pb-5 border-b border-border/50">
-                            {['technical', 'communication', 'experience', 'cultural_fit'].map(k => (
-                               (ev.scores as any)[k] !== undefined ? (
-                                  <div key={k}>
-                                    <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{k.replace('_', ' ')}</span>
-                                    <div className="flex gap-1">
-                                      {[1, 2, 3, 4, 5].map(s => (
-                                         <Star key={s} className={cn("w-5 h-5 transition-colors", s <= (ev.scores as any)[k] ? "fill-amber-400 text-amber-500" : "fill-muted text-muted-foreground/30")} />
-                                      ))}
-                                    </div>
-                                  </div>
-                               ) : null
-                            ))}
-                         </div>
-                      )}
-
-                      <div>
-                         <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Evaluation Remarks</span>
-                         <p className="text-sm text-foreground leading-relaxed bg-muted/10 p-3 rounded-lg border border-border/30">
-                           {ev.remarks ? `"${ev.remarks}"` : <span className="text-muted-foreground italic">No remarks provided.</span>}
-                         </p>
+                    <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 gap-3">
+                      <div className="flex items-center gap-3">
+                        <h3 className="font-bold text-lg uppercase tracking-wider text-foreground">
+                          TECHNICAL TEST
+                        </h3>
+                        {isCompleted && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm whitespace-nowrap bg-success/10 text-success border-success/20">
+                            Evaluated
+                          </span>
+                        )}
                       </div>
                     </div>
-                  ) : null}
-
-                  {ev.type === 'TECHNICAL_TEST' ? (
+                    
                     <TechnicalTestPaperWidget 
                       ev={ev} 
                       candidate={candidate} 
@@ -424,100 +327,41 @@ export function EvaluationStageWidget({
                       generatingLinkId={generatingLinkId}
                       remarksId={remarksId} 
                     />
-                  ) : null}
-                </div>
 
-                <div className="mt-3">
-                  <AnimatePresence mode="wait">
-                    {remarksId === ev.id && (
-                      <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="space-y-3 pt-3 border-t border-border mt-3">
-
-                        {ev.type === 'TECHNICAL_TEST' ? (
-                          <div className="grid grid-cols-2 gap-3 text-xs">
-                            <div>
-                              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Score %</label>
-                              <input type="number" min="0" max="100" value={testScore} onChange={(e) => setTestScore(e.target.value)} placeholder="80" className="w-full bg-background border border-border rounded-lg p-2" />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Verdict</label>
-                              <select value={testVerdict} onChange={(e) => setTestVerdict(e.target.value as EvaluationVerdict)} className="w-full bg-background border border-border rounded-lg p-2">
-                                <option value="PASS">Pass</option>
-                                <option value="FAIL">Fail</option>
-                              </select>
-                            </div>
-                            <div className="col-span-2">
-                              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Remarks</label>
-                              <textarea value={testRemarks} onChange={(e) => setTestRemarks(e.target.value)} placeholder="Technical test notes..." className="w-full min-h-[60px] bg-background border border-border rounded-lg p-2 resize-y" />
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-4">
-                            <div className="flex justify-end -mb-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setAttitudeScore(4);
-                                  setCommScore(3);
-                                  setKnowledgeScore(3);
-                                }}
-                                className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-primary hover:text-primary/80 transition-colors bg-primary/10 hover:bg-primary/20 px-2 py-1 rounded-md"
-                              >
-                                <Star className="w-3.5 h-3.5 fill-current" /> Give Full Marks
-                              </button>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                              <div className="flex flex-col gap-4">
-                                <StarInput label="Attitude" val={attitudeScore} setVal={setAttitudeScore} maxStars={4} />
-                                <StarInput label="Communication" val={commScore} setVal={setCommScore} maxStars={3} />
-                                <StarInput label="Knowledge" val={knowledgeScore} setVal={setKnowledgeScore} maxStars={3} />
+                    <div className="mt-3">
+                      <AnimatePresence mode="wait">
+                        {remarksId === ev.id && (
+                          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} className="space-y-3 pt-3 border-t border-border mt-3">
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Score %</label>
+                                <input type="number" min="0" max="100" value={testScore} onChange={(e) => setTestScore(e.target.value)} placeholder="80" className="w-full bg-background border border-border rounded-lg p-2" />
                               </div>
-
-                              <div className="h-full flex flex-col">
-                                <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-2">Remarks & Key Takeaways</label>
-                                <textarea value={remarksText} onChange={(e) => setRemarksText(e.target.value)} placeholder="Summary of interview..." className="w-full h-full min-h-[140px] bg-background border border-border rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary/20 resize-none transition-all" />
+                              <div>
+                                <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Verdict</label>
+                                <select value={testVerdict} onChange={(e) => setTestVerdict(e.target.value as EvaluationVerdict)} className="w-full bg-background border border-border rounded-lg p-2">
+                                  <option value="PASS">Pass</option>
+                                  <option value="FAIL">Fail</option>
+                                </select>
+                              </div>
+                              <div className="col-span-2">
+                                <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">Remarks</label>
+                                <textarea value={testRemarks} onChange={(e) => setTestRemarks(e.target.value)} placeholder="Technical test notes..." className="w-full min-h-[60px] bg-background border border-border rounded-lg p-2 resize-y" />
                               </div>
                             </div>
-
-                            <div className="flex flex-col gap-3 pt-2">
-                              <div className="flex items-center gap-10">
-                                <label className="flex items-center gap-2 cursor-pointer group">
-                                  <div className={cn("w-6 h-6 border-2 flex items-center justify-center shrink-0 transition-colors", verdict === 'SELECTED' ? "border-success bg-success/10" : "border-border bg-background group-hover:border-success/50")}>
-                                    {verdict === 'SELECTED' && <Check className="w-5 h-5 text-success stroke-[3]" />}
-                                  </div>
-                                  <span className="text-sm font-bold uppercase tracking-wider text-foreground">Selected</span>
-                                  <input type="radio" className="hidden" checked={verdict === 'SELECTED'} onChange={() => setVerdict('SELECTED')} />
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer group">
-                                  <div className={cn("w-6 h-6 border-2 flex items-center justify-center shrink-0 transition-colors", verdict === 'ON_HOLD' ? "border-success bg-success/10" : "border-border bg-background group-hover:border-success/50")}>
-                                    {verdict === 'ON_HOLD' && <Check className="w-5 h-5 text-success stroke-[3]" />}
-                                  </div>
-                                  <span className="text-sm font-bold uppercase tracking-wider text-foreground">Hold</span>
-                                  <input type="radio" className="hidden" checked={verdict === 'ON_HOLD'} onChange={() => setVerdict('ON_HOLD')} />
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer group">
-                                  <div className={cn("w-6 h-6 border-2 flex items-center justify-center shrink-0 transition-colors", verdict === 'REJECTED' ? "border-success bg-success/10" : "border-border bg-background group-hover:border-success/50")}>
-                                    {verdict === 'REJECTED' && <Check className="w-5 h-5 text-success stroke-[3]" />}
-                                  </div>
-                                  <span className="text-sm font-bold uppercase tracking-wider text-foreground">Rejected</span>
-                                  <input type="radio" className="hidden" checked={verdict === 'REJECTED'} onChange={() => setVerdict('REJECTED')} />
-                                </label>
-                              </div>
+                            <div className="flex gap-2 justify-end pt-2">
+                              {isCompleted && (
+                                <Button variant="ghost" size="sm" onClick={() => setRemarksId(null)}>Cancel</Button>
+                              )}
+                              <Button variant="primary" size="sm" onClick={() => handleSubmitScorecard(ev.id, ev, true)} isLoading={submitting}>Submit Test</Button>
                             </div>
-                          </div>
+                          </motion.div>
                         )}
-                        <div className="flex gap-2 justify-end pt-1">
-                          {isCompleted && (
-                             <Button variant="ghost" size="sm" onClick={() => setRemarksId(null)}>Cancel</Button>
-                          )}
-                          <Button variant="primary" size="sm" onClick={() => handleSubmitScorecard(ev.id, ev, ev.type === 'TECHNICAL_TEST')} isLoading={submitting}>Submit</Button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </motion.div>
-            );
-          })}
+                      </AnimatePresence>
+                    </div>
+                  </motion.div>
+                );
+            })}
           </AnimatePresence>
 
           {evalTypes.includes('DEPT_HEAD') && evaluations.filter(e => e.type === 'DEPT_HEAD').length > 0 && evaluations.filter(e => e.type === 'DEPT_HEAD').length < 5 && (
