@@ -63,6 +63,7 @@ export default function CandidatesList() {
       setCandidates(list);
     } catch (err) {
       console.error('Failed to load candidates', err);
+      toast.error('Failed to load candidates. Please refresh.');
     } finally {
       setLoading(false);
     }

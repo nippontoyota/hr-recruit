@@ -20,24 +20,16 @@ export function FinalApprovalWidget({ candidate }: FinalApprovalWidgetProps) {
   }, [candidate.id]);
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-0 overflow-hidden min-h-[500px]">
-        <div className="min-h-[80vh]">
-          <div className="w-full">
-            <div className="bg-white">
-              {fetching ? (
-                <div className="flex justify-center p-12"><LoadingSpinner /></div>
-              ) : (
-                <CandidateSummaryDocument 
-                  candidate={candidate} 
-                  evaluations={evaluations} 
-                  hidePrintButton={false} 
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-6 w-full">
+      {fetching ? (
+        <div className="flex justify-center p-12"><LoadingSpinner /></div>
+      ) : (
+        <CandidateSummaryDocument 
+          candidate={candidate} 
+          evaluations={evaluations} 
+          hidePrintButton={false} 
+        />
+      )}
     </div>
   );
 }

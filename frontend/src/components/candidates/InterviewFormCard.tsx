@@ -3,10 +3,10 @@ import { motion } from 'framer-motion';
 import { Check, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '../ui';
-import { submitScorecardDirect, deleteEvaluation, generateEvaluationToken, sendEvaluationWhatsAppInvite } from '../../api/evaluations';
+import { submitScorecardDirect, deleteEvaluation, } from '../../api/evaluations';
 import type { Candidate, Evaluation, EvaluationVerdict } from '../../types';
 import { cn, extractError } from '../../lib/utils';
-import { useAuth } from '../../auth/AuthContext';
+
 
 const PREDEFINED_REMARKS = [
   "Excellent candidate, highly recommended.",
@@ -48,10 +48,9 @@ const StarInput = ({ label, val, setVal, maxStars = 5 }: { label: string; val: n
   </div>
 );
 
-export function InterviewFormCard({ ev, index, candidate, onUpdate }: InterviewFormCardProps) {
-  const { user } = useAuth();
+export function InterviewFormCard({ ev, index, onUpdate }: InterviewFormCardProps) {
   const [submitting, setSubmitting] = useState(false);
-  const [sendingInvite, setSendingInvite] = useState(false);
+  
   const [deleting, setDeleting] = useState(false);
   
   const isCompleted = ev.status === 'EVALUATED';
@@ -75,44 +74,7 @@ export function InterviewFormCard({ ev, index, candidate, onUpdate }: InterviewF
     setIsEditing(true);
   };
 
-  const handleInstantWhatsAppShare = async () => {
-    setSendingInvite(true);
-    const mockId = toast.loading('Sending WhatsApp invite to candidate...');
-    try {
-      const tokenData = await generateEvaluationToken(ev.id);
-      const finalLink = `${window.location.origin}/#/eval/${tokenData.token}`;
-
-      let dateStr = 'TBD';
-      let timeStr = 'TBD';
-      const targetTime = new Date().toISOString();
-      try {
-        const parsedDate = new Date(targetTime);
-        if (!isNaN(parsedDate.getTime())) {
-          dateStr = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(parsedDate);
-          timeStr = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(parsedDate).toLowerCase();
-        }
-      } catch (e) { console.error(e); }
-
-      await sendEvaluationWhatsAppInvite(ev.id, {
-        to_phone: candidate.phone,
-        recipient_type: 'CANDIDATE',
-        variables: {
-          candidateName: candidate.full_name,
-          position: candidate.position_applied_for || 'Unknown Position',
-          date: dateStr,
-          time: timeStr,
-          mode: 'Online',
-          locationOrLink: finalLink,
-          recruiterName: user?.full_name || 'HR Team',
-        }
-      });
-      toast.success('WhatsApp invitation sent successfully!', { id: mockId });
-    } catch (err) {
-      toast.error(extractError(err, 'Failed to send WhatsApp invitation'), { id: mockId });
-    } finally {
-      setSendingInvite(false);
-    }
-  };
+  
 
   const handleDelete = async () => {
     setDeleting(true);

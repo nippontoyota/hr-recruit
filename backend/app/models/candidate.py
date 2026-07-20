@@ -1,21 +1,32 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, func, FetchedValue
+from sqlalchemy import Index, Boolean, DateTime, Enum, ForeignKey, String, func, FetchedValue
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import List
+from typing import TYPE_CHECKING, List
 
 from app.core.config import settings
 from app.core.database import Base
 from app.models.enums import PipelineStage, FormStatus
 from app.models.evaluation import Evaluation
 
+if TYPE_CHECKING:
+    from app.models.candidate_profile import CandidateProfile
+    from app.models.communication import Communication
+    from app.models.followup import FollowUp
+
+
 SCHEMA = settings.db_schema
 
 
 class Candidate(Base):
     __tablename__ = "candidates"
+
+    __table_args__ = (
+        Index("ix_candidate_stage_created", "current_stage", "created_at"),
+        {"schema": SCHEMA} if SCHEMA else None,
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     candidate_id: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True, server_default=FetchedValue())
@@ -32,19 +43,19 @@ class Candidate(Base):
         index=True,
     )
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    branch_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    branch_location: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     is_duplicate_flagged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     duplicate_of_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.candidates.id"), nullable=True
     )
     assigned_hr_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id"), nullable=True, index=True
     )
     assigned_manager_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id"), nullable=True, index=True
     )
     assigned_gm_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id"), nullable=True, index=True
     )
     is_head_office_hire: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False, nullable=False)
     interviewer_assignments: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

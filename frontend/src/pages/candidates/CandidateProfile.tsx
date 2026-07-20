@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
-import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History, Printer, Edit2 } from 'lucide-react';
+import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History, Edit2 } from 'lucide-react';
 import { getCandidateById, updateCandidateStage, unholdCandidate } from '../../api/candidates';
 import { getCandidateEvaluations } from '../../api/evaluations';
 import type { Candidate, PipelineStage } from '../../types';
@@ -63,7 +63,7 @@ export default function CandidateProfile() {
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [candidate?.id, candidate?.current_stage, initialLoading]);
+  }, [candidate, initialLoading]);
 
 
   const fetchCandidate = async (showLoading = true) => {
@@ -338,36 +338,40 @@ export default function CandidateProfile() {
                   )}
                 </div>
 
-                {candidate.position_applied_for && (
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Applying for: <strong className="text-foreground">{candidate.position_applied_for}</strong>
-                  </p>
-                )}
+                <div className="flex flex-col gap-2 mt-2">
+                  {candidate.position_applied_for && (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground font-medium">Applying for: </span>
+                      <strong className="text-foreground">{candidate.position_applied_for}</strong>
+                    </div>
+                  )}
 
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Phone className="w-4 h-4 shrink-0" />
-                    <span className="text-foreground font-medium">+91 {candidate.phone}</span>
-                  </span>
-                  {candidate.email && (
-                    <span className="flex items-center gap-1.5">
-                      <Mail className="w-4 h-4 shrink-0" />
-                      <span className="text-foreground font-medium">{candidate.email}</span>
+                  <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-2">
+                      <Phone className="w-4 h-4 shrink-0" />
+                      <span className="text-foreground font-medium">+91 {candidate.phone}</span>
                     </span>
-                  )}
-                  {candidate.branch_location && (
-                    <span className="flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4 shrink-0" />
-                      <span className="text-foreground font-medium">{candidate.branch_location}</span>
-                    </span>
-                  )}
-                  {candidate.source && (
-                    <span className="flex items-center gap-1.5">
-                      <span className="font-medium text-foreground">
-                        Source: {candidate.source === 'INDEED' ? 'Indeed' : candidate.source === 'NAUKRI' ? 'Naukri' : candidate.source.replace(/_/g, ' ')}
+                    {candidate.email && (
+                      <span className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 shrink-0" />
+                        <span className="text-foreground font-medium">{candidate.email}</span>
                       </span>
-                    </span>
-                  )}
+                    )}
+                    {candidate.branch_location && (
+                      <span className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 shrink-0" />
+                        <span className="text-foreground font-medium">{candidate.branch_location}</span>
+                      </span>
+                    )}
+                    {candidate.source && (
+                      <span className="flex items-center gap-2">
+                        <span className="text-muted-foreground font-medium">Source: </span>
+                        <span className="text-foreground font-medium">
+                          {candidate.source === 'INDEED' ? 'Indeed' : candidate.source === 'NAUKRI' ? 'Naukri' : candidate.source.replace(/_/g, ' ')}
+                        </span>
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -380,16 +384,6 @@ export default function CandidateProfile() {
                 >
                   <History className="w-4 h-4 text-muted-foreground" /> Activity Log
                 </Button>
-                {actualStage === 'FINAL_APPROVAL' && (
-                  <a
-                    href={`/candidates/${candidate.id}/print`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
-                  >
-                    <Printer className="w-4 h-4 text-muted-foreground" /> Print Form
-                  </a>
-                )}
                 <a
                   href={`https://wa.me/91${candidate.phone}`}
                   target="_blank"
@@ -418,23 +412,12 @@ export default function CandidateProfile() {
                     variant="danger"
                     size="sm"
                     onClick={() => setShowRejectModal(true)}
-                    className="h-9 px-4 gap-2 bg-danger/10 text-danger hover:bg-danger hover:text-white border-transparent transition-colors shadow-sm"
+                    className="h-9 px-4 text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm font-medium"
                   >
-                    <XCircle className="w-4 h-4" /> Reject
+                    Reject Candidate
                   </Button>
                 )}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setEditStageSelection(actualStage);
-                    setEditStageRemarks('');
-                    setShowEditStageModal(true);
-                  }}
-                  className="h-9 px-4 gap-2 shadow-sm"
-                >
-                  <Edit2 className="w-4 h-4" /> Edit Stage
-                </Button>
+
               </div>
             </div>
 

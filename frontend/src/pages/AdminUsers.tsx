@@ -32,7 +32,7 @@ export default function AdminUsers() {
       setLoading(true);
       const data = await getUsers();
       setUsers(data);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load users");
     } finally {
       setLoading(false);

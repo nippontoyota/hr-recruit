@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, FileText, CheckCircle, Star, Loader2 } from 'lucide-react';
+import { Link, FileText, CheckCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, LoadingSpinner, Modal, EmptyState } from '../ui';
 import { InterviewFormCard } from './InterviewFormCard';

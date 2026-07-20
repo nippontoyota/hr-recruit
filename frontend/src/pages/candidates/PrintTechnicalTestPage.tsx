@@ -32,7 +32,7 @@ export default function PrintTechnicalTestPage() {
           const qs = await getDepartmentQuestions(dept);
           setQuestions(qs);
         }
-      } catch (err) {
+      } catch {
         setError('Failed to load candidate or test data.');
       } finally {
         setLoading(false);
@@ -49,7 +49,7 @@ export default function PrintTechnicalTestPage() {
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [loading, candidate, questions]);
+  }, [loading, candidate, questions, handlePrint]);
 
   if (loading) {
     return (

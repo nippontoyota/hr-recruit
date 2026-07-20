@@ -1,3 +1,4 @@
+from typing import TYPE_CHECKING
 import uuid
 from datetime import datetime
 
@@ -7,6 +8,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.config import settings
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.candidate import Candidate
+
 
 SCHEMA = settings.db_schema
 

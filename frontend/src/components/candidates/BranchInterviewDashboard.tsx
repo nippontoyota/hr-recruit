@@ -203,11 +203,7 @@ export function BranchInterviewDashboard({ candidate, onUpdate }: BranchIntervie
   const [addingInterviewerName, setAddingInterviewerName] = useState<string>('');
   const [addingInterviewerDesignation, setAddingInterviewerDesignation] = useState<string>('');
 
-  useEffect(() => {
-    fetchData();
-  }, [candidate.id]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const evals = await getCandidateEvaluations(candidate.id);
@@ -218,7 +214,11 @@ export function BranchInterviewDashboard({ candidate, onUpdate }: BranchIntervie
     } finally {
       setLoading(false);
     }
-  };
+  }, [candidate.id]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleAddInterview = async () => {
     if (!addingInterviewType) return;

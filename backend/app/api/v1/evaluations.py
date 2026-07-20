@@ -117,7 +117,7 @@ def get_candidate_evaluations(
     evals = db.scalars(
         select(Evaluation)
         .where(Evaluation.candidate_id == candidate_id)
-        .order_by(Evaluation.created_at.asc())
+        .order_by(Evaluation.created_at.asc(), Evaluation.type.asc())
     ).all()
     return evals
 
@@ -331,7 +331,7 @@ def submit_scorecard(
             user=current_user,
             remarks=f"Placed on hold during {evaluation.type.value.replace('_', ' ').title()} evaluation."
         )
-    elif body.verdict == EvaluationVerdict.SELECTED and candidate.stage == PipelineStage.BRANCH_INTERVIEW:
+    elif body.verdict == EvaluationVerdict.SELECTED and candidate.current_stage == PipelineStage.BRANCH_INTERVIEW:
         # Check if both HR and Dept are evaluated
         evals = db.scalars(
             select(Evaluation).where(
