@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
-import { useReactToPrint } from 'react-to-print';
+import { useState, useEffect } from 'react';
 import { Button, Input, Modal } from '../ui';
 import { CheckCircle2, Pencil, Printer, Save, X, RefreshCw, Link, Send } from 'lucide-react';
 import type { Candidate } from '../../types';
@@ -31,12 +30,113 @@ function formatFieldValue(value: unknown): string {
   return String(value);
 }
 
+// Thematic categorizations for candidate responses
+const PERSONAL_FIELDS = ['age', 'gender', 'height', 'weight', 'bloodGroup', 'maritalStatus', 'religionCaste', 'dateOfBirth'];
+const ADDRESS_FIELDS = ['permHouseName', 'permPostOffice', 'permLandmark', 'permDistrict', 'permPinCode', 'presHouseName', 'presPostOffice', 'presLandmark', 'presDistrict', 'presPinCode', 'sameAsPermanent'];
+const EDUCATION_FIELDS = [
+  'class10School', 'class10Board', 'class10Percentage', 'class10PassingYear', 'class10Mode',
+  'class12School', 'class12Stream', 'class12Percentage', 'class12PassingYear', 'class12Mode',
+  'gradCourse', 'gradCollege', 'gradPercentage', 'gradPassingYear', 'gradMode',
+  'postGradCourse', 'postGradCollege', 'postGradPercentage', 'postGradPassingYear', 'postGradMode'
+];
+const EMPLOYMENT_FIELDS = [
+  'prevCompanyName', 'prevPosition', 'totalExperience', 'expectedSalary', 'currentSalary', 'noticePeriod',
+  'prev1From', 'prev1To', 'prev1Salary', 'prev1Reason', 'prev1Reporting',
+  'prev2Name', 'prev2From', 'prev2To', 'prev2Salary', 'prev2Reason', 'prev2Position', 'prev2Reporting',
+  'prev3Name', 'prev3From', 'prev3To', 'prev3Salary', 'prev3Reason', 'prev3Position', 'prev3Reporting',
+  'prev4Name', 'prev4From', 'prev4To', 'prev4Salary', 'prev4Reason', 'prev4Position', 'prev4Reporting',
+  'previousExperience'
+];
+const IDENTITY_FIELDS = ['aadhaarNumber', 'panNumber', 'drivingLicenseNumber', 'passportNumber', 'languagesRead', 'languagesWrite', 'languagesSpeak', 'languagesOther', 'hobbies'];
+const FAMILY_FIELDS = [
+  'fatherName', 'fatherAge', 'fatherPhone', 'fatherCompany', 'fatherOccupation',
+  'motherName', 'motherAge', 'motherPhone', 'motherCompany', 'motherOccupation',
+  'spouseName', 'spouseAge', 'spousePhone', 'spouseCompany', 'spouseOccupation',
+  'sibling1Name', 'sibling1Age', 'sibling1Phone', 'sibling1Company', 'sibling1Relation', 'sibling1Occupation',
+  'sibling2Name', 'sibling2Age', 'sibling2Phone', 'sibling2Company', 'sibling2Relation', 'sibling2Occupation',
+  'sibling3Name', 'sibling3Age', 'sibling3Phone', 'sibling3Company', 'sibling3Relation', 'sibling3Occupation',
+  'child1Name', 'child1Age', 'child1Phone', 'child1Company', 'child1Relation', 'child1Occupation',
+  'child2Name', 'child2Age', 'child2Phone', 'child2Company', 'child2Relation', 'child2Occupation',
+  'child3Name', 'child3Age', 'child3Phone', 'child3Company', 'child3Relation', 'child3Occupation'
+];
+const REFERENCES_FIELDS = ['refName', 'refRole', 'refContactNumber', 'refPanchayat', 'hasReference', 'referredBy', 'sourceOfOpening', 'preferredRegion', 'expectedJoiningDate'];
+const MEDICAL_FIELDS = ['medicalRemarks', 'physicalDisability', 'nervousDisorder', 'criminalConviction', 'prevTerminated', 'compWord', 'compExcel', 'compPowerPoint', 'compTally', 'compOther', 'softwareCerts', 'drive2Wheeler', 'drive3Wheeler', 'drive4Wheeler', 'driveHeavy', 'emergency1Name', 'emergency1Contact', 'emergency1Address', 'emergency1Relation', 'emergency2Name', 'emergency2Contact', 'emergency2Address', 'emergency2Relation'];
+
+const ALL_CATEGORIZED_KEYS = new Set([
+  ...PERSONAL_FIELDS,
+  ...ADDRESS_FIELDS,
+  ...EDUCATION_FIELDS,
+  ...EMPLOYMENT_FIELDS,
+  ...IDENTITY_FIELDS,
+  ...FAMILY_FIELDS,
+  ...REFERENCES_FIELDS,
+  ...MEDICAL_FIELDS,
+]);
+
 export function PostFormStatus({ candidate, onUpdate }: PostFormStatusProps) {
-  const componentRef = useRef<HTMLDivElement>(null);
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: `PostForm_${candidate.full_name}`,
-  });
+  const handlePrint = async () => {
+    try {
+      const sections: { heading: string; items: Record<string, string> }[] = [];
+      const addSection = (title: string, keys: string[]) => {
+        const items: Record<string, string> = {};
+        for (const key of keys) {
+          const val = localRawData[key];
+          if (!HIDDEN_RAW_KEYS.has(key) && val !== null && val !== undefined && val !== '') {
+            items[formatFieldKey(key)] = formatFieldValue(val);
+          }
+        }
+        if (Object.keys(items).length > 0) {
+          sections.push({ heading: title, items });
+        }
+      };
+
+      addSection("Personal Details", PERSONAL_FIELDS);
+      addSection("Address & Contact Details", ADDRESS_FIELDS);
+      addSection("Education Details", EDUCATION_FIELDS);
+      addSection("Employment History", EMPLOYMENT_FIELDS);
+      addSection("Family Details", FAMILY_FIELDS);
+      addSection("Identity Documents & Skills", IDENTITY_FIELDS);
+      addSection("References & General Questions", REFERENCES_FIELDS);
+      addSection("Medical & Declarations", MEDICAL_FIELDS);
+      
+      const otherKeys = Object.keys(localRawData).filter(
+        (key) => !ALL_CATEGORIZED_KEYS.has(key) && !HIDDEN_RAW_KEYS.has(key)
+      );
+      if (otherKeys.length > 0) addSection("Other Details", otherKeys);
+
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/v1/pdf/dynamic-form', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: "Candidate Information Form",
+          subtitle: `Candidate Name: ${candidate.full_name}`,
+          sections
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed to generate PDF");
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      
+      const newWindow = window.open(url, '_blank');
+      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Candidate_Information_Form_${candidate.full_name?.replace(/\s+/g, '_') || 'Applicant'}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (error) {
+      toast.error("Error generating PDF");
+    }
+  };
 
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -101,7 +201,7 @@ export function PostFormStatus({ candidate, onUpdate }: PostFormStatusProps) {
 
   if (status === 'SUBMITTED') {
     return (
-      <div ref={componentRef} className="py-8 w-full max-w-4xl mx-auto print-container">
+      <div className="py-8 w-full max-w-4xl mx-auto print-container">
         <div className="flex flex-col items-center mb-8 no-print">
           <CheckCircle2 className="w-10 h-10 text-success mb-3" />
           <h3 className="text-2xl font-bold text-foreground">Form Submitted</h3>

@@ -1,13 +1,15 @@
 import type { PipelineStage } from '../types';
 import type { BadgeProps } from '../components/ui/Badge';
 
-export function stageLabel(stage: PipelineStage | string): string {
+export function stageLabel(stage?: PipelineStage | string | null): string {
+  if (!stage) return 'Unknown';
   return stage
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-export function stageColor(stage: PipelineStage): string {
+export function stageColor(stage?: PipelineStage | string | null): string {
+  if (!stage) return 'bg-background text-text-secondary border border-border';
   switch (stage) {
     case 'HIRED':
       return 'bg-emerald-100 text-emerald-700 border-emerald-300 border-dashed';
@@ -28,7 +30,8 @@ export function stageColor(stage: PipelineStage): string {
   }
 }
 
-export function getStageBadgeVariant(stage: PipelineStage | string): BadgeProps['variant'] {
+export function getStageBadgeVariant(stage?: PipelineStage | string | null): BadgeProps['variant'] {
+  if (!stage) return 'secondary';
   if (stage === 'REJECTED') return 'destructive';
   if (stage === 'HIRED') return 'success';
   if (stage === 'ON_HOLD') return 'warning';

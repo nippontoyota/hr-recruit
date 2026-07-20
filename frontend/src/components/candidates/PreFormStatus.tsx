@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
-import { useReactToPrint } from 'react-to-print';
+import { useState, useEffect } from 'react';
 import { Button, Input, Modal } from '../ui';
 import { CheckCircle2, Pencil, Printer, Save, X, RefreshCw, Link } from 'lucide-react';
 import type { Candidate } from '../../types';
@@ -74,11 +73,69 @@ function formatFieldValue(value: unknown): string {
 }
 
 export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
-  const componentRef = useRef<HTMLDivElement>(null);
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: `PreForm_${candidate.full_name}`,
-  });
+  const handlePrint = async () => {
+    try {
+      const sections: { heading: string; items: Record<string, string> }[] = [];
+      const addSection = (title: string, keys: string[]) => {
+        const items: Record<string, string> = {};
+        for (const key of keys) {
+          const val = localRawData[key];
+          if (!HIDDEN_RAW_KEYS.has(key) && val !== null && val !== undefined && val !== '') {
+            items[formatFieldKey(key)] = formatFieldValue(val);
+          }
+        }
+        if (Object.keys(items).length > 0) {
+          sections.push({ heading: title, items });
+        }
+      };
+
+      addSection("Personal Details", PERSONAL_FIELDS);
+      addSection("Address & Contact Details", ADDRESS_FIELDS);
+      addSection("Education Details", EDUCATION_FIELDS);
+      addSection("Employment History", EMPLOYMENT_FIELDS);
+      addSection("Family Details", FAMILY_FIELDS);
+      addSection("Identity Documents & Skills", IDENTITY_FIELDS);
+      addSection("References & General Questions", REFERENCES_FIELDS);
+      addSection("Medical & Declarations", MEDICAL_FIELDS);
+      
+      const otherKeys = Object.keys(localRawData).filter(
+        (key) => !ALL_CATEGORIZED_KEYS.has(key) && !HIDDEN_RAW_KEYS.has(key)
+      );
+      if (otherKeys.length > 0) addSection("Other Details", otherKeys);
+
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/v1/pdf/dynamic-form', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: "Candidate Application Form",
+          subtitle: `Candidate Name: ${candidate.full_name}`,
+          sections
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed to generate PDF");
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      
+      const newWindow = window.open(url, '_blank');
+      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Candidate_Form_${candidate.full_name?.replace(/\s+/g, '_') || 'Applicant'}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (error) {
+      toast.error("Error generating PDF");
+    }
+  };
 
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -192,7 +249,7 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
     );
 
     return (
-      <div ref={componentRef} className="py-8 w-full max-w-4xl mx-auto print-container">
+      <div className="py-8 w-full max-w-4xl mx-auto print-container">
         <div className="flex flex-col items-center mb-8 no-print">
           <CheckCircle2 className="w-10 h-10 text-success mb-3" />
           <h3 className="text-2xl font-bold text-foreground">Form Submitted</h3>

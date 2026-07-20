@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, Link, UserCheck, FileText, CheckCircle, Star, Send, Video, Clock, CheckCheck, ArrowLeft, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, LoadingSpinner, Modal, Input, EmptyState } from '../ui';
+import { Button, LoadingSpinner, Modal, Input } from '../ui';
 import { getCandidateEvaluations, scheduleEvaluation, generateEvaluationToken, submitScorecardDirect, sendEvaluationWhatsAppInvite } from '../../api/evaluations';
 import type { Candidate, Evaluation, EvaluationVerdict, User } from '../../types';
 import { cn, extractError } from '../../lib/utils';
@@ -20,6 +20,39 @@ interface EvaluationStageWidgetProps {
 
 // Simple global cache to allow stale-while-revalidate (instant loading)
 const evaluationsCache: Record<string, Evaluation[]> = {};
+
+const StarInput = ({ label, val, setVal }: { label: string; val: number; setVal: (v: number) => void }) => {
+    const [hoverValue, setHoverValue] = useState<number | null>(null);
+    return (
+      <div className="flex flex-col p-3.5 bg-surface/40 backdrop-blur-md border border-border/60 rounded-xl shadow-sm transition-all hover:bg-surface/80 hover:shadow-md hover:-translate-y-0.5">
+        <div className="flex justify-between items-center mb-3">
+          <span className="text-[11px] font-bold text-foreground uppercase tracking-wider">{label}</span>
+          <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">{val}/5</span>
+        </div>
+        <div className="flex items-center justify-between" onMouseLeave={() => setHoverValue(null)}>
+          {[1, 2, 3, 4, 5].map((star) => {
+            const isFilled = hoverValue !== null ? star <= hoverValue : star <= val;
+            return (
+              <button
+                type="button"
+                key={star}
+                onClick={() => setVal(star)}
+                onMouseEnter={() => setHoverValue(star)}
+                className="p-1.5 transition-transform hover:scale-125 focus:outline-none"
+              >
+                <Star
+                  className={cn(
+                    "w-6 h-6 transition-all duration-300 ease-out",
+                    isFilled ? "fill-amber-400 text-amber-500 drop-shadow-md scale-110" : "fill-muted text-muted-foreground/30"
+                  )}
+                />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
 export function EvaluationStageWidget({
   candidate,
@@ -345,34 +378,6 @@ export function EvaluationStageWidget({
       setSubmitting(false);
     }
   };
-
-
-  const StarInput = ({ label, val, setVal }: { label: string; val: number; setVal: (v: number) => void }) => (
-    <div className="flex flex-col p-3 bg-background border border-border rounded-lg shadow-sm">
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-[10px] font-bold text-foreground uppercase tracking-wider">{label}</span>
-        <span className="text-xs font-semibold text-muted-foreground">{val}/5</span>
-      </div>
-      <div className="flex items-center justify-between">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button
-            type="button"
-            key={star}
-            onClick={() => setVal(star)}
-            className="p-1 transition-transform hover:scale-110 focus:outline-none"
-          >
-            <Star
-              className={cn(
-                "w-5 h-5 transition-all duration-200",
-                star <= val ? "fill-primary text-primary drop-shadow-sm" : "fill-muted text-muted-foreground/30"
-              )}
-            />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
   if (loading) {
     return (
       <div className="w-full flex justify-center py-12">
@@ -413,12 +418,16 @@ export function EvaluationStageWidget({
         <div className="grid gap-4 grid-cols-1">
           <AnimatePresence mode="wait">
             {evaluations.filter((ev) => evalTypes.length === 1 || ev.type === activeType).length === 0 ? (
-              <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <EmptyState
-                  icon={<FileText className="w-10 h-10 text-muted-foreground/30" />}
-                  title="No evaluation found"
-                  description="There are no active evaluations matching this type for the candidate."
-                />
+              <motion.div key="empty" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.3 }}>
+                <div className="flex flex-col items-center justify-center py-16 px-4 bg-surface/30 backdrop-blur-md border border-border/50 rounded-2xl shadow-sm">
+                  <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mb-4">
+                    <FileText className="w-8 h-8 text-muted-foreground/50" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground mb-1">No evaluation found</h3>
+                  <p className="text-sm text-muted-foreground text-center max-w-sm">
+                    There are no active evaluations matching this type for the candidate.
+                  </p>
+                </div>
               </motion.div>
             ) : evaluations
               .filter((ev) => evalTypes.length === 1 || ev.type === activeType)
@@ -438,9 +447,9 @@ export function EvaluationStageWidget({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="flex flex-col justify-between py-2"
+                    className="flex flex-col justify-between p-6 bg-surface/50 backdrop-blur-md border border-border/60 rounded-2xl shadow-sm mb-6 transition-all hover:shadow-md"
                   >
-                <div>
+                <div className="w-full">
                   {ev.type !== 'TECHNICAL_TEST' && (
                   <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 gap-3">
                     <div className="flex items-center gap-3">

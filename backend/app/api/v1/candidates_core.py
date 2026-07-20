@@ -362,8 +362,8 @@ def list_candidates(
     # Row-Level Security / Visibility Logic
     if user.role in (UserRole.COMPANY_HR_HEAD, UserRole.SUPER_ADMIN, UserRole.ADMIN):
         pass # sees all
-    elif user.role == UserRole.BRANCH_HR:
-        # Branch HR sees candidates assigned to them, or candidates in their branch
+    elif user.role in (UserRole.BRANCH_HR, UserRole.LOCAL_HR):
+        # Branch HR and Local HR see candidates assigned to them, or candidates in their branch
         q = q.where(
             or_(
                 Candidate.assigned_hr_user_id == user.id,

@@ -59,8 +59,9 @@ export default function CandidatesList() {
     try {
       if (showLoading && candidatesCache.length === 0) setLoading(true);
       const list = await getCandidates();
-      candidatesCache = list;
-      setCandidates(list);
+      const validList = Array.isArray(list) ? list : [];
+      candidatesCache = validList;
+      setCandidates(validList);
     } catch (err) {
       console.error('Failed to load candidates', err);
     } finally {
@@ -84,7 +85,8 @@ export default function CandidatesList() {
   // Clear selection when filters change
   useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter, statusFilter]);
 
-  const filteredCandidates = candidates.filter((c) => {
+  const safeCandidates = Array.isArray(candidates) ? candidates : [];
+  const filteredCandidates = safeCandidates.filter((c) => {
     if (activeTab === 'UPDATES') {
       if (c.current_stage === 'CANDIDATE_FORM' && c.pre_form_status === 'SUBMITTED') return true;
       if (c.current_stage === 'BRANCH_INTERVIEW' && !c.has_resume) return true;

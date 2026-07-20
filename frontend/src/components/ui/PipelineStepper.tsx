@@ -127,9 +127,9 @@ export function PipelineStepper({
                 className={cn(
                   "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 relative bg-background border-2",
                   isCurrentViewed ? "ring-2 ring-primary ring-offset-2 scale-105" : "",
-                  isCompleted ? "border-success bg-success/5 text-success shadow-sm" :
-                  isHeld ? "border-warning bg-warning/5 text-warning shadow-sm ring-2 ring-warning/30" :
-                  isSkipped ? "border-warning border-dashed bg-warning/5 text-warning shadow-sm" :
+                  isCompleted ? "border-success text-success shadow-sm" :
+                  isHeld ? "border-warning text-warning shadow-sm ring-2 ring-warning/30" :
+                  isSkipped ? "border-warning border-dashed text-warning shadow-sm" :
                   isCurrentActual ? "border-success bg-success text-white shadow-md" :
                   "border-muted text-muted-foreground",
                   isClickable && !isCurrentViewed ? "cursor-pointer hover:border-success hover:text-success" : "cursor-not-allowed",

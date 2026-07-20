@@ -59,11 +59,15 @@ def transition(
             s = standard_stages[i]
             
             if s == PipelineStage.BRANCH_INTERVIEW:
-                # We do not initialize BranchInterview here because it's its own independent table
-                # (unless they were using Evaluation table for it, but the new architecture uses BranchInterview table)
-                # However, this code was historically creating Evaluation records for BRANCH_HR and DEPT_HEAD.
-                # Since we replaced those with BranchInterview table, we can skip creating Evaluation records.
-                pass
+                existing = db.scalar(sa.select(Evaluation).where(
+                    sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == EvaluationType.BRANCH_HR)
+                ))
+                if not existing:
+                    db.add(Evaluation(
+                        candidate_id=candidate.id,
+                        type=EvaluationType.BRANCH_HR,
+                        status=InterviewStatus.PENDING_SCHEDULE
+                    ))
 
             elif s == PipelineStage.TEST:
                 for etype in [EvaluationType.TECHNICAL_TEST]:

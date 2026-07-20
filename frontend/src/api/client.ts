@@ -44,10 +44,15 @@ export async function request(method: string, endpoint: string, body?: any, conf
   }
 
   let data;
-  try {
-    data = await response.json();
-  } catch {
-    data = await response.text();
+  const text = await response.text();
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  } else {
+    data = null;
   }
 
   if (!response.ok) {

@@ -83,7 +83,7 @@ export default function CandidateProfile() {
       if (res) {
         profileCache[id] = res;
         setCandidate(res);
-        setEvaluations(evals);
+        setEvaluations(Array.isArray(evals) ? evals : []);
       } else {
         setError('Candidate not found.');
       }
@@ -281,12 +281,12 @@ export default function CandidateProfile() {
   return (
     <div className="flex items-start w-full min-h-screen">
 
-      {/* ── LEFT: Main Workspace ── */}
-      <div className="flex-1 flex flex-col pl-4 sm:pl-6 lg:pl-8 pt-4 lg:pt-6 pr-0 lg:pr-8 pb-4 min-w-0 transition-all duration-300 ease-in-out">
+      {/* 🚀 LEFT: Main Workspace 🚀 */}
+      <div className="flex-1 flex flex-col pl-4 sm:pl-6 lg:pl-8 pt-6 pr-0 lg:pr-8 pb-8 min-w-0 transition-all duration-300 ease-in-out relative">
 
-        {/* ── CANDIDATE HEADER ── */}
-        <div className="pb-6 mb-6 border-b border-border">
-          <div className="w-full">
+        {/* 🚀 CANDIDATE HEADER 🚀 */}
+        <div className="glass-card p-6 mb-6 rounded-2xl relative overflow-hidden">
+          <div className="w-full relative z-10">
             <div className="flex items-center gap-2 mb-4">
               <button
                 type="button"
