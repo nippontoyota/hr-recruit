@@ -66,15 +66,6 @@ class Candidate(Base):
     pre_form_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     pre_form_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Post-Form Tracking
-    post_form_token: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
-    post_form_status: Mapped[FormStatus] = mapped_column(
-        Enum(FormStatus, name="form_status", schema=SCHEMA, create_type=False),
-        nullable=False,
-        default=FormStatus.NOT_SENT
-    )
-    post_form_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    post_form_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

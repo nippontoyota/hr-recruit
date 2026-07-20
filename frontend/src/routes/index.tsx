@@ -15,7 +15,7 @@ const CandidatePrintView = lazy(() => import('../pages/candidates/CandidatePrint
 const NotFound = lazy(() => import('../pages/NotFound'));
 const ApplyForm = lazy(() => import('../pages/candidates/ApplyForm'));
 const PreFormPage = lazy(() => import('../pages/candidates/PreFormPage'));
-const PostFormPage = lazy(() => import('../pages/candidates/PostFormPage'));
+
 const PublicInterviewerPage = lazy(() => import('../pages/candidates/PublicInterviewerPage'));
 const PublicTestPage = lazy(() => import('../pages/candidates/PublicTestPage'));
 const PrintTechnicalTestPage = lazy(() => import('../pages/candidates/PrintTechnicalTestPage'));
@@ -59,15 +59,7 @@ export const router = createHashRouter([
       </PageSuspense>
     ),
   },
-  {
-    path: '/post-form/:token',
-    errorElement: <RouteErrorPage />,
-    element: (
-      <PageSuspense>
-        <PostFormPage />
-      </PageSuspense>
-    ),
-  },
+
   {
     path: '/eval/:token',
     errorElement: <RouteErrorPage />,

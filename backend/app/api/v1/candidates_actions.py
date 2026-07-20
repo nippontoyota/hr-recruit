@@ -172,19 +172,6 @@ def send_pre_form(
     db.refresh(row)
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
 
-@router.post("/{id}/post-form/send", response_model=CandidateOut)
-def send_post_form(
-    id: UUID,
-    db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.LOCAL_HR, UserRole.HQ_HR)),
-):
-    from app.api.v1.candidates_core import _issue_post_form
-    row = get_candidate_for_user(db, id, user)
-    _issue_post_form(db, row, user)
-    db.commit()
-    db.refresh(row)
-    return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
-
 @router.post("/{id}/whatsapp-invite")
 def send_whatsapp_invite(
     id: UUID,

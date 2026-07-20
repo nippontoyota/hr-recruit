@@ -56,9 +56,6 @@ export interface Candidate {
   position_applied_for?: string;
   share_url?: string;
   pre_form_status?: string;
-  post_form_status?: string;
-  post_share_url?: string;
-  post_form_token?: string;
   is_awaiting_full_fill?: boolean;
   pre_form_sent_at?: string;
   pre_form_submitted_at?: string;
@@ -69,8 +66,6 @@ export interface Candidate {
   is_duplicate_flagged: boolean;
   duplicate_of_candidate_id?: string;
   is_rejoining: boolean;
-  post_form_sent_at?: string;
-  post_form_submitted_at?: string;
   applied_at: string;
   has_resume?: boolean;
   created_at: string;

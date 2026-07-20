@@ -2,6 +2,7 @@ import type { PipelineStage } from '../types';
 import type { BadgeProps } from '../components/ui/Badge';
 
 export function stageLabel(stage: PipelineStage | string): string {
+  if (stage === 'CANDIDATE_FORM') return 'CALL LETTER';
   return stage
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());

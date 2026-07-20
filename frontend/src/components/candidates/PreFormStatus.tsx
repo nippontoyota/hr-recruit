@@ -313,7 +313,7 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
           <div className="space-y-3">
             <label className="form-label flex items-center gap-1.5">
               <Link className="w-4 h-4" />
-              Candidate form link
+              CALL LETTER link
             </label>
             <div className="flex items-center gap-2 w-full bg-background border border-border p-1.5 rounded-xl">
               <input

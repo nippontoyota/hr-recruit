@@ -449,10 +449,6 @@ class CandidateOut(BaseModel):
     pre_form_status: FormStatus
     pre_form_sent_at: datetime | None
     pre_form_submitted_at: datetime | None
-    post_form_status: FormStatus | None = None
-    post_form_sent_at: datetime | None = None
-    post_form_submitted_at: datetime | None = None
-    post_share_url: str | None = None
     current_stage: PipelineStage
     branch_location: str | None
     visit_branch: str | None = None
@@ -489,10 +485,6 @@ class CandidateListOut(BaseModel):
     pre_form_status: FormStatus
     pre_form_sent_at: datetime | None
     pre_form_submitted_at: datetime | None
-    post_form_status: FormStatus | None = None
-    post_form_sent_at: datetime | None = None
-    post_form_submitted_at: datetime | None = None
-    post_share_url: str | None = None
     current_stage: PipelineStage
     branch_location: str | None
     visit_branch: str | None = None

@@ -71,17 +71,15 @@ def share_url_for_token(token: str | None) -> str | None:
 def to_candidate_out(row: Candidate, has_resume: bool) -> CandidateOut:
     from app.core.config import settings
     share_url = share_url_for_token(row.pre_form_token)
-    post_share_url = f"{settings.public_app_url}/#/post-form/{row.post_form_token}" if row.post_form_token else None
     return CandidateOut.model_validate(row).model_copy(
-        update={"has_resume": has_resume, "is_rejoining": False, "share_url": share_url, "post_share_url": post_share_url}
+        update={"has_resume": has_resume, "is_rejoining": False, "share_url": share_url}
     )
 
 def to_candidate_list_out(row: Candidate, has_resume: bool) -> CandidateListOut:
     from app.core.config import settings
     share_url = share_url_for_token(row.pre_form_token)
-    post_share_url = f"{settings.public_app_url}/#/post-form/{row.post_form_token}" if row.post_form_token else None
     return CandidateListOut.model_validate(row).model_copy(
-        update={"has_resume": has_resume, "is_rejoining": False, "share_url": share_url, "post_share_url": post_share_url}
+        update={"has_resume": has_resume, "is_rejoining": False, "share_url": share_url}
     )
 
 
@@ -112,26 +110,7 @@ def _issue_pre_form(db: Session, candidate: Candidate, user: User) -> None:
             )
         )
 
-def _issue_post_form(db: Session, candidate: Candidate, user: User) -> None:
-    from app.core.security import generate_secure_token
-    from datetime import datetime, UTC
-    from app.models.enums import FormStatus, ActivityType
-    from app.models.activity_log import ActivityLog
 
-    if not candidate.post_form_token:
-        candidate.post_form_token = generate_secure_token()
-    candidate.post_form_status = FormStatus.SENT
-    candidate.post_form_sent_at = datetime.now(UTC)
-
-    db.add(
-        ActivityLog(
-            candidate_id=candidate.id,
-            activity_type=ActivityType.FORM,
-            title="Post Form Sent",
-            description="Post-interview form link generated automatically.",
-            created_by_user_id=user.id,
-        )
-    )
 
 
 def _store_whatsapp_invite(
