@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Link, UserCheck, FileText, CheckCircle, Star, Send, Video, Clock, CheckCheck, ArrowLeft, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCircle2, XCircle } from 'lucide-react';
+import { Calendar, Link, UserCheck, FileText, CheckCircle, Star, Send, Video, Clock, CheckCheck, ArrowLeft, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, LoadingSpinner, Modal, Input, EmptyState } from '../ui';
 import { getCandidateEvaluations, scheduleEvaluation, generateEvaluationToken, submitScorecardDirect, sendEvaluationWhatsAppInvite } from '../../api/evaluations';
@@ -41,6 +41,7 @@ export function EvaluationStageWidget({
 
   // Cancel Schedule Confirm State
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null);
+  const [generatingLinkId, setGeneratingLinkId] = useState<string | null>(null);
   const [technicalQuestions, setTechnicalQuestions] = useState<any[] | null>(null);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [activeType, setActiveType] = useState(evalTypes[0]);
@@ -222,6 +223,8 @@ export function EvaluationStageWidget({
 
 
   const handleCopyLink = async (evalId: string, isTest = false) => {
+    if (generatingLinkId) return;
+    setGeneratingLinkId(evalId);
     try {
       const tokenData = await generateEvaluationToken(evalId);
       const path = isTest ? 'test' : 'eval';
@@ -232,6 +235,8 @@ export function EvaluationStageWidget({
       setTimeout(() => setCopiedId(null), 2000);
     } catch (err) {
       toast.error('Failed to generate secure link');
+    } finally {
+      setGeneratingLinkId(null);
     }
   };
 
@@ -256,6 +261,9 @@ export function EvaluationStageWidget({
       if (recipientType === 'INTERVIEWER') {
         const tokenData = await generateEvaluationToken(shareEval.id);
         finalLink = `${window.location.origin}/#/eval/${tokenData.token}`;
+      } else if (shareEval.type === 'TECHNICAL_TEST') {
+        const tokenData = await generateEvaluationToken(shareEval.id);
+        finalLink = `${window.location.origin}/#/test/${tokenData.token}`;
       }
 
       let dateStr = 'TBD';
@@ -547,6 +555,7 @@ export function EvaluationStageWidget({
                       handleInstantWhatsAppShare={handleInstantWhatsAppShare} 
                       handleCopyLink={handleCopyLink}
                       copiedId={copiedId}
+                      generatingLinkId={generatingLinkId}
                       remarksId={remarksId} 
                     />
                   ) : !isCompleted ? (
@@ -1087,7 +1096,7 @@ Nippon Toyota`;
 }
 
 
-function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQuestions, handleInstantWhatsAppShare, handleCopyLink, copiedId, remarksId }: any) {
+function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQuestions, handleInstantWhatsAppShare, handleCopyLink, copiedId, generatingLinkId, remarksId }: any) {
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -1099,27 +1108,38 @@ function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQu
       {/* Action Buttons — outside QP so they don't print */}
       {!remarksId && (
         <div className="flex gap-2 justify-end mb-3 print:hidden">
-          <button
-            type="button"
-            onClick={() => handleCopyLink(ev.id, true)}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-foreground bg-background border border-border hover:bg-muted rounded shadow-sm transition-colors whitespace-nowrap"
-          >
-            {copiedId === ev.id ? <CheckCircle className="w-3.5 h-3.5 text-success" /> : <Link className="w-3.5 h-3.5" />}
-            {copiedId === ev.id ? 'Copied!' : 'Copy Test Link'}
-          </button>
+          {ev.status !== 'EVALUATED' && (
+            <>
+              <button
+                type="button"
+                onClick={() => handleCopyLink(ev.id, true)}
+                disabled={generatingLinkId === ev.id}
+                className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-foreground bg-background border border-border hover:bg-muted rounded shadow-sm transition-colors whitespace-nowrap ${generatingLinkId === ev.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {generatingLinkId === ev.id ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : copiedId === ev.id ? (
+                  <CheckCircle className="w-3.5 h-3.5 text-success" />
+                ) : (
+                  <Link className="w-3.5 h-3.5" />
+                )}
+                {generatingLinkId === ev.id ? 'Generating...' : copiedId === ev.id ? 'Copied!' : 'Copy Test Link'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleInstantWhatsAppShare(ev)}
+                className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded shadow-md transition-colors whitespace-nowrap"
+              >
+                <img src="/whatsapp.webp" alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> Send Link
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={() => handlePrint()}
             className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded shadow-md transition-colors whitespace-nowrap"
           >
             <FileText className="w-3.5 h-3.5" /> Print Paper
-          </button>
-          <button
-            type="button"
-            onClick={() => handleInstantWhatsAppShare(ev)}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded shadow-md transition-colors whitespace-nowrap"
-          >
-            <img src="/whatsapp.webp" alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> Send Link
           </button>
         </div>
       )}

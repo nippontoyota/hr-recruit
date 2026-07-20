@@ -55,17 +55,17 @@ router = APIRouter(prefix="/evaluations", tags=["Evaluations"])
 
 def _get_candidate_department(position: str | None) -> str:
     if not position:
-        return "Telecalling Customer Support"
+        return "SALES"
     pos = position.upper()
-    if any(k in pos for k in ["DEVELOPER", "TECH", "SOFTWARE", "IT", "SYSTEM"]):
-        return "Telecalling Customer Support"
     if any(k in pos for k in ["SALES", "MARKETING", "ADVISOR", "CONSULTANT"]):
         return "SALES"
     if any(k in pos for k in ["SERVICE", "MECHANIC", "DIAGNOSTIC", "WORKSHOP", "TECHNICIAN"]):
         return "SERVICE"
+    if any(k in pos for k in ["INSURANCE", "POLICY", "CLAIMS", "UNDERWRITER"]):
+        return "INSURANCE"
     if any(k in pos for k in ["FINANCE", "ACCOUNT", "BILLING", "CASHIER"]):
         return "FINANCE"
-    return "IT"  # default
+    return "SALES"  # default
 
 
 @router.get("/questions", response_model=list[TechnicalQuestionOut])
@@ -246,7 +246,7 @@ def generate_evaluation_token(
         ).all()
         if not q_rows:
             q_rows = db.scalars(
-                select(TechnicalQuestion).where(TechnicalQuestion.department == "Telecalling Customer Support")
+                select(TechnicalQuestion).where(TechnicalQuestion.department == "SALES")
             ).all()
         q_list = list(q_rows)
         random.shuffle(q_list)
@@ -565,7 +565,7 @@ def get_public_test_questions(
         ).all()
         if not q_rows:
             q_rows = db.scalars(
-                select(TechnicalQuestion).where(TechnicalQuestion.department == "Telecalling Customer Support")
+                select(TechnicalQuestion).where(TechnicalQuestion.department == "SALES")
             ).all()
         public_questions = [
             {"id": q.id, "text": q.text, "options": q.options}
@@ -745,7 +745,7 @@ def get_department_questions(
     ).all()
     if not q_rows:
         q_rows = db.scalars(
-            select(TechnicalQuestion).where(TechnicalQuestion.department == "Telecalling Customer Support")
+            select(TechnicalQuestion).where(TechnicalQuestion.department == "SALES")
         ).all()
         
     return [
@@ -758,7 +758,7 @@ def get_department_questions(
     ]
     if not q_rows:
         q_rows = db.scalars(
-            select(TechnicalQuestion).where(TechnicalQuestion.department == "Telecalling Customer Support")
+            select(TechnicalQuestion).where(TechnicalQuestion.department == "SALES")
         ).all()
         
     return [
