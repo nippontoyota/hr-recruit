@@ -20,7 +20,7 @@ import { extractError } from '../../lib/utils';
 
 
 const LINEAR_STAGES: PipelineStage[] = [
-  'CANDIDATE_FORM', 'HR_INTERVIEW', 'DEPARTMENT_INTERVIEW', 'BRANCH_EVALUATION', 'FINAL_APPROVAL', 'HIRED'
+  'CANDIDATE_FORM', 'BRANCH_INTERVIEW', 'TEST', 'FINAL_APPROVAL', 'HIRED'
 ];
 
 
@@ -231,25 +231,18 @@ export default function CandidateProfile() {
       completedStages.push('CANDIDATE_FORM');
     }
 
-    // 3. HR_INTERVIEW
+    // 3. BRANCH_INTERVIEW
     const hrEval = evaluations.find(e => e.type === 'BRANCH_HR');
     if (hrEval && hrEval.verdict) {
-      if (hrEval.verdict === 'ON_HOLD') heldStages.push('HR_INTERVIEW');
-      else completedStages.push('HR_INTERVIEW');
+      if (hrEval.verdict === 'ON_HOLD') heldStages.push('BRANCH_INTERVIEW');
+      else completedStages.push('BRANCH_INTERVIEW');
     }
 
-    // 4. DEPARTMENT_INTERVIEW
-    const deptEval = evaluations.find(e => e.type === 'DEPT_HEAD');
-    if (deptEval && deptEval.verdict) {
-      if (deptEval.verdict === 'ON_HOLD') heldStages.push('DEPARTMENT_INTERVIEW');
-      else completedStages.push('DEPARTMENT_INTERVIEW');
-    }
-
-    // 5. BRANCH_EVALUATION
-    const gmEval = evaluations.find(e => e.type === 'GM_LEVEL');
-    if (gmEval && gmEval.verdict) {
-      if (gmEval.verdict === 'ON_HOLD') heldStages.push('BRANCH_EVALUATION');
-      else completedStages.push('BRANCH_EVALUATION');
+    // 5. TEST
+    const testEval = evaluations.find(e => e.type === 'TECHNICAL_TEST');
+    if (testEval && testEval.verdict) {
+      if (testEval.verdict === 'ON_HOLD') heldStages.push('TEST');
+      else completedStages.push('TEST');
     }
 
     // 6. FINAL_APPROVAL
@@ -510,29 +503,20 @@ export default function CandidateProfile() {
               <WhatsAppPreviewPanel candidate={candidate} className="lg:hidden mt-6 rounded-xl border border-border overflow-hidden" />
             )}
 
-            {stageToView === 'HR_INTERVIEW' && (
+            {stageToView === 'BRANCH_INTERVIEW' && (
               <EvaluationStageWidget
                 candidate={candidate}
                 evalTypes={['BRANCH_HR']}
-                title="HR Interview Evaluation"
+                title="Branch HR Interview Evaluation"
                 onUpdate={handleUpdate}
               />
             )}
 
-            {stageToView === 'DEPARTMENT_INTERVIEW' && (
+            {stageToView === 'TEST' && (
               <EvaluationStageWidget
                 candidate={candidate}
-                evalTypes={['DEPT_HEAD']}
-                title="Department Head Evaluation"
-                onUpdate={handleUpdate}
-              />
-            )}
-
-            {stageToView === 'BRANCH_EVALUATION' && (
-              <EvaluationStageWidget
-                candidate={candidate}
-                evalTypes={['GM_LEVEL', 'TECHNICAL_TEST']}
-                title="Branch General Manager Evaluation"
+                evalTypes={['TECHNICAL_TEST']}
+                title="Technical Test Evaluation"
                 onUpdate={handleUpdate}
               />
             )}
@@ -676,9 +660,8 @@ export default function CandidateProfile() {
                 className="w-full bg-background border border-border rounded-[10px] p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
               >
                 <option value="CANDIDATE_FORM">Candidate Form</option>
-                <option value="HR_INTERVIEW">HR Interview</option>
-                <option value="DEPARTMENT_INTERVIEW">Department Interview</option>
-                <option value="BRANCH_EVALUATION">Branch Evaluation</option>
+                <option value="BRANCH_INTERVIEW">Branch Interview</option>
+                <option value="TEST">Technical Test</option>
                 <option value="FINAL_APPROVAL">Final Approval</option>
                 <option value="ON_HOLD">On Hold</option>
                 <option value="REJECTED">Rejected</option>

@@ -54,7 +54,6 @@ export interface Candidate {
   source: string;
   source_reference?: string;
   position_applied_for?: string;
-  department?: string;
   share_url?: string;
   pre_form_status?: string;
   post_form_status?: string;
@@ -66,11 +65,6 @@ export interface Candidate {
   current_stage: PipelineStage;
   screening?: CandidateScreening;
   branch_location?: string;
-  visit_branch?: string;
-  visit_date?: string;
-  visit_time?: string;
-  visit_maps_link?: string;
-  visit_instructions?: string;
   profile?: CandidateProfile;
   is_duplicate_flagged: boolean;
   duplicate_of_candidate_id?: string;

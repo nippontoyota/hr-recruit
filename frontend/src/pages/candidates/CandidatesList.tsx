@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Button, Modal, LoadingSpinner, EmptyState, Badge } from '../../components/ui';
-import { Plus, Link, RefreshCw, Trash, Search, X, CheckSquare, Square, Minus, Play } from 'lucide-react';
+import { Plus,  RefreshCw, Trash, Search, X, CheckSquare, Square, Minus, Play } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { getCandidates, deleteCandidate, bulkDeleteCandidates, unholdCandidate } from '../../api/candidates';
 import { getStageBadgeVariant, stageLabel, formatSource } from '../../lib/stages';
@@ -34,7 +34,7 @@ export default function CandidatesList() {
   const [candidates, setCandidates] = useState<Candidate[]>(candidatesCache);
   const [loading, setLoading] = useState(candidatesCache.length === 0);
   const [resumingId, setResumingId] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  
 
   // Filters
   const location = useLocation();
@@ -87,7 +87,7 @@ export default function CandidatesList() {
   const filteredCandidates = candidates.filter((c) => {
     if (activeTab === 'UPDATES') {
       if (c.current_stage === 'CANDIDATE_FORM' && c.pre_form_status === 'SUBMITTED') return true;
-      if (c.current_stage === 'HR_INTERVIEW' && !c.has_resume) return true;
+      if (c.current_stage === 'BRANCH_INTERVIEW' && !c.has_resume) return true;
       return false;
     }
 
@@ -198,18 +198,6 @@ export default function CandidatesList() {
     }
   };
 
-  const handleCopyLink = async () => {
-    if (!user) return;
-    const url = `${window.location.origin}/#/apply?hr=${user.id}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      toast.success('Recruiter link copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error('Failed to copy link. Please select and copy manually.');
-    }
-  };
 
   return (
     <>
