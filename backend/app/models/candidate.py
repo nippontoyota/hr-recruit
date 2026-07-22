@@ -59,6 +59,7 @@ class Candidate(Base):
     )
     is_head_office_hire: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False, nullable=False)
     interviewer_assignments: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    offer_status: Mapped[str | None] = mapped_column(String(50), nullable=True) # PENDING, ACCEPTED, DECLINED
     
     # Visit Scheduling Fields
     visit_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -86,5 +87,5 @@ class Candidate(Base):
     communications: Mapped[List["Communication"]] = relationship("Communication", back_populates="candidate", cascade="all, delete-orphan")
     followups: Mapped[List["FollowUp"]] = relationship("FollowUp", back_populates="candidate", cascade="all, delete-orphan")
     evaluations: Mapped[List["Evaluation"]] = relationship("Evaluation", back_populates="candidate", cascade="all, delete-orphan")
-    # screening: Mapped["CandidateScreening"] = relationship("CandidateScreening", uselist=False, cascade="all, delete-orphan")
+
 

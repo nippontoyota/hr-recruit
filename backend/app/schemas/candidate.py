@@ -68,6 +68,10 @@ class CandidateCreate(BaseModel):
         return value.strip()
 
 
+class CandidateResolveDuplicate(BaseModel):
+    action: str = Field(..., description="Either 'MERGE' or 'NOT_DUPLICATE'")
+
+
 class PreFormApplicationData(BaseModel):
     """Validated payload for public pre-interview form submission."""
 
@@ -386,6 +390,7 @@ class CandidateProfileOut(BaseModel):
     joining_date: str | None
     email: str | None
     resume_url: str | None
+    photo_url: str | None = None
     raw_data: dict | None = None
     created_at: datetime
     updated_at: datetime
@@ -449,6 +454,7 @@ class CandidateOut(BaseModel):
     pre_form_status: FormStatus
     pre_form_sent_at: datetime | None
     pre_form_submitted_at: datetime | None
+    pre_form_token: str | None = None
     current_stage: PipelineStage
     branch_location: str | None
     visit_branch: str | None = None
@@ -462,6 +468,7 @@ class CandidateOut(BaseModel):
     assigned_hr_user_id: UUID | None
     assigned_manager_id: UUID | None
     assigned_gm_id: UUID | None
+    offer_status: str | None = None
     applied_at: datetime
     created_at: datetime
     updated_at: datetime
@@ -485,6 +492,7 @@ class CandidateListOut(BaseModel):
     pre_form_status: FormStatus
     pre_form_sent_at: datetime | None
     pre_form_submitted_at: datetime | None
+    pre_form_token: str | None = None
     current_stage: PipelineStage
     branch_location: str | None
     visit_branch: str | None = None
@@ -497,6 +505,7 @@ class CandidateListOut(BaseModel):
     assigned_hr_user_id: UUID | None
     assigned_manager_id: UUID | None
     assigned_gm_id: UUID | None
+    offer_status: str | None = None
     applied_at: datetime
     created_at: datetime
     updated_at: datetime
@@ -555,17 +564,46 @@ class ScreeningSubmitResponse(BaseModel):
     screening: CandidateScreeningOut
     candidate: CandidateOut | None = None
 
+class ActivityLogOut(BaseModel):
+    id: UUID
+    candidate_id: UUID
+    activity_type: ActivityType
+    title: str
+    description: str
+    created_by_user_id: UUID | None
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class CandidatePortalEvaluationOut(BaseModel):
+    id: UUID
+    type: str
+    status: str
+    scheduled_time: datetime | None
+    location_or_link: str | None
+    candidate_response: str | None
+    interview_mode: str | None
+
+class CandidatePortalOut(BaseModel):
+    id: UUID
+    full_name: str
+    position_applied_for: str
+    phone: str
+    email: str | None = None
+    branch_location: str | None = None
+    photo_url: str | None = None
+    current_stage: PipelineStage
+    offer_status: str | None
+    evaluations: list[CandidatePortalEvaluationOut]
+
+class CandidatePortalResponseIn(BaseModel):
+    action_type: str # "INTERVIEW_CONFIRM", "INTERVIEW_DECLINE", "OFFER_ACCEPT", "OFFER_DECLINE"
+    evaluation_id: UUID | None = None
+
 class ActivityLogCreate(BaseModel):
     activity_type: ActivityType
     title: str
     description: str
-
-class ActivityLogOut(ActivityLogCreate):
-    model_config = ConfigDict(from_attributes=True)
-    id: UUID
-    candidate_id: UUID
-    created_by_user_id: UUID | None
-    created_at: datetime
 
 
 class WhatsAppInviteCreate(BaseModel):

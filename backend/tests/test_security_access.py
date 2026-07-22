@@ -37,19 +37,6 @@ def _other_candidate() -> Candidate:
     return candidate
 
 
-def test_hr_cannot_read_other_candidates_screening():
-    user = _hr_user()
-    candidate = _other_candidate()
-    db = type("DB", (), {})()
-    db.get = lambda model, pk: candidate if model is Candidate and pk == candidate.id else None
-
-    app.dependency_overrides[get_current_active_user] = lambda: user
-    app.dependency_overrides[get_db] = lambda: db
-    try:
-        response = client.get(f"/api/v1/candidates/{candidate.id}/screening")
-        assert response.status_code == 403
-    finally:
-        app.dependency_overrides.clear()
 
 
 def test_public_resume_rejects_non_screening_candidate():

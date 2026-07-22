@@ -19,6 +19,7 @@ const PreFormPage = lazy(() => import('../pages/candidates/PreFormPage'));
 const PublicInterviewerPage = lazy(() => import('../pages/candidates/PublicInterviewerPage'));
 const PublicTestPage = lazy(() => import('../pages/candidates/PublicTestPage'));
 const PrintTechnicalTestPage = lazy(() => import('../pages/candidates/PrintTechnicalTestPage'));
+const CandidatePortalPage = lazy(() => import('../pages/candidates/CandidatePortalPage'));
 const AdminUsers = lazy(() => import('../pages/AdminUsers'));
 
 const SuspenseFallback = () => (
@@ -66,6 +67,15 @@ export const router = createHashRouter([
     element: (
       <PageSuspense>
         <PublicInterviewerPage />
+      </PageSuspense>
+    ),
+  },
+  {
+    path: '/portal/:token',
+    errorElement: <RouteErrorPage />,
+    element: (
+      <PageSuspense>
+        <CandidatePortalPage />
       </PageSuspense>
     ),
   },

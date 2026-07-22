@@ -1,8 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from fastapi_cache import FastAPICache
-from fastapi_cache.backends.inmemory import InMemoryBackend
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -10,17 +7,12 @@ from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
-    yield
 
 app = FastAPI(
     title="Nippon Toyota Recruitment Portal",
     docs_url=None if settings.is_production else "/docs",
     redoc_url=None if settings.is_production else "/redoc",
     openapi_url=None if settings.is_production else "/openapi.json",
-    lifespan=lifespan,
 )
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(

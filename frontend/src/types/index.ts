@@ -55,10 +55,10 @@ export interface Candidate {
   source_reference?: string;
   position_applied_for?: string;
   share_url?: string;
-  pre_form_status?: string;
-  is_awaiting_full_fill?: boolean;
+  pre_form_status: FormStatus;
   pre_form_sent_at?: string;
   pre_form_submitted_at?: string;
+  pre_form_token?: string;
   current_stage: PipelineStage;
   screening?: CandidateScreening;
   branch_location?: string;
@@ -67,6 +67,8 @@ export interface Candidate {
   is_duplicate_flagged: boolean;
   duplicate_of_candidate_id?: string;
   is_rejoining: boolean;
+  assigned_hr_user_id?: string;
+  offer_status?: string;
   applied_at: string;
   has_resume?: boolean;
   created_at: string;
@@ -115,6 +117,7 @@ export interface CandidateProfile {
   joining_date?: string;
   email?: string;
   resume_url?: string;
+  photo_url?: string;
   raw_data?: Record<string, any>;
   created_at: string;
   updated_at: string;

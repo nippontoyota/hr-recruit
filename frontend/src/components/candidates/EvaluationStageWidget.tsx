@@ -326,6 +326,7 @@ export function EvaluationStageWidget({
                       copiedId={copiedId}
                       generatingLinkId={generatingLinkId}
                       remarksId={remarksId} 
+                      setRemarksId={setRemarksId}
                     />
 
                     <div className="mt-3">
@@ -396,7 +397,7 @@ export function EvaluationStageWidget({
 }
 
 
-function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQuestions, handleInstantWhatsAppShare, handleCopyLink, copiedId, generatingLinkId, remarksId }: any) {
+function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQuestions, handleInstantWhatsAppShare, handleCopyLink, copiedId, generatingLinkId, remarksId, setRemarksId }: any) {
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -440,6 +441,13 @@ function TechnicalTestPaperWidget({ ev, candidate, technicalQuestions, loadingQu
             className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-black hover:bg-gray-800 rounded shadow-md transition-colors whitespace-nowrap"
           >
             <FileText className="w-3.5 h-3.5" /> Print Paper
+          </button>
+          <button
+            type="button"
+            onClick={() => setRemarksId(ev.id)}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-md transition-colors whitespace-nowrap"
+          >
+            <CheckCircle className="w-3.5 h-3.5" /> Evaluate Manually
           </button>
         </div>
       )}

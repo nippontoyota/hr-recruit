@@ -33,7 +33,8 @@ class Evaluation(Base):
         nullable=True
     )
     scheduled_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    location_or_link: Mapped[str | None] = mapped_column(String, nullable=True)
+    location_or_link: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    candidate_response: Mapped[str | None] = mapped_column(String(50), nullable=True) # PENDING, CONFIRMED, DECLINED
     verdict: Mapped[EvaluationVerdict | None] = mapped_column(
         Enum(EvaluationVerdict, name="evaluation_verdict", schema=SCHEMA, create_type=False),
         nullable=True

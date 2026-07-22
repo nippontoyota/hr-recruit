@@ -161,3 +161,16 @@ export const resendPreForm = async (candidateId: string): Promise<Candidate> => 
   const response = await request('POST', `/candidates/${candidateId}/pre-form/send`);
   return response.data;
 };
+
+export const resolveDuplicateCandidate = async (candidateId: string, action: 'MERGE' | 'NOT_DUPLICATE'): Promise<void> => {
+  await request('POST', `/candidates/${candidateId}/resolve-duplicate`, { action });
+};
+
+export const uploadCandidatePhoto = async (candidateId: string, file: File): Promise<{ status: string, photo_url: string }> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await request('POST', `/candidates/${candidateId}/photo`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};

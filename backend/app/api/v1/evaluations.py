@@ -764,16 +764,4 @@ def get_department_questions(
             "department": q.department
         } for q in q_rows
     ]
-    if not q_rows:
-        q_rows = db.scalars(
-            select(TechnicalQuestion).where(TechnicalQuestion.department == "SALES")
-        ).all()
-        
-    return [
-        {
-            "id": str(q.id),
-            "text": q.text,
-            "options": q.options,
-            "department": q.department
-        } for q in q_rows
-    ]
+

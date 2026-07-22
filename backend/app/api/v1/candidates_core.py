@@ -21,11 +21,109 @@ from app.models.document import Document
 from app.models.enums import DocumentType, PipelineStage, UserRole, ActivityType, ScreeningStatus, FormStatus
 from app.models.stage_history import StageHistory
 from app.models.user import User
-from app.schemas.candidate import CandidateCreate, CandidateOut, CandidateListOut, DocumentOut, CandidateProfileRawDataUpdate
+from app.schemas.candidate import (
+    CandidateCreate, CandidateOut, CandidateListOut, DocumentOut,
+    CandidateProfileRawDataUpdate, CandidateResolveDuplicate, CandidatePortalOut, CandidatePortalEvaluationOut, CandidatePortalResponseIn
+)
 from app.services import storage
+
+
 from app.services.workflow import transition
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
+
+# PORTAL ENDPOINTS
+
+@router.get("/portal/{token}", response_model=CandidatePortalOut)
+def get_candidate_portal(token: str, db: Session = Depends(get_db)):
+    from sqlalchemy.orm import joinedload
+    from app.core.config import settings
+    from app.services import storage
+
+    candidate = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.pre_form_token == token))
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Invalid token")
+        
+    evaluations = db.scalars(select(Evaluation).where(Evaluation.candidate_id == candidate.id)).all()
+    eval_outs = []
+    for ev in evaluations:
+        # Only show interviews, not tests
+        if ev.type != EvaluationType.TECHNICAL_TEST:
+            eval_outs.append(CandidatePortalEvaluationOut(
+                id=ev.id,
+                type=ev.type.value,
+                status=ev.status.value,
+                scheduled_time=ev.scheduled_time,
+                location_or_link=ev.location_or_link,
+                candidate_response=ev.candidate_response,
+                interview_mode=ev.interview_mode.value if hasattr(ev, 'interview_mode') and ev.interview_mode else None
+            ))
+            
+    photo_url = None
+    if candidate.profile and candidate.profile.photo_url:
+        path = candidate.profile.photo_url
+        if "http" in path and "object/public" in path:
+            try:
+                bucket = settings.supabase_storage_bucket
+                path = path.split(f"/{bucket}/")[-1]
+            except Exception:
+                pass
+        try:
+            photo_url = storage.create_signed_url(path, expires_in=3600)
+        except Exception:
+            pass
+            
+    return CandidatePortalOut(
+        id=candidate.id,
+        full_name=candidate.full_name,
+        position_applied_for=candidate.position_applied_for,
+        phone=candidate.phone,
+        email=candidate.email,
+        branch_location=candidate.branch_location,
+        photo_url=photo_url,
+        current_stage=candidate.current_stage,
+        offer_status=candidate.offer_status,
+        evaluations=eval_outs
+    )
+
+
+@router.post("/portal/{token}/response")
+def submit_candidate_portal_response(token: str, body: CandidatePortalResponseIn, db: Session = Depends(get_db)):
+    candidate = db.scalar(select(Candidate).where(Candidate.pre_form_token == token))
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Invalid token")
+        
+    if body.action_type in ["INTERVIEW_CONFIRM", "INTERVIEW_DECLINE"]:
+        if not body.evaluation_id:
+            raise HTTPException(status_code=400, detail="evaluation_id is required")
+        ev = db.get(Evaluation, body.evaluation_id)
+        if not ev or ev.candidate_id != candidate.id:
+            raise HTTPException(status_code=404, detail="Evaluation not found")
+            
+        ev.candidate_response = "CONFIRMED" if body.action_type == "INTERVIEW_CONFIRM" else "DECLINED"
+        db.add(ActivityLog(
+            candidate_id=candidate.id,
+            activity_type=ActivityType.CALL,
+            title=f"Interview {ev.candidate_response.title()}",
+            description=f"Candidate has {ev.candidate_response.lower()} the interview scheduled for {ev.scheduled_time}.",
+            created_by_user_id=None
+        ))
+        
+    elif body.action_type in ["OFFER_ACCEPT", "OFFER_DECLINE"]:
+        candidate.offer_status = "ACCEPTED" if body.action_type == "OFFER_ACCEPT" else "DECLINED"
+        db.add(ActivityLog(
+            candidate_id=candidate.id,
+            activity_type=ActivityType.SYSTEM,
+            title=f"Offer {candidate.offer_status.title()}",
+            description=f"Candidate has {candidate.offer_status.lower()} the offer.",
+            created_by_user_id=None
+        ))
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action_type")
+        
+    db.commit()
+    return {"status": "success"}
+
 
 ALLOWED_RESUME_EXTENSIONS = {".pdf", ".doc", ".docx"}
 ALLOWED_RESUME_CONTENT_TYPES = {
@@ -70,10 +168,27 @@ def share_url_for_token(token: str | None) -> str | None:
 
 def to_candidate_out(row: Candidate, has_resume: bool) -> CandidateOut:
     from app.core.config import settings
+    from app.services import storage
+    
     share_url = share_url_for_token(row.pre_form_token)
-    return CandidateOut.model_validate(row).model_copy(
+    out = CandidateOut.model_validate(row).model_copy(
         update={"has_resume": has_resume, "is_rejoining": False, "share_url": share_url}
     )
+    
+    if out.profile and out.profile.photo_url:
+        path = out.profile.photo_url
+        if "http" in path and "object/public" in path:
+            try:
+                bucket = settings.supabase_storage_bucket
+                path = path.split(f"/{bucket}/")[-1]
+            except Exception:
+                pass
+        try:
+            out.profile.photo_url = storage.create_signed_url(path, expires_in=3600)
+        except Exception:
+            pass
+            
+    return out
 
 def to_candidate_list_out(row: Candidate, has_resume: bool) -> CandidateListOut:
     from app.core.config import settings
@@ -320,6 +435,37 @@ async def _save_resume_for_candidate(
 
     return _document_out(doc)
 
+async def _save_photo_for_candidate(
+    db: Session,
+    candidate: Candidate,
+    file: UploadFile,
+) -> dict:
+    ext = ""
+    if file.filename and "." in file.filename:
+        ext = f".{file.filename.rsplit('.', 1)[-1].lower()}"
+    
+    if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
+        raise HTTPException(status_code=400, detail="Photo must be JPG, PNG, or WEBP")
+        
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Photo must be under 5MB")
+        
+    candidate_id = candidate.id
+    storage_path = f"photos/{candidate_id}/{uuid4()}{ext}"
+    
+    storage.upload_object(storage_path, data, file.content_type or "image/jpeg", upsert=True)
+    
+    if not candidate.profile:
+        candidate.profile = CandidateProfile(candidate_id=candidate.id)
+    
+    candidate.profile.photo_url = storage_path
+    db.commit()
+    
+    signed_url = storage.create_signed_url(storage_path, expires_in=3600)
+    return {"status": "success", "photo_url": signed_url}
+
+
 
 @router.get("", response_model=list[CandidateListOut])
 def list_candidates(
@@ -479,9 +625,45 @@ def delete_candidate_endpoint(
     db.delete(row)
     try:
         db.commit()
-    except IntegrityError:
+    except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Cannot delete candidate due to existing references.")
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "success", "message": "Candidate and all associated records deleted."}
+
+
+@router.post("/{id}/resolve-duplicate")
+def resolve_duplicate(
+    id: UUID,
+    body: CandidateResolveDuplicate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
+):
+    candidate = db.get(Candidate, id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+        
+    if body.action == "NOT_DUPLICATE":
+        candidate.is_duplicate_flagged = False
+        candidate.duplicate_of_candidate_id = None
+        log_desc = "Marked as not a duplicate (False Positive)."
+    elif body.action == "MERGE":
+        # We just reject the current one as duplicate
+        candidate.current_stage = PipelineStage.REJECTED
+        log_desc = f"Archived as duplicate of {candidate.duplicate_of_candidate_id}."
+        db.add(StageHistory(candidate_id=candidate.id, to_stage=PipelineStage.REJECTED, changed_by_user_id=current_user.id, reason=log_desc))
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action")
+        
+    db.add(ActivityLog(
+        candidate_id=candidate.id,
+        activity_type=ActivityType.SYSTEM,
+        title="Duplicate Resolution",
+        description=log_desc,
+        created_by_user_id=current_user.id
+    ))
+    db.commit()
+    return {"status": "success"}
+
 
 class BulkDeleteRequest(BaseModel):
     candidate_ids: list[UUID]

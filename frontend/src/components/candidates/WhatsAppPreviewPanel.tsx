@@ -150,7 +150,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
     <>
       <aside
         className={cn(
-          'w-full lg:w-[480px] xl:w-[520px] shrink-0 border-l border-border bg-[#f7f8fa] flex flex-col min-h-0 overflow-hidden',
+          'w-full lg:w-[400px] xl:w-[440px] shrink-0 border-l border-border bg-[#f7f8fa] flex flex-col min-h-0 overflow-hidden',
           className
         )}
       >

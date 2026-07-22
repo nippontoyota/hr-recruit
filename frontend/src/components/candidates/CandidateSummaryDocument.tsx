@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { Candidate, Evaluation } from '../../types';
 import { PdfViewer, LoadingSpinner } from '../../components/ui';
 import { getDepartmentQuestions } from '../../api/evaluations';
@@ -14,15 +14,27 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const payloadHash = JSON.stringify({
-    id: candidate?.id,
-    name: candidate?.full_name,
-    pos: candidate?.position_applied_for,
-    raw_data: candidate?.profile?.raw_data || {}
-  });
+  // Avoid regenerating the PDF every time the candidate object reference changes during background polling.
+  // We only track the core identifying data that would require a new PDF if changed.
+  const payloadHash = useMemo(() => {
+    return JSON.stringify({
+      id: candidate?.id,
+      name: candidate?.full_name,
+      pos: candidate?.position_applied_for,
+      photo: candidate?.profile?.photo_url,
+      // Stringifying the entire raw_data can cause unstable hashes if the backend dict order changes.
+      // We rely on the `updated_at` timestamp of the candidate instead to know if data actually changed.
+      updated_at: (candidate as any)?.updated_at || candidate?.created_at,
+      evals_count: evaluations?.length,
+      evals_hash: evaluations?.map(e => `${e.id}-${e.verdict}`).join(',')
+    });
+  }, [candidate, evaluations]);
 
   useEffect(() => {
     if (!candidate) return;
+    
+    // If we already have a pdfUrl and the hash hasn't changed, don't regenerate.
+    // The dependency array ensures this effect only runs when payloadHash changes.
 
     const fetchPdf = async () => {
       setLoading(true);
@@ -47,7 +59,8 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
               full_name: candidate.full_name,
               position_applied_for: candidate.position_applied_for || 'Unknown Position',
               phone: candidate.phone,
-              applied_at: candidate.created_at
+              applied_at: candidate.created_at,
+              photo_url: candidate.profile?.photo_url
             },
             raw_data: candidate.profile?.raw_data || {},
             evaluations: evaluations || [],
@@ -56,14 +69,15 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to generate PDF: ${response.statusText}`);
+          throw new Error('Failed to generate PDF');
         }
 
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         setPdfUrl(url);
       } catch (err: any) {
-        setError(err.message || 'Failed to load Candidate Summary PDF.');
+        console.error(err);
+        setError('Could not load candidate summary document.');
       } finally {
         setLoading(false);
       }
@@ -72,10 +86,10 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
     fetchPdf();
 
     return () => {
-      if (pdfUrl) {} // oxlint ignore for now, safe leak since singleton component
+      // Intentionally not revoking object URL immediately to prevent flickering on quick re-renders
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [payloadHash, candidate, evaluations]);
+  }, [payloadHash]);
 
   if (!candidate) {
     return <div className="p-8 text-center text-gray-500">No candidate data available.</div>;

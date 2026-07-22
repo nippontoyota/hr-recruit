@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
 import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History, Edit2 } from 'lucide-react';
-import { getCandidateById, updateCandidateStage, unholdCandidate } from '../../api/candidates';
+import { getCandidateById, updateCandidateStage, unholdCandidate, resolveDuplicateCandidate } from '../../api/candidates';
 import { getCandidateEvaluations } from '../../api/evaluations';
 import type { Candidate, PipelineStage } from '../../types';
 import { toast } from 'sonner';
@@ -55,15 +55,6 @@ export default function CandidateProfile() {
   const [viewedStage, setViewedStage] = useState<PipelineStage | null>(null);
 
   const workspaceRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (candidate && !initialLoading) {
-      const timer = setTimeout(() => {
-        workspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [candidate, initialLoading]);
 
 
   const fetchCandidate = async (showLoading = true) => {
@@ -163,6 +154,20 @@ export default function CandidateProfile() {
       toast.error(extractError(err, 'Failed to reject candidate.'));
     } finally {
       setIsRejecting(false);
+    }
+  };
+
+  const handleResolveDuplicate = async (action: 'MERGE' | 'NOT_DUPLICATE') => {
+    if (!candidate) return;
+    setIsUpdating(true);
+    try {
+      await resolveDuplicateCandidate(candidate.id, action);
+      handleUpdate();
+      toast.success(action === 'MERGE' ? 'Archived as duplicate' : 'Marked as not a duplicate');
+    } catch (err: any) {
+      toast.error(extractError(err, 'Failed to resolve duplicate.'));
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -301,171 +306,277 @@ export default function CandidateProfile() {
               <span className="text-sm font-medium text-foreground">{candidate.full_name}</span>
             </div>
 
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-              {/* Left Column: Title & Metadata */}
-              <div className="flex-1 min-w-0 space-y-3">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-2xl font-bold tracking-tight text-foreground truncate">{candidate.full_name}</h1>
-                  <span className={cn('shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm', stageColor(actualStage))}>
-                    {stageLabel(actualStage)}
-                  </span>
-                  {candidate.is_duplicate_flagged && (
-                    <span className="text-[10px] font-semibold text-warning bg-warning/10 border border-warning/20 px-2 py-0.5 rounded-md">
-                      Duplicate
-                    </span>
-                  )}
-                  {actualStage === 'ON_HOLD' && (
-                    <Button
-                      size="sm"
-                      onClick={async () => {
-                        if (!candidate) return;
-                        setIsResuming(true);
-                        try {
-                          await unholdCandidate(candidate.id, 'Resumed from On Hold');
-                          toast.success('Candidate resumed to previous stage');
-                          handleUpdate();
-                        } catch (err: any) {
-                          toast.error(extractError(err, 'Failed to resume candidate.'));
-                        } finally {
-                          setIsResuming(false);
-                        }
-                      }}
-                      isLoading={isResuming}
-                      className="h-7 px-3 text-xs gap-1.5 bg-warning/90 hover:bg-warning text-white"
-                    >
-                      <Play className="w-3.5 h-3.5" /> Resume to previous
-                    </Button>
-                  )}
+            {candidate.is_duplicate_flagged && (
+              <div className="mb-6 bg-orange-50 border border-orange-200 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3 text-orange-800">
+                  <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                    <XCircle className="w-5 h-5 text-orange-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm">Duplicate Candidate Detected</h3>
+                    <p className="text-xs opacity-90 mt-0.5">This candidate was flagged as a duplicate of another application.</p>
+                  </div>
                 </div>
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  <Button variant="ghost" size="sm" onClick={() => handleResolveDuplicate('NOT_DUPLICATE')} disabled={isUpdating} className="border border-orange-200 hover:bg-orange-100 text-orange-700 bg-white">Not a Duplicate</Button>
+                  <Button variant="primary" size="sm" onClick={() => handleResolveDuplicate('MERGE')} disabled={isUpdating} className="bg-orange-600 hover:bg-orange-700 text-white border-0 shadow-sm">Archive as Duplicate</Button>
+                </div>
+              </div>
+            )}
 
-                <div className="flex flex-col gap-2 mt-2">
-                  {candidate.position_applied_for && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground font-medium">Applying for: </span>
-                      <strong className="text-foreground">{candidate.position_applied_for}</strong>
+            {(() => {
+              const isCallLetterStage = stageToView === 'CANDIDATE_FORM';
+
+              const stepperBlock = (
+                <div className="flex items-center justify-between gap-4">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={isPrevDisabled}
+                    onClick={handlePrevStep}
+                    className={cn(
+                      "h-9 w-9 rounded-md border border-border bg-background shadow-sm shrink-0 flex items-center justify-center transition-all",
+                      !isPrevDisabled ? "hover:bg-muted hover:text-foreground text-muted-foreground" : "opacity-40 cursor-not-allowed"
+                    )}
+                    title="Previous Step"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+
+                  <div className="flex-1 min-w-0">
+                    <PipelineStepper
+                      stages={stepperStages}
+                      currentStage={stageToView}
+                      actualStage={actualStage}
+                      onStageClick={handleStageClick}
+                      isLoading={isUpdating}
+                      completedStages={completedStages}
+                      skippedStages={skippedStages}
+                      heldStages={heldStages}
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={isNextDisabled}
+                    onClick={handleNextStep}
+                    className={cn(
+                      "h-9 w-9 rounded-md border border-border bg-background shadow-sm shrink-0 flex items-center justify-center transition-all",
+                      !isNextDisabled ? "hover:bg-muted hover:text-foreground text-muted-foreground" : "opacity-40 cursor-not-allowed"
+                    )}
+                    title="Next Step"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              );
+
+              return (
+                <>
+                  {isCallLetterStage && (
+                    <div className="mb-8 pb-2">
+                      {stepperBlock}
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 shrink-0" />
-                      <span className="text-foreground font-medium">+91 {candidate.phone}</span>
-                    </span>
-                    {candidate.email && (
-                      <span className="flex items-center gap-2">
-                        <Mail className="w-4 h-4 shrink-0" />
-                        <span className="text-foreground font-medium">{candidate.email}</span>
-                      </span>
-                    )}
-                    {candidate.branch_location && (
-                      <span className="flex items-center gap-2">
-                        <MapPin className="w-4 h-4 shrink-0" />
-                        <span className="text-foreground font-medium">{candidate.branch_location}</span>
-                      </span>
-                    )}
-                    {candidate.source && (
-                      <span className="flex items-center gap-2">
-                        <span className="text-muted-foreground font-medium">Source: </span>
-                        <span className="text-foreground font-medium">
-                          {candidate.source === 'INDEED' ? 'Indeed' : candidate.source === 'NAUKRI' ? 'Naukri' : candidate.source.replace(/_/g, ' ')}
-                        </span>
-                      </span>
-                    )}
+                  <div className={isCallLetterStage ? "flex flex-col items-center justify-center gap-6 mt-4 mb-8" : "flex flex-col md:flex-row md:items-start justify-between gap-6"}>
+                    
+                    <div className={isCallLetterStage ? "flex flex-col items-center text-center max-w-2xl mx-auto space-y-4" : "flex-1 min-w-0 space-y-3"}>
+                      <div className={isCallLetterStage ? "flex flex-col items-center gap-2 w-full" : "flex items-center gap-4 flex-wrap"}>
+                        
+                        <div className={isCallLetterStage ? "relative group cursor-pointer mb-2" : "relative group cursor-pointer shrink-0"} onClick={() => document.getElementById('photo-upload')?.click()}>
+                          <input
+                            type="file"
+                            id="photo-upload"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                if (file.size > 5 * 1024 * 1024) {
+                                  toast.error('Photo must be under 5MB');
+                                  return;
+                                }
+                                setIsUpdating(true);
+                                try {
+                                  const { uploadCandidatePhoto } = await import('../../api/candidates');
+                                  await uploadCandidatePhoto(candidate.id, file);
+                                  toast.success('Photo uploaded successfully');
+                                  handleUpdate();
+                                } catch (err: any) {
+                                  toast.error(extractError(err, 'Failed to upload photo'));
+                                } finally {
+                                  setIsUpdating(false);
+                                }
+                              }
+                            }}
+                          />
+                          {candidate.profile?.photo_url ? (
+                            <img src={candidate.profile.photo_url} alt="Profile" className={cn("rounded-none object-cover border border-border bg-white", isCallLetterStage ? "w-28 h-36 mx-auto" : "w-20 h-24")} />
+                          ) : (
+                            <div className={cn("rounded-none bg-muted flex items-center justify-center border border-border text-muted-foreground font-bold", isCallLetterStage ? "w-28 h-36 text-4xl mx-auto" : "w-20 h-24 text-xl")}>
+                              {candidate.full_name.charAt(0)}
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-black/50 rounded-none opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <Edit2 className="w-6 h-6 text-white" />
+                          </div>
+                        </div>
+
+                        <div className={isCallLetterStage ? "flex flex-col items-center gap-2" : "flex items-center gap-4 flex-wrap"}>
+                          <h1 className={isCallLetterStage ? "text-3xl font-extrabold tracking-tight text-foreground" : "text-2xl font-bold tracking-tight text-foreground truncate"}>{candidate.full_name}</h1>
+                          
+                          <div className={isCallLetterStage ? "flex items-center gap-2 justify-center flex-wrap" : "flex items-center gap-2"}>
+                            <span className={cn('shrink-0 font-bold border uppercase shadow-sm', isCallLetterStage ? "text-xs px-3 py-1 rounded-full" : "text-[11px] px-2 py-0.5 rounded-full", stageColor(actualStage))}>
+                              {stageLabel(actualStage)}
+                            </span>
+                            {candidate.is_duplicate_flagged && (
+                              <span className={cn("font-semibold text-warning bg-warning/10 border border-warning/20 rounded-md", isCallLetterStage ? "text-[10px] px-2 py-1" : "text-[10px] px-2 py-0.5")}>
+                                Duplicate
+                              </span>
+                            )}
+                          </div>
+
+                          {!isCallLetterStage && actualStage === 'ON_HOLD' && (
+                            <Button
+                              size="sm"
+                              onClick={async () => {
+                                if (!candidate) return;
+                                setIsResuming(true);
+                                try {
+                                  await unholdCandidate(candidate.id, 'Resumed from On Hold');
+                                  toast.success('Candidate resumed to previous stage');
+                                  handleUpdate();
+                                } catch (err: any) {
+                                  toast.error(extractError(err, 'Failed to resume candidate.'));
+                                } finally {
+                                  setIsResuming(false);
+                                }
+                              }}
+                              isLoading={isResuming}
+                              className="h-7 px-3 text-xs gap-1.5 bg-warning/90 hover:bg-warning text-white"
+                            >
+                              <Play className="w-3.5 h-3.5" /> Resume to previous
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className={isCallLetterStage ? "flex flex-col items-center gap-1.5 mt-2" : "flex flex-col gap-2 mt-2"}>
+                        {candidate.position_applied_for && (
+                          <div className={isCallLetterStage ? "text-base" : "text-sm"}>
+                            <span className="text-muted-foreground font-medium">Applying for: </span>
+                            <strong className="text-foreground">{candidate.position_applied_for}</strong>
+                          </div>
+                        )}
+
+                        <div className={isCallLetterStage ? "flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground mt-2" : "flex flex-col gap-2 text-sm text-muted-foreground"}>
+                          <span className={isCallLetterStage ? "flex items-center gap-1.5" : "flex items-center gap-2"}>
+                            <Phone className="w-4 h-4 shrink-0" />
+                            <span className="text-foreground font-medium">+91 {candidate.phone}</span>
+                          </span>
+                          {candidate.email && (
+                            <span className={isCallLetterStage ? "flex items-center gap-1.5" : "flex items-center gap-2"}>
+                              <Mail className="w-4 h-4 shrink-0" />
+                              <span className="text-foreground font-medium">{candidate.email}</span>
+                            </span>
+                          )}
+                          {candidate.branch_location && (
+                            <span className={isCallLetterStage ? "flex items-center gap-1.5" : "flex items-center gap-2"}>
+                              <MapPin className="w-4 h-4 shrink-0" />
+                              <span className="text-foreground font-medium">{candidate.branch_location}</span>
+                            </span>
+                          )}
+                          {candidate.source && (
+                            <span className={isCallLetterStage ? "flex items-center gap-1.5" : "flex items-center gap-2"}>
+                              <span className="text-muted-foreground font-medium">Source: </span>
+                              <span className="text-foreground font-medium">
+                                {candidate.source === 'INDEED' ? 'Indeed' : candidate.source === 'NAUKRI' ? 'Naukri' : candidate.source.replace(/_/g, ' ')}
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={isCallLetterStage ? "flex flex-wrap items-center justify-center gap-2 mt-4" : "flex flex-wrap items-center gap-2 shrink-0"}>
+                      {isCallLetterStage && actualStage === 'ON_HOLD' && (
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            if (!candidate) return;
+                            setIsResuming(true);
+                            try {
+                              await unholdCandidate(candidate.id, 'Resumed from On Hold');
+                              toast.success('Candidate resumed to previous stage');
+                              handleUpdate();
+                            } catch (err: any) {
+                              toast.error(extractError(err, 'Failed to resume candidate.'));
+                            } finally {
+                              setIsResuming(false);
+                            }
+                          }}
+                          isLoading={isResuming}
+                          className="h-8 px-4 text-xs gap-1.5 bg-warning/90 hover:bg-warning text-white"
+                        >
+                          <Play className="w-3.5 h-3.5" /> Resume to previous
+                        </Button>
+                      )}
+                      
+                      <Button
+                        variant="ghost"
+                        onClick={() => setIsActivityOpen(true)}
+                        className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
+                      >
+                        <History className="w-4 h-4 text-muted-foreground" /> Activity Log
+                      </Button>
+                      <a
+                        href={`https://wa.me/91${candidate.phone}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
+                      >
+                        <img src="/whatsapp.webp" className="w-4 h-4 object-contain" alt="WhatsApp" /> WhatsApp
+                      </a>
+                      {candidate.email && (
+                        <a
+                          href={`mailto:${candidate.email}`}
+                          className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
+                        >
+                          <img src="/gmail.webp" className="w-4 h-4 object-contain" alt="Email" /> Email
+                        </a>
+                      )}
+                      {candidate.has_resume && (
+                        <ResumeButton
+                          candidateId={candidate.id}
+                          candidateName={candidate.full_name}
+                          hasResume={candidate.has_resume}
+                        />
+                      )}
+                      {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => setShowRejectModal(true)}
+                          className="h-9 px-4 text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm font-bold"
+                        >
+                          Reject Candidate
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Right Column: Actions */}
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <Button
-                  variant="ghost"
-                  onClick={() => setIsActivityOpen(true)}
-                  className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
-                >
-                  <History className="w-4 h-4 text-muted-foreground" /> Activity Log
-                </Button>
-                <a
-                  href={`https://wa.me/91${candidate.phone}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
-                >
-                  <img src="/whatsapp.webp" className="w-4 h-4 object-contain" alt="WhatsApp" /> WhatsApp
-                </a>
-                {candidate.email && (
-                  <a
-                    href={`mailto:${candidate.email}`}
-                    className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
-                  >
-                    <img src="/gmail.webp" className="w-4 h-4 object-contain" alt="Email" /> Email
-                  </a>
-                )}
-                {candidate.has_resume && (
-                  <ResumeButton
-                    candidateId={candidate.id}
-                    candidateName={candidate.full_name}
-                    hasResume={candidate.has_resume}
-                  />
-                )}
-                {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && (
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => setShowRejectModal(true)}
-                    className="h-9 px-4 text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm font-medium"
-                  >
-                    Reject Candidate
-                  </Button>
-                )}
-
-              </div>
-            </div>
-
-            {/* Stepper block */}
-            <div className="mt-8 pt-6 border-t border-border flex items-center justify-between gap-4">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                disabled={isPrevDisabled}
-                onClick={handlePrevStep}
-                className={cn(
-                  "h-9 w-9 rounded-md border border-border bg-background shadow-sm shrink-0 flex items-center justify-center transition-all",
-                  !isPrevDisabled ? "hover:bg-muted hover:text-foreground text-muted-foreground" : "opacity-40 cursor-not-allowed"
-                )}
-                title="Previous Step"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-
-              <div className="flex-1 min-w-0">
-                <PipelineStepper
-                  stages={stepperStages}
-                  currentStage={stageToView}
-                  actualStage={actualStage}
-                  onStageClick={handleStageClick}
-                  isLoading={isUpdating}
-                  completedStages={completedStages}
-                  skippedStages={skippedStages}
-                  heldStages={heldStages}
-                />
-              </div>
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                disabled={isNextDisabled}
-                onClick={handleNextStep}
-                className={cn(
-                  "h-9 w-9 rounded-md border border-border bg-background shadow-sm shrink-0 flex items-center justify-center transition-all",
-                  !isNextDisabled ? "hover:bg-muted hover:text-foreground text-muted-foreground" : "opacity-40 cursor-not-allowed"
-                )}
-                title="Next Step"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
+                  {!isCallLetterStage && (
+                    <div className="mt-8 pt-2">
+                      {stepperBlock}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
 
@@ -670,3 +781,4 @@ export default function CandidateProfile() {
     </div>
   );
 }
+

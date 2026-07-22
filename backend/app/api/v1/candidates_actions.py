@@ -23,7 +23,7 @@ router = APIRouter(prefix="/candidates", tags=["candidates"])
 from .candidates_core import *
 from .candidates_core import (
     _get_resume_document,
-    _document_out, _save_resume_for_candidate, _issue_pre_form, _store_whatsapp_invite
+    _document_out, _save_resume_for_candidate, _save_photo_for_candidate, _issue_pre_form, _store_whatsapp_invite
 )
 
 @router.post("/{id}/resume", response_model=DocumentOut, status_code=201)
@@ -35,6 +35,20 @@ async def upload_resume(
 ):
     row = get_candidate_for_user(db, id, user)
     return await _save_resume_for_candidate(db, row, file, uploaded_by_user_id=user.id)
+
+
+@router.post("/{id}/photo", response_model=dict, status_code=201)
+async def upload_photo(
+    id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    # Can be uploaded by candidate via public form or HR
+):
+    row = db.get(Candidate, id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+        
+    return await _save_photo_for_candidate(db, row, file)
 
 
 @router.get("/{id}/resume", response_model=DocumentOut)

@@ -275,8 +275,13 @@ def generate_candidate_summary_pdf(payload: dict) -> bytes:
         row.cell(contact)
         row.cell("Experience", style=bold_bg_gray)
         row.cell("Years", style=bold_bg_gray)
-        row.cell("Photo", rowspan=3, style=FontFace(color=(150, 150, 150)))
         
+        photo_url = candidate.get("photo_url")
+        if photo_url:
+            row.cell(img=photo_url, img_fill_width=True, rowspan=3)
+        else:
+            row.cell("Photo", rowspan=3, style=FontFace(color=(150, 150, 150)))
+            
         row = table.row()
         row.cell("Contact Address", rowspan=2, style=bold_bg_gray)
         perm = [raw_data.get(k) for k in ["permHouseName", "permPostOffice", "permLandmark", "permDistrict", "permPinCode"] if raw_data.get(k)]

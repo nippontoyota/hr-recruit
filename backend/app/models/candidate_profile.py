@@ -38,6 +38,7 @@ class CandidateProfile(Base):
     joining_date: Mapped[str | None] = mapped_column(String(100), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     resume_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    photo_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     raw_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     
     # Audit

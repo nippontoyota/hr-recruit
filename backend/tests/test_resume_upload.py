@@ -8,7 +8,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.api.v1.candidates import _resume_extension, _safe_filename, _validate_resume_content_type
+from app.api.v1.candidates_core import _resume_extension, _safe_filename, _validate_resume_content_type
 from app.core.database import get_db
 from app.core.deps import get_current_active_user
 from app.main import app
