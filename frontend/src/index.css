@@ -139,11 +139,11 @@
   }
 
   .data-table th {
-    @apply px-4 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wide border-b border-border;
+    @apply px-4 py-2 text-left text-xs font-semibold text-text-secondary uppercase tracking-wide border-b border-border;
   }
 
   .data-table td {
-    @apply px-4 py-3 text-sm text-text-primary border-b border-border;
+    @apply px-4 py-2 text-[13px] text-text-primary border-b border-border;
   }
 
   .data-table tbody tr {

@@ -91,7 +91,7 @@ export const AppShell = () => {
               className={
                 isCandidateProfile
                   ? 'w-full min-h-full flex'
-                  : 'p-4 sm:p-6 lg:p-8 w-full h-full max-w-7xl mx-auto'
+                  : 'p-4 sm:p-6 lg:p-8 w-full h-full mx-auto'
               }
             >
               <AnimatePresence mode="wait">

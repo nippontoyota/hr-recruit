@@ -357,29 +357,29 @@ export default function CandidatesList() {
                           </div>
                         </td>
 
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-2">
                           <div className="flex flex-col">
                             <span className="font-semibold text-text-primary">{candidate.full_name}</span>
                             <span className="text-xs text-text-secondary">+91 {candidate.phone}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-text-secondary font-medium">
+                        <td className="px-4 py-2 text-text-secondary font-medium">
                           {candidate.position_applied_for || '—'}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-2">
                           <Badge variant={getStageBadgeVariant(candidate.current_stage)} className="font-semibold px-2.5 py-0.5 rounded-lg">
                             {stageLabel(candidate.current_stage)}
                           </Badge>
                         </td>
-                        <td className="px-4 py-3 text-text-secondary">
+                        <td className="px-4 py-2 text-text-secondary">
                           <span className="px-2 py-1 bg-background border border-border rounded-[10px] text-xs font-medium">
                             {formatSource(candidate.source)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground font-medium">
+                        <td className="px-4 py-2 text-xs text-muted-foreground font-medium">
                           {formatDate(candidate.created_at)}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-2 text-right">
                           <div className="flex items-center justify-end gap-1">
                             <ResumeButton
                               candidateId={candidate.id}
