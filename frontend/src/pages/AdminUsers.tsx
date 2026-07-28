@@ -186,7 +186,7 @@ export default function AdminUsers() {
             <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">ADMIN</h2>
             <div className="flex flex-col border border-border rounded-md bg-surface">
               {users.filter(u => u.role === 'ADMIN').map(u => (
-                <div key={u.id} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                <div key={u.id} onClick={() => openEdit(u)} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-muted/50 cursor-pointer transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold shrink-0 bg-gray-200 text-gray-700">
                       {u.full_name.charAt(0).toUpperCase()}
@@ -202,11 +202,6 @@ export default function AdminUsers() {
                         GLOBAL ACCESS
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 border-l border-border pl-3">
-                      <button onClick={() => openEdit(u)} className="p-1.5 text-muted-foreground hover:bg-muted hover:text-primary rounded transition-colors" title="Edit User">
-                        <Edit className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
                   </div>
                 </div>
               ))}
@@ -220,7 +215,7 @@ export default function AdminUsers() {
             <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">HEAD OFFICE HR</h2>
             <div className="flex flex-col border border-border rounded-md bg-surface">
               {users.filter(u => u.role === 'HO_HR').map(u => (
-                <div key={u.id} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                <div key={u.id} onClick={() => openEdit(u)} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-muted/50 cursor-pointer transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold shrink-0 bg-emerald-100 text-emerald-700">
                       {u.full_name.charAt(0).toUpperCase()}
@@ -237,10 +232,7 @@ export default function AdminUsers() {
                       </span>
                     </div>
                     <div className="flex items-center gap-1 border-l border-border pl-3">
-                      <button onClick={() => openEdit(u)} className="p-1.5 text-muted-foreground hover:bg-muted hover:text-primary rounded transition-colors" title="Edit User">
-                        <Edit className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => openDelete(u)} className="p-1.5 text-muted-foreground hover:bg-danger/10 hover:text-danger rounded transition-colors" title="Delete User">
+                      <button onClick={(e) => { e.stopPropagation(); openDelete(u); }} className="p-1.5 text-muted-foreground hover:bg-danger/10 hover:text-danger rounded transition-colors" title="Delete User">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -328,7 +320,7 @@ export default function AdminUsers() {
                 };
                 
                 return (
-                  <div key={u.id} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                  <div key={u.id} onClick={() => openEdit(u)} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-muted/50 cursor-pointer transition-colors">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold shrink-0 bg-amber-100 text-amber-700">
                         {u.full_name.charAt(0).toUpperCase()}
@@ -346,10 +338,7 @@ export default function AdminUsers() {
                         </span>
                       </div>
                       <div className="flex items-center gap-1 border-l border-border pl-3">
-                        <button onClick={() => openEdit(u)} className="p-1.5 text-muted-foreground hover:bg-muted hover:text-primary rounded transition-colors" title="Edit User">
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => openDelete(u)} className="p-1.5 text-muted-foreground hover:bg-danger/10 hover:text-danger rounded transition-colors" title="Delete User">
+                        <button onClick={(e) => { e.stopPropagation(); openDelete(u); }} className="p-1.5 text-muted-foreground hover:bg-danger/10 hover:text-danger rounded transition-colors" title="Delete User">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
