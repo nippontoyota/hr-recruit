@@ -275,9 +275,6 @@ export default function CandidatesList() {
               </button>
             )}
 
-            <span className="ml-auto text-xs text-muted-foreground font-medium">
-              {filteredCandidates.length} of {candidates.length}
-            </span>
           </div>
 
           {/* ── Table ── */}
@@ -404,6 +401,9 @@ export default function CandidatesList() {
                   })}
                 </tbody>
               </table>
+            </div>
+            <div className="px-4 py-3 border-t border-border bg-muted/10 text-xs font-medium text-muted-foreground text-center sm:text-right">
+              Showing {filteredCandidates.length} of {candidates.length} candidates
             </div>
           </div>
         </div>
