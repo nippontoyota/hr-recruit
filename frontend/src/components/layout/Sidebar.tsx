@@ -17,7 +17,7 @@ export const Sidebar = ({
   isCollapsed?: boolean;
   setIsCollapsed?: (c: boolean) => void;
 }) => {
-  const { role, user, logout } = useAuth();
+  const { role } = useAuth();
   const location = useLocation();
 
   if (!role) return null;
@@ -114,38 +114,6 @@ export const Sidebar = ({
           </div>
         </nav>
 
-        <div className="border-t border-border shrink-0 p-3 bg-sidebar">
-          {!isCollapsed ? (
-            <>
-              <div className="px-2 py-2 mb-2 rounded-lg bg-surface border border-border">
-                <p className="text-sm font-medium text-text-primary truncate">{user?.full_name}</p>
-                <p className="text-xs text-text-secondary truncate mt-0.5">{user?.email}</p>
-                {role && (
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-primary mt-1.5">
-                    {role.replace(/_/g, ' ')}
-                  </p>
-                )}
-              </div>
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-danger hover:bg-danger/10 hover:text-danger h-9"
-                onClick={logout}
-              >
-                Log out
-              </Button>
-            </>
-          ) : (
-            <button
-              type="button"
-              className="w-9 h-9 mx-auto rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs"
-              onClick={logout}
-              title="Log out"
-              aria-label="Log out"
-            >
-              {user?.full_name.charAt(0)}
-            </button>
-          )}
-        </div>
       </aside>
     </>
   );
