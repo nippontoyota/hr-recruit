@@ -7,8 +7,8 @@ from app.models.user import User
 
 
 def assert_candidate_access(user: User, candidate: Candidate) -> None:
-    if user.role == UserRole.LOCAL_HR and candidate.assigned_hr_user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if user.role == UserRole.LOCAL_HR and candidate.branch_location != user.branch_location:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Candidate is not in your branch.")
 
 
 def get_candidate_for_user(db: Session, candidate_id, user: User) -> Candidate:

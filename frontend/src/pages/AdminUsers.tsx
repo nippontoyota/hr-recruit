@@ -3,7 +3,7 @@ import { Shield, Plus, Edit, Trash2, Search } from 'lucide-react';
 import { getUsers, createUser, updateUser, deleteUser } from '../api/users';
 import type { User } from '../types';
 import { toast } from 'sonner';
-import { Button, Modal, Input, LoadingSpinner } from '../components/ui';
+import { Button, Modal, Input, LoadingSpinner, Select } from '../components/ui';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<User[]>([]);
@@ -21,11 +21,13 @@ export default function AdminUsers() {
     email: '',
     full_name: '',
     password: '',
-    role: 'BRANCH_HR',
+    role: 'LOCAL_HR',
     branch_location: '',
     department: ''
   });
   const [submitting, setSubmitting] = useState(false);
+
+  const [branchFilter, setBranchFilter] = useState('');
 
   const fetchUsers = async () => {
     try {
@@ -44,14 +46,38 @@ export default function AdminUsers() {
   }, []);
 
   const handleCreate = async () => {
-    if (!formData.email || !formData.full_name || !formData.password || !formData.role) {
-      toast.error("Please fill all required fields");
+    let generatedEmail = '';
+    let generatedName = '';
+    
+    if (formData.role === 'ADMIN') {
+      generatedEmail = 'admin@nipponhr.com';
+      generatedName = 'System Admin';
+    } else if (formData.role === 'HO_HR') {
+      generatedEmail = 'ho@nipponhr.com';
+      generatedName = 'Head Office HR';
+    } else if (formData.role === 'LOCAL_HR') {
+      if (!formData.branch_location) {
+        toast.error("Please select a branch location");
+        return;
+      }
+      const branchSlug = formData.branch_location.toLowerCase().replace(/[^a-z0-9]/g, '');
+      generatedEmail = `${branchSlug}@nipponhr.com`;
+      generatedName = `${formData.branch_location} Branch HR`;
+    }
+
+    if (!formData.password) {
+      toast.error("Please provide a password");
       return;
     }
+
     setSubmitting(true);
     try {
-      await createUser(formData);
-      toast.success("User created successfully");
+      const newUser = await createUser({
+        ...formData,
+        email: generatedEmail,
+        full_name: generatedName
+      });
+      toast.success(`Access granted! Account ${newUser.email} was created.`);
       setIsCreateOpen(false);
       fetchUsers();
     } catch (err: any) {
@@ -123,137 +149,302 @@ export default function AdminUsers() {
       email: '',
       full_name: '',
       password: '',
-      role: 'BRANCH_HR',
+      role: 'LOCAL_HR',
       branch_location: '',
       department: ''
     });
     setIsCreateOpen(true);
   };
 
-  const filteredUsers = users.filter(u => 
-    u.full_name.toLowerCase().includes(search.toLowerCase()) || 
-    u.email.toLowerCase().includes(search.toLowerCase()) ||
-    u.role.toLowerCase().includes(search.toLowerCase())
-  );
+  const localHRUsers = users.filter(u => {
+    if (u.role !== 'LOCAL_HR') return false;
+    const matchesSearch = u.full_name.toLowerCase().includes(search.toLowerCase()) || 
+      u.email.toLowerCase().includes(search.toLowerCase());
+    const matchesBranch = branchFilter ? u.branch_location === branchFilter : true;
+    return matchesSearch && matchesBranch;
+  });
 
   if (loading) return <div className="flex justify-center p-12"><LoadingSpinner size="lg" /></div>;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex justify-between items-center bg-card p-6 rounded-2xl shadow-sm border border-border">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-primary/10 text-primary rounded-xl">
-            <Shield className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">User Management</h1>
-            <p className="text-muted-foreground text-sm">Manage access and roles for all platform users</p>
-          </div>
+    <div className="max-w-6xl mx-auto space-y-8">
+      <div className="flex justify-between items-end">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground tracking-tight">User Management</h1>
+          <p className="text-muted-foreground mt-1">Manage access and roles for all platform users</p>
         </div>
-        <Button variant="primary" onClick={openCreate} className="flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Add User
+        <Button onClick={openCreate} className="flex items-center gap-2 !bg-red-600 hover:!bg-red-700 !text-white !border-none !rounded-md font-semibold px-4 py-2">
+          <Plus className="w-4 h-4" /> Add Access
         </Button>
       </div>
 
-      <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
-        <div className="p-4 border-b border-border bg-muted/20">
-          <div className="relative max-w-md">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input 
-              type="text" 
-              placeholder="Search users by name, email, or role..." 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-background border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-            />
-          </div>
-        </div>
+      <div className="space-y-8">
         
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-muted/30 text-muted-foreground font-semibold">
-              <tr>
-                <th className="px-6 py-3">Name</th>
-                <th className="px-6 py-3">Role</th>
-                <th className="px-6 py-3">Branch / Dept</th>
-                <th className="px-6 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filteredUsers.map(u => (
-                <tr key={u.id} className="hover:bg-muted/10 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="font-bold text-foreground">{u.full_name}</div>
-                    <div className="text-muted-foreground text-xs">{u.email}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="px-2 py-1 bg-primary/10 text-primary rounded text-[10px] font-bold uppercase tracking-wider">
-                      {u.role.replace(/_/g, ' ')}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-foreground">{u.branch_location || '-'}</div>
-                    <div className="text-muted-foreground text-xs">{u.department || ''}</div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button onClick={() => openEdit(u)} className="p-2 text-muted-foreground hover:text-primary transition-colors"><Edit className="w-4 h-4" /></button>
-                    <button onClick={() => openDelete(u)} className="p-2 text-muted-foreground hover:text-danger transition-colors"><Trash2 className="w-4 h-4" /></button>
-                  </td>
-                </tr>
+        {/* ADMIN SECTION */}
+        {users.filter(u => u.role === 'ADMIN').length > 0 && (
+          <div>
+            <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">ADMIN</h2>
+            <div className="flex flex-col border border-border rounded-md bg-surface">
+              {users.filter(u => u.role === 'ADMIN').map(u => (
+                <div key={u.id} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold shrink-0 bg-gray-200 text-gray-700">
+                      {u.full_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-foreground text-sm">{u.full_name}</div>
+                      <div className="text-muted-foreground text-xs">{u.email}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border bg-gray-50 text-gray-600 border-gray-200">
+                        GLOBAL ACCESS
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 border-l border-border pl-3">
+                      <button onClick={() => openEdit(u)} className="p-1.5 text-muted-foreground hover:bg-muted hover:text-primary rounded transition-colors" title="Edit User">
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
               ))}
-              {filteredUsers.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-muted-foreground">No users found.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+            </div>
+          </div>
+        )}
+
+        {/* HO HR SECTION */}
+        {users.filter(u => u.role === 'HO_HR').length > 0 && (
+          <div>
+            <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">HEAD OFFICE HR</h2>
+            <div className="flex flex-col border border-border rounded-md bg-surface">
+              {users.filter(u => u.role === 'HO_HR').map(u => (
+                <div key={u.id} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold shrink-0 bg-emerald-100 text-emerald-700">
+                      {u.full_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-foreground text-sm">{u.full_name}</div>
+                      <div className="text-muted-foreground text-xs">{u.email}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border bg-gray-50 text-gray-600 border-gray-200">
+                        GLOBAL ACCESS
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 border-l border-border pl-3">
+                      <button onClick={() => openEdit(u)} className="p-1.5 text-muted-foreground hover:bg-muted hover:text-primary rounded transition-colors" title="Edit User">
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => openDelete(u)} className="p-1.5 text-muted-foreground hover:bg-danger/10 hover:text-danger rounded transition-colors" title="Delete User">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* LOCAL HR SECTION */}
+        <div>
+          <div className="flex flex-col sm:flex-row gap-4 items-end justify-between mb-3">
+            <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider ml-1 mb-1">LOCAL HR</h2>
+            <div className="flex flex-col sm:flex-row gap-2 items-center w-full sm:w-auto">
+              <div className="w-full sm:w-64">
+                <Input 
+                  type="text" 
+                  placeholder="Search local HR..." 
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  leftElement={<Search className="w-4 h-4 text-muted-foreground" />}
+                  className="bg-surface shadow-sm border-border h-8 text-xs"
+                />
+              </div>
+              <div className="w-full sm:w-48">
+                <Select 
+                  value={branchFilter} 
+                  onChange={(e: any) => setBranchFilter(e.target.value)}
+                  className="bg-surface shadow-sm border-border h-8 text-xs"
+                >
+                  <option value="">All Branches</option>
+                  <option value="Enchakkal">Enchakkal</option>
+                  <option value="Kazhakootam">Kazhakootam</option>
+                  <option value="Kochuveli">Kochuveli</option>
+                  <option value="Kalamassery (Nippon Towers)">Kalamassery (Nippon Towers)</option>
+                  <option value="Nettoor">Nettoor</option>
+                  <option value="Muvattupuzha">Muvattupuzha</option>
+                  <option value="Puzhakkal (Ayyanthole)">Puzhakkal (Ayyanthole)</option>
+                  <option value="Nadathara">Nadathara</option>
+                  <option value="Vellangallur (Irinjalakuda)">Vellangallur (Irinjalakuda)</option>
+                  <option value="Nattakom">Nattakom</option>
+                  <option value="Thellakom">Thellakom</option>
+                  <option value="Pala">Pala</option>
+                  <option value="Kottiyam (Kollam)">Kottiyam (Kollam)</option>
+                  <option value="Pathanamthitta">Pathanamthitta</option>
+                  <option value="Thiruvalla">Thiruvalla</option>
+                  <option value="Kayamkulam">Kayamkulam</option>
+                </Select>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex flex-col border border-border rounded-md bg-surface min-h-[100px]">
+            {localHRUsers.length === 0 ? (
+              <div className="py-8 text-center m-auto">
+                <p className="text-muted-foreground text-sm">No local HR found.</p>
+              </div>
+            ) : (
+              localHRUsers.map(u => {
+                const getBranchColor = (branch: string | null) => {
+                  if (!branch) return 'bg-gray-100 text-gray-700 border-gray-200';
+                  const colorList = [
+                    'bg-blue-50 text-blue-700 border-blue-200',
+                    'bg-cyan-50 text-cyan-700 border-cyan-200',
+                    'bg-sky-50 text-sky-700 border-sky-200',
+                    'bg-indigo-50 text-indigo-700 border-indigo-200',
+                    'bg-violet-50 text-violet-700 border-violet-200',
+                    'bg-purple-50 text-purple-700 border-purple-200',
+                    'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
+                    'bg-pink-50 text-pink-700 border-pink-200',
+                    'bg-rose-50 text-rose-700 border-rose-200',
+                    'bg-red-50 text-red-700 border-red-200',
+                    'bg-orange-50 text-orange-700 border-orange-200',
+                    'bg-amber-50 text-amber-700 border-amber-200',
+                    'bg-lime-50 text-lime-700 border-lime-200',
+                    'bg-green-50 text-green-700 border-green-200',
+                    'bg-emerald-50 text-emerald-700 border-emerald-200',
+                  ];
+                  let hash = 0;
+                  for (let i = 0; i < branch.length; i++) {
+                    hash = branch.charCodeAt(i) + ((hash << 5) - hash);
+                  }
+                  return colorList[Math.abs(hash) % colorList.length];
+                };
+                
+                return (
+                  <div key={u.id} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold shrink-0 bg-amber-100 text-amber-700">
+                        {u.full_name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-foreground text-sm">{u.full_name}</div>
+                        <div className="text-muted-foreground text-xs">{u.email}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getBranchColor(u.branch_location)}`}>
+                          {u.branch_location}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 border-l border-border pl-3">
+                        <button onClick={() => openEdit(u)} className="p-1.5 text-muted-foreground hover:bg-muted hover:text-primary rounded transition-colors" title="Edit User">
+                          <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => openDelete(u)} className="p-1.5 text-muted-foreground hover:bg-danger/10 hover:text-danger rounded transition-colors" title="Delete User">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Create / Edit Modal */}
-      <Modal isOpen={isCreateOpen || isEditOpen} onClose={() => { setIsCreateOpen(false); setIsEditOpen(false); }} title={isEditOpen ? "Edit User" : "Create New User"} size="md">
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Full Name</label>
-            <Input value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} placeholder="John Doe" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Email</label>
-            <Input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="john@example.com" disabled={isEditOpen} />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">{isEditOpen ? "New Password (Optional)" : "Password"}</label>
-            <Input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="********" />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Role</label>
-            <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full p-2.5 bg-background border border-border rounded-xl">
-              <option value="SUPER_ADMIN">Super Admin</option>
-              <option value="COMPANY_HR_HEAD">Company HR Head</option>
-              <option value="BRANCH_HR">Branch HR</option>
-              <option value="HQ_HR">HQ HR</option>
-              <option value="DEPT_HEAD">Department Head</option>
-              <option value="BRANCH_VP">Branch VP</option>
-              <option value="SERVICE_VP">Service VP</option>
-              <option value="HQ_STAFF">HQ Staff</option>
-              <option value="FINANCE">Finance</option>
-            </select>
-          </div>
+      <Modal isOpen={isCreateOpen || isEditOpen} onClose={() => { setIsCreateOpen(false); setIsEditOpen(false); }} title={isEditOpen ? "Edit User Access" : "Grant New Access"} size="md">
+        <div className="p-6 space-y-5">
+          {isEditOpen && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Full Name</label>
+                <Input 
+                  value={formData.full_name} 
+                  disabled 
+                  className="bg-surface border-border shadow-sm rounded-md h-9 text-sm disabled:bg-muted/50"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Email Address</label>
+                <Input 
+                  value={formData.email} 
+                  disabled 
+                  className="bg-surface border-border shadow-sm rounded-md h-9 text-sm disabled:bg-muted/50"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Branch (Optional)</label>
-              <Input value={formData.branch_location} onChange={e => setFormData({...formData, branch_location: e.target.value})} placeholder="Kochi" />
+              <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Access Role</label>
+              <Select 
+                value={formData.role} 
+                onChange={(e: any) => setFormData({...formData, role: e.target.value})} 
+                className="bg-surface border-border shadow-sm rounded-md h-9 text-sm w-full"
+              >
+                <option value="ADMIN">System Admin</option>
+                <option value="HO_HR">Head Office HR</option>
+                <option value="LOCAL_HR">Local Branch HR</option>
+              </Select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase mb-1">Department (Optional)</label>
-              <Input value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} placeholder="IT" />
+              <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
+                {isEditOpen ? "Reset Password" : "Password"}
+              </label>
+              <Input 
+                type="password" 
+                value={formData.password} 
+                onChange={e => setFormData({...formData, password: e.target.value})} 
+                placeholder={isEditOpen ? "Leave blank to keep current" : "Secure password"} 
+                className="bg-surface border-border shadow-sm rounded-md h-9 text-sm"
+              />
             </div>
           </div>
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="ghost" onClick={() => { setIsCreateOpen(false); setIsEditOpen(false); }}>Cancel</Button>
-            <Button variant="primary" onClick={isEditOpen ? handleUpdate : handleCreate} isLoading={submitting}>
-              {isEditOpen ? "Save Changes" : "Create User"}
+
+          {formData.role === 'LOCAL_HR' && (
+            <div className="pt-2 border-t border-border/50 mt-4">
+              <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5 text-primary">Assign Branch Location</label>
+              <Select 
+                value={formData.branch_location} 
+                onChange={(e: any) => setFormData({...formData, branch_location: e.target.value})} 
+                className="bg-primary/5 border-primary/20 shadow-sm rounded-md h-9 text-sm w-full font-medium"
+              >
+                <option value="">Select branch...</option>
+                <option value="Enchakkal">Enchakkal</option>
+                <option value="Kazhakootam">Kazhakootam</option>
+                <option value="Kochuveli">Kochuveli</option>
+                <option value="Kalamassery (Nippon Towers)">Kalamassery (Nippon Towers)</option>
+                <option value="Nettoor">Nettoor</option>
+                <option value="Muvattupuzha">Muvattupuzha</option>
+                <option value="Puzhakkal (Ayyanthole)">Puzhakkal (Ayyanthole)</option>
+                <option value="Nadathara">Nadathara</option>
+                <option value="Vellangallur (Irinjalakuda)">Vellangallur (Irinjalakuda)</option>
+                <option value="Nattakom">Nattakom</option>
+                <option value="Thellakom">Thellakom</option>
+                <option value="Pala">Pala</option>
+                <option value="Kottiyam (Kollam)">Kottiyam (Kollam)</option>
+                <option value="Pathanamthitta">Pathanamthitta</option>
+                <option value="Thiruvalla">Thiruvalla</option>
+                <option value="Kayamkulam">Kayamkulam</option>
+              </Select>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-6">
+            <Button variant="ghost" className="h-9 px-4 text-sm" onClick={() => { setIsCreateOpen(false); setIsEditOpen(false); }}>Cancel</Button>
+            <Button variant="primary" className="h-9 px-6 text-sm bg-red-600 hover:bg-red-700 text-white font-semibold border-none" onClick={isEditOpen ? handleUpdate : handleCreate} isLoading={submitting}>
+              {isEditOpen ? "Save Changes" : "Grant Access"}
             </Button>
           </div>
         </div>

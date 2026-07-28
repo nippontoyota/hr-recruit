@@ -60,6 +60,7 @@ class Candidate(Base):
     is_head_office_hire: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False, nullable=False)
     interviewer_assignments: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     offer_status: Mapped[str | None] = mapped_column(String(50), nullable=True) # PENDING, ACCEPTED, DECLINED
+    salary_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True) # Mapped from Bulk Excel Upload
     
     # Visit Scheduling Fields
     visit_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)

@@ -72,10 +72,7 @@ def _get_candidate_department(position: str | None) -> str:
 def get_department_questions(
     department: str,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(
-        UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR,
-        UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN, UserRole.DEPT_HEAD
-    )),
+    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     norm_dept = _get_candidate_department(department)
     questions = db.scalars(select(TechnicalQuestion).where(TechnicalQuestion.department == norm_dept)).all()
@@ -88,7 +85,7 @@ def get_department_questions(
 def get_candidate_evaluations(
     candidate_id: UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
+    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     candidate = db.get(Candidate, candidate_id)
     if not candidate:
@@ -126,7 +123,7 @@ def create_evaluation(
     candidate_id: UUID,
     body: EvaluationCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
+    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     candidate = db.get(Candidate, candidate_id)
     if not candidate:
@@ -165,7 +162,7 @@ def create_evaluation(
 def delete_evaluation(
     eval_id: UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
+    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     evaluation = db.get(Evaluation, eval_id)
     if not evaluation:
@@ -192,7 +189,7 @@ def schedule_evaluation(
     eval_id: UUID,
     body: EvaluationSchedule,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
+    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     evaluation = db.get(Evaluation, eval_id)
     if not evaluation:
@@ -226,7 +223,7 @@ def schedule_evaluation(
 def generate_evaluation_token(
     eval_id: UUID,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
+    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     evaluation = db.get(Evaluation, eval_id)
     if not evaluation:
@@ -287,7 +284,7 @@ def submit_scorecard(
     eval_id: UUID,
     body: EvaluationSubmitScorecard,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
+    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     evaluation = db.get(Evaluation, eval_id)
     if not evaluation:
@@ -651,7 +648,7 @@ def send_evaluation_whatsapp_invite(
     eval_id: UUID,
     body: EvaluationWhatsAppInvite,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
+    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     evaluation = db.get(Evaluation, eval_id)
     if not evaluation:
@@ -746,7 +743,7 @@ def send_evaluation_whatsapp_invite(
 def get_department_questions(
     department: str,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.HR))
+    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR))
 ):
     q_rows = db.scalars(
         select(TechnicalQuestion).where(TechnicalQuestion.department == department)

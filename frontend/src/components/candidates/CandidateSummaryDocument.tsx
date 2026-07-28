@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import type { Candidate, Evaluation } from '../../types';
 import { PdfViewer, LoadingSpinner } from '../../components/ui';
 import { getDepartmentQuestions } from '../../api/evaluations';
+import { useAuth } from '../../auth/AuthContext';
 
 interface CandidateSummaryDocumentProps {
   candidate: Candidate;
@@ -10,6 +11,7 @@ interface CandidateSummaryDocumentProps {
 }
 
 export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButton = false }: CandidateSummaryDocumentProps) {
+  const { user } = useAuth();
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,8 +23,9 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
       id: candidate?.id,
       name: candidate?.full_name,
       pos: candidate?.position_applied_for,
-      photo: candidate?.profile?.photo_url,
-      // Stringifying the entire raw_data can cause unstable hashes if the backend dict order changes.
+      // The backend attaches ?t=<timestamp> to photo_url which changes on every poll.
+      // We must strip it out so the hash remains stable!
+      photo: candidate?.profile?.photo_url?.split('?')[0],
       // We rely on the `updated_at` timestamp of the candidate instead to know if data actually changed.
       updated_at: (candidate as any)?.updated_at || candidate?.created_at,
       evals_count: evaluations?.length,
@@ -136,6 +139,22 @@ export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButt
         </div>
       )}
       <div className="flex-1 w-full relative">
+        {user?.role !== 'LOCAL_HR' && candidate.salary_data && (
+          <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-md p-4">
+            <h3 className="text-sm font-bold text-emerald-800 uppercase tracking-wider mb-3">Salary Annexure Data</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {Object.entries(candidate.salary_data).map(([key, value]) => {
+                if (key.toLowerCase().includes('id') || key.toLowerCase().includes('email')) return null;
+                return (
+                  <div key={key}>
+                    <p className="text-xs text-emerald-600 font-semibold">{key}</p>
+                    <p className="text-sm text-emerald-900">{String(value)}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <PdfViewer url={pdfUrl} />
       </div>
     </div>

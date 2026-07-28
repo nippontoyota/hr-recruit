@@ -99,6 +99,16 @@ export const updateCandidateStage = async (candidateId: string, toStage: string,
   return response.data;
 };
 
+export const updateCommunicationStatus = async (communicationId: string, status: string): Promise<any> => {
+  const response = await request('POST', `/communications/${communicationId}/status`, { status });
+  return response.data;
+};
+
+export const sendOfferLetter = async (candidateId: string): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/offer-letter/send`);
+  return response.data;
+};
+
 export const unholdCandidate = async (candidateId: string, remarks?: string): Promise<Candidate> => {
   const response = await request('POST', `/candidates/${candidateId}/unhold`, { remarks });
   return response.data;
@@ -170,6 +180,18 @@ export const uploadCandidatePhoto = async (candidateId: string, file: File): Pro
   const formData = new FormData();
   formData.append('file', file);
   const response = await request('POST', `/candidates/${candidateId}/photo`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+
+
+export const uploadBulkSalary = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await request('POST', '/candidates/bulk-salary', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return response.data;

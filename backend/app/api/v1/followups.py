@@ -50,7 +50,7 @@ class FollowUpOut(BaseModel):
 def create_followup(
     body: FollowUpCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = db.get(Candidate, body.candidate_id)
     if not row:
@@ -74,7 +74,7 @@ def create_followup(
 @router.get("", response_model=List[FollowUpOut])
 def list_followups(
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     q = select(FollowUp).order_by(FollowUp.due_at.asc())
     if user.role == UserRole.LOCAL_HR:
@@ -85,7 +85,7 @@ def list_followups(
 def list_candidate_followups(
     candidate_id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     get_candidate_for_user(db, candidate_id, user)
     return list(db.scalars(
@@ -99,7 +99,7 @@ def update_followup(
     id: UUID,
     body: FollowUpUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     fu = db.get(FollowUp, id)
     if not fu:
@@ -121,7 +121,7 @@ def update_followup(
 def delete_followup(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     fu = db.get(FollowUp, id)
     if not fu:

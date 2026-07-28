@@ -11,6 +11,7 @@ import { AddCandidateForm } from '../../components/candidates/AddCandidateForm';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { toast } from 'sonner';
 import { cn, extractError } from '../../lib/utils';
+import { BulkSalaryUpload } from '../../components/candidates/BulkSalaryUpload';
 
 const PIPELINE_STAGES: PipelineStage[] = [
   'SCREENING', 'CANDIDATE_FORM', 'BRANCH_INTERVIEW',
@@ -28,7 +29,7 @@ let candidatesCache: Candidate[] = [];
 export default function CandidatesList() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canDelete = ['SUPER_ADMIN', 'HR'].includes(user?.role as string);
+  const canDelete = ['ADMIN', 'HO_HR', 'LOCAL_HR'].includes(user?.role as string);
 
   // Data
   const [candidates, setCandidates] = useState<Candidate[]>(candidatesCache);
@@ -207,6 +208,7 @@ export default function CandidatesList() {
         description={activeTab === 'UPDATES' ? 'Candidates needing your attention' : 'All applicants linked to your recruiter profile. Click a row to open the full profile and manage pipeline stages.'}
         action={
           <div className="flex gap-3">
+            {user?.role !== 'LOCAL_HR' && <BulkSalaryUpload />}
             <Button onClick={() => setIsAddOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Candidate

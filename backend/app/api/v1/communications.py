@@ -40,7 +40,7 @@ class CommunicationOut(BaseModel):
 def create_communication(
     body: CommunicationCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = db.get(Candidate, body.candidate_id)
     if not row:
@@ -75,7 +75,7 @@ def create_communication(
 def list_candidate_communications(
     candidate_id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     get_candidate_for_user(db, candidate_id, user)
     return list(db.scalars(

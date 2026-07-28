@@ -469,6 +469,7 @@ class CandidateOut(BaseModel):
     assigned_manager_id: UUID | None
     assigned_gm_id: UUID | None
     offer_status: str | None = None
+    salary_data: dict | None = None
     applied_at: datetime
     created_at: datetime
     updated_at: datetime

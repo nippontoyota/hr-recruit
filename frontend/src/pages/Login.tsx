@@ -3,12 +3,12 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth";
 import { Input, Button } from "../components/ui";
 import { Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -17,12 +17,24 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     try {
       await login(email, password);
-      navigate(from, { replace: true });
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Login failed. Check your credentials and try again.");
+      toast.success("Successfully logged in");
+      
+      // Get the updated user from local storage (or we could return it from login)
+      const storedUser = localStorage.getItem('user');
+      const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+      
+      // Prevent non-admins from being redirected to admin routes if they logged out from there
+      let targetPath = from;
+      if (parsedUser && parsedUser.role !== 'ADMIN' && targetPath.startsWith('/admin')) {
+        targetPath = '/';
+      }
+      
+      navigate(targetPath, { replace: true });
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      toast.error(detail || err.message || "Login failed. Check your credentials and try again.");
     }
   };
 
@@ -51,14 +63,6 @@ export default function Login() {
             </div>
 
             <form className="space-y-5" onSubmit={handleSubmit}>
-              {error && (
-                <div
-                  role="alert"
-                  className="bg-danger/5 text-danger text-sm p-3 rounded-lg border border-danger/20"
-                >
-                  {error}
-                </div>
-              )}
 
               <div>
                 <label htmlFor="email" className="form-label">
@@ -72,7 +76,6 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@nippon.test"
-                  error={!!error}
                 />
               </div>
 
@@ -88,7 +91,6 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  error={!!error}
                   rightElement={
                     <button
                       type="button"

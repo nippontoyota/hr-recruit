@@ -31,7 +31,7 @@ async def upload_resume(
     id: UUID,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
     return await _save_resume_for_candidate(db, row, file, uploaded_by_user_id=user.id)
@@ -55,7 +55,7 @@ async def upload_photo(
 def get_resume(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     get_candidate_for_user(db, id, user)
     doc = _get_resume_document(db, id)
@@ -69,7 +69,7 @@ def transition_stage(
     id: UUID,
     body: StageChange,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
     updated = transition(
@@ -93,7 +93,7 @@ def unhold_candidate(
     id: UUID,
     body: UnholdRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     """Resume a candidate from ON_HOLD back to the previous stage recorded in stage history.
 
@@ -128,7 +128,7 @@ def unhold_candidate(
 def history(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     get_candidate_for_user(db, id, user)
     return list(db.scalars(select(StageHistory).where(StageHistory.candidate_id == id).order_by(StageHistory.created_at)))
@@ -137,7 +137,7 @@ def history(
 def get_activity_logs(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     get_candidate_for_user(db, id, user)
     return list(db.scalars(select(ActivityLog).where(ActivityLog.candidate_id == id).order_by(ActivityLog.created_at.desc())))
@@ -147,7 +147,7 @@ def update_visit_schedule(
     id: UUID,
     body: VisitScheduleUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     candidate = get_candidate_for_user(db, id, user)
     
@@ -178,7 +178,7 @@ def update_visit_schedule(
 def send_pre_form(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
     _issue_pre_form(db, row, user)
@@ -191,7 +191,7 @@ def send_whatsapp_invite(
     id: UUID,
     body: WhatsAppInviteCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     candidate = get_candidate_for_user(db, id, user)
     
@@ -286,3 +286,144 @@ def send_whatsapp_invite(
     db.commit()
     return {"status": "success", "message_id": external_message_id}
 
+
+from app.api.v1.pdf import generate_offer_letter_pdf
+from app.services.email import send_email_with_pdf
+
+class SendOfferLetterRequest(BaseModel):
+    pass
+
+@router.post("/{id}/offer-letter/send", response_model=CandidateOut)
+def send_offer_letter(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
+):
+    row = get_candidate_for_user(db, id, user)
+    
+    if row.current_stage not in (PipelineStage.FINAL_APPROVAL, PipelineStage.HIRED):
+        raise HTTPException(status_code=400, detail="Offer letter can only be sent in Final Approval or Hired stage.")
+        
+    if not row.email:
+        raise HTTPException(status_code=400, detail="Candidate does not have an email address.")
+        
+    # Generate the PDF
+    payload = {
+        "candidate": {
+            "full_name": row.full_name,
+            "position_applied_for": row.position_applied_for,
+            "salary_data": row.salary_data
+        }
+    }
+    pdf_bytes = generate_offer_letter_pdf(payload)
+    
+    # Send Email
+    subject = f"Offer of Employment - {row.position_applied_for} at Nippon Toyota"
+    body_html = f"""
+    <html>
+        <body>
+            <p>Dear {row.full_name},</p>
+            <p>We are delighted to offer you the position of <strong>{row.position_applied_for}</strong> at Nippon Toyota.</p>
+            <p>Please find your official offer letter attached as a PDF.</p>
+            <p>We look forward to welcoming you to the team!</p>
+            <br/>
+            <p>Best regards,<br/>Human Resources<br/>Nippon Toyota</p>
+        </body>
+    </html>
+    """
+    
+    send_email_with_pdf(
+        to_email=row.email,
+        subject=subject,
+        body_html=body_html,
+        pdf_bytes=bytes(pdf_bytes),
+        pdf_filename="OfferLetter_NipponToyota.pdf"
+    )
+    
+    # Log communication
+    comm = Communication(
+        candidate_id=id,
+        type=CommunicationType.EMAIL,
+        direction=CommunicationDirection.OUTGOING,
+        status=CommunicationStatus.SENT,
+        subject=subject,
+        content_preview="Sent Offer Letter Email with PDF Attachment.",
+        created_by=user.id
+    )
+    db.add(comm)
+    
+    # Log Activity
+    log = ActivityLog(
+        candidate_id=id,
+        activity_type=ActivityType.EMAIL,
+        title="Sent Offer Letter",
+        description="Generated and sent offer letter PDF via email.",
+        created_by_user_id=user.id
+    )
+    db.add(log)
+    
+    # Update candidate offer_status
+    row.offer_status = "SENT"
+    
+    db.commit()
+    db.refresh(row)
+    
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
+
+import openpyxl
+import io
+
+@router.post("/bulk-salary", status_code=200)
+async def upload_bulk_salary(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
+):
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported.")
+    
+    try:
+        contents = await file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
+        sheet = wb.active
+        
+        headers = []
+        updated_count = 0
+        not_found_count = 0
+        
+        for i, row in enumerate(sheet.iter_rows(values_only=True)):
+            if i == 0:
+                headers = [str(cell).strip() if cell else f"col_{j}" for j, cell in enumerate(row)]
+                continue
+                
+            if not any(row):
+                continue
+                
+            row_data = dict(zip(headers, row))
+            candidate_id = row_data.get("Candidate ID") or row_data.get("candidate_id")
+            email = row_data.get("Email") or row_data.get("email")
+            
+            query = select(Candidate)
+            if candidate_id:
+                query = query.where(Candidate.candidate_id == str(candidate_id))
+            elif email:
+                query = query.where(Candidate.email == str(email))
+            else:
+                continue
+                
+            candidate = db.scalar(query)
+            if candidate:
+                candidate.salary_data = row_data
+                updated_count += 1
+            else:
+                not_found_count += 1
+                
+        db.commit()
+        return {
+            "message": f"Successfully updated {updated_count} candidates.",
+            "updated_count": updated_count,
+            "not_found_count": not_found_count
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to process excel file: {str(e)}")

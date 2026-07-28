@@ -473,62 +473,21 @@ def list_candidates(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(
-        UserRole.COMPANY_HR_HEAD, UserRole.SUPER_ADMIN, UserRole.ADMIN,
-        UserRole.BRANCH_HR, UserRole.DEPT_HEAD, UserRole.BRANCH_VP,
-        UserRole.SERVICE_VP, UserRole.FINANCE, UserRole.HQ_HR,
-        UserRole.HQ_STAFF, UserRole.LOCAL_HR
-    )),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     q = select(Candidate).order_by(Candidate.created_at.desc())
     if stage:
         q = q.where(Candidate.current_stage == stage)
-        
     # Row-Level Security / Visibility Logic
-    if user.role in (UserRole.COMPANY_HR_HEAD, UserRole.SUPER_ADMIN, UserRole.ADMIN):
+    if user.role in (UserRole.ADMIN, UserRole.HO_HR):
         pass # sees all
-    elif user.role == UserRole.BRANCH_HR:
-        # Branch HR sees candidates assigned to them, or candidates in their branch
-        q = q.where(
-            or_(
-                Candidate.assigned_hr_user_id == user.id,
-                Candidate.branch_location == user.branch_location
-            )
-        )
-    elif user.role == UserRole.DEPT_HEAD:
-        # Dept Head sees candidates for their department, or where they are assigned as interviewer
-        q = q.where(
-            or_(
-                Candidate.position_applied_for == user.department,
-                func.jsonb_path_exists(Candidate.interviewer_assignments, f'$.* ? (@ == "{str(user.id)}")')
-            )
-        )
-    elif user.role == UserRole.BRANCH_VP:
-        q = q.where(
-            or_(
-                Candidate.branch_location == user.branch_location,
-                func.jsonb_path_exists(Candidate.interviewer_assignments, f'$.* ? (@ == "{str(user.id)}")')
-            )
-        )
-    elif user.role == UserRole.SERVICE_VP:
-        q = q.where(
-            or_(
-                Candidate.position_applied_for.ilike("%service%"),
-                func.jsonb_path_exists(Candidate.interviewer_assignments, f'$.* ? (@ == "{str(user.id)}")')
-            )
-        )
-    elif user.role == UserRole.FINANCE:
-        # Finance only sees candidates in final stages
-        q = q.where(Candidate.current_stage.in_([PipelineStage.FINAL_APPROVAL, PipelineStage.HIRED]))
+    elif user.role == UserRole.LOCAL_HR:
+        # Local HR sees candidates in their branch
+        q = q.where(Candidate.branch_location == user.branch_location)
     else:
-        # HQ_HR, HQ_STAFF, INTERVIEWER fallback
-        q = q.where(
-            or_(
-                Candidate.assigned_hr_user_id == user.id,
-                func.jsonb_path_exists(Candidate.interviewer_assignments, f'$.* ? (@ == "{str(user.id)}")')
-            )
-        )
-    
+        # Fallback to prevent leaks
+        q = q.where(Candidate.id == None)
+
     q = q.offset(skip).limit(limit)
     rows = list(db.scalars(q).all())
     with_resume = resume_candidate_ids(db, [row.id for row in rows])
@@ -539,7 +498,7 @@ def list_candidates(
 def create(
     body: CandidateCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     if body.assigned_hr_user_id is None:
         body = body.model_copy(update={"assigned_hr_user_id": user.id})
@@ -551,7 +510,7 @@ def create(
 def get_candidate(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.id == id))
     if not row:
@@ -565,7 +524,7 @@ def update_profile_raw_data(
     id: UUID,
     body: CandidateProfileRawDataUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.id == id))
     if not row:
@@ -597,7 +556,7 @@ def update_profile_raw_data(
 def delete_candidate_endpoint(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
     
@@ -636,7 +595,7 @@ def resolve_duplicate(
     id: UUID,
     body: CandidateResolveDuplicate,
     db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.LOCAL_HR, UserRole.ADMIN)),
+    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     candidate = db.get(Candidate, id)
     if not candidate:
@@ -672,7 +631,7 @@ class BulkDeleteRequest(BaseModel):
 def bulk_delete_candidates_endpoint(
     request: BulkDeleteRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.SUPER_ADMIN, UserRole.COMPANY_HR_HEAD, UserRole.BRANCH_HR, UserRole.HQ_HR, UserRole.ADMIN, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     success_count = 0
     failed_ids = []

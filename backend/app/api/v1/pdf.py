@@ -1141,3 +1141,103 @@ async def generate_dynamic_form(request: Request):
             err_f.write(traceback.format_exc())
             err_f.write(str(payload))
         raise e
+
+def generate_offer_letter_pdf(payload: dict) -> bytearray:
+    candidate = payload.get("candidate", {})
+    full_name = s(candidate.get("full_name"))
+    position = s(candidate.get("position_applied_for"))
+    
+    from datetime import datetime
+    today = datetime.now().strftime("%B %d, %Y")
+
+    pdf = ToyotaPDF()
+    pdf.add_page()
+    pdf.set_margins(left=20, top=20, right=20)
+    pdf.set_auto_page_break(auto=True, margin=20)
+    
+    # Header
+    pdf.set_font("Roboto", "B", 18)
+    pdf.cell(0, 10, "Nippon Toyota", ln=True, align="C")
+    pdf.set_font("Roboto", "", 10)
+    pdf.cell(0, 6, "123 Business Avenue, Kochi, Kerala, India", ln=True, align="C")
+    pdf.ln(15)
+    
+    # Date
+    pdf.set_font("Roboto", "", 11)
+    pdf.cell(0, 8, f"Date: {today}", ln=True)
+    pdf.ln(5)
+    
+    # Salutation
+    pdf.set_font("Roboto", "B", 11)
+    pdf.cell(0, 8, f"Dear {full_name},", ln=True)
+    pdf.ln(5)
+    
+    # Body
+    pdf.set_font("Roboto", "", 11)
+    pdf.multi_cell(0, 6, f"We are thrilled to formally offer you the position of {position} at Nippon Toyota. "
+                         "Our team was highly impressed by your skills and background, and we believe you will make "
+                         "a fantastic addition to our company.")
+    pdf.ln(5)
+    
+    pdf.multi_cell(0, 6, "As discussed, you will be receiving a comprehensive compensation package along with standard "
+                         "company benefits. Your exact compensation structure and joining details will be finalized shortly.")
+    pdf.ln(5)
+    
+    pdf.multi_cell(0, 6, "We look forward to welcoming you to the Nippon Toyota family. "
+                         "Please respond to this email to indicate your acceptance of this offer.")
+    pdf.ln(10)
+    
+    # Sign-off
+    pdf.cell(0, 6, "Sincerely,", ln=True)
+    pdf.ln(10)
+    pdf.set_font("Roboto", "B", 11)
+    pdf.cell(0, 6, "Human Resources Department", ln=True)
+    pdf.set_font("Roboto", "", 11)
+    pdf.cell(0, 6, "Nippon Toyota", ln=True)
+    
+    # Salary Annexure Page
+    salary_data = candidate.get("salary_data")
+    if salary_data and isinstance(salary_data, dict):
+        pdf.add_page()
+        pdf.set_font("Roboto", "B", 14)
+        pdf.cell(0, 10, "Annexure A: Compensation Details", ln=True, align="C")
+        pdf.ln(10)
+        
+        pdf.set_font("Roboto", "", 11)
+        pdf.multi_cell(0, 6, f"Name: {full_name}\nPosition: {position}")
+        pdf.ln(10)
+        
+        # Table Header
+        pdf.set_font("Roboto", "B", 11)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(90, 8, " Component", border=1, fill=True)
+        pdf.cell(90, 8, " Amount (INR)", border=1, fill=True, ln=True)
+        
+        # Table Body
+        pdf.set_font("Roboto", "", 11)
+        for key, value in salary_data.items():
+            if str(key).lower() in ("candidate_id", "candidate id", "email"):
+                continue
+            pdf.cell(90, 8, f" {key}", border=1)
+            pdf.cell(90, 8, f" {value}", border=1, ln=True)
+            
+        pdf.ln(15)
+        pdf.multi_cell(0, 6, "Note: All compensation is subject to applicable taxes and statutory deductions.")
+    
+    return pdf.output(dest="S")
+
+@router.post("/offer-letter")
+async def generate_offer_letter(request: Request):
+    try:
+        payload = await request.json()
+        pdf_bytes = generate_offer_letter_pdf(payload)
+        return Response(
+            content=bytes(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="OfferLetter.pdf"'}
+        )
+    except Exception as e:
+        import traceback
+        with open("pdf_error.log", "w") as err_f:
+            err_f.write(traceback.format_exc())
+        raise e

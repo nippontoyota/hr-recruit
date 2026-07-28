@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 60
     redis_url: str = ""
 
+    # SMTP Configuration
+    smtp_host: str = "smtp.sendgrid.net"
+    smtp_port: int = 587
+    smtp_user: str = "apikey"
+    smtp_password: str = ""
+    smtp_from_email: str = "hr@nippontoyota.com"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
