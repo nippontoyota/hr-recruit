@@ -40,6 +40,11 @@ export const AppShell = () => {
               </div>
 
               <div className="flex items-center justify-end gap-4 ml-auto">
+                {role && (
+                  <span className="px-2.5 py-1 bg-primary/10 text-primary border border-primary/20 rounded-md text-[10px] font-bold uppercase tracking-widest hidden sm:inline-block">
+                    {role.replace(/_/g, ' ')}
+                  </span>
+                )}
                 <button
                   onClick={logout}
                   className="px-3 py-1.5 bg-danger/10 text-danger hover:bg-danger hover:text-white rounded-md transition-colors text-xs font-bold uppercase tracking-wider"
