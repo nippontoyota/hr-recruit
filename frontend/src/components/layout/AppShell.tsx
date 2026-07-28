@@ -47,7 +47,7 @@ export const AppShell = () => {
     <ResumeViewerProvider>
       <div className="flex h-screen w-full bg-background overflow-hidden font-sans flex-col">
         {!isCandidateProfile && (
-          <header className="sticky top-0 z-[var(--z-sticky)] flex items-center justify-between h-14 border-b border-border bg-surface px-4 lg:px-6 shrink-0">
+          <header className="sticky top-0 z-[var(--z-sticky)] flex items-center justify-between h-14 bg-surface px-4 lg:px-6 shrink-0">
             {/* Logo / Mobile Menu */}
             <div className="flex items-center gap-4 w-1/4">
               <button
@@ -59,7 +59,7 @@ export const AppShell = () => {
                 {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
               <span className="text-base font-accent font-extrabold text-text-primary tracking-tight hidden md:block">
-                Recruitment CRM
+                Nippon Recruitment CRM
               </span>
             </div>
 
