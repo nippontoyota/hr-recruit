@@ -46,7 +46,7 @@ class Candidate(Base):
     branch_location: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     is_duplicate_flagged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     duplicate_of_candidate_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.candidates.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.candidates.id"), nullable=True, index=True
     )
     assigned_hr_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id"), nullable=True, index=True
@@ -84,9 +84,9 @@ class Candidate(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    profile: Mapped["CandidateProfile"] = relationship("CandidateProfile", back_populates="candidate", uselist=False, cascade="all, delete-orphan")
-    communications: Mapped[List["Communication"]] = relationship("Communication", back_populates="candidate", cascade="all, delete-orphan")
-    followups: Mapped[List["FollowUp"]] = relationship("FollowUp", back_populates="candidate", cascade="all, delete-orphan")
-    evaluations: Mapped[List["Evaluation"]] = relationship("Evaluation", back_populates="candidate", cascade="all, delete-orphan")
+    profile: Mapped["CandidateProfile"] = relationship("CandidateProfile", back_populates="candidate", uselist=False, cascade="all, delete-orphan", passive_deletes=True)
+    communications: Mapped[List["Communication"]] = relationship("Communication", back_populates="candidate", cascade="all, delete-orphan", passive_deletes=True)
+    followups: Mapped[List["FollowUp"]] = relationship("FollowUp", back_populates="candidate", cascade="all, delete-orphan", passive_deletes=True)
+    evaluations: Mapped[List["Evaluation"]] = relationship("Evaluation", back_populates="candidate", cascade="all, delete-orphan", passive_deletes=True)
 
 

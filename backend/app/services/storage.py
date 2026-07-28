@@ -62,6 +62,13 @@ def upload_object(path: str, data: bytes, content_type: str, *, upsert: bool = T
 
 def delete_object(path: str) -> None:
     """Best-effort delete; ignores failures."""
+    delete_objects([path])
+
+
+def delete_objects(paths: list[str]) -> None:
+    """Best-effort bulk delete; ignores failures."""
+    if not paths:
+        return
     try:
         base, key, bucket = _require_storage_config()
     except HTTPException:
@@ -72,7 +79,7 @@ def delete_object(path: str) -> None:
             "DELETE",
             url,
             headers=_headers(key, content_type="application/json"),
-            json={"prefixes": [path]},
+            json={"prefixes": paths},
         )
     except httpx.HTTPError:
         return

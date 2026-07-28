@@ -3,7 +3,7 @@ from pathlib import PurePosixPath
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from sqlalchemy import or_, select, cast, String, func
+from sqlalchemy import or_, select, cast, String, func, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
@@ -560,26 +560,27 @@ def delete_candidate_endpoint(
 ):
     row = get_candidate_for_user(db, id, user)
     
-    # Try to delete documents from storage and db
+    # Try to bulk delete documents from storage
     docs = db.scalars(select(Document).where(Document.candidate_id == id)).all()
-    for doc in docs:
-        if doc.storage_path:
-            try:
-                storage.delete_object(doc.storage_path)
-            except Exception as e:
-                print(f"Failed to delete {doc.storage_path}: {e}")
-        db.delete(doc)
-        
-    # Delete stage histories
-    histories = db.scalars(select(StageHistory).where(StageHistory.candidate_id == id)).all()
-    for h in histories:
-        db.delete(h)
+    storage_paths = [doc.storage_path for doc in docs if doc.storage_path]
+    if storage_paths:
+        try:
+            storage.delete_objects(storage_paths)
+        except Exception as e:
+            print(f"Failed to bulk delete documents: {e}")
+            
+    # Bulk delete documents and stage histories
+    db.execute(delete(Document).where(Document.candidate_id == id))
+    db.execute(delete(StageHistory).where(StageHistory.candidate_id == id))
         
     # Clear out any candidates marked as duplicates of this one
-    duplicates = db.scalars(select(Candidate).where(Candidate.duplicate_of_candidate_id == id)).all()
-    for dup in duplicates:
-        dup.duplicate_of_candidate_id = None
-        dup.is_duplicate_flagged = False
+    # Note: the update allows taking advantage of the newly added index
+    from sqlalchemy import update
+    db.execute(
+        update(Candidate)
+        .where(Candidate.duplicate_of_candidate_id == id)
+        .values(duplicate_of_candidate_id=None, is_duplicate_flagged=False)
+    )
                 
     db.delete(row)
     try:
