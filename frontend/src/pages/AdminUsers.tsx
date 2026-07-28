@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, Plus, Edit, Trash2, Search } from 'lucide-react';
+import { Shield, Plus, Edit, Trash2, Search, Eye, EyeOff } from 'lucide-react';
 import { getUsers, createUser, updateUser, deleteUser } from '../api/users';
 import type { User } from '../types';
 import { toast } from 'sonner';
@@ -26,6 +26,7 @@ export default function AdminUsers() {
     department: ''
   });
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [branchFilter, setBranchFilter] = useState('');
 
@@ -136,6 +137,7 @@ export default function AdminUsers() {
       branch_location: user.branch_location || '',
       department: user.department || ''
     });
+    setShowPassword(false);
     setIsEditOpen(true);
   };
 
@@ -153,6 +155,7 @@ export default function AdminUsers() {
       branch_location: '',
       department: ''
     });
+    setShowPassword(false);
     setIsCreateOpen(true);
   };
 
@@ -393,11 +396,20 @@ export default function AdminUsers() {
                 {isEditOpen ? "Reset Password" : "Password"}
               </label>
               <Input 
-                type="password" 
+                type={showPassword ? "text" : "password"} 
                 value={formData.password} 
                 onChange={e => setFormData({...formData, password: e.target.value})} 
                 placeholder={isEditOpen ? "Leave blank to keep current" : "Secure password"} 
                 className="bg-surface border-border shadow-sm rounded-md h-9 text-sm"
+                rightElement={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                }
               />
             </div>
           </div>
