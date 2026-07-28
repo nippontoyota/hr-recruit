@@ -81,16 +81,17 @@ export default function PublicTestPage() {
 
   if (error || questions.length === 0) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
-        <div className="max-w-md bg-surface border border-border p-8 rounded-2xl shadow-lg flex flex-col items-center">
-          <div className="w-14 h-14 bg-danger/10 text-danger rounded-full flex items-center justify-center mb-4">
-            <ShieldAlert className="w-7 h-7" />
+      <div className="min-h-screen bg-muted/5 flex flex-col">
+        <div className="flex-1 flex flex-col items-center">
+          <div className="w-full max-w-3xl bg-surface sm:border-l-[3px] sm:border-r-[3px] border-dashed border-primary/40 min-h-screen flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-16 h-16 bg-danger/10 text-danger rounded-full flex items-center justify-center mb-5">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <h3 className="text-2xl font-bold text-foreground tracking-tight">Test Link Invalid</h3>
+            <p className="text-base text-muted-foreground mt-3 max-w-md">
+              {error || 'This technical test is no longer available, or has already been submitted.'}
+            </p>
           </div>
-          <h3 className="text-lg font-bold text-foreground">Test Link Invalid</h3>
-          <p className="text-sm text-muted-foreground mt-2 mb-6">
-            {error || 'This technical test is no longer available, or has already been submitted.'}
-          </p>
-          <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Nippon Toyota — HR Team</p>
         </div>
       </div>
     );
@@ -98,28 +99,33 @@ export default function PublicTestPage() {
 
   if (submitted && result) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
-        <div className="max-w-md bg-surface border border-success/20 p-8 rounded-2xl shadow-lg flex flex-col items-center">
-          <div className="w-14 h-14 bg-success/10 text-success rounded-full flex items-center justify-center mb-4">
-            <CheckCircle className="w-7 h-7" />
-          </div>
-          <h3 className="text-lg font-bold text-success">Test Submitted Successfully</h3>
-          <p className="text-sm text-muted-foreground mt-2 mb-6">
-            Thank you for completing the technical test. Your responses have been graded and logged in the system.
-          </p>
-          <div className="bg-muted/40 border border-border p-4 rounded-xl mb-6 text-xs w-full">
-            <div className="flex justify-between mb-1">
-              <span className="text-muted-foreground">Department:</span>
-              <strong className="text-foreground">{department}</strong>
+      <div className="min-h-screen bg-muted/5 flex flex-col">
+        <div className="flex-1 flex flex-col items-center">
+          <div className="w-full max-w-3xl bg-surface sm:border-l-[3px] sm:border-r-[3px] border-dashed border-primary/40 min-h-screen flex flex-col items-center justify-center p-6 text-center">
+            <div className="w-20 h-20 bg-success/10 text-success rounded-full flex items-center justify-center mb-6 shadow-sm border border-success/20">
+              <CheckCircle className="w-10 h-10" />
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Test Result:</span>
-              <strong className={cn("font-bold uppercase", result.verdict === 'PASS' ? "text-success" : "text-danger")}>
-                {result.verdict} ({result.score})
-              </strong>
+            <h3 className="text-3xl font-bold text-foreground tracking-tight mb-3">Test Submitted</h3>
+            <p className="text-base text-muted-foreground max-w-md mb-10 leading-relaxed">
+              Your responses have been securely logged in the system. You may now close this page.
+            </p>
+            
+            <div className="bg-muted/30 border border-border/50 p-6 rounded-2xl w-full max-w-sm space-y-4">
+              <div className="flex justify-between items-center border-b border-border/40 pb-3">
+                <span className="text-sm font-medium text-muted-foreground">Department</span>
+                <strong className="text-sm font-bold text-foreground uppercase">{department}</strong>
+              </div>
+              
+              {result.verdict && result.score && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-muted-foreground">Result</span>
+                  <strong className={cn("text-sm font-bold uppercase px-3 py-1 rounded-full", result.verdict === 'PASS' ? "bg-success/10 text-success" : "bg-danger/10 text-danger")}>
+                    {result.verdict} ({result.score})
+                  </strong>
+                </div>
+              )}
             </div>
           </div>
-          <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Nippon Toyota — HR Team</p>
         </div>
       </div>
     );
