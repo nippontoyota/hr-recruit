@@ -40,25 +40,6 @@ export const AppShell = () => {
               </div>
 
               <div className="flex items-center justify-end gap-4 ml-auto">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm uppercase shrink-0">
-                    {user?.full_name.charAt(0) || 'U'}
-                  </div>
-                  <div className="hidden md:block min-w-0">
-                    <p className="text-sm font-semibold text-text-primary truncate max-w-[200px] leading-tight">
-                      {user?.full_name}
-                    </p>
-                    <p className="text-[11px] text-text-secondary truncate max-w-[200px] leading-tight mt-0.5">
-                      {user?.email}
-                    </p>
-                    {role && (
-                      <p className="text-[10px] font-bold text-primary uppercase tracking-wide mt-1">
-                        {role.replace(/_/g, ' ')}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="h-8 w-px bg-border mx-1 hidden md:block"></div>
                 <button
                   onClick={logout}
                   className="px-3 py-1.5 bg-danger/10 text-danger hover:bg-danger hover:text-white rounded-md transition-colors text-xs font-bold uppercase tracking-wider"
