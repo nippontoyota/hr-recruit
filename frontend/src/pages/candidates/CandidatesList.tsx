@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { Button, Modal, LoadingSpinner, EmptyState, Badge } from '../../components/ui';
+import { Button, Modal, LoadingSpinner, EmptyState, Badge, Select } from '../../components/ui';
 import { Plus,  RefreshCw, Trash, Search, X, CheckSquare, Square, Minus, Play } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { getCandidates, deleteCandidate, bulkDeleteCandidates, unholdCandidate } from '../../api/candidates';
@@ -14,7 +14,7 @@ import { cn, extractError } from '../../lib/utils';
 import { BulkSalaryUpload } from '../../components/candidates/BulkSalaryUpload';
 
 const PIPELINE_STAGES: PipelineStage[] = [
-  'SCREENING', 'CANDIDATE_FORM', 'BRANCH_INTERVIEW',
+  'CANDIDATE_FORM', 'BRANCH_INTERVIEW',
   'TEST', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD',
 ];
 
@@ -42,7 +42,6 @@ export default function CandidatesList() {
   const activeTab = location.pathname === '/updates' ? 'UPDATES' : 'ALL';
   const [searchQuery, setSearchQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<PipelineStage | ''>('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'CURRENT' | 'ON_HOLD' | 'REJECTED'>('ALL');
 
   // Single delete
   const [candidateToDelete, setCandidateToDelete] = useState<Candidate | null>(null);
@@ -84,7 +83,7 @@ export default function CandidatesList() {
   }, [fetchCandidatesList]);
 
   // Clear selection when filters change
-  useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter, statusFilter]);
+  useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter]);
 
   const filteredCandidates = candidates.filter((c) => {
     if (activeTab === 'UPDATES') {
@@ -101,13 +100,7 @@ export default function CandidatesList() {
       (c.candidate_id && c.candidate_id.toLowerCase().includes(q));
     const matchesStage = !stageFilter || c.current_stage === stageFilter;
     
-    const matchesStatus = 
-      statusFilter === 'ALL' ? true :
-      statusFilter === 'CURRENT' ? !['REJECTED', 'ON_HOLD', 'HIRED'].includes(c.current_stage) :
-      statusFilter === 'ON_HOLD' ? c.current_stage === 'ON_HOLD' :
-      statusFilter === 'REJECTED' ? c.current_stage === 'REJECTED' : true;
-      
-    return matchesSearch && matchesStage && matchesStatus;
+    return matchesSearch && matchesStage;
   });
 
   // Select-all derived state
@@ -259,32 +252,21 @@ export default function CandidatesList() {
               )}
             </div>
 
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="h-9 px-3 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
-            >
-              <option value="ALL">All Status</option>
-              <option value="CURRENT">Current Candidates</option>
-              <option value="ON_HOLD">On Hold</option>
-              <option value="REJECTED">Rejected</option>
-            </select>
-
-            <select
+            <Select
               value={stageFilter}
-              onChange={(e) => setStageFilter(e.target.value as PipelineStage | '')}
-              className="h-9 px-3 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground"
+              onChange={(e: any) => setStageFilter(e.target.value as PipelineStage | '')}
+              className="w-40 bg-surface border-border shadow-sm rounded-xl h-9 text-sm text-text-primary"
             >
-              <option value="">All stages</option>
+              <option value="">All Stages</option>
               {PIPELINE_STAGES.map((s) => (
                 <option key={s} value={s}>{stageLabel(s)}</option>
               ))}
-            </select>
+            </Select>
 
-            {(searchQuery || stageFilter || statusFilter !== 'ALL') && (
+            {(searchQuery || stageFilter) && (
               <button
                 type="button"
-                onClick={() => { setSearchQuery(''); setStageFilter(''); setStatusFilter('ALL'); }}
+                onClick={() => { setSearchQuery(''); setStageFilter(''); }}
                 className="text-xs text-muted-foreground hover:text-foreground font-medium underline underline-offset-2"
               >
                 Clear filters
