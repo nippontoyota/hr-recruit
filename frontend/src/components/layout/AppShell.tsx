@@ -65,7 +65,7 @@ export const AppShell = () => {
 
             {/* Desktop Navigation Links */}
             <nav className="hidden md:flex flex-1 justify-center items-center gap-2">
-              <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-full border border-border/50">
+              <div className="flex items-center gap-1 bg-muted/60 p-1.5 rounded-full border border-border shadow-inner">
                 {allowedNavItems.map((item) => {
                   const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
                   const Icon = item.icon;
@@ -76,14 +76,14 @@ export const AppShell = () => {
                       className={cn(
                         'relative flex items-center gap-2 px-4 py-1.5 text-sm font-accent font-bold rounded-full transition-colors duration-200 z-10',
                         isActive
-                          ? 'text-white'
-                          : 'text-text-secondary hover:text-text-primary hover:bg-muted/50'
+                          ? 'text-white drop-shadow-sm'
+                          : 'text-text-secondary hover:text-text-primary hover:bg-white/50'
                       )}
                     >
                       {isActive && (
                         <motion.div
                           layoutId="active-nav-pill"
-                          className="absolute inset-0 bg-primary rounded-full shadow-sm -z-10"
+                          className="absolute inset-0 bg-gradient-to-b from-primary to-[#b9181f] rounded-full shadow-[0_4px_10px_-2px_rgba(214,28,36,0.5),inset_0_2px_4px_rgba(255,255,255,0.3)] border border-primary -z-10"
                           transition={{ type: "spring", stiffness: 500, damping: 35 }}
                         />
                       )}
