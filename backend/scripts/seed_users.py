@@ -12,7 +12,7 @@ from app.models.user import User
 
 SEED_USERS = [
     {
-        "email": "admin@nippon.test",
+        "email": "admin@nippon.local",
         "full_name": "Portal Admin",
         "role": UserRole.ADMIN,
         "branch_location": None,

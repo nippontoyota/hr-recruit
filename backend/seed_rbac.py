@@ -58,7 +58,7 @@ def reset_db():
         # Seed 3 Users
         admin_user = User(
             id=uuid.uuid4(),
-            email="admin@nippontoyota.com",
+            email="admin@nippon.local",
             full_name="System Admin",
             hashed_password=hash_password("admin123"),
             role=UserRole.ADMIN,
@@ -95,7 +95,7 @@ def reset_db():
         db.add_all([admin_user, ho_hr, kochi_hr, tvm_hr])
         db.commit()
         print("Successfully seeded testing credentials:")
-        print("1. admin@nippontoyota.com (pw: admin123) - ADMIN")
+        print("1. admin@nippon.local (pw: admin123) - ADMIN")
         print("2. ho@nippontoyota.com (pw: hr123) - HO_HR")
         print("3. kochi@nippontoyota.com (pw: local123) - LOCAL_HR (Kochi)")
         print("4. tvm@nippontoyota.com (pw: local123) - LOCAL_HR (Trivandrum)")

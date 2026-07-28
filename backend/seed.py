@@ -12,10 +12,13 @@ def seed():
     seed_users()
     db = SessionLocal()
     try:
-        if db.scalar(select(User).where(User.email == "admin@nippon.test")) is None:
+        if db.scalar(select(User).where(User.email == "admin@nippon.local")) is None:
             return
-        admin = db.scalar(select(User).where(User.email == "admin@nippon.test"))
-        hr = db.scalar(select(User).where(User.email == "hr@nippon.test"))
+        admin = db.scalar(select(User).where(User.email == "admin@nippon.local"))
+        hr = db.scalar(select(User).where(User.email == "hr@nippon.local"))
+        if admin:
+            admin.hashed_password = hash_password("admin123")
+            db.commit()
         if admin is None or hr is None:
             return
 
