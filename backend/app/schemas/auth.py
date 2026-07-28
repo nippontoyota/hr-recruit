@@ -11,6 +11,8 @@ from app.models.user import User
 
 
 def _normalize_email(value: str) -> str:
+    if value.lower().strip().endswith(".local"):
+        return value.strip().lower()
     try:
         result = validate_email(value, check_deliverability=False, test_environment=True)
     except EmailNotValidError as exc:
