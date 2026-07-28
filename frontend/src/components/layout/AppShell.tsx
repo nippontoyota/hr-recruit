@@ -65,25 +65,34 @@ export const AppShell = () => {
 
             {/* Desktop Navigation Links */}
             <nav className="hidden md:flex flex-1 justify-center items-center gap-2">
-              {allowedNavItems.map((item) => {
-                const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    className={cn(
-                      'flex items-center gap-2 px-4 py-1.5 text-sm font-accent font-bold rounded-full transition-all duration-200',
-                      isActive
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'text-text-secondary hover:bg-muted hover:text-text-primary'
-                    )}
-                  >
-                    <Icon strokeWidth={2.5} className="h-4 w-4" />
-                    <span>{item.name}</span>
-                  </Link>
-                );
-              })}
+              <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-full border border-border/50">
+                {allowedNavItems.map((item) => {
+                  const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.name}
+                      to={item.href}
+                      className={cn(
+                        'relative flex items-center gap-2 px-4 py-1.5 text-sm font-accent font-bold rounded-full transition-colors duration-200 z-10',
+                        isActive
+                          ? 'text-white'
+                          : 'text-text-secondary hover:text-text-primary hover:bg-muted/50'
+                      )}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId="active-nav-pill"
+                          className="absolute inset-0 bg-primary rounded-full shadow-sm -z-10"
+                          transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                        />
+                      )}
+                      <Icon strokeWidth={isActive ? 2.5 : 2} className="h-4 w-4 relative z-10" />
+                      <span className="relative z-10">{item.name}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </nav>
 
             {/* Profile & Actions */}
