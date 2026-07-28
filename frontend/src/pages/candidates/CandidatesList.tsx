@@ -252,16 +252,18 @@ export default function CandidatesList() {
               )}
             </div>
 
-            <Select
-              value={stageFilter}
-              onChange={(e: any) => setStageFilter(e.target.value as PipelineStage | '')}
-              className="w-[140px] md:w-40 shrink-0 bg-surface border-border shadow-sm rounded-xl h-9 text-sm text-text-primary"
-            >
-              <option value="">All Stages</option>
-              {PIPELINE_STAGES.map((s) => (
-                <option key={s} value={s}>{stageLabel(s)}</option>
-              ))}
-            </Select>
+            <div className="ml-auto w-[140px] md:w-48 shrink-0">
+              <Select
+                value={stageFilter}
+                onChange={(e: any) => setStageFilter(e.target.value as PipelineStage | '')}
+                className="bg-surface border-border shadow-sm rounded-xl h-9 text-sm text-text-primary"
+              >
+                <option value="">All Stages</option>
+                {PIPELINE_STAGES.map((s) => (
+                  <option key={s} value={s}>{stageLabel(s)}</option>
+                ))}
+              </Select>
+            </div>
 
             {(searchQuery || stageFilter) && (
               <button
