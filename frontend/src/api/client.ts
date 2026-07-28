@@ -60,6 +60,9 @@ export async function request(method: string, endpoint: string, body?: any, conf
   }
 
   if (!response.ok) {
+    if (data && typeof data === 'object' && Array.isArray(data.detail)) {
+      data.detail = data.detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
+    }
     throw new FetchError(response.status, data);
   }
 
