@@ -303,6 +303,7 @@ export default function CandidatesList() {
                     </th>
                     <th>Candidate</th>
                     <th>Position</th>
+                    <th>Stage</th>
                     <th>Source</th>
                     <th>Date Added</th>
                     <th className="text-right">Actions</th>
@@ -311,7 +312,7 @@ export default function CandidatesList() {
                 <tbody>
                   {filteredCandidates.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-10 text-sm text-muted-foreground">
+                      <td colSpan={7} className="text-center py-10 text-sm text-muted-foreground">
                         No candidates match your search.
                       </td>
                     </tr>
@@ -346,6 +347,11 @@ export default function CandidatesList() {
                         </td>
                         <td className="px-4 py-2 text-text-secondary font-medium">
                           {candidate.position_applied_for || '—'}
+                        </td>
+                        <td className="px-4 py-2">
+                          <Badge variant={getStageBadgeVariant(candidate.current_stage)} className="font-semibold px-2.5 py-0.5 rounded-lg">
+                            {stageLabel(candidate.current_stage)}
+                          </Badge>
                         </td>
                         <td className="px-4 py-2 text-text-secondary">
                           <span className="px-2 py-1 bg-background border border-border rounded-[10px] text-xs font-medium">
