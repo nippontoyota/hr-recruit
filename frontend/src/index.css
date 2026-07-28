@@ -28,8 +28,9 @@
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
   --shadow-md: 0 4px 16px rgba(16, 24, 40, 0.08);
 
-  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-heading: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-accent: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
 
   --z-dropdown: 40;
   --z-sticky: 30;

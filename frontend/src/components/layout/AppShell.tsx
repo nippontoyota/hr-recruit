@@ -62,22 +62,22 @@ export const AppShell = () => {
                 >
                   <Menu className="h-5 w-5" />
                 </button>
-                <span className="text-sm font-semibold text-text-primary">Recruitment</span>
+                <span className="text-sm font-accent font-semibold text-text-primary">Recruitment</span>
               </div>
 
               <div className="flex items-center justify-end gap-4 ml-auto">
                 {role === 'LOCAL_HR' && user?.branch_location ? (
-                  <span className={`px-2 py-1 border rounded shadow-sm text-[10px] font-bold uppercase tracking-widest hidden sm:inline-block ${getBranchColor(user.branch_location)}`}>
+                  <span className={`px-2 py-1 border rounded shadow-sm text-[10px] font-accent font-bold uppercase tracking-widest hidden sm:inline-block ${getBranchColor(user.branch_location)}`}>
                     {user.branch_location}
                   </span>
                 ) : role && (
-                  <span className="px-2 py-1 bg-slate-800 text-white border border-slate-900 shadow-sm rounded text-[10px] font-bold uppercase tracking-widest hidden sm:inline-block">
+                  <span className="px-2 py-1 bg-slate-800 text-white border border-slate-900 shadow-sm rounded text-[10px] font-accent font-bold uppercase tracking-widest hidden sm:inline-block">
                     {role.replace(/_/g, ' ')}
                   </span>
                 )}
                 <button
                   onClick={logout}
-                  className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white border border-red-700 shadow-sm rounded transition-colors text-[10px] font-bold uppercase tracking-wider"
+                  className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white border border-red-700 shadow-sm rounded transition-colors text-[10px] font-accent font-bold uppercase tracking-wider"
                   title="Log out"
                 >
                   Log out

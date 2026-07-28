@@ -48,7 +48,7 @@ export const Sidebar = ({
           )}
         >
           {!isCollapsed && (
-            <span className="font-bold text-text-primary whitespace-nowrap overflow-hidden text-ellipsis">
+            <span className="font-accent font-bold text-text-primary whitespace-nowrap overflow-hidden text-ellipsis">
               Recruitment CRM
             </span>
           )}
@@ -80,7 +80,7 @@ export const Sidebar = ({
 
         <nav className="flex-1 py-4 overflow-y-auto overflow-x-hidden" aria-label="Main navigation">
           {!isCollapsed && (
-            <p className="px-4 mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary">
+            <p className="px-4 mb-2 text-[11px] font-accent font-semibold uppercase tracking-wide text-text-secondary">
               Workspace
             </p>
           )}
@@ -96,7 +96,7 @@ export const Sidebar = ({
                   key={item.name}
                   to={item.href}
                   className={cn(
-                    'flex items-center text-sm font-medium rounded-lg transition-colors',
+                    'flex items-center text-sm font-accent font-medium rounded-lg transition-colors',
                     isCollapsed ? 'justify-center py-2.5' : 'gap-3 px-3 py-2',
                     isActive
                       ? 'bg-primary/10 text-primary'
