@@ -129,10 +129,10 @@ export default function PublicTestPage() {
   const selectedOpt = answers[q.id];
 
   return (
-    <PublicShell>
+    <div className="min-h-screen bg-muted/5 flex flex-col">
       {/* Main Container */}
-      <div className="flex-1 flex flex-col items-center bg-muted/5 min-h-screen">
-        <div className="w-full max-w-3xl bg-surface sm:border-l-[3px] sm:border-r-[3px] border-dotted border-border/60 min-h-[calc(100vh-64px)] flex flex-col">
+      <div className="flex-1 flex flex-col items-center">
+        <div className="w-full max-w-3xl bg-surface sm:border-l-[3px] sm:border-r-[3px] border-dashed border-primary/40 min-h-screen flex flex-col">
           
           {/* Progress Header */}
           <div className="bg-surface px-6 py-5 flex justify-between items-center text-xs font-bold text-muted-foreground border-b border-border/40">
@@ -224,6 +224,6 @@ export default function PublicTestPage() {
           </div>
         </div>
       </div>
-    </PublicShell>
+    </div>
   );
 }

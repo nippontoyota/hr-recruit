@@ -19,9 +19,6 @@ export function PublicShell({ children, maxWidth = 'xl', className }: PublicShel
       <main className={cn('flex-1 py-8 sm:py-10 px-4 sm:px-6 lg:px-8', className)}>
         <div className={cn('mx-auto w-full', widthClass[maxWidth])}>{children}</div>
       </main>
-      <footer className="border-t border-border bg-surface py-4 px-4 text-center text-xs text-text-secondary shrink-0">
-        HR Recruitment Portal
-      </footer>
     </div>
   );
 }
