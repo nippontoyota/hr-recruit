@@ -231,12 +231,12 @@ export default function CandidatesList() {
         <div className="space-y-3">
 
           {/* ── Search + Filter bar ── */}
-          <div className="flex flex-wrap items-center gap-3 px-1 pt-2">
-            <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <div className="flex items-center gap-3 px-1 pt-2 w-full">
+            <div className="relative flex-1 min-w-0 md:max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <input
                 type="text"
-                placeholder="Search name, phone…"
+                placeholder="Search by name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full h-9 pl-9 pr-8 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground placeholder:text-muted-foreground"
@@ -255,7 +255,7 @@ export default function CandidatesList() {
             <Select
               value={stageFilter}
               onChange={(e: any) => setStageFilter(e.target.value as PipelineStage | '')}
-              className="w-40 bg-surface border-border shadow-sm rounded-xl h-9 text-sm text-text-primary"
+              className="w-[140px] md:w-40 shrink-0 bg-surface border-border shadow-sm rounded-xl h-9 text-sm text-text-primary"
             >
               <option value="">All Stages</option>
               {PIPELINE_STAGES.map((s) => (
