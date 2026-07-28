@@ -1,7 +1,7 @@
 import type { ElementType } from 'react';
 import type { UserRole } from '../types';
 import { ALL_ROLES } from '../types';
-import { Users, Shield, Bell } from 'lucide-react';
+import { UsersRound, ShieldCheck, Activity } from 'lucide-react';
 
 export interface NavItem {
   name: string;
@@ -14,19 +14,19 @@ export const NAV_ITEMS: NavItem[] = [
   {
     name: 'Candidates',
     href: '/candidates',
-    icon: Users,
+    icon: UsersRound,
     roles: ALL_ROLES,
   },
   {
     name: 'Updates',
     href: '/updates',
-    icon: Bell,
+    icon: Activity,
     roles: ALL_ROLES,
   },
   {
     name: 'User Management',
     href: '/admin/users',
-    icon: Shield,
+    icon: ShieldCheck,
     roles: ['ADMIN'],
   },
 ];

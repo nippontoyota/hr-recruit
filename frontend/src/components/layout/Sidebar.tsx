@@ -38,7 +38,7 @@ export const Sidebar = ({
         className={cn(
           'fixed inset-y-0 left-0 z-50 bg-sidebar border-r border-border transform transition-[width,transform] duration-200 ease-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col',
           isOpen ? 'translate-x-0' : '-translate-x-full',
-          isCollapsed ? 'w-[4.5rem]' : 'w-60'
+          isCollapsed ? 'w-[4.5rem]' : 'w-56'
         )}
       >
         <div
@@ -106,7 +106,7 @@ export const Sidebar = ({
                   title={isCollapsed ? item.name : undefined}
                   aria-current={isActive ? 'page' : undefined}
                 >
-                  <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive && 'text-primary')} />
+                  <Icon strokeWidth={1.75} className={cn('h-[18px] w-[18px] shrink-0', isActive && 'text-primary')} />
                   {!isCollapsed && <span>{item.name}</span>}
                 </Link>
               );
