@@ -748,8 +748,8 @@ export default function CandidateProfile() {
                 onChange={(e) => setEditStageSelection(e.target.value as PipelineStage)}
                 className="w-full bg-background border border-border rounded-[10px] p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
               >
-                <option value="CANDIDATE_FORM">CALL LETTER</option>
-                <option value="BRANCH_INTERVIEW">INTERVIEW</option>
+                <option value="CANDIDATE_FORM">Call Letter</option>
+                <option value="BRANCH_INTERVIEW">Interview</option>
                 <option value="TEST">Technical Test</option>
                 <option value="FINAL_APPROVAL">Final Approval</option>
                 <option value="ON_HOLD">On Hold</option>
