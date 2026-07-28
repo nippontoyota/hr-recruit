@@ -131,13 +131,13 @@ export default function PublicTestPage() {
   return (
     <PublicShell>
       {/* Main Container */}
-      <div className="flex-1 flex flex-col items-center p-4 sm:p-6 bg-muted/10">
-        <div className="w-full max-w-2xl bg-surface border border-border rounded-2xl shadow-md overflow-hidden flex flex-col">
+      <div className="flex-1 flex flex-col items-center bg-muted/5 min-h-screen">
+        <div className="w-full max-w-3xl bg-surface sm:border-l-[3px] sm:border-r-[3px] border-dotted border-border/60 min-h-[calc(100vh-64px)] flex flex-col">
           
           {/* Progress Header */}
-          <div className="bg-sidebar px-6 py-4 border-b border-border flex justify-between items-center text-xs font-semibold text-muted-foreground">
-            <span>QUESTION {currentIdx + 1} OF {questions.length}</span>
-            <div className="flex gap-1 w-32 bg-muted h-2 rounded-full overflow-hidden">
+          <div className="bg-surface px-6 py-5 flex justify-between items-center text-xs font-bold text-muted-foreground border-b border-border/40">
+            <span className="tracking-widest">QUESTION {currentIdx + 1} OF {questions.length}</span>
+            <div className="flex gap-1 w-32 sm:w-48 bg-muted/60 h-2 rounded-full overflow-hidden border border-border/50">
               <div 
                 className="bg-primary h-full transition-all duration-300"
                 style={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }}
@@ -146,13 +146,13 @@ export default function PublicTestPage() {
           </div>
 
           {/* Question Block */}
-          <div className="p-6 sm:p-8 flex-1 space-y-6">
-            <h3 className="text-base sm:text-lg font-bold text-foreground leading-snug flex gap-2">
+          <div className="p-6 sm:p-10 flex-1 space-y-8">
+            <h3 className="text-xl sm:text-2xl font-bold text-foreground leading-snug flex gap-3">
               <span className="text-primary">{currentIdx + 1}.</span>
               {q.text}
             </h3>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               {Object.keys(q.options).length > 0 ? (
                 Object.entries(q.options).map(([optKey, optVal]) => {
                   const isSelected = selectedOpt === optKey;
@@ -162,13 +162,15 @@ export default function PublicTestPage() {
                       type="button"
                       onClick={() => handleSelectOption(q.id, optKey)}
                       className={cn(
-                        "w-full text-left p-4 rounded-xl border border-border bg-background/50 hover:bg-muted/30 transition-all duration-200 flex items-center gap-3 text-xs sm:text-sm font-medium focus:ring-1 focus:ring-primary focus:outline-none",
-                        isSelected && "border-primary bg-primary/5 text-primary"
+                        "w-full text-left p-5 rounded-2xl border bg-surface hover:bg-muted/20 transition-all duration-200 flex items-center gap-4 text-sm sm:text-base font-semibold focus:outline-none",
+                        isSelected 
+                          ? "border-primary bg-primary/5 text-primary shadow-sm" 
+                          : "border-border/60 text-text-primary hover:border-border"
                       )}
                     >
                       <span className={cn(
-                        "w-5 h-5 rounded-full border border-border flex items-center justify-center text-[10px] shrink-0 font-bold",
-                        isSelected ? "bg-primary border-transparent text-primary-foreground" : "bg-muted"
+                        "w-6 h-6 rounded-full border flex items-center justify-center text-[11px] shrink-0 font-bold transition-colors",
+                        isSelected ? "bg-primary border-primary text-primary-foreground" : "bg-muted/50 border-border text-text-secondary"
                       )}>
                         {optKey.toUpperCase()}
                       </span>
@@ -180,7 +182,7 @@ export default function PublicTestPage() {
                 <textarea
                   value={answers[q.id] || ''}
                   onChange={(e) => setAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
-                  className="w-full h-40 p-4 bg-background border border-border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 transition-all focus:outline-none resize-none font-medium text-foreground placeholder:text-muted-foreground/60"
+                  className="w-full h-48 p-5 bg-surface border border-border/60 rounded-2xl text-base focus:ring-2 focus:ring-primary/20 transition-all focus:outline-none resize-none font-medium text-foreground placeholder:text-muted-foreground/60 shadow-inner"
                   placeholder="Type your answer here..."
                 />
               )}
@@ -188,15 +190,15 @@ export default function PublicTestPage() {
           </div>
 
           {/* Actions Footer */}
-          <div className="bg-sidebar px-6 py-4 border-t border-border flex justify-between items-center">
+          <div className="bg-surface px-6 sm:px-10 py-5 border-t border-border/40 flex justify-between items-center">
             <Button
               variant="ghost"
               size="sm"
               disabled={currentIdx === 0}
               onClick={() => setCurrentIdx(prev => prev - 1)}
-              className="border border-border text-xs"
+              className="border border-border/60 text-sm font-semibold h-11 px-5 rounded-xl hover:bg-muted/30"
             >
-              <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+              <ChevronLeft className="w-4 h-4 mr-1.5" /> Previous
             </Button>
 
             {currentIdx < questions.length - 1 ? (
@@ -204,9 +206,9 @@ export default function PublicTestPage() {
                 variant="primary"
                 size="sm"
                 onClick={() => setCurrentIdx(prev => prev + 1)}
-                className="text-xs"
+                className="text-sm font-bold h-11 px-7 rounded-xl shadow-md"
               >
-                Next <ChevronRight className="w-4 h-4 ml-1" />
+                Next <ChevronRight className="w-4 h-4 ml-1.5" />
               </Button>
             ) : (
               <Button
@@ -214,7 +216,7 @@ export default function PublicTestPage() {
                 size="sm"
                 onClick={handleSubmit}
                 isLoading={submitting}
-                className="text-xs"
+                className="text-sm font-bold h-11 px-7 rounded-xl shadow-md"
               >
                 Submit Test
               </Button>
