@@ -17,21 +17,21 @@ export const AppShell = () => {
   const getBranchColor = (branch: string | null | undefined) => {
     if (!branch) return 'bg-gray-100 text-gray-700 border-gray-200';
     const colorList = [
-      'bg-blue-50 text-blue-700 border-blue-200',
-      'bg-cyan-50 text-cyan-700 border-cyan-200',
-      'bg-sky-50 text-sky-700 border-sky-200',
-      'bg-indigo-50 text-indigo-700 border-indigo-200',
-      'bg-violet-50 text-violet-700 border-violet-200',
-      'bg-purple-50 text-purple-700 border-purple-200',
-      'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
-      'bg-pink-50 text-pink-700 border-pink-200',
-      'bg-rose-50 text-rose-700 border-rose-200',
-      'bg-red-50 text-red-700 border-red-200',
-      'bg-orange-50 text-orange-700 border-orange-200',
-      'bg-amber-50 text-amber-700 border-amber-200',
-      'bg-lime-50 text-lime-700 border-lime-200',
-      'bg-green-50 text-green-700 border-green-200',
-      'bg-emerald-50 text-emerald-700 border-emerald-200',
+      'bg-blue-600 text-white border-blue-700 shadow-sm',
+      'bg-cyan-600 text-white border-cyan-700 shadow-sm',
+      'bg-sky-600 text-white border-sky-700 shadow-sm',
+      'bg-indigo-600 text-white border-indigo-700 shadow-sm',
+      'bg-violet-600 text-white border-violet-700 shadow-sm',
+      'bg-purple-600 text-white border-purple-700 shadow-sm',
+      'bg-fuchsia-600 text-white border-fuchsia-700 shadow-sm',
+      'bg-pink-600 text-white border-pink-700 shadow-sm',
+      'bg-rose-600 text-white border-rose-700 shadow-sm',
+      'bg-red-600 text-white border-red-700 shadow-sm',
+      'bg-orange-600 text-white border-orange-700 shadow-sm',
+      'bg-amber-600 text-white border-amber-700 shadow-sm',
+      'bg-lime-600 text-white border-lime-700 shadow-sm',
+      'bg-green-600 text-white border-green-700 shadow-sm',
+      'bg-emerald-600 text-white border-emerald-700 shadow-sm',
     ];
     let hash = 0;
     for (let i = 0; i < branch.length; i++) {
@@ -67,17 +67,17 @@ export const AppShell = () => {
 
               <div className="flex items-center justify-end gap-4 ml-auto">
                 {role === 'LOCAL_HR' && user?.branch_location ? (
-                  <span className={`px-2.5 py-1 border rounded-md text-[10px] font-bold uppercase tracking-widest hidden sm:inline-block ${getBranchColor(user.branch_location)}`}>
+                  <span className={`px-2 py-1 border rounded shadow-sm text-[10px] font-bold uppercase tracking-widest hidden sm:inline-block ${getBranchColor(user.branch_location)}`}>
                     {user.branch_location}
                   </span>
                 ) : role && (
-                  <span className="px-2.5 py-1 bg-primary/10 text-primary border border-primary/20 rounded-md text-[10px] font-bold uppercase tracking-widest hidden sm:inline-block">
+                  <span className="px-2 py-1 bg-slate-800 text-white border border-slate-900 shadow-sm rounded text-[10px] font-bold uppercase tracking-widest hidden sm:inline-block">
                     {role.replace(/_/g, ' ')}
                   </span>
                 )}
                 <button
                   onClick={logout}
-                  className="px-3 py-1.5 bg-danger/10 text-danger hover:bg-danger hover:text-white rounded-md transition-colors text-xs font-bold uppercase tracking-wider"
+                  className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white border border-red-700 shadow-sm rounded transition-colors text-[10px] font-bold uppercase tracking-wider"
                   title="Log out"
                 >
                   Log out
