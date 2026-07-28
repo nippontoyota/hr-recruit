@@ -14,6 +14,32 @@ export const AppShell = () => {
   const location = useLocation();
   const isCandidateProfile = location.pathname.match(/^\/candidates\/[a-zA-Z0-9_-]+$/);
 
+  const getBranchColor = (branch: string | null | undefined) => {
+    if (!branch) return 'bg-gray-100 text-gray-700 border-gray-200';
+    const colorList = [
+      'bg-blue-50 text-blue-700 border-blue-200',
+      'bg-cyan-50 text-cyan-700 border-cyan-200',
+      'bg-sky-50 text-sky-700 border-sky-200',
+      'bg-indigo-50 text-indigo-700 border-indigo-200',
+      'bg-violet-50 text-violet-700 border-violet-200',
+      'bg-purple-50 text-purple-700 border-purple-200',
+      'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
+      'bg-pink-50 text-pink-700 border-pink-200',
+      'bg-rose-50 text-rose-700 border-rose-200',
+      'bg-red-50 text-red-700 border-red-200',
+      'bg-orange-50 text-orange-700 border-orange-200',
+      'bg-amber-50 text-amber-700 border-amber-200',
+      'bg-lime-50 text-lime-700 border-lime-200',
+      'bg-green-50 text-green-700 border-green-200',
+      'bg-emerald-50 text-emerald-700 border-emerald-200',
+    ];
+    let hash = 0;
+    for (let i = 0; i < branch.length; i++) {
+      hash = branch.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colorList[Math.abs(hash) % colorList.length];
+  };
+
   return (
     <ResumeViewerProvider>
       <div className="flex h-screen w-full bg-background overflow-hidden font-sans">
@@ -40,7 +66,11 @@ export const AppShell = () => {
               </div>
 
               <div className="flex items-center justify-end gap-4 ml-auto">
-                {role && (
+                {role === 'LOCAL_HR' && user?.branch_location ? (
+                  <span className={`px-2.5 py-1 border rounded-md text-[10px] font-bold uppercase tracking-widest hidden sm:inline-block ${getBranchColor(user.branch_location)}`}>
+                    {user.branch_location}
+                  </span>
+                ) : role && (
                   <span className="px-2.5 py-1 bg-primary/10 text-primary border border-primary/20 rounded-md text-[10px] font-bold uppercase tracking-widest hidden sm:inline-block">
                     {role.replace(/_/g, ' ')}
                   </span>

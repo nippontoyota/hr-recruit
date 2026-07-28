@@ -205,7 +205,7 @@ export default function CandidatesList() {
     <>
       <PageHeader
         title={activeTab === 'UPDATES' ? 'Updates' : 'Candidates'}
-        description={activeTab === 'UPDATES' ? 'Candidates needing your attention' : 'All applicants linked to your recruiter profile. Click a row to open the full profile and manage pipeline stages.'}
+        description={activeTab === 'UPDATES' ? 'Candidates needing your attention' : undefined}
         action={
           <div className="flex gap-3">
             {user?.role !== 'LOCAL_HR' && <BulkSalaryUpload />}
