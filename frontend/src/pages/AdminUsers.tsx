@@ -381,8 +381,9 @@ export default function AdminUsers() {
                 value={formData.role} 
                 onChange={(e: any) => setFormData({...formData, role: e.target.value})} 
                 className="bg-surface border-border shadow-sm rounded-md h-9 text-sm w-full"
+                disabled={selectedUser?.role === 'ADMIN'}
               >
-                <option value="ADMIN">System Admin</option>
+                {formData.role === 'ADMIN' && <option value="ADMIN">System Admin</option>}
                 <option value="HO_HR">Head Office HR</option>
                 <option value="LOCAL_HR">Local Branch HR</option>
               </Select>
