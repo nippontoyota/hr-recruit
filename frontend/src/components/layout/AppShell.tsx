@@ -61,7 +61,7 @@ export const AppShell = () => {
                 <div className="h-8 w-px bg-border mx-1 hidden md:block"></div>
                 <button
                   onClick={logout}
-                  className="text-sm font-medium text-text-secondary hover:text-danger transition-colors"
+                  className="px-3 py-1.5 bg-danger/10 text-danger hover:bg-danger hover:text-white rounded-md transition-colors text-xs font-bold uppercase tracking-wider"
                   title="Log out"
                 >
                   Log out
