@@ -44,10 +44,19 @@ export async function request(method: string, endpoint: string, body?: any, conf
   }
 
   let data;
-  try {
-    data = await response.json();
-  } catch {
-    data = await response.text();
+  if (response.status === 204) {
+    data = null;
+  } else {
+    try {
+      const text = await response.text();
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = text;
+      }
+    } catch {
+      data = null;
+    }
   }
 
   if (!response.ok) {
