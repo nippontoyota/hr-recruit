@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+import anyio
 from pathlib import PurePosixPath
 from uuid import UUID, uuid4
 
@@ -18,11 +19,14 @@ from app.models.candidate_profile import CandidateProfile
 from app.models.candidate_screening import CandidateScreening
 from app.models.activity_log import ActivityLog
 from app.models.document import Document
-from app.models.enums import DocumentType, PipelineStage, UserRole, ActivityType, ScreeningStatus, FormStatus
+from app.models.evaluation import Evaluation
+from app.models.enums import DocumentType, PipelineStage, UserRole, ActivityType, ScreeningStatus, FormStatus, EvaluationType
 from app.models.stage_history import StageHistory
 from app.models.user import User
 from app.schemas.candidate import (
-    CandidateCreate, CandidateOut, CandidateListOut, DocumentOut,
+    CandidateCreate,
+    CandidateListOut,
+    CandidatePaginatedOut, DocumentOut,
     CandidateProfileRawDataUpdate, CandidateResolveDuplicate, CandidatePortalOut, CandidatePortalEvaluationOut, CandidatePortalResponseIn
 )
 from app.services import storage
@@ -399,7 +403,9 @@ async def _save_resume_for_candidate(
     storage_path = f"resumes/{candidate_id}/{doc_id}{ext}"
     file_name = _safe_filename(file.filename, ext)
 
-    storage.upload_object(storage_path, data, content_type, upsert=True)
+    await anyio.to_thread.run_sync(
+        storage.upload_object, storage_path, data, content_type, True
+    )
 
     if existing:
         existing.file_name = file_name
@@ -427,11 +433,11 @@ async def _save_resume_for_candidate(
     except Exception:
         db.rollback()
         if not existing or old_path != storage_path:
-            storage.delete_object(storage_path)
+            await anyio.to_thread.run_sync(storage.delete_object, storage_path)
         raise HTTPException(status_code=502, detail="Failed to save resume metadata.")
 
     if old_path and old_path != storage_path:
-        storage.delete_object(old_path)
+        await anyio.to_thread.run_sync(storage.delete_object, old_path)
 
     return _document_out(doc)
 
@@ -454,7 +460,9 @@ async def _save_photo_for_candidate(
     candidate_id = candidate.id
     storage_path = f"photos/{candidate_id}/{uuid4()}{ext}"
     
-    storage.upload_object(storage_path, data, file.content_type or "image/jpeg", upsert=True)
+    await anyio.to_thread.run_sync(
+        storage.upload_object, storage_path, data, file.content_type or "image/jpeg", True
+    )
     
     if not candidate.profile:
         candidate.profile = CandidateProfile(candidate_id=candidate.id)
@@ -467,17 +475,30 @@ async def _save_photo_for_candidate(
 
 
 
-@router.get("", response_model=list[CandidateListOut])
+@router.get("", response_model=CandidatePaginatedOut)
 def list_candidates(
     stage: PipelineStage | None = None,
-    skip: int = 0,
-    limit: int = 100,
+    search: str | None = None,
+    page: int = 1,
+    limit: int = 50,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    q = select(Candidate).order_by(Candidate.created_at.desc())
+    skip = (page - 1) * limit
+    q = select(Candidate)
     if stage:
         q = q.where(Candidate.current_stage == stage)
+    if search:
+        search_term = f"%{search}%"
+        q = q.where(
+            or_(
+                Candidate.full_name.ilike(search_term),
+                Candidate.phone.ilike(search_term),
+                Candidate.candidate_id.ilike(search_term),
+                Candidate.email.ilike(search_term)
+            )
+        )
+        
     # Row-Level Security / Visibility Logic
     if user.role in (UserRole.ADMIN, UserRole.HO_HR):
         pass # sees all
@@ -488,10 +509,19 @@ def list_candidates(
         # Fallback to prevent leaks
         q = q.where(Candidate.id == None)
 
-    q = q.offset(skip).limit(limit)
+    total_count = db.scalar(select(func.count()).select_from(q.subquery())) or 0
+
+    q = q.order_by(Candidate.created_at.desc()).offset(skip).limit(limit)
     rows = list(db.scalars(q).all())
     with_resume = resume_candidate_ids(db, [row.id for row in rows])
-    return [to_candidate_list_out(row, row.id in with_resume) for row in rows]
+    data = [to_candidate_list_out(row, row.id in with_resume) for row in rows]
+    
+    return CandidatePaginatedOut(
+        data=data,
+        total_count=total_count,
+        page=page,
+        limit=limit
+    )
 
 
 @router.post("", response_model=CandidateOut, status_code=201)
@@ -634,39 +664,52 @@ def bulk_delete_candidates_endpoint(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    success_count = 0
-    failed_ids = []
+    if not request.candidate_ids:
+        return {"success_count": 0, "failed_ids": []}
+        
+    cids = request.candidate_ids
+    
+    # 1. Enforce Role access: Ensure user has access to all requested IDs
+    if user.role == UserRole.LOCAL_HR:
+        valid_cids = db.scalars(select(Candidate.id).where(
+            Candidate.id.in_(cids),
+            Candidate.branch_location == user.branch_location
+        )).all()
+        cids = [c for c in cids if c in valid_cids]
+        
+    if not cids:
+        return {"success_count": 0, "failed_ids": request.candidate_ids}
 
-    for cid in request.candidate_ids:
+    # 2. Bulk delete documents from storage
+    docs = db.scalars(select(Document).where(Document.candidate_id.in_(cids))).all()
+    storage_paths = [doc.storage_path for doc in docs if doc.storage_path]
+    if storage_paths:
         try:
-            row = get_candidate_for_user(db, cid, user)
-            
-            docs = db.scalars(select(Document).where(Document.candidate_id == cid)).all()
-            for doc in docs:
-                if doc.storage_path:
-                    try:
-                        storage.delete_object(doc.storage_path)
-                    except Exception as e:
-                        print(f"Failed to delete {doc.storage_path}: {e}")
-                db.delete(doc)
-                
-            histories = db.scalars(select(StageHistory).where(StageHistory.candidate_id == cid)).all()
-            for h in histories:
-                db.delete(h)
-                
-            duplicates = db.scalars(select(Candidate).where(Candidate.duplicate_of_candidate_id == cid)).all()
-            for dup in duplicates:
-                dup.duplicate_of_candidate_id = None
-                dup.is_duplicate_flagged = False
-                        
-            db.delete(row)
-            db.commit()
-            success_count += 1
+            storage.delete_objects(storage_paths)
         except Exception as e:
-            db.rollback()
-            print(f"Failed to delete candidate {cid}: {e}")
-            failed_ids.append(cid)
+            print(f"Failed to bulk delete documents: {e}")
 
-    return {"success_count": success_count, "failed_ids": failed_ids}
+    try:
+        # 3. Bulk DB Operations
+        db.execute(delete(Document).where(Document.candidate_id.in_(cids)))
+        db.execute(delete(StageHistory).where(StageHistory.candidate_id.in_(cids)))
+        
+        # 4. Un-flag duplicates
+        from sqlalchemy import update
+        db.execute(
+            update(Candidate)
+            .where(Candidate.duplicate_of_candidate_id.in_(cids))
+            .values(duplicate_of_candidate_id=None, is_duplicate_flagged=False)
+        )
+        
+        # 5. Delete the candidates
+        db.execute(delete(Candidate).where(Candidate.id.in_(cids)))
+        
+        db.commit()
+        return {"success_count": len(cids), "failed_ids": list(set(request.candidate_ids) - set(cids))}
+    except Exception as e:
+        db.rollback()
+        print(f"Bulk delete failed: {e}")
+        return {"success_count": 0, "failed_ids": request.candidate_ids}
 
 

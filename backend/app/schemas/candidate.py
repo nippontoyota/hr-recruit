@@ -609,3 +609,10 @@ class ActivityLogCreate(BaseModel):
 
 class WhatsAppInviteCreate(BaseModel):
     variables: dict[str, str]
+
+
+class CandidatePaginatedOut(BaseModel):
+    data: list[CandidateListOut]
+    total_count: int
+    page: int
+    limit: int

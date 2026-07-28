@@ -23,17 +23,17 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-// Simple global cache to allow stale-while-revalidate (instant loading)
-let candidatesCache: Candidate[] = [];
-
 export default function CandidatesList() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canDelete = ['ADMIN', 'HO_HR', 'LOCAL_HR'].includes(user?.role as string);
 
   // Data
-  const [candidates, setCandidates] = useState<Candidate[]>(candidatesCache);
-  const [loading, setLoading] = useState(candidatesCache.length === 0);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const limit = 50;
+  const [loading, setLoading] = useState(true);
   const [resumingId, setResumingId] = useState<string | null>(null);
   
 
@@ -55,46 +55,36 @@ export default function CandidatesList() {
 
   const fetchCandidatesList = useCallback(async (showLoading = true) => {
     try {
-      if (showLoading && candidatesCache.length === 0) setLoading(true);
-      const list = await getCandidates();
-      candidatesCache = list;
-      setCandidates(list);
+      if (showLoading) setLoading(true);
+      const res = await getCandidates(page, limit, searchQuery, stageFilter);
+      setCandidates(res.data);
+      setTotalCount(res.total_count);
     } catch (err) {
       console.error('Failed to load candidates', err);
       toast.error('Failed to load candidates. Please refresh.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, limit, searchQuery, stageFilter]);
 
+  // Debounce search and refetch
   useEffect(() => {
-    fetchCandidatesList(true);
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') fetchCandidatesList(false);
-    };
-    window.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('focus', handleVisibility);
-    return () => {
-      window.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('focus', handleVisibility);
-    };
+    const timeout = setTimeout(() => {
+      fetchCandidatesList(true);
+    }, 300);
+    return () => clearTimeout(timeout);
   }, [fetchCandidatesList]);
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, stageFilter]);
 
   // Clear selection when filters change
   useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter]);
 
-  const filteredCandidates = candidates.filter((c) => {
-
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      !q ||
-      c.full_name.toLowerCase().includes(q) ||
-      c.phone.includes(q) ||
-      (c.candidate_id && c.candidate_id.toLowerCase().includes(q));
-    const matchesStage = !stageFilter || c.current_stage === stageFilter;
-    
-    return matchesSearch && matchesStage;
-  });
+  // The backend now filters and paginates, so candidates is our filtered list
+  const filteredCandidates = candidates;
 
   // Select-all derived state
   const allVisibleIds = filteredCandidates.map((c) => c.id);
@@ -394,8 +384,12 @@ export default function CandidatesList() {
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-3 border-t border-border bg-muted/10 text-xs font-medium text-muted-foreground text-center sm:text-right">
-              Showing {filteredCandidates.length} of {candidates.length} candidates
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/10 text-xs font-medium text-muted-foreground">
+              <span>Showing {candidates.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, totalCount)} of {totalCount} candidates</span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={page === 1} onClick={() => setPage(p => p - 1)} className="h-7 text-xs px-3">Previous</Button>
+                <Button size="sm" variant="outline" disabled={page * limit >= totalCount} onClick={() => setPage(p => p + 1)} className="h-7 text-xs px-3">Next</Button>
+              </div>
             </div>
           </div>
         </div>

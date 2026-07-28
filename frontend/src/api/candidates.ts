@@ -1,8 +1,26 @@
-import type { Candidate, ResumeDocument, BranchInterviewData, ActivityLog } from '../types';
+import type { Candidate, ResumeDocument, BranchInterviewData, ActivityLog, PipelineStage } from '../types';
 import { request } from './client';
 
-export const getCandidates = async (): Promise<Candidate[]> => {
-  const response = await request('GET', '/candidates');
+export interface PaginatedCandidates {
+  data: Candidate[];
+  total_count: number;
+  page: number;
+  limit: number;
+}
+
+export const getCandidates = async (
+  page: number = 1,
+  limit: number = 50,
+  search?: string,
+  stage?: PipelineStage | ''
+): Promise<PaginatedCandidates> => {
+  const query = new URLSearchParams();
+  query.append('page', page.toString());
+  query.append('limit', limit.toString());
+  if (search) query.append('search', search);
+  if (stage) query.append('stage', stage);
+
+  const response = await request('GET', `/candidates?${query.toString()}`);
   return response.data;
 };
 
