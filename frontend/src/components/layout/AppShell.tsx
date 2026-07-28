@@ -9,7 +9,7 @@ import { ResumeViewerProvider } from '../candidates/ResumeViewer';
 export const AppShell = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { user, role } = useAuth();
+  const { user, role, logout } = useAuth();
 
   const location = useLocation();
   const isCandidateProfile = location.pathname.match(/^\/candidates\/[a-zA-Z0-9_-]+$/);
