@@ -430,9 +430,6 @@ export default function CandidateProfile() {
                           <h1 className={isCallLetterStage ? "text-3xl font-extrabold tracking-tight text-foreground" : "text-2xl font-bold tracking-tight text-foreground truncate"}>{candidate.full_name}</h1>
                           
                           <div className={isCallLetterStage ? "flex items-center gap-2 justify-center flex-wrap" : "flex items-center gap-2"}>
-                            <span className={cn('shrink-0 font-bold border uppercase shadow-sm', isCallLetterStage ? "text-xs px-3 py-1 rounded-full" : "text-[11px] px-2 py-0.5 rounded-full", stageColor(actualStage))}>
-                              {stageLabel(actualStage)}
-                            </span>
                             {candidate.is_duplicate_flagged && (
                               <span className={cn("font-semibold text-warning bg-warning/10 border border-warning/20 rounded-md", isCallLetterStage ? "text-[10px] px-2 py-1" : "text-[10px] px-2 py-0.5")}>
                                 Duplicate
