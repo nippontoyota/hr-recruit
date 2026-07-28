@@ -132,16 +132,7 @@ export const router = createHashRouter([
           </RoleRoute>
         ),
       },
-      {
-        path: 'updates',
-        element: (
-          <RoleRoute allowed={ALL_ROLES}>
-            <PageSuspense>
-              <CandidatesList />
-            </PageSuspense>
-          </RoleRoute>
-        ),
-      },
+
       {
         path: 'candidates/:id',
         element: (

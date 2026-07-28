@@ -38,8 +38,6 @@ export default function CandidatesList() {
   
 
   // Filters
-  const location = useLocation();
-  const activeTab = location.pathname === '/updates' ? 'UPDATES' : 'ALL';
   const [searchQuery, setSearchQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<PipelineStage | ''>('');
 
@@ -86,11 +84,6 @@ export default function CandidatesList() {
   useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter]);
 
   const filteredCandidates = candidates.filter((c) => {
-    if (activeTab === 'UPDATES') {
-      if (c.current_stage === 'CANDIDATE_FORM' && c.pre_form_status === 'SUBMITTED') return true;
-      if (c.current_stage === 'BRANCH_INTERVIEW' && !c.has_resume) return true;
-      return false;
-    }
 
     const q = searchQuery.toLowerCase();
     const matchesSearch =
@@ -197,8 +190,7 @@ export default function CandidatesList() {
   return (
     <>
       <PageHeader
-        title={activeTab === 'UPDATES' ? 'Updates' : 'Candidates'}
-        description={activeTab === 'UPDATES' ? 'Candidates needing your attention' : undefined}
+        title="Candidates"
         action={
           <div className="flex gap-3">
             {user?.role !== 'LOCAL_HR' && <BulkSalaryUpload />}

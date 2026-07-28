@@ -18,12 +18,6 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ALL_ROLES,
   },
   {
-    name: 'Updates',
-    href: '/updates',
-    icon: Activity,
-    roles: ALL_ROLES,
-  },
-  {
     name: 'User Management',
     href: '/admin/users',
     icon: ShieldCheck,
