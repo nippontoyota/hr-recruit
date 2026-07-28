@@ -64,41 +64,10 @@ def reset_db():
             role=UserRole.ADMIN,
             branch_location=None
         )
-        
-        ho_hr = User(
-            id=uuid.uuid4(),
-            email="ho@nippontoyota.com",
-            full_name="Head Office HR",
-            hashed_password=hash_password("hr123"),
-            role=UserRole.HO_HR,
-            branch_location=None
-        )
-        
-        kochi_hr = User(
-            id=uuid.uuid4(),
-            email="kochi@nippontoyota.com",
-            full_name="Kochi Local HR",
-            hashed_password=hash_password("local123"),
-            role=UserRole.LOCAL_HR,
-            branch_location="Kochi"
-        )
-        
-        tvm_hr = User(
-            id=uuid.uuid4(),
-            email="tvm@nippontoyota.com",
-            full_name="Trivandrum Local HR",
-            hashed_password=hash_password("local123"),
-            role=UserRole.LOCAL_HR,
-            branch_location="Trivandrum"
-        )
-        
-        db.add_all([admin_user, ho_hr, kochi_hr, tvm_hr])
+        db.add_all([admin_user])
         db.commit()
         print("Successfully seeded testing credentials:")
         print("1. admin@nippon.local (pw: admin123) - ADMIN")
-        print("2. ho@nippontoyota.com (pw: hr123) - HO_HR")
-        print("3. kochi@nippontoyota.com (pw: local123) - LOCAL_HR (Kochi)")
-        print("4. tvm@nippontoyota.com (pw: local123) - LOCAL_HR (Trivandrum)")
         
     except Exception as e:
         db.rollback()
