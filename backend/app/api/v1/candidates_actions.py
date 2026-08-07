@@ -427,3 +427,25 @@ async def upload_bulk_salary(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to process excel file: {str(e)}")
+
+@router.post("/{id}/send-to-ho", response_model=CandidateOut)
+def send_to_ho(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.LOCAL_HR, UserRole.ADMIN)),
+):
+    row = get_candidate_for_user(db, id, user)
+    
+    if row.current_stage != PipelineStage.APPLICATION:
+        raise HTTPException(status_code=400, detail="Candidate must be in APPLICATION stage to be sent to Head Office.")
+        
+    updated = transition(
+        db=db,
+        candidate=row,
+        target_stage=PipelineStage.SENT_TO_HO,
+        user=user,
+        remarks="Application transferred to Head Office"
+    )
+    db.commit()
+    db.refresh(updated)
+    return to_candidate_out(updated, id in resume_candidate_ids(db, [id]))

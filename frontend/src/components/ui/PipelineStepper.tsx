@@ -8,7 +8,9 @@ import {
   Code2, 
   Check,
   Pause,
-  CircleDashed
+  CircleDashed,
+  FileText,
+  Send
 } from 'lucide-react';
 import type { PipelineStage } from '../../types';
 import { stageLabel } from '../../lib/stages';
@@ -31,6 +33,11 @@ const STAGE_ICONS: Record<string, React.ElementType> = {
   'BRANCH_INTERVIEW': MessagesSquare,
   'TEST': Code2,
   'FINAL_APPROVAL': BadgeCheck,
+  'CALL_LETTER': Mail,
+  'INTERVIEWS': MessagesSquare,
+  'BACKGROUND_VERIFICATION': UserCheck,
+  'APPLICATION': FileText,
+  'SENT_TO_HO': Send,
 };
 
 export function PipelineStepper({ 
@@ -74,7 +81,7 @@ export function PipelineStepper({
       </div>
 
       {/* Desktop view: full horizontal stepper */}
-      <div className="hidden md:flex items-start justify-between relative px-4 w-full">
+      <div className="hidden md:flex items-start justify-between relative px-4 w-full max-w-4xl mx-auto">
         {/* Background connecting line */}
         <div className="absolute top-5 left-12 right-12 h-[2px] bg-muted/60 -z-10" />
 

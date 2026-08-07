@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Button, Modal, LoadingSpinner, EmptyState, Badge, Select } from '../../components/ui';
@@ -11,7 +11,6 @@ import { AddCandidateForm } from '../../components/candidates/AddCandidateForm';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { toast } from 'sonner';
 import { cn, extractError } from '../../lib/utils';
-import { BulkSalaryUpload } from '../../components/candidates/BulkSalaryUpload';
 
 const PIPELINE_STAGES: PipelineStage[] = [
   'CANDIDATE_FORM', 'BRANCH_INTERVIEW',
@@ -21,6 +20,33 @@ const PIPELINE_STAGES: PipelineStage[] = [
 function formatDate(dateStr: string): string {
   if (!dateStr) return '—';
   return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function DebouncedSearchInput({ value, onChange, placeholder, className }: { value: string, onChange: (val: string) => void, placeholder?: string, className?: string }) {
+  const [localValue, setLocalValue] = useState(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (localValue !== value) {
+        onChange(localValue);
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [localValue, value, onChange]);
+
+  return (
+    <input
+      type="text"
+      placeholder={placeholder}
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      className={className}
+    />
+  );
 }
 
 export default function CandidatesList() {
@@ -67,12 +93,9 @@ export default function CandidatesList() {
     }
   }, [page, limit, searchQuery, stageFilter]);
 
-  // Debounce search and refetch
+  // Fetch when dependencies change
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      fetchCandidatesList(true);
-    }, 300);
-    return () => clearTimeout(timeout);
+    fetchCandidatesList(true);
   }, [fetchCandidatesList]);
 
   // Reset page to 1 when filters change
@@ -87,8 +110,8 @@ export default function CandidatesList() {
   const filteredCandidates = candidates;
 
   // Select-all derived state
-  const allVisibleIds = filteredCandidates.map((c) => c.id);
-  const selectedVisibleCount = allVisibleIds.filter((id) => selectedIds.has(id)).length;
+  const allVisibleIds = useMemo(() => filteredCandidates.map((c) => c.id), [filteredCandidates]);
+  const selectedVisibleCount = useMemo(() => allVisibleIds.filter((id) => selectedIds.has(id)).length, [allVisibleIds, selectedIds]);
   const allSelected = allVisibleIds.length > 0 && selectedVisibleCount === allVisibleIds.length;
   const someSelected = selectedVisibleCount > 0 && !allSelected;
 
@@ -183,7 +206,6 @@ export default function CandidatesList() {
         title="Candidates"
         action={
           <div className="flex gap-3">
-            {user?.role !== 'LOCAL_HR' && <BulkSalaryUpload />}
             <Button onClick={() => setIsAddOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Candidate
@@ -216,11 +238,10 @@ export default function CandidatesList() {
           <div className="flex items-center gap-3 px-1 pt-2 w-full">
             <div className="relative flex-1 min-w-0 md:max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-              <input
-                type="text"
+              <DebouncedSearchInput
                 placeholder="Search by name..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={setSearchQuery}
                 className="w-full h-9 pl-9 pr-8 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground placeholder:text-muted-foreground"
               />
               {searchQuery && (

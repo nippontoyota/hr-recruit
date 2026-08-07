@@ -49,51 +49,55 @@ export const AppShell = () => {
         {!isCandidateProfile && (
           <header className="sticky top-0 z-[var(--z-sticky)] flex items-center justify-between h-14 bg-surface px-4 lg:px-6 shrink-0">
             {/* Logo / Mobile Menu */}
-            <div className="flex items-center gap-4 w-1/4">
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-1 -ml-1 text-text-secondary hover:text-text-primary rounded-lg hover:bg-muted transition-colors md:hidden"
-                aria-label="Toggle menu"
-              >
-                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </button>
+            <div className="flex items-center gap-4 flex-1">
+              {role === 'ADMIN' && (
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  className="p-1 -ml-1 text-text-secondary hover:text-text-primary rounded-lg hover:bg-muted transition-colors md:hidden"
+                  aria-label="Toggle menu"
+                >
+                  {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                </button>
+              )}
               <span className="text-base font-accent font-extrabold text-text-primary tracking-tight hidden md:block">
                 Nippon Recruitment CRM
               </span>
             </div>
 
             {/* Desktop Navigation Links */}
-            <nav className="hidden md:flex flex-1 justify-center items-center gap-2">
-              <div className="flex items-center gap-1 bg-muted/60 p-1.5 rounded-full border border-border shadow-inner">
-                {allowedNavItems.map((item) => {
-                  const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.name}
-                      to={item.href}
-                      className={cn(
-                        'relative flex items-center gap-2 px-4 py-1.5 text-sm font-accent font-bold rounded-full transition-colors duration-200 z-10',
-                        isActive
-                          ? 'text-white drop-shadow-sm'
-                          : 'text-text-secondary hover:text-text-primary hover:bg-white/50'
-                      )}
-                    >
-                      {isActive && (
-                        <motion.div
-                          layoutId="active-nav-pill"
-                          className="absolute inset-0 bg-gradient-to-b from-primary to-[#b9181f] rounded-full shadow-[0_4px_10px_-2px_rgba(214,28,36,0.5),inset_0_2px_4px_rgba(255,255,255,0.3)] border border-primary -z-10"
-                          transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                        />
-                      )}
-                      <Icon strokeWidth={isActive ? 2.5 : 2} className="h-4 w-4 relative z-10" />
-                      <span className="relative z-10">{item.name}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </nav>
+            {role === 'ADMIN' && (
+              <nav className="hidden md:flex flex-1 justify-center items-center gap-2">
+                <div className="flex items-center gap-1 bg-muted/60 p-1.5 rounded-full border border-border shadow-inner">
+                  {allowedNavItems.map((item) => {
+                    const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.name}
+                        to={item.href}
+                        className={cn(
+                          'relative flex items-center gap-2 px-4 py-1.5 text-sm font-accent font-bold rounded-full transition-colors duration-200 z-10',
+                          isActive
+                            ? 'text-white drop-shadow-sm'
+                            : 'text-text-secondary hover:text-text-primary hover:bg-white/50'
+                        )}
+                      >
+                        {isActive && (
+                          <motion.div
+                            layoutId="active-nav-pill"
+                            className="absolute inset-0 bg-gradient-to-b from-primary to-[#b9181f] rounded-full shadow-[0_4px_10px_-2px_rgba(214,28,36,0.5),inset_0_2px_4px_rgba(255,255,255,0.3)] border border-primary -z-10"
+                            transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                          />
+                        )}
+                        <Icon strokeWidth={isActive ? 2.5 : 2} className="h-4 w-4 relative z-10" />
+                        <span className="relative z-10">{item.name}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </nav>
+            )}
 
             {/* Profile & Actions */}
             <div className="flex items-center justify-end gap-3 w-1/4">
@@ -119,7 +123,7 @@ export const AppShell = () => {
 
         {/* Mobile Navigation Menu Dropdown */}
         <AnimatePresence>
-          {!isCandidateProfile && mobileMenuOpen && (
+          {!isCandidateProfile && mobileMenuOpen && role === 'ADMIN' && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -157,7 +161,7 @@ export const AppShell = () => {
             className={
               isCandidateProfile
                 ? 'w-full min-h-full flex'
-                : 'p-4 sm:p-6 lg:p-8 w-full h-full mx-auto'
+                : 'p-2 sm:p-4 w-full h-full mx-auto'
             }
           >
             <AnimatePresence mode="wait">

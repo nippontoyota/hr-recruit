@@ -3,12 +3,12 @@ import type { User } from '../types';
 
 export const getUsers = async (): Promise<User[]> => {
   const response = await request('GET', '/users');
-  return response.data;
+  return response.data.data;
 };
 
 export const getInterviewers = async (): Promise<User[]> => {
   const response = await request('GET', '/users/interviewers');
-  return response.data;
+  return response.data.data;
 };
 
 export const createUser = async (data: any): Promise<User> => {

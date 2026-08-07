@@ -80,7 +80,7 @@ def public_full_status(
         raise HTTPException(status_code=404, detail="Invalid token or candidate not found.")
     return {
         "full_name": row.full_name,
-        "is_awaiting_full_fill": row.current_stage == PipelineStage.CANDIDATE_FORM and row.pre_form_status in (FormStatus.SENT, FormStatus.VIEWED)
+        "is_awaiting_full_fill": row.current_stage == PipelineStage.CALL_LETTER and row.pre_form_status in (FormStatus.SENT, FormStatus.VIEWED)
     }
 
 @router.post("/public-apply-full/{token}", response_model=CandidateOut)
@@ -93,8 +93,8 @@ def public_apply_full(
     row = db.scalar(select(Candidate).where(Candidate.pre_form_token == token))
     if not row:
         raise HTTPException(status_code=404, detail="Invalid token or candidate not found.")
-    if row.current_stage != PipelineStage.CANDIDATE_FORM:
-        raise HTTPException(status_code=400, detail="Candidate is not in CANDIDATE_FORM stage.")
+    if row.current_stage != PipelineStage.CALL_LETTER:
+        raise HTTPException(status_code=400, detail="Candidate is not in CALL_LETTER stage.")
     profile = db.scalar(select(CandidateProfile).where(CandidateProfile.candidate_id == row.id))
     if not profile:
         profile = CandidateProfile(candidate_id=row.id)

@@ -46,6 +46,12 @@ class FollowUpOut(BaseModel):
     created_by: UUID | None
     created_at: datetime
 
+class FollowUpPaginatedOut(BaseModel):
+    data: List[FollowUpOut]
+    total_count: int
+    page: int
+    limit: int
+
 @router.post("", response_model=FollowUpOut, status_code=201)
 def create_followup(
     body: FollowUpCreate,
@@ -71,15 +77,29 @@ def create_followup(
     db.refresh(fu)
     return fu
 
-@router.get("", response_model=List[FollowUpOut])
+@router.get("", response_model=FollowUpPaginatedOut)
 def list_followups(
+    page: int = 1,
+    limit: int = 50,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    q = select(FollowUp).order_by(FollowUp.due_at.asc())
+    from sqlalchemy import func
+    skip = (page - 1) * limit
+    q = select(FollowUp)
     if user.role == UserRole.LOCAL_HR:
         q = q.where(FollowUp.assigned_to == user.id)
-    return list(db.scalars(q).all())
+        
+    total_count = db.scalar(select(func.count()).select_from(q.subquery())) or 0
+    q = q.order_by(FollowUp.due_at.asc()).offset(skip).limit(limit)
+    data = list(db.scalars(q).all())
+    
+    return FollowUpPaginatedOut(
+        data=data,
+        total_count=total_count,
+        page=page,
+        limit=limit
+    )
 
 @router.get("/candidate/{candidate_id}", response_model=List[FollowUpOut])
 def list_candidate_followups(

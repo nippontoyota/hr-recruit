@@ -14,7 +14,13 @@ export type PipelineStage =
   | 'FINAL_APPROVAL'
   | 'HIRED'
   | 'REJECTED'
-  | 'ON_HOLD';
+  | 'ON_HOLD'
+  | 'CALL_LETTER'
+  | 'INTERVIEWS'
+  | 'TEST'
+  | 'BACKGROUND_VERIFICATION'
+  | 'APPLICATION'
+  | 'SENT_TO_HO';
 
 export const NIPPON_BRANCHES = [
   'Enchakkal',

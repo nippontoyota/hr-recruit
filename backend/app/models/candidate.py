@@ -39,7 +39,7 @@ class Candidate(Base):
     current_stage: Mapped[PipelineStage] = mapped_column(
         Enum(PipelineStage, name="pipeline_stage", schema=SCHEMA, create_type=False),
         nullable=False,
-        default=PipelineStage.CANDIDATE_FORM,
+        default=PipelineStage.CALL_LETTER,
         index=True,
     )
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -81,7 +81,7 @@ class Candidate(Base):
 
 
     applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     profile: Mapped["CandidateProfile"] = relationship("CandidateProfile", back_populates="candidate", uselist=False, cascade="all, delete-orphan", passive_deletes=True)

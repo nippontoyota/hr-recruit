@@ -6,7 +6,7 @@ from app.models.enums import PipelineStage
 from app.models.user import User
 from app.schemas.candidate import CandidateCreate
 from scripts.seed_users import seed_users
-from app.services.workflow import WorkflowService
+from app.services.workflow import transition
 
 def seed():
     seed_users()
@@ -39,7 +39,7 @@ def seed():
             admin.id,
         )
         
-        WorkflowService.transition(
+        transition(
             db=db,
             candidate=row,
             target_stage=PipelineStage.CANDIDATE_FORM,
@@ -48,7 +48,7 @@ def seed():
         )
         db.flush()
         
-        WorkflowService.transition(
+        transition(
             db=db,
             candidate=row,
             target_stage=PipelineStage.HR_INTERVIEW,

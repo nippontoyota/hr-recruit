@@ -41,14 +41,13 @@ def transition(
         from app.models.evaluation import Evaluation
         from app.models.enums import EvaluationType, InterviewStatus
 
-        # We will loop through the standard stages up to the target_stage
-        # and initialize evaluations for any skipped stages.
         standard_stages = [
-            PipelineStage.CANDIDATE_FORM,
-            PipelineStage.BRANCH_INTERVIEW,
+            PipelineStage.CALL_LETTER,
+            PipelineStage.INTERVIEWS,
             PipelineStage.TEST,
-            PipelineStage.FINAL_APPROVAL,
-            PipelineStage.HIRED
+            PipelineStage.BACKGROUND_VERIFICATION,
+            PipelineStage.APPLICATION,
+            PipelineStage.SENT_TO_HO
         ]
         
         target_idx = -1
@@ -58,14 +57,7 @@ def transition(
         for i in range(target_idx + 1):
             s = standard_stages[i]
             
-            if s == PipelineStage.BRANCH_INTERVIEW:
-                # We do not initialize BranchInterview here because it's its own independent table
-                # (unless they were using Evaluation table for it, but the new architecture uses BranchInterview table)
-                # However, this code was historically creating Evaluation records for BRANCH_HR and DEPT_HEAD.
-                # Since we replaced those with BranchInterview table, we can skip creating Evaluation records.
-                pass
-
-            elif s == PipelineStage.TEST:
+            if s == PipelineStage.TEST:
                 for etype in [EvaluationType.TECHNICAL_TEST]:
                     existing = db.scalar(sa.select(Evaluation).where(
                         sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == etype)
@@ -77,18 +69,6 @@ def transition(
                             status=InterviewStatus.PENDING_SCHEDULE
                         ))
 
-            elif s == PipelineStage.FINAL_APPROVAL:
-                existing = db.scalar(sa.select(Evaluation).where(
-                    sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == EvaluationType.HQ_INTERVIEW)
-                ))
-                if not existing:
-                    db.add(Evaluation(
-                        candidate_id=candidate.id,
-                        type=EvaluationType.HQ_INTERVIEW,
-                        status=InterviewStatus.PENDING_SCHEDULE
-                    ))
-
-            
         old_stage = candidate.current_stage
         
         # 2. Update Candidate

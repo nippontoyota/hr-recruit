@@ -47,37 +47,27 @@ export default function AdminUsers() {
   }, []);
 
   const handleCreate = async () => {
-    let generatedEmail = '';
-    let generatedName = '';
-    
-    if (formData.role === 'ADMIN') {
-      generatedEmail = 'admin@nipponhr.com';
-      generatedName = 'System Admin';
-    } else if (formData.role === 'HO_HR') {
-      generatedEmail = 'ho@nipponhr.com';
-      generatedName = 'Head Office HR';
-    } else if (formData.role === 'LOCAL_HR') {
-      if (!formData.branch_location) {
-        toast.error("Please select a branch location");
-        return;
-      }
-      const branchSlug = formData.branch_location.toLowerCase().replace(/[^a-z0-9]/g, '');
-      generatedEmail = `${branchSlug}@nipponhr.com`;
-      generatedName = `${formData.branch_location} Branch HR`;
+    if (!formData.email) {
+      toast.error("Please provide an email address");
+      return;
     }
-
+    if (!formData.full_name) {
+      toast.error("Please provide a full name");
+      return;
+    }
     if (!formData.password) {
       toast.error("Please provide a password");
       return;
     }
 
+    if (formData.role === 'LOCAL_HR' && !formData.branch_location) {
+      toast.error("Please select a branch location");
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const newUser = await createUser({
-        ...formData,
-        email: generatedEmail,
-        full_name: generatedName
-      });
+      const newUser = await createUser(formData);
       toast.success(`Access granted! Account ${newUser.email} was created.`);
       setIsCreateOpen(false);
       fetchUsers();
@@ -94,6 +84,7 @@ export default function AdminUsers() {
     try {
       const updateData: any = {
         full_name: formData.full_name,
+        email: formData.email,
         role: formData.role,
         branch_location: formData.branch_location || null,
         department: formData.department || null,
@@ -356,26 +347,27 @@ export default function AdminUsers() {
 
       <Modal isOpen={isCreateOpen || isEditOpen} onClose={() => { setIsCreateOpen(false); setIsEditOpen(false); }} title={isEditOpen ? "Edit User Access" : "Grant New Access"} size="md">
         <div className="p-6 space-y-5">
-          {isEditOpen && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Full Name</label>
-                <Input 
-                  value={formData.full_name} 
-                  disabled 
-                  className="bg-surface border-border shadow-sm rounded-md h-9 text-sm disabled:bg-muted/50"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Email Address</label>
-                <Input 
-                  value={formData.email} 
-                  disabled 
-                  className="bg-surface border-border shadow-sm rounded-md h-9 text-sm disabled:bg-muted/50"
-                />
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Full Name</label>
+              <Input 
+                value={formData.full_name}
+                onChange={e => setFormData({...formData, full_name: e.target.value})}
+                placeholder="e.g. John Doe"
+                className="bg-surface border-border shadow-sm rounded-md h-9 text-sm"
+              />
             </div>
-          )}
+            <div>
+              <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Email Address</label>
+              <Input 
+                value={formData.email}
+                onChange={e => setFormData({...formData, email: e.target.value})}
+                placeholder="e.g. john@nipponhr.com"
+                className="bg-surface border-border shadow-sm rounded-md h-9 text-sm"
+                type="email"
+              />
+            </div>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>

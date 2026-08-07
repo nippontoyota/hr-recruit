@@ -31,43 +31,50 @@ def reset_db():
                 # Value might already exist, which is fine
                 pass
 
-        # Drop dependent tables first
-        db.execute(text("DELETE FROM recruitment.activity_logs"))
-        db.execute(text("DELETE FROM recruitment.communications"))
-        db.execute(text("DELETE FROM recruitment.documents"))
-        db.execute(text("DELETE FROM recruitment.evaluations"))
-        db.execute(text("DELETE FROM recruitment.evaluation_tokens"))
-        db.execute(text("DELETE FROM recruitment.stage_history"))
-        db.execute(text("DELETE FROM recruitment.candidate_screening"))
-        db.execute(text("DELETE FROM recruitment.candidate_profiles"))
-        
-        # Now drop candidates and users
-        db.execute(text("DELETE FROM recruitment.candidates"))
+        # Just drop users
         db.execute(text("DELETE FROM recruitment.users"))
         db.commit()
-        print("Cleared existing users and candidates.")
+        print("Cleared existing users.")
         
-        # Alter ENUM type if running on PostgreSQL to ensure it only has 3 roles
-        # In a real environment, we'd use Alembic. For this seed, we just execute raw SQL to update the type.
-        # But wait, PostgreSQL enum types can't easily drop values. 
-        # The easiest way is to rename the old type, create a new one, and cast.
-        # We will skip DB-level enum alteration if it's too complex and just rely on SQLAlchemy string mapping.
-        # SQLAlchemy Enum with native_enum=False or we just insert strings.
-        # Since we use create_type=False in the models, we don't need to drop the enum type, it will just accept strings.
+        # Seed Professional Users
+        users = [
+            User(
+                id=uuid.uuid4(),
+                email="admin@nipponhr.com",
+                full_name="System Administrator",
+                hashed_password=hash_password("Admin@123!"),
+                role=UserRole.ADMIN,
+                branch_location=None
+            ),
+            User(
+                id=uuid.uuid4(),
+                email="ho@nipponhr.com",
+                full_name="Head Office HR",
+                hashed_password=hash_password("HOHR@123!"),
+                role=UserRole.HO_HR,
+                branch_location=None
+            ),
+            User(
+                id=uuid.uuid4(),
+                email="nettoor@nipponhr.com",
+                full_name="Nettoor Branch HR",
+                hashed_password=hash_password("Nettoor@123!"),
+                role=UserRole.LOCAL_HR,
+                branch_location="Nettoor"
+            ),
+            User(
+                id=uuid.uuid4(),
+                email="enchakkal@nipponhr.com",
+                full_name="Enchakkal Branch HR",
+                hashed_password=hash_password("Enchakkal@123!"),
+                role=UserRole.LOCAL_HR,
+                branch_location="Enchakkal"
+            )
+        ]
         
-        # Seed 3 Users
-        admin_user = User(
-            id=uuid.uuid4(),
-            email="admin@nippon.local",
-            full_name="System Admin",
-            hashed_password=hash_password("admin123"),
-            role=UserRole.ADMIN,
-            branch_location=None
-        )
-        db.add_all([admin_user])
+        db.add_all(users)
         db.commit()
-        print("Successfully seeded testing credentials:")
-        print("1. admin@nippon.local (pw: admin123) - ADMIN")
+        print("Successfully seeded testing credentials.")
         
     except Exception as e:
         db.rollback()

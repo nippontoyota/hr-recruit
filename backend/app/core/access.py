@@ -2,13 +2,20 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.candidate import Candidate
-from app.models.enums import UserRole
+from app.models.enums import UserRole, PipelineStage
 from app.models.user import User
 
 
 def assert_candidate_access(user: User, candidate: Candidate) -> None:
-    if user.role == UserRole.LOCAL_HR and candidate.branch_location != user.branch_location:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Candidate is not in your branch.")
+    if user.role == UserRole.LOCAL_HR:
+        if candidate.branch_location != user.branch_location:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Candidate is not in your branch.")
+        if candidate.current_stage == PipelineStage.SENT_TO_HO:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Candidate has been handed over to Head Office.")
+            
+    if user.role == UserRole.HO_HR:
+        if candidate.current_stage != PipelineStage.SENT_TO_HO:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Candidate has not been handed over to Head Office yet.")
 
 
 def get_candidate_for_user(db: Session, candidate_id, user: User) -> Candidate:

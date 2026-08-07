@@ -100,7 +100,21 @@ export function EvaluationStageWidget({
       const pending = evaluations.find(e => e.status !== 'EVALUATED' && e.type !== 'TECHNICAL_TEST');
       if (pending) setRemarksId(pending.id);
     }
-  }, [evaluations, loading, remarksId]);
+
+    // Auto-create missing evaluations so the cards are always visible
+    if (!loading && !submitting) {
+      let missingType = evalTypes.find(type => !evaluations.some(e => e.type === type));
+      if (missingType) {
+        setSubmitting(true);
+        createEvaluation(candidate.id, missingType).then(() => {
+          fetchEvaluations();
+        }).catch(err => {
+          console.error('Auto-create failed:', err);
+          setSubmitting(false);
+        });
+      }
+    }
+  }, [evaluations, loading, remarksId, evalTypes, candidate.id, submitting]);
 
   const handleAddDeptInterview = async () => {
     try {
@@ -257,12 +271,15 @@ export function EvaluationStageWidget({
 
   return (
     <div className="space-y-4">
-      <div>
+      <div className="flex justify-end mb-4">
+        {evalTypes.includes('DEPT_HEAD') && evaluations.filter(e => e.type === 'DEPT_HEAD').length > 0 && evaluations.filter(e => e.type === 'DEPT_HEAD').length < 5 && (
+          <Button variant="primary" size="sm" onClick={handleAddDeptInterview} isLoading={submitting} className="bg-primary/10 text-primary hover:bg-primary/20 border-0 shadow-none">
+            <span className="font-bold text-[10px] uppercase tracking-wider">+ Add Another Dept Interview</span>
+          </Button>
+        )}
+      </div>
 
-        
-
-
-        <div className="grid gap-4 grid-cols-1">
+      <div className="grid gap-4 grid-cols-1">
           <AnimatePresence mode="wait">
             {evaluations.length === 0 ? (
               <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -365,15 +382,8 @@ export function EvaluationStageWidget({
             })}
           </AnimatePresence>
 
-          {evalTypes.includes('DEPT_HEAD') && evaluations.filter(e => e.type === 'DEPT_HEAD').length > 0 && evaluations.filter(e => e.type === 'DEPT_HEAD').length < 5 && (
-            <div className="flex justify-start mt-2">
-              <Button variant="primary" size="sm" onClick={handleAddDeptInterview} isLoading={submitting} className="bg-primary/10 text-primary hover:bg-primary/20 border-0 shadow-none">
-                <span className="font-bold text-[10px] uppercase tracking-wider">+ Add Another Dept Interview</span>
-              </Button>
-            </div>
-          )}
+
         </div>
-      </div>
 
       <Modal
         isOpen={!!cancelConfirmId}

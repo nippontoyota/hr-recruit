@@ -26,6 +26,7 @@ from app.models.user import User
 from app.schemas.candidate import (
     CandidateCreate,
     CandidateListOut,
+    CandidateOut,
     CandidatePaginatedOut, DocumentOut,
     CandidateProfileRawDataUpdate, CandidateResolveDuplicate, CandidatePortalOut, CandidatePortalEvaluationOut, CandidatePortalResponseIn
 )
@@ -210,11 +211,12 @@ def _issue_pre_form(db: Session, candidate: Candidate, user: User) -> None:
     candidate.pre_form_status = FormStatus.SENT
     candidate.pre_form_sent_at = datetime.now(UTC)
 
-    if candidate.current_stage != PipelineStage.CANDIDATE_FORM:
+    if candidate.current_stage != PipelineStage.CALL_LETTER:
+        # Move them to CALL_LETTER so the form can be tracked
         transition(
             db=db,
             candidate=candidate,
-            target_stage=PipelineStage.CANDIDATE_FORM,
+            target_stage=PipelineStage.CALL_LETTER,
             user=user,
             remarks="Screening accepted — pre-interview form issued",
         )
@@ -284,7 +286,7 @@ def create_candidate(db: Session, body: CandidateCreate, user_id: UUID | None, c
             assigned_hr_user_id=body.assigned_hr_user_id,
             is_duplicate_flagged=dup is not None,
             duplicate_of_candidate_id=dup.id if dup else None,
-            current_stage=PipelineStage.CANDIDATE_FORM,
+            current_stage=PipelineStage.CALL_LETTER,
             pre_form_status=FormStatus.SENT,
             pre_form_token=generate_secure_token(),
             pre_form_sent_at=datetime.now(UTC),
@@ -305,7 +307,7 @@ def create_candidate(db: Session, body: CandidateCreate, user_id: UUID | None, c
         )
         db.add(log)
         
-        db.add(StageHistory(candidate_id=row.id, to_stage=PipelineStage.CANDIDATE_FORM, changed_by_user_id=user_id))
+        db.add(StageHistory(candidate_id=row.id, to_stage=PipelineStage.CALL_LETTER, changed_by_user_id=user_id))
         db.commit()
         db.refresh(row)
         return row
@@ -500,11 +502,15 @@ def list_candidates(
         )
         
     # Row-Level Security / Visibility Logic
-    if user.role in (UserRole.ADMIN, UserRole.HO_HR):
+    if user.role == UserRole.ADMIN:
         pass # sees all
+    elif user.role == UserRole.HO_HR:
+        q = q.where(Candidate.current_stage == PipelineStage.SENT_TO_HO)
     elif user.role == UserRole.LOCAL_HR:
-        # Local HR sees candidates in their branch
-        q = q.where(Candidate.branch_location == user.branch_location)
+        q = q.where(
+            Candidate.branch_location == user.branch_location,
+            Candidate.current_stage != PipelineStage.SENT_TO_HO
+        )
     else:
         # Fallback to prevent leaks
         q = q.where(Candidate.id == None)
@@ -532,6 +538,8 @@ def create(
 ):
     if body.assigned_hr_user_id is None:
         body = body.model_copy(update={"assigned_hr_user_id": user.id})
+    if user.role == UserRole.LOCAL_HR:
+        body = body.model_copy(update={"branch_location": user.branch_location})
     row = create_candidate(db, body, user.id, created_via_public_apply=False)
     return to_candidate_out(row, False)
 
@@ -659,7 +667,7 @@ class BulkDeleteRequest(BaseModel):
     candidate_ids: list[UUID]
 
 @router.post("/bulk-delete", status_code=200)
-def bulk_delete_candidates_endpoint(
+async def bulk_delete_candidates_endpoint(
     request: BulkDeleteRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
@@ -685,7 +693,7 @@ def bulk_delete_candidates_endpoint(
     storage_paths = [doc.storage_path for doc in docs if doc.storage_path]
     if storage_paths:
         try:
-            storage.delete_objects(storage_paths)
+            await anyio.to_thread.run_sync(storage.delete_objects, storage_paths)
         except Exception as e:
             print(f"Failed to bulk delete documents: {e}")
 

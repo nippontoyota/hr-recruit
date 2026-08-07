@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type { User, UserRole } from '../types';
 import { login as apiLogin, AUTH_EXPIRED_EVENT } from '../api/client';
@@ -79,8 +79,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
   }, [logout]);
 
+  const contextValue = React.useMemo(() => ({
+    user,
+    role: user?.role || null,
+    token,
+    isLoading,
+    login,
+    logout
+  }), [user, token, isLoading, login, logout]);
+
   return (
-    <AuthContext.Provider value={{ user, role: user?.role || null, token, isLoading, login, logout }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

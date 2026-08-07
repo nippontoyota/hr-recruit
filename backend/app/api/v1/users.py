@@ -1,4 +1,5 @@
 from uuid import UUID
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
@@ -12,26 +13,55 @@ from app.schemas.auth import UserOut, UserCreate, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-@router.get("", response_model=list[UserOut])
+class UserPaginatedOut(BaseModel):
+    data: list[UserOut]
+    total_count: int
+    page: int
+    limit: int
+
+@router.get("", response_model=UserPaginatedOut)
 def list_users(
+    page: int = 1,
+    limit: int = 50,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN))
 ):
-    users = db.scalars(select(User).where(User.is_active == True).order_by(User.created_at.desc())).all()
-    return [UserOut.from_user(u) for u in users]
+    skip = (page - 1) * limit
+    q = select(User).where(User.is_active == True)
+    total_count = db.scalar(select(func.count()).select_from(q.subquery())) or 0
+    users = db.scalars(q.order_by(User.created_at.desc()).offset(skip).limit(limit)).all()
+    
+    return UserPaginatedOut(
+        data=[UserOut.from_user(u) for u in users],
+        total_count=total_count,
+        page=page,
+        limit=limit
+    )
 
-@router.get("/interviewers", response_model=list[UserOut])
+@router.get("/interviewers", response_model=UserPaginatedOut)
 def list_interviewers(
+    page: int = 1,
+    limit: int = 50,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR))
 ):
-    users = db.scalars(select(User).where(User.is_active == True).order_by(User.full_name.asc())).all()
+    skip = (page - 1) * limit
+    q = select(User).where(User.is_active == True)
+    total_count = db.scalar(select(func.count()).select_from(q.subquery())) or 0
+    users = db.scalars(q.order_by(User.full_name.asc()).offset(skip).limit(limit)).all()
+    
     out = []
     for u in users:
         uo = UserOut.from_user(u)
         uo.email = "redacted@example.com"  # Redact PII
         out.append(uo)
-    return out
+        
+    return UserPaginatedOut(
+        data=out,
+        total_count=total_count,
+        page=page,
+        limit=limit
+    )
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def create_user(
@@ -44,7 +74,7 @@ def create_user(
         raise HTTPException(status_code=400, detail="User with this email already exists")
 
     if body.role == UserRole.HO_HR:
-        ho_hr_count = db.scalar(select(func.count(User.id)).where(User.role == UserRole.HO_HR))
+        ho_hr_count = db.scalar(select(func.count(User.id)).where(User.role == UserRole.HO_HR, User.is_active == True))
         if ho_hr_count > 0:
             raise HTTPException(status_code=400, detail="Only one Head Office HR account is allowed")
     elif body.role == UserRole.LOCAL_HR:
@@ -52,7 +82,7 @@ def create_user(
             raise HTTPException(status_code=400, detail="Branch location is required for Local HR")
         local_hr_count = db.scalar(
             select(func.count(User.id))
-            .where(User.role == UserRole.LOCAL_HR, User.branch_location == body.branch_location)
+            .where(User.role == UserRole.LOCAL_HR, User.branch_location == body.branch_location, User.is_active == True)
         )
         if local_hr_count > 0:
             raise HTTPException(status_code=400, detail=f"A Local HR account already exists for {body.branch_location}")
@@ -95,9 +125,15 @@ def update_user(
     new_role = body.role if body.role is not None else found.role
     new_branch = body.branch_location if body.branch_location is not None else found.branch_location
 
+    if body.email is not None and body.email != found.email:
+        existing = db.scalar(select(User).where(User.email == body.email))
+        if existing:
+            raise HTTPException(status_code=400, detail="User with this email already exists")
+        found.email = body.email
+
     if (body.role is not None and body.role != found.role) or (body.branch_location is not None and body.branch_location != found.branch_location):
         if new_role == UserRole.HO_HR:
-            ho_hr_count = db.scalar(select(func.count(User.id)).where(User.role == UserRole.HO_HR, User.id != user_id))
+            ho_hr_count = db.scalar(select(func.count(User.id)).where(User.role == UserRole.HO_HR, User.id != user_id, User.is_active == True))
             if ho_hr_count > 0:
                 raise HTTPException(status_code=400, detail="Only one Head Office HR account is allowed")
         elif new_role == UserRole.LOCAL_HR:
@@ -105,7 +141,7 @@ def update_user(
                 raise HTTPException(status_code=400, detail="Branch location is required for Local HR")
             local_hr_count = db.scalar(
                 select(func.count(User.id))
-                .where(User.role == UserRole.LOCAL_HR, User.branch_location == new_branch, User.id != user_id)
+                .where(User.role == UserRole.LOCAL_HR, User.branch_location == new_branch, User.id != user_id, User.is_active == True)
             )
             if local_hr_count > 0:
                 raise HTTPException(status_code=400, detail=f"A Local HR account already exists for {new_branch}")

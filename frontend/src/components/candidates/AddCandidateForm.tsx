@@ -4,6 +4,7 @@ import { Button, Input, Select, Modal } from '../ui';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { createCandidate } from '../../api/candidates';
 import { NIPPON_BRANCHES } from '../../types';
+import { useAuth } from '../../auth/AuthContext';
 import { validateBasicCandidateForm } from '../../lib/validatePreForm';
 
 interface AddCandidateFormProps {
@@ -14,6 +15,7 @@ interface AddCandidateFormProps {
 
 export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFormProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [position, setPosition] = useState('');
@@ -206,20 +208,22 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
             />
           </div>
 
-          <div className="col-span-2 sm:col-span-1">
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
-              Branch Location
-            </label>
-            <Select
-              value={branchLocation}
-              onChange={(e) => setBranchLocation(e.target.value)}
-            >
-              <option value="">Select branch</option>
-              {NIPPON_BRANCHES.map(branch => (
-                <option key={branch} value={branch}>{branch}</option>
-              ))}
-            </Select>
-          </div>
+          {user?.role !== 'LOCAL_HR' && (
+            <div className="col-span-2 sm:col-span-1">
+              <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
+                Branch Location
+              </label>
+              <Select
+                value={branchLocation}
+                onChange={(e) => setBranchLocation(e.target.value)}
+              >
+                <option value="">Select branch</option>
+                {NIPPON_BRANCHES.map(branch => (
+                  <option key={branch} value={branch}>{branch}</option>
+                ))}
+              </Select>
+            </div>
+          )}
 
         </div>
 

@@ -76,6 +76,7 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    email: EmailAddress | None = None
     full_name: str | None = None
     role: UserRole | None = None
     branch_location: str | None = None

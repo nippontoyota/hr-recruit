@@ -117,6 +117,11 @@ export const updateCandidateStage = async (candidateId: string, toStage: string,
   return response.data;
 };
 
+export const sendToHeadOffice = async (candidateId: string): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/send-to-ho`);
+  return response.data;
+};
+
 export const updateCommunicationStatus = async (communicationId: string, status: string): Promise<any> => {
   const response = await request('POST', `/communications/${communicationId}/status`, { status });
   return response.data;

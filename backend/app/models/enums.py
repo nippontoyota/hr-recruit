@@ -17,6 +17,13 @@ class PipelineStage(str, enum.Enum):
     REJECTED = "REJECTED"
     ON_HOLD = "ON_HOLD"
     
+    # New Branch Flow Stages
+    CALL_LETTER = "CALL_LETTER"
+    INTERVIEWS = "INTERVIEWS"
+    BACKGROUND_VERIFICATION = "BACKGROUND_VERIFICATION"
+    APPLICATION = "APPLICATION"
+    SENT_TO_HO = "SENT_TO_HO"
+    
     # Deprecated stages (kept for SQLAlchemy pg_enum mapping compatibility)
     DEPARTMENT_INTERVIEW = "DEPARTMENT_INTERVIEW"
     BRANCH_EVALUATION = "BRANCH_EVALUATION"

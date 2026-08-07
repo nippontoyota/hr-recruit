@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, useMemo, type ReactNode } from 'react';
 import { FileText, ExternalLink, Download } from 'lucide-react';
 import { getCandidateResume } from '../../api/candidates';
 import type { ResumeDocument } from '../../types';
@@ -134,8 +134,10 @@ export function ResumeViewerProvider({ children }: { children: ReactNode }) {
     setTarget({ candidateId, candidateName });
   }, []);
 
+  const contextValue = useMemo(() => ({ openResume }), [openResume]);
+
   return (
-    <ResumeViewerContext.Provider value={{ openResume }}>
+    <ResumeViewerContext.Provider value={contextValue}>
       {children}
       <ResumeViewerModal target={target} onClose={() => setTarget(null)} />
     </ResumeViewerContext.Provider>
