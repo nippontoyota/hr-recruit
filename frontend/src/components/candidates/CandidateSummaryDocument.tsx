@@ -1,161 +1,262 @@
-import { useState, useEffect, useMemo } from 'react';
+import React from 'react';
 import type { Candidate, Evaluation } from '../../types';
-import { PdfViewer, LoadingSpinner } from '../../components/ui';
-import { getDepartmentQuestions } from '../../api/evaluations';
-import { useAuth } from '../../auth/AuthContext';
 
 interface CandidateSummaryDocumentProps {
   candidate: Candidate;
   evaluations: Evaluation[];
-  hidePrintButton?: boolean;
 }
 
-export function CandidateSummaryDocument({ candidate, evaluations, hidePrintButton = false }: CandidateSummaryDocumentProps) {
-  const { user } = useAuth();
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function CandidateSummaryDocument({ candidate, evaluations }: CandidateSummaryDocumentProps) {
+  const getEval = (type: string) => evaluations.find(e => e.type === type);
+  const hrEval = getEval('BRANCH_HR');
+  const deptEval = getEval('DEPT_HEAD');
+  const techEval = getEval('TECHNICAL_TEST');
 
-  // Avoid regenerating the PDF every time the candidate object reference changes during background polling.
-  // We only track the core identifying data that would require a new PDF if changed.
-  const payloadHash = useMemo(() => {
-    return JSON.stringify({
-      id: candidate?.id,
-      name: candidate?.full_name,
-      pos: candidate?.position_applied_for,
-      // The backend attaches ?t=<timestamp> to photo_url which changes on every poll.
-      // We must strip it out so the hash remains stable!
-      photo: candidate?.profile?.photo_url?.split('?')[0],
-      // We rely on the `updated_at` timestamp of the candidate instead to know if data actually changed.
-      updated_at: (candidate as any)?.updated_at || candidate?.created_at,
-      evals_count: evaluations?.length,
-      evals_hash: evaluations?.map(e => `${e.id}-${e.verdict}`).join(',')
-    });
-  }, [candidate, evaluations]);
-
-  useEffect(() => {
-    if (!candidate) return;
-    
-    // If we already have a pdfUrl and the hash hasn't changed, don't regenerate.
-    // The dependency array ensures this effect only runs when payloadHash changes.
-
-    const fetchPdf = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        // Fetch technical questions if there's a technical test
-        let questions: any[] = [];
-        if (evaluations?.some(e => e.type === 'TECHNICAL_TEST')) {
-          try {
-             questions = await getDepartmentQuestions(candidate.position_applied_for || '');
-          } catch (e) {
-             console.error("Failed to fetch technical questions", e);
-          }
-        }
-
-        const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
-        const response = await fetch(`${baseURL}/pdf/candidate-summary`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            candidate: {
-              full_name: candidate.full_name,
-              position_applied_for: candidate.position_applied_for || 'Unknown Position',
-              phone: candidate.phone,
-              applied_at: candidate.created_at,
-              photo_url: candidate.profile?.photo_url
-            },
-            raw_data: candidate.profile?.raw_data || {},
-            evaluations: evaluations || [],
-            questions: questions
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to generate PDF');
-        }
-
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        setPdfUrl(url);
-      } catch (err: any) {
-        console.error(err);
-        setError('Could not load candidate summary document.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPdf();
-
-    return () => {
-      // Intentionally not revoking object URL immediately to prevent flickering on quick re-renders
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [payloadHash]);
-
-  if (!candidate) {
-    return <div className="p-8 text-center text-gray-500">No candidate data available.</div>;
-  }
-
-  if (loading) {
-    return (
-      <div className="flex h-[600px] w-full items-center justify-center">
-        <LoadingSpinner className="w-8 h-8" />
-        <span className="ml-2 text-sm text-gray-500">Generating PDF...</span>
-      </div>
-    );
-  }
-
-  if (error || !pdfUrl) {
-    return (
-      <div className="flex h-[600px] w-full items-center justify-center bg-red-50 border border-red-100 rounded-lg">
-        <p className="text-danger">{error}</p>
-        <button onClick={() => window.location.reload()} className="ml-4 underline text-sm text-red-600">Retry</button>
-      </div>
-    );
-  }
+  // Format Date safely
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    try {
+      const d = new Date(dateString);
+      return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).format(d);
+    } catch {
+      return dateString;
+    }
+  };
 
   return (
-    <div className="flex flex-col w-full h-[800px]">
-      {!hidePrintButton && (
-        <div className="pb-4 mb-4 flex justify-between items-center">
-          <h2 className="text-lg font-bold text-foreground">Candidate Summary Sheet</h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => window.open(pdfUrl, '_blank')}
-              className="px-3 py-1.5 bg-black text-white rounded hover:bg-black/80 text-xs font-medium shadow-sm transition-colors"
-            >
-              Take Printout
-            </button>
-            <a
-              href={pdfUrl}
-              download={`CandidateSummary_${candidate.full_name}.pdf`}
-              className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-xs font-medium shadow-sm transition-colors"
-            >
-              Download
-            </a>
-          </div>
+    <div className="w-[210mm] min-h-[297mm] mx-auto bg-white shadow-2xl p-[10mm] text-black font-sans text-xs box-border scale-[0.8] md:scale-100 origin-top">
+      {/* HEADER SECTION */}
+      <div className="border border-black mb-2 flex items-center p-2 gap-4">
+        <div className="w-24 h-12 flex items-center justify-center font-bold text-lg border-2 border-black rounded-full italic shrink-0">
+          TOYOTA
         </div>
-      )}
-      <div className="flex-1 w-full relative">
-        {user?.role !== 'LOCAL_HR' && candidate.salary_data && (
-          <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-md p-4">
-            <h3 className="text-sm font-bold text-emerald-800 uppercase tracking-wider mb-3">Salary Annexure Data</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {Object.entries(candidate.salary_data).map(([key, value]) => {
-                if (key.toLowerCase().includes('id') || key.toLowerCase().includes('email')) return null;
-                return (
-                  <div key={key}>
-                    <p className="text-xs text-emerald-600 font-semibold">{key}</p>
-                    <p className="text-sm text-emerald-900">{String(value)}</p>
-                  </div>
-                );
-              })}
+        <div className="flex-1 text-center">
+          <h1 className="font-bold text-sm tracking-wide">NIPPON MOTOR CORPORATION (P) LTD, NIPPON TOWERS, KALAMASSERY</h1>
+        </div>
+      </div>
+      
+      <div className="text-center font-bold border-b border-black pb-1 mb-2">Human Resource Department</div>
+      
+      {/* CANDIDATE SUMMARY SHEET */}
+      <table className="w-full border-collapse border border-black mb-2 table-fixed">
+        <tbody>
+          <tr className="border border-black">
+            <td colSpan={6} className="bg-gray-200 text-center font-bold border border-black py-1">Candidate Summary Sheet</td>
+          </tr>
+          <tr className="border border-black text-[10px]">
+            <td className="border border-black p-1 font-semibold w-[15%]">Name</td>
+            <td className="border border-black p-1 w-[25%]">{candidate.full_name}</td>
+            <td className="border border-black p-1 font-semibold w-[15%]">Application Submitted on:</td>
+            <td className="border border-black p-1 w-[15%]">{formatDate(candidate.created_at)}</td>
+            <td className="border border-black p-1 font-semibold w-[15%]">Department</td>
+            <td className="border border-black p-1 w-[15%]">{candidate.department || ''}</td>
+          </tr>
+          <tr className="border border-black text-[10px]">
+            <td className="border border-black p-1 font-semibold">Post Applied</td>
+            <td className="border border-black p-1">{candidate.position_applied_for}</td>
+            <td className="border border-black p-1 font-semibold">Source</td>
+            <td className="border border-black p-1">{candidate.source}</td>
+            <td className="border border-black p-1 font-semibold">Location</td>
+            <td className="border border-black p-1">{candidate.branch_location || ''}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* PERSONAL DETAILS */}
+      <table className="w-full border-collapse border border-black mb-2 table-fixed text-[10px]">
+        <tbody>
+          <tr className="border border-black">
+            <td colSpan={4} className="bg-gray-200 text-center font-bold border border-black py-1">Personal Details</td>
+            <td rowSpan={7} className="border border-black w-[20%] p-1 text-center align-middle">
+               <div className="w-[35mm] h-[45mm] border border-dashed border-gray-400 mx-auto flex items-center justify-center text-gray-400">
+                  Photo
+               </div>
+            </td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold w-[15%]">Contact No:</td>
+            <td className="border border-black p-1 w-[25%]">{candidate.phone}</td>
+            <td className="border border-black p-1 font-semibold w-[15%]">Date of Birth</td>
+            <td className="border border-black p-1 w-[25%]"></td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold">Contact Address</td>
+            <td className="border border-black p-1"></td>
+            <td className="border border-black p-1 font-semibold bg-gray-200 text-center" colSpan={2}>Experience</td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold">Email</td>
+            <td className="border border-black p-1">{candidate.email}</td>
+            <td className="border border-black p-1 font-semibold text-center">Total Work Experience</td>
+            <td className="border border-black p-1 text-center"></td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold">Educational Qualification</td>
+            <td className="border border-black p-1"></td>
+            <td className="border border-black p-1 font-semibold text-center">Father's Occupation</td>
+            <td className="border border-black p-1"></td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold">Computer Knowledge</td>
+            <td className="border border-black p-1"></td>
+            <td className="border border-black p-1 font-semibold text-center">Mother's Occupation</td>
+            <td className="border border-black p-1"></td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold">Driving Licence</td>
+            <td className="border border-black p-1"></td>
+            <td className="border border-black p-1 font-semibold text-center">Spouse Occupation</td>
+            <td className="border border-black p-1"></td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* SCORE BOARD / TEST RESULTS */}
+      <table className="w-full border-collapse border border-black mb-2 table-fixed text-[10px]">
+        <tbody>
+          <tr className="border border-black">
+            <td colSpan={4} className="bg-gray-200 text-center font-bold border border-black py-1">SCORE BOARD / TEST RESULTS (% Wise)</td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold w-[25%]">Psychometry test Result</td>
+            <td className="border border-black p-1 text-center w-[15%]"></td>
+            <td rowSpan={4} className="border border-black p-1 text-center align-middle font-bold w-[30%]">
+              TOTAL AVERAGE <br/><span className="text-sm"></span>
+            </td>
+            <td className="border border-black p-1 font-semibold w-[30%]">1st Interview: <span className="float-right">{hrEval ? formatDate(hrEval.created_at) : ''}</span></td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold">Analytical Test Result</td>
+            <td className="border border-black p-1 text-center"></td>
+            <td className="border border-black p-1 font-semibold">2nd Interview: <span className="float-right">{deptEval ? formatDate(deptEval.created_at) : ''}</span></td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold">Technical Test Result</td>
+            <td className="border border-black p-1 text-center">{techEval?.scores?.percentage ? `${techEval.scores.percentage}%` : ''}</td>
+            <td className="border border-black p-1 font-semibold">3rd Interview: <span className="float-right"></span></td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold">Department Test Result</td>
+            <td className="border border-black p-1 text-center"></td>
+            <td className="border border-black p-1 font-semibold">4th Interview: <span className="float-right"></span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* EMPLOYMENT RECORD */}
+      <table className="w-full border-collapse border border-black mb-2 table-fixed text-[10px]">
+        <thead>
+          <tr className="bg-gray-200 border border-black text-center font-bold">
+            <td colSpan={6} className="py-1 border border-black">Employment Record</td>
+          </tr>
+          <tr className="border border-black font-semibold text-center">
+            <td className="border border-black p-1 w-[20%]">Organisation</td>
+            <td className="border border-black p-1 w-[20%]">Period</td>
+            <td className="border border-black p-1 w-[10%]">No. of Years</td>
+            <td className="border border-black p-1 w-[15%]">Designation</td>
+            <td className="border border-black p-1 w-[20%]">Reason for Resignation</td>
+            <td className="border border-black p-1 w-[15%]">Total Salary</td>
+          </tr>
+        </thead>
+        <tbody>
+          {[1, 2, 3].map((row) => (
+            <tr key={row} className="border border-black text-center h-8">
+              <td className="border border-black p-1"></td>
+              <td className="border border-black p-1"></td>
+              <td className="border border-black p-1"></td>
+              <td className="border border-black p-1"></td>
+              <td className="border border-black p-1"></td>
+              <td className="border border-black p-1"></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      
+      {/* SALARY EXPECTATION */}
+      <table className="w-full border-collapse border border-black mb-2 table-fixed text-[10px]">
+        <tbody>
+          <tr>
+            <td className="border border-black p-1 font-semibold w-[20%]">Current Salary</td>
+            <td className="border border-black p-1 w-[20%]"></td>
+            <td rowSpan={4} className="border border-black p-1 text-center align-middle font-semibold w-[20%]">Remarks</td>
+            <td className="border border-black p-1 font-semibold w-[20%]">Expected Salary</td>
+            <td className="border border-black p-1 w-[20%]"></td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold">Incentive</td>
+            <td className="border border-black p-1"></td>
+            <td className="border border-black p-1 font-semibold">Incentive</td>
+            <td className="border border-black p-1"></td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold">Others</td>
+            <td className="border border-black p-1"></td>
+            <td className="border border-black p-1 font-semibold">Others</td>
+            <td className="border border-black p-1"></td>
+          </tr>
+          <tr>
+            <td className="border border-black p-1 font-semibold">Total</td>
+            <td className="border border-black p-1"></td>
+            <td className="border border-black p-1 font-semibold">Total</td>
+            <td className="border border-black p-1"></td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* INTERVIEW COMMENTS */}
+      <table className="w-full border-collapse border border-black mb-2 table-fixed text-[10px]">
+        <tbody>
+          <tr className="bg-gray-200 border border-black text-center font-bold">
+            <td className="border border-black p-1 w-[15%]"></td>
+            <td className="border border-black p-1 w-[20%]">Interviewer</td>
+            <td className="border border-black p-1 w-[45%]">Interview Comments</td>
+            <td className="border border-black p-1 w-[10%]">Grade</td>
+            <td className="border border-black p-1 w-[10%]">Marks (Max 10)</td>
+          </tr>
+          
+          <tr className="border border-black text-center h-16">
+             <td className="border border-black p-1 font-bold text-center align-middle" rowSpan={3}>Interview Comments</td>
+             <td className="border border-black p-1">BRANCH HR</td>
+             <td className="border border-black p-2 text-left align-top">{hrEval?.remarks || ''}</td>
+             <td className="border border-black p-1">{hrEval?.verdict?.charAt(0) || ''}</td>
+             <td className="border border-black p-1">{hrEval?.scores?.total_score || ''}</td>
+          </tr>
+          <tr className="border border-black text-center h-16">
+             <td className="border border-black p-1">DEPT HEAD</td>
+             <td className="border border-black p-2 text-left align-top">{deptEval?.remarks || ''}</td>
+             <td className="border border-black p-1">{deptEval?.verdict?.charAt(0) || ''}</td>
+             <td className="border border-black p-1">{deptEval?.scores?.total_score || ''}</td>
+          </tr>
+          <tr className="border border-black text-center h-16">
+             <td className="border border-black p-1">HEAD OFFICE</td>
+             <td className="border border-black p-2 text-left align-top"></td>
+             <td className="border border-black p-1"></td>
+             <td className="border border-black p-1"></td>
+          </tr>
+        </tbody>
+      </table>
+      
+      {/* BOTTOM SECTION */}
+      <div className="grid grid-cols-5 gap-0 border border-black text-[10px] text-center mt-4 h-16">
+         <div className="border-r border-black p-2">
+            <div className="font-semibold mb-2">Offer Letter Issued</div>
+            <div className="w-4 h-4 border border-black mx-auto"></div>
+         </div>
+         <div className="border-r border-black p-2 col-span-2">
+            <div className="font-semibold mb-2">Offer Communication Message</div>
+            <div className="flex justify-center gap-4">
+               <div>Accepted <div className="w-4 h-4 border border-black inline-block ml-1 align-middle"></div></div>
+               <div>Rejected <div className="w-4 h-4 border border-black inline-block ml-1 align-middle"></div></div>
             </div>
-          </div>
-        )}
-        <PdfViewer url={pdfUrl} />
+         </div>
+         <div className="border-r border-black p-2">
+            <div className="font-semibold mb-2">Document Carry Message</div>
+            <div className="w-4 h-4 border border-black mx-auto"></div>
+         </div>
+         <div className="p-2 flex flex-col justify-between text-left border-l-0">
+            <div className="font-semibold">Follow Up Call (N-1) <div className="w-4 h-4 border border-black inline-block float-right"></div></div>
+            <div className="font-semibold">Date Of Joining: ___________</div>
+         </div>
       </div>
     </div>
   );

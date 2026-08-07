@@ -14,6 +14,7 @@ import { PreFormStatus } from '../../components/candidates/PreFormStatus';
 import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPreviewPanel';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { EvaluationStageWidget } from '../../components/candidates/EvaluationStageWidget';
+import { ApplicationStageWidget } from '../../components/candidates/ApplicationStageWidget';
 import { FinalApprovalWidget } from '../../components/candidates/FinalApprovalWidget';
 import { BackgroundVerificationWidget } from '../../components/candidates/BackgroundVerificationWidget';
 import { ActivityTimeline } from '../../components/candidates/ActivityTimeline';
@@ -624,43 +625,10 @@ export default function CandidateProfile() {
             )}
 
             {stageToView === 'APPLICATION' && (
-              <div className="bg-background border border-border rounded-xl p-8 flex flex-col items-center justify-center text-center mt-6">
-                <div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mb-4">
-                  <Send className="w-8 h-8 text-pink-600" />
-                </div>
-                <h3 className="text-xl font-bold text-foreground">Final Application Review</h3>
-                <p className="text-text-secondary mt-2 max-w-md">
-                  The candidate has passed all local branch stages. Review their complete application profile and if everything looks good, push it to the Head Office HR for final offer and onboarding.
-                </p>
-                {user?.role === 'LOCAL_HR' && actualStage === 'APPLICATION' ? (
-                  <Button
-                    size="lg"
-                    isLoading={isUpdating}
-                    onClick={async () => {
-                      if (!candidate) return;
-                      setIsUpdating(true);
-                      try {
-                        const { sendToHeadOffice } = await import('../../api/candidates');
-                        await sendToHeadOffice(candidate.id);
-                        toast.success('Application sent to Head Office');
-                        navigate('/candidates');
-                      } catch (err: any) {
-                        toast.error(extractError(err, 'Failed to send to Head Office.'));
-                        setIsUpdating(false);
-                      }
-                    }}
-                    className="mt-6 px-8 py-6 font-bold bg-pink-600 hover:bg-pink-700 text-white shadow-lg text-lg rounded-xl transition-all hover:scale-105"
-                  >
-                    Send to Head Office
-                  </Button>
-                ) : (
-                  <div className="mt-6 p-4 bg-muted/50 rounded-lg border border-border">
-                    <p className="text-sm font-semibold text-text-secondary">
-                      {actualStage === 'APPLICATION' ? 'Only Local HR can push applications to HO.' : 'Candidate must complete all previous stages before being sent to Head Office.'}
-                    </p>
-                  </div>
-                )}
-              </div>
+              <ApplicationStageWidget
+                candidate={candidate}
+                onUpdate={handleUpdate}
+              />
             )}
 
             {stageToView === 'FINAL_APPROVAL' && (

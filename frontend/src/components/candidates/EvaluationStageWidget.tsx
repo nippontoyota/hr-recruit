@@ -290,12 +290,20 @@ export function EvaluationStageWidget({
                 />
               </motion.div>
             ) : evaluations
-              // Deduplicate: for TECHNICAL_TEST only keep the first (prefer EVALUATED status)
+              .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
               .filter((ev, _idx, arr) => {
-                if (ev.type !== 'TECHNICAL_TEST') return true;
-                const techEvals = arr.filter(e => e.type === 'TECHNICAL_TEST');
-                const preferred = techEvals.find(e => e.status === 'EVALUATED') ?? techEvals[0];
-                return ev.id === preferred?.id;
+                // Deduplicate BRANCH_HR: only keep the first one
+                if (ev.type === 'BRANCH_HR') {
+                  const firstHR = arr.find(e => e.type === 'BRANCH_HR');
+                  if (ev.id !== firstHR?.id) return false;
+                }
+                // Deduplicate TECHNICAL_TEST: prefer EVALUATED status
+                if (ev.type === 'TECHNICAL_TEST') {
+                  const techEvals = arr.filter(e => e.type === 'TECHNICAL_TEST');
+                  const preferred = techEvals.find(e => e.status === 'EVALUATED') ?? techEvals[0];
+                  if (ev.id !== preferred?.id) return false;
+                }
+                return true;
               })
               .map((ev) => {
                 if (ev.type !== 'TECHNICAL_TEST') {
@@ -382,7 +390,26 @@ export function EvaluationStageWidget({
             })}
           </AnimatePresence>
 
-
+          {evalTypes.includes('DEPT_HEAD') && (
+            <div className="flex justify-center mt-2 mb-4">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  setSubmitting(true);
+                  createEvaluation(candidate.id, 'DEPT_HEAD').then(() => {
+                    fetchEvaluations();
+                  }).catch(err => {
+                    console.error('Failed to add DEPT_HEAD:', err);
+                  }).finally(() => setSubmitting(false));
+                }}
+                isLoading={submitting}
+                className="border-dashed border-2 hover:bg-muted/50 text-muted-foreground w-full max-w-sm"
+              >
+                + Add Another Department Interview
+              </Button>
+            </div>
+          )}
         </div>
 
       <Modal
