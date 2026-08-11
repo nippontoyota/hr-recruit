@@ -10,11 +10,9 @@ def assert_candidate_access(user: User, candidate: Candidate) -> None:
     if user.role == UserRole.LOCAL_HR:
         if candidate.branch_location != user.branch_location:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Candidate is not in your branch.")
-        if candidate.current_stage == PipelineStage.SENT_TO_HO:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Candidate has been handed over to Head Office.")
             
     if user.role == UserRole.HO_HR:
-        if candidate.current_stage != PipelineStage.SENT_TO_HO:
+        if candidate.current_stage not in [PipelineStage.SENT_TO_HO, PipelineStage.FINAL_APPROVAL, PipelineStage.HIRED]:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Candidate has not been handed over to Head Office yet.")
 
 
