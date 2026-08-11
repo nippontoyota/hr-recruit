@@ -11,6 +11,7 @@ function App() {
         <RouterProvider router={router} />
         <Toaster 
           position="bottom-right" 
+          theme="dark"
           richColors
           closeButton
           expand={false}
@@ -20,10 +21,11 @@ function App() {
               fontFamily: 'var(--font-sans)',
               padding: '16px 20px',
               borderRadius: '16px',
-              boxShadow: '0 20px 40px -15px rgba(0,0,0,0.2)',
-              fontWeight: 700,
-              border: 'none'
-            }
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.4)',
+              fontWeight: 600,
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            },
+            className: 'backdrop-blur-xl bg-opacity-95'
           }}
         />
       </AuthProvider>
