@@ -13,7 +13,6 @@ import { cn } from '../../lib/utils';
 import { PreFormStatus } from '../../components/candidates/PreFormStatus';
 import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPreviewPanel';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
-import { DownloadApplicationButton } from '../../components/candidates/DownloadApplicationButton';
 import { EvaluationStageWidget } from '../../components/candidates/EvaluationStageWidget';
 import { ApplicationStageWidget } from '../../components/candidates/ApplicationStageWidget';
 import { FinalApprovalWidget } from '../../components/candidates/FinalApprovalWidget';
@@ -503,13 +502,6 @@ export default function CandidateProfile() {
                           candidateId={candidate.id}
                           candidateName={candidate.full_name}
                           hasResume={candidate.has_resume}
-                        />
-                      )}
-                      {isHO && (
-                        <DownloadApplicationButton
-                          candidate={candidate}
-                          evaluations={evaluations}
-                          className="h-9 rounded-sm uppercase tracking-wider text-xs shadow-sm font-extrabold"
                         />
                       )}
                     </div>
