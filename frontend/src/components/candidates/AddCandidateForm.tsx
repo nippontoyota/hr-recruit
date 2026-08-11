@@ -18,7 +18,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
   const { user } = useAuth();
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [position, setPosition] = useState('');
+  const [experience, setExperience] = useState('Fresher');
   const [department, setDepartment] = useState('');
   const [branchLocation, setBranchLocation] = useState('');
   
@@ -29,7 +29,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
   const handleAutofill = () => {
     setFullName('Amit Patel');
     setPhone('9876543211');
-    setPosition('Sales Executive');
+    setExperience('Experienced');
     setDepartment('Sales');
     setBranchLocation('Kalamassery');
   };
@@ -37,7 +37,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
   const resetForm = () => {
     setFullName('');
     setPhone('');
-    setPosition('');
+    setExperience('Fresher');
     setDepartment('');
     setBranchLocation('');
     setFormError('');
@@ -57,12 +57,16 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
       phone,
       email: '',
       emailRequired: false,
-      position,
+      experience,
       source: 'OTHER',
       sourceRequired: false,
     });
     if (validationError) {
       setFormError(validationError);
+      return;
+    }
+    if (!department.trim()) {
+      setFormError('Department is required.');
       return;
     }
 
@@ -77,7 +81,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
         email: undefined,
         source: 'OTHER',
         source_reference: undefined,
-        position_applied_for: position.trim(),
+        experience: experience,
         department: department.trim() || undefined,
         branch_location: branchLocation || undefined,
       } as any);
@@ -92,7 +96,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
         handleClose();
       }
     } catch (err: any) {
-      setFormError(err?.response?.data?.detail || err.message || 'Failed to create candidate.');
+      setFormError(typeof err?.response?.data?.detail === 'string' ? err.response.data.detail : (err?.response?.data?.detail?.[0]?.msg || err.message || 'Failed to create candidate.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -185,25 +189,27 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
           
           <div className="col-span-2 sm:col-span-1">
             <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
-              Position Applied For <span className="text-text-primary">*</span>
+              Experience <span className="text-text-primary">*</span>
             </label>
-            <Input
-              value={position}
-              onChange={(e) => setPosition(e.target.value)}
-              placeholder="e.g. Sales Executive"
+            <Select
+              value={experience}
+              onChange={(e) => setExperience(e.target.value)}
               required
-              maxLength={100}
-            />
+            >
+              <option value="Fresher">Fresher</option>
+              <option value="Experienced">Experienced</option>
+            </Select>
           </div>
 
           <div className="col-span-2 sm:col-span-1">
             <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
-              Department
+              Department <span className="text-text-primary">*</span>
             </label>
             <Input
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
               placeholder="e.g. Sales"
+              required
               maxLength={100}
             />
           </div>
