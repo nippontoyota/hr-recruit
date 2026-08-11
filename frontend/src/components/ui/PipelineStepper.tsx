@@ -25,6 +25,7 @@ interface PipelineStepperProps {
   completedStages?: PipelineStage[];
   skippedStages?: PipelineStage[];
   heldStages?: PipelineStage[];
+  customLabels?: Partial<Record<PipelineStage, string>>;
 }
 
 const STAGE_ICONS: Record<string, React.ElementType> = {
@@ -48,7 +49,8 @@ export function PipelineStepper({
   isLoading,
   completedStages,
   skippedStages,
-  heldStages
+  heldStages,
+  customLabels
 }: PipelineStepperProps) {
   const currentIndex = stages.indexOf(actualStage);
   const viewedIndex = stages.indexOf(currentStage);
@@ -69,7 +71,7 @@ export function PipelineStepper({
       {/* Mobile view: simple text-based progress */}
       <div className="flex flex-col items-center gap-1 md:hidden py-1 select-none">
         <span className="text-sm font-bold text-foreground text-center">
-          {isTerminalStage ? 'Completed' : stageLabel(actualStage)}
+          {isTerminalStage ? 'Completed' : (customLabels?.[actualStage] || stageLabel(actualStage))}
         </span>
         {/* Compact progress bar */}
         <div className="w-24 bg-muted h-1 rounded-full overflow-hidden mt-1.5">
@@ -190,7 +192,7 @@ export function PipelineStepper({
                   "text-[11px] font-semibold text-center w-24 text-balance leading-tight transition-colors duration-300",
                   isCurrentViewed ? "text-foreground font-bold" : "text-muted-foreground"
                 )}>
-                  {stageLabel(stage)}
+                  {customLabels?.[stage] || stageLabel(stage)}
                 </span>
               </div>
             </motion.div>

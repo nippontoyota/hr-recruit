@@ -26,6 +26,9 @@ import { useAuth } from '../../auth/AuthContext';
 const LINEAR_STAGES: PipelineStage[] = [
   'CALL_LETTER', 'INTERVIEWS', 'TEST', 'BACKGROUND_VERIFICATION', 'APPLICATION'
 ];
+const HO_LINEAR_STAGES: PipelineStage[] = [
+  'SENT_TO_HO', 'FINAL_APPROVAL'
+];
 
 
 // Simple global cache to allow stale-while-revalidate (instant loading)
@@ -121,8 +124,9 @@ export default function CandidateProfile() {
     // Prevent accidentally navigating into side/terminal states via the stepper
     if (clickedStage === 'REJECTED' || clickedStage === 'ON_HOLD' || clickedStage === 'HIRED') return;
 
-    const currentIdx = LINEAR_STAGES.indexOf(candidate.current_stage);
-    const clickedIdx = LINEAR_STAGES.indexOf(clickedStage);
+    const effectiveStages = user?.role === 'HO_HR' ? HO_LINEAR_STAGES : LINEAR_STAGES;
+    const currentIdx = effectiveStages.indexOf(candidate.current_stage);
+    const clickedIdx = effectiveStages.indexOf(clickedStage);
 
     // Always update the viewed tab
     setViewedStage(clickedStage);
@@ -234,7 +238,9 @@ export default function CandidateProfile() {
   const stageToView = viewedStage || actualStage;
   const showWhatsAppSidebar = stageToView === 'CALL_LETTER' && candidate.pre_form_status !== 'SUBMITTED';
 
-  const stepperStages = LINEAR_STAGES.filter((s): s is Exclude<PipelineStage, 'HIRED'> => s !== 'HIRED');
+  const isHO = user?.role === 'HO_HR';
+  const effectiveStages = isHO ? HO_LINEAR_STAGES : LINEAR_STAGES;
+  const stepperStages = effectiveStages.filter((s): s is Exclude<PipelineStage, 'HIRED'> => s !== 'HIRED');
   const viewedIdx = stepperStages.findIndex((s) => s === stageToView);
   const isPrevDisabled = viewedIdx <= 0 || isUpdating;
   const isNextDisabled = viewedIdx === -1 || viewedIdx >= stepperStages.length - 1 || isUpdating;
@@ -276,8 +282,8 @@ export default function CandidateProfile() {
     }
 
     // A stage is skipped if it is not completed and not held, but the candidate's current stage is past it in the linear sequence!
-    const currentIdx = LINEAR_STAGES.indexOf(candidate.current_stage);
-    LINEAR_STAGES.forEach((stage, idx) => {
+    const currentIdx = effectiveStages.indexOf(candidate.current_stage);
+    effectiveStages.forEach((stage, idx) => {
       if (idx < currentIdx && !completedStages.includes(stage) && !heldStages.includes(stage)) {
         skippedStages.push(stage);
       }
@@ -343,6 +349,7 @@ export default function CandidateProfile() {
                     completedStages={completedStages}
                     skippedStages={skippedStages}
                     heldStages={heldStages}
+                    customLabels={isHO ? { 'SENT_TO_HO': 'CANDIDATE APPLICATION', 'FINAL_APPROVAL': 'OFFER LETTER' } : undefined}
                   />
                 </div>
               );
@@ -571,15 +578,22 @@ export default function CandidateProfile() {
             )}
 
             {stageToView === 'SENT_TO_HO' && (
-              <div className="bg-pink-50/50 border border-pink-200 p-8 rounded-xl mt-6 flex flex-col items-center">
-                <div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center shadow-sm mb-4">
-                  <Send className="w-8 h-8 text-pink-600" />
+              isHO ? (
+                <ApplicationStageWidget
+                  candidate={candidate}
+                  onUpdate={handleUpdate}
+                />
+              ) : (
+                <div className="bg-pink-50/50 border border-pink-200 p-8 rounded-xl mt-6 flex flex-col items-center">
+                  <div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center shadow-sm mb-4">
+                    <Send className="w-8 h-8 text-pink-600" />
+                  </div>
+                  <h3 className="text-xl font-bold text-pink-900">Application Sent to HR</h3>
+                  <p className="text-pink-700/80 mt-2 max-w-md mx-auto font-medium text-center">
+                    This candidate's application has been successfully forwarded to the Head Office HR for final review and approval.
+                  </p>
                 </div>
-                <h3 className="text-xl font-bold text-pink-900">Application Sent to HR</h3>
-                <p className="text-pink-700/80 mt-2 max-w-md mx-auto font-medium text-center">
-                  This candidate's application has been successfully forwarded to the Head Office HR for final review and approval.
-                </p>
-              </div>
+              )
             )}
 
             {stageToView === 'FINAL_APPROVAL' && (
@@ -605,7 +619,7 @@ export default function CandidateProfile() {
                     onChange={(e) => setResumeStage(e.target.value as PipelineStage)}
                     className="flex-1 w-full sm:w-auto bg-background border border-border rounded-lg px-3 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-warning/40"
                   >
-                    {LINEAR_STAGES.filter(s => s !== 'HIRED').map(s => (
+                    {effectiveStages.filter(s => s !== 'HIRED').map(s => (
                       <option key={s} value={s}>{stageLabel(s)}</option>
                     ))}
                   </select>
@@ -726,6 +740,7 @@ export default function CandidateProfile() {
                 <option value="BACKGROUND_VERIFICATION">Background Verification</option>
                 <option value="APPLICATION">Application</option>
                 <option value="SENT_TO_HO">Sent to Head Office</option>
+                <option value="FINAL_APPROVAL">Final Approval</option>
                 <option value="ON_HOLD">On Hold</option>
                 <option value="REJECTED">Rejected</option>
                 <option value="HIRED">Hired</option>
