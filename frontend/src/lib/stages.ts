@@ -2,9 +2,10 @@ import type { PipelineStage } from '../types';
 import type { BadgeProps } from '../components/ui/Badge';
 
 export function stageLabel(stage: PipelineStage | string): string {
-  if (stage === 'CANDIDATE_FORM' || stage === 'CALL_LETTER') return 'CALL LETTER';
-  if (stage === 'BRANCH_INTERVIEW' || stage === 'INTERVIEWS') return 'INTERVIEW';
-  if (stage === 'SENT_TO_HO') return 'SENT TO HO';
+  if (stage === 'CANDIDATE_FORM' || stage === 'CALL_LETTER') return 'Call Letter';
+  if (stage === 'BRANCH_INTERVIEW' || stage === 'INTERVIEWS') return 'Interviews';
+  if (stage === 'TEST') return 'Technical Test';
+  if (stage === 'SENT_TO_HO') return 'Sent to Head Office';
   return stage
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());

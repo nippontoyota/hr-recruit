@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { Button, Modal, LoadingSpinner, EmptyState, Badge, Select } from '../../components/ui';
+import { Button, Modal, LoadingSpinner, EmptyState, Badge, Select, Skeleton } from '../../components/ui';
 import { Plus,  RefreshCw, Trash, Search, X, CheckSquare, Square, Minus, Play } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { getCandidates, deleteCandidate, bulkDeleteCandidates, unholdCandidate } from '../../api/candidates';
@@ -11,10 +11,11 @@ import { AddCandidateForm } from '../../components/candidates/AddCandidateForm';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { toast } from 'sonner';
 import { cn, extractError } from '../../lib/utils';
+import { useCandidatesList } from '../../hooks/api/useCandidates';
 
 const PIPELINE_STAGES: PipelineStage[] = [
-  'CANDIDATE_FORM', 'BRANCH_INTERVIEW',
-  'TEST', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD',
+  'CALL_LETTER', 'INTERVIEWS', 'TEST', 'BACKGROUND_VERIFICATION', 
+  'APPLICATION', 'SENT_TO_HO', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD',
 ];
 
 function formatDate(dateStr: string): string {
@@ -54,18 +55,22 @@ export default function CandidatesList() {
   const { user } = useAuth();
   const canDelete = ['ADMIN', 'HO_HR', 'LOCAL_HR'].includes(user?.role as string);
 
-  // Data
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(1);
-  const limit = 50;
-  const [loading, setLoading] = useState(true);
-  const [resumingId, setResumingId] = useState<string | null>(null);
-  
+  // Data & Filters from hook
+  const {
+    candidates,
+    totalCount,
+    loading,
+    page,
+    setPage,
+    searchQuery,
+    setSearchQuery,
+    stageFilter,
+    setStageFilter,
+    limit,
+    refetch: fetchCandidatesList
+  } = useCandidatesList(1, 50);
 
-  // Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [stageFilter, setStageFilter] = useState<PipelineStage | ''>('');
+  const [resumingId, setResumingId] = useState<string | null>(null);
 
   // Single delete
   const [candidateToDelete, setCandidateToDelete] = useState<Candidate | null>(null);
@@ -78,30 +83,6 @@ export default function CandidatesList() {
 
   // Add form
   const [isAddOpen, setIsAddOpen] = useState(false);
-
-  const fetchCandidatesList = useCallback(async (showLoading = true) => {
-    try {
-      if (showLoading) setLoading(true);
-      const res = await getCandidates(page, limit, searchQuery, stageFilter);
-      setCandidates(res.data);
-      setTotalCount(res.total_count);
-    } catch (err) {
-      console.error('Failed to load candidates', err);
-      toast.error('Failed to load candidates. Please refresh.');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, limit, searchQuery, stageFilter]);
-
-  // Fetch when dependencies change
-  useEffect(() => {
-    fetchCandidatesList(true);
-  }, [fetchCandidatesList]);
-
-  // Reset page to 1 when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery, stageFilter]);
 
   // Clear selection when filters change
   useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter]);
@@ -215,8 +196,8 @@ export default function CandidatesList() {
       />
 
       {loading ? (
-        <div className="flex h-64 items-center justify-center">
-          <LoadingSpinner size="lg" />
+        <div className="flex justify-center items-center py-20">
+          <LoadingSpinner size="lg" className="text-blue-600" />
         </div>
       ) : candidates.length === 0 ? (
         <div className="py-12">
@@ -262,7 +243,12 @@ export default function CandidatesList() {
                 className="bg-surface border-border shadow-sm rounded-xl h-9 text-sm text-text-primary"
               >
                 <option value="">All Stages</option>
-                {PIPELINE_STAGES.map((s) => (
+                {PIPELINE_STAGES.filter((s) => {
+                  if (user?.role === 'HO_HR') {
+                    return ['SENT_TO_HO', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD'].includes(s);
+                  }
+                  return true;
+                }).map((s) => (
                   <option key={s} value={s}>{stageLabel(s)}</option>
                 ))}
               </Select>
@@ -348,7 +334,7 @@ export default function CandidatesList() {
                           </div>
                         </td>
                         <td className="px-4 py-2 text-text-secondary font-medium">
-                          {candidate.position_applied_for || '—'}
+                          {candidate.experience || '—'}
                         </td>
                         <td className="px-4 py-2">
                           <Badge variant={getStageBadgeVariant(candidate.current_stage)} className="font-semibold px-2.5 py-0.5 rounded-lg">
@@ -375,7 +361,7 @@ export default function CandidatesList() {
                             {isOnHold && (
                               <button
                                 type="button"
-                                className="p-1.5 text-warning hover:text-white hover:bg-warning transition-colors rounded-[10px] focus:outline-none flex items-center justify-center"
+                                className="p-1.5 text-warning hover:text-white hover:bg-warning transition-colors rounded-sm focus:outline-none flex items-center justify-center"
                                 onClick={(e) => handleUnhold(candidate, e)}
                                 disabled={resumingId === candidate.id}
                                 title="Remove from hold"
@@ -390,7 +376,7 @@ export default function CandidatesList() {
                             {canDelete && (
                               <button
                                 type="button"
-                                className="p-1.5 text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors rounded-[10px] focus:outline-none"
+                                className="p-1.5 text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors rounded-sm focus:outline-none"
                                 onClick={(e) => { e.stopPropagation(); setCandidateToDelete(candidate); }}
                                 title="Delete Candidate"
                               >
