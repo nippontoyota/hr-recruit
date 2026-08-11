@@ -19,6 +19,8 @@ import { FinalApprovalWidget } from '../../components/candidates/FinalApprovalWi
 import { BackgroundVerificationWidget } from '../../components/candidates/BackgroundVerificationWidget';
 import { ActivityTimeline } from '../../components/candidates/ActivityTimeline';
 import { extractError } from '../../lib/utils';
+import { HOInterviewWidget } from '../../components/candidates/HOInterviewWidget';
+import { CSSStageWidget } from '../../components/candidates/CSSStageWidget';
 
 
 import { useAuth } from '../../auth/AuthContext';
@@ -27,7 +29,7 @@ const LINEAR_STAGES: PipelineStage[] = [
   'CALL_LETTER', 'INTERVIEWS', 'TEST', 'BACKGROUND_VERIFICATION', 'APPLICATION'
 ];
 const HO_LINEAR_STAGES: PipelineStage[] = [
-  'SENT_TO_HO', 'FINAL_APPROVAL'
+  'SENT_TO_HO', 'HO_INTERVIEWS', 'CSS', 'FINAL_APPROVAL'
 ];
 
 
@@ -513,7 +515,7 @@ export default function CandidateProfile() {
                     </div>
                   )}
 
-                  {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && !isReadOnly && (
+                  {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && actualStage !== 'CSS' && actualStage !== 'FINAL_APPROVAL' && !isReadOnly && (
                     <div className="mt-8 flex justify-center w-full">
                       <Button
                         variant="danger"
@@ -601,27 +603,19 @@ export default function CandidateProfile() {
             )}
 
             {stageToView === 'HO_INTERVIEWS' && (
-              <div className="bg-blue-50/50 border border-blue-200 p-8 rounded-xl mt-6 flex flex-col items-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center shadow-sm mb-4">
-                  <span className="text-2xl font-bold text-blue-600">?</span>
-                </div>
-                <h3 className="text-xl font-bold text-blue-900">HO Interviews</h3>
-                <p className="text-blue-700/80 mt-2 max-w-md mx-auto font-medium text-center">
-                  This stage is currently empty and will be configured later.
-                </p>
-              </div>
+              <HOInterviewWidget
+                candidate={candidate}
+                evalTypes={['HQ_INTERVIEW_1', 'HQ_INTERVIEW_2']}
+                onUpdate={handleUpdate}
+                isReadOnly={isReadOnly}
+              />
             )}
 
             {stageToView === 'CSS' && (
-              <div className="bg-teal-50/50 border border-teal-200 p-8 rounded-xl mt-6 flex flex-col items-center">
-                <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center shadow-sm mb-4">
-                  <span className="text-2xl font-bold text-teal-600">?</span>
-                </div>
-                <h3 className="text-xl font-bold text-teal-900">CSS</h3>
-                <p className="text-teal-700/80 mt-2 max-w-md mx-auto font-medium text-center">
-                  This stage is currently empty and will be configured later.
-                </p>
-              </div>
+              <CSSStageWidget
+                candidate={candidate}
+                onUpdate={handleUpdate}
+              />
             )}
 
             {stageToView === 'FINAL_APPROVAL' && (
