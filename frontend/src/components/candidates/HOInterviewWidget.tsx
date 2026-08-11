@@ -270,26 +270,7 @@ export function HOInterviewWidget({
 
   return (
     <div className="space-y-4">
-      {!isReadOnly && (
-        <div className="flex justify-end mb-4">
-          <Button 
-            variant="primary" 
-            onClick={async () => {
-              try {
-                const { updateCandidateStage } = await import('../../api/candidates');
-                await updateCandidateStage(candidate.id, 'CSS', 'Completed HO Interviews');
-                toast.success('Moved to CSS Stage');
-                onUpdate();
-              } catch (err: any) {
-                toast.error(err.message || 'Failed to update stage');
-              }
-            }} 
-            className="bg-blue-600 text-white hover:bg-blue-700 shadow-sm font-semibold"
-          >
-            Complete HO Interviews & Move to CSS
-          </Button>
-        </div>
-      )}
+
 
       <div className="grid gap-4 grid-cols-1">
           <AnimatePresence mode="wait">
