@@ -195,13 +195,18 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
             <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
               Department <span className="text-text-primary">*</span>
             </label>
-            <Input
+            <Select
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
-              placeholder="e.g. Sales"
               required
-              maxLength={100}
-            />
+            >
+              <option value="" disabled>Select Department</option>
+              <option value="Sales">Sales</option>
+              <option value="Service">Service</option>
+              <option value="Insurance">Insurance</option>
+              <option value="Call Center">Call Center</option>
+              <option value="HR">HR</option>
+            </Select>
           </div>
 
           {user?.role !== 'LOCAL_HR' && (
