@@ -17,10 +17,21 @@ export type PipelineStage =
   | 'ON_HOLD'
   | 'CALL_LETTER'
   | 'INTERVIEWS'
-  | 'TEST'
   | 'BACKGROUND_VERIFICATION'
   | 'APPLICATION'
-  | 'SENT_TO_HO';
+  | 'SENT_TO_HO'
+  | 'HO_INTERVIEWS'
+  | 'SALARY_DETAILS'
+  | 'CSS';
+
+export const HO_LINEAR_STAGES: PipelineStage[] = [
+  'SENT_TO_HO',
+  'HO_INTERVIEWS',
+  'SALARY_DETAILS',
+  'CSS',
+  'FINAL_APPROVAL',
+  'HIRED'
+];
 
 export const NIPPON_BRANCHES = [
   'Enchakkal',
@@ -58,7 +69,7 @@ export interface Candidate {
   email?: string;
   source: string;
   source_reference?: string;
-  position_applied_for?: string;
+  experience?: string;
   share_url?: string;
   pre_form_status: FormStatus;
   pre_form_sent_at?: string;

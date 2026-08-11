@@ -4,6 +4,9 @@ import type { BadgeProps } from '../components/ui/Badge';
 export function stageLabel(stage: PipelineStage | string): string {
   if (stage === 'CANDIDATE_FORM' || stage === 'CALL_LETTER') return 'Call Letter';
   if (stage === 'BRANCH_INTERVIEW' || stage === 'INTERVIEWS') return 'Interviews';
+  if (stage === 'HO_INTERVIEWS') return 'Interviews';
+  if (stage === 'SALARY_DETAILS') return 'Salary Details';
+  if (stage === 'CSS') return 'CSS';
   if (stage === 'TEST') return 'Technical Test';
   if (stage === 'SENT_TO_HO') return 'Sent to Head Office';
   return stage
@@ -21,6 +24,12 @@ export function stageColor(stage: PipelineStage): string {
       return 'bg-purple-100 text-purple-700 border-purple-300 border-dashed';
     case 'BRANCH_INTERVIEW':
       return 'bg-indigo-100 text-indigo-700 border-indigo-300 border-dashed';
+    case 'HO_INTERVIEWS':
+      return 'bg-blue-100 text-blue-700 border-blue-300 border-dashed';
+    case 'SALARY_DETAILS':
+      return 'bg-cyan-100 text-cyan-700 border-cyan-300 border-dashed';
+    case 'CSS':
+      return 'bg-teal-100 text-teal-700 border-teal-300 border-dashed';
     case 'FINAL_APPROVAL':
       return 'bg-teal-100 text-teal-700 border-teal-300 border-dashed';
     case 'REJECTED':
@@ -51,6 +60,9 @@ export function getStageBadgeVariant(stage: PipelineStage | string): BadgeProps[
   if (stage === 'SCREENING') return 'sky';
   if (stage === 'CANDIDATE_FORM' || stage === 'CALL_LETTER') return 'purple';
   if (stage === 'BRANCH_INTERVIEW' || stage === 'INTERVIEWS') return 'indigo';
+  if (stage === 'HO_INTERVIEWS') return 'blue';
+  if (stage === 'SALARY_DETAILS') return 'cyan';
+  if (stage === 'CSS') return 'teal';
   if (stage === 'FINAL_APPROVAL') return 'teal';
   if (stage === 'TEST') return 'info';
   if (stage === 'BACKGROUND_VERIFICATION') return 'teal';
