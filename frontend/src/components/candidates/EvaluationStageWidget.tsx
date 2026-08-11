@@ -106,13 +106,9 @@ export function EvaluationStageWidget({
       let missingType = evalTypes.find(type => !evaluations.some(e => e.type === type));
       if (missingType) {
         setSubmitting(true);
-        createEvaluation(candidate.id, missingType).then(() => {
-          fetchEvaluations();
-          setSubmitting(false);
-        }).catch(err => {
-          console.error('Auto-create failed:', err);
-          setSubmitting(false);
-        });
+        createEvaluation(candidate.id, missingType)
+          .then(() => fetchEvaluations())
+          .finally(() => setSubmitting(false));
       }
     }
   }, [evaluations, loading, remarksId, evalTypes, candidate.id, submitting]);
@@ -294,16 +290,18 @@ export function EvaluationStageWidget({
               .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
               .filter((ev, _idx, arr) => {
                 // Deduplicate BRANCH_HR: only keep the first one
-                if (ev.type === 'BRANCH_HR') {
-                  const firstHR = arr.find(e => e.type === 'BRANCH_HR');
-                  if (ev.id !== firstHR?.id) return false;
-                }
                 // Deduplicate TECHNICAL_TEST: prefer EVALUATED status
                 if (ev.type === 'TECHNICAL_TEST') {
                   const techEvals = arr.filter(e => e.type === 'TECHNICAL_TEST');
                   const preferred = techEvals.find(e => e.status === 'EVALUATED') ?? techEvals[0];
                   if (ev.id !== preferred?.id) return false;
+                  return true;
                 }
+
+                // For all other types, just keep the first one
+                const firstOfType = arr.find(e => e.type === ev.type);
+                if (ev.id !== firstOfType?.id) return false;
+
                 return true;
               })
               .map((ev) => {
