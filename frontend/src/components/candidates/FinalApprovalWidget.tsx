@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, LoadingSpinner } from '../ui';
+import { Button, LoadingSpinner, Modal } from '../ui';
 import { sendOfferLetter } from '../../api/candidates';
 import type { Candidate } from '../../types';
 import { Mail, FileText } from 'lucide-react';
@@ -15,6 +15,38 @@ interface FinalApprovalWidgetProps {
 export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidgetProps) {
   const { user } = useAuth();
   const [sendingOffer, setSendingOffer] = useState(false);
+  const [isPdfOpen, setIsPdfOpen] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  const handlePreviewOffer = async () => {
+    try {
+      setGeneratingPdf(true);
+      const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+      const response = await fetch(`${baseURL}/pdf/offer-letter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidate: {
+            full_name: candidate.full_name,
+            experience: candidate.experience || 'Unknown Position',
+            branch_location: candidate.branch_location,
+            department: candidate.department,
+          }
+        })
+      });
+      if (!response.ok) throw new Error('Failed to generate preview');
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setPdfUrl(url);
+      setIsPdfOpen(true);
+    } catch (err) {
+      toast.error('Could not load offer letter preview.');
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
 
   const handleSendOffer = async () => {
     if (!candidate.email) {
@@ -35,13 +67,23 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
 
   return (
     <div className="space-y-6 w-full">
-      <div className="flex items-center justify-center pt-2 pb-4">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2 pb-4">
+        <Button 
+          variant="secondary"
+          onClick={handlePreviewOffer} 
+          disabled={generatingPdf}
+          size="lg"
+          className="!bg-white !rounded-[10px] shadow-sm !font-bold tracking-wide w-full sm:w-auto sm:min-w-[240px] h-12 border border-border"
+        >
+          {generatingPdf ? <LoadingSpinner className="h-4 w-4 mr-2" /> : <FileText className="h-4 w-4 mr-2" />}
+          {generatingPdf ? 'Generating Preview...' : 'View Offer Letter'}
+        </Button>
         {user?.role !== 'LOCAL_HR' && (
           <Button 
             onClick={handleSendOffer} 
             disabled={sendingOffer}
             size="lg"
-            className="!bg-green-700 hover:!bg-green-800 !text-white !border-none !rounded-[10px] shadow-sm !font-bold tracking-wide w-full max-w-sm h-12"
+            className="!bg-green-700 hover:!bg-green-800 !text-white !border-none !rounded-[10px] shadow-sm !font-bold tracking-wide w-full sm:w-auto sm:min-w-[240px] h-12"
           >
             {sendingOffer ? <LoadingSpinner className="h-4 w-4 mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
             {sendingOffer ? 'Sending Offer Letter...' : 'Send Offer Letter'}
@@ -81,6 +123,18 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
           </div>
         </div>
       </div>
+
+      <Modal isOpen={isPdfOpen} onClose={() => setIsPdfOpen(false)} title="Offer Letter Preview" size="lg">
+        <div className="w-full h-full min-h-[70vh] bg-muted/20">
+          {pdfUrl ? (
+            <iframe src={pdfUrl} className="w-full h-[70vh] border-none" title="Offer Letter Preview" />
+          ) : (
+            <div className="flex items-center justify-center h-[70vh]">
+              <LoadingSpinner size="lg" />
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }
