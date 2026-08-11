@@ -43,45 +43,18 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
     }
   };
 
-  const handleViewOffer = async () => {
-    try {
-      const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
-      const response = await fetch(`${baseURL}/pdf/offer-letter`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          candidate: {
-            full_name: candidate.full_name,
-            position_applied_for: candidate.position_applied_for || 'Unknown Position',
-          }
-        })
-      });
-      if (!response.ok) throw new Error('Failed to generate preview');
-      
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-    } catch (err) {
-      toast.error('Could not load offer letter preview.');
-    }
-  };
-
   return (
     <div className="space-y-6 w-full">
-      <div className="flex items-center justify-end gap-3">
-        <Button variant="secondary" size="sm" onClick={handleViewOffer} className="!bg-white !rounded-sm !font-semibold">
-          <FileText className="h-3.5 w-3.5 mr-2" />
-          View Offer Letter
-        </Button>
+      <div className="flex items-center justify-center pt-2 pb-4">
         {user?.role !== 'LOCAL_HR' && (
           <Button 
             onClick={handleSendOffer} 
             disabled={sendingOffer}
-            size="sm"
-            className="!bg-green-700 hover:!bg-green-800 !text-white !border-none !rounded-sm shadow-sm !font-bold tracking-wide"
+            size="lg"
+            className="!bg-green-700 hover:!bg-green-800 !text-white !border-none !rounded-[10px] shadow-sm !font-bold tracking-wide w-full max-w-sm h-12"
           >
-            {sendingOffer ? <LoadingSpinner className="h-3.5 w-3.5 mr-2" /> : <Mail className="h-3.5 w-3.5 mr-2" />}
-            {sendingOffer ? 'Sending...' : 'Send Offer Letter'}
+            {sendingOffer ? <LoadingSpinner className="h-4 w-4 mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
+            {sendingOffer ? 'Sending Offer Letter...' : 'Send Offer Letter'}
           </Button>
         )}
       </div>

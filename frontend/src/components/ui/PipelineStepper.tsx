@@ -83,7 +83,7 @@ export function PipelineStepper({
       </div>
 
       {/* Desktop view: full horizontal stepper */}
-      <div className="hidden md:flex items-start justify-between relative px-4 w-full max-w-4xl mx-auto">
+      <div className={cn("hidden md:flex items-start justify-between relative px-4 w-full mx-auto", stages.length <= 3 ? "max-w-xl" : "max-w-4xl")}>
         {/* Background connecting line */}
         <div className="absolute top-5 left-12 right-12 h-[2px] bg-muted/60 -z-10" />
 
