@@ -16,9 +16,8 @@ interface CSSStageWidgetProps {
 
 export function CSSStageWidget({ candidate, onUpdate }: CSSStageWidgetProps) {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-  const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-
+  
   useEffect(() => {
     let isMounted = true;
     getCandidateEvaluations(candidate.id).then(data => {
@@ -32,18 +31,6 @@ export function CSSStageWidget({ candidate, onUpdate }: CSSStageWidgetProps) {
     });
     return () => { isMounted = false; };
   }, [candidate.id]);
-
-  const handleSendToFinalApproval = async () => {
-    setIsSending(true);
-    try {
-      await updateCandidateStage(candidate.id, 'FINAL_APPROVAL', 'Generated Candidate Summary Sheet');
-      toast.success('Moved to Final Approval successfully!');
-      onUpdate(); 
-    } catch (err: any) {
-      toast.error(extractError(err, 'Failed to move to Final Approval'));
-      setIsSending(false);
-    }
-  };
 
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({
@@ -66,15 +53,6 @@ export function CSSStageWidget({ candidate, onUpdate }: CSSStageWidgetProps) {
           className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-sm rounded-sm shadow-sm transition-all duration-200"
         >
           <Printer className="w-4 h-4" /> Print CSS
-        </Button>
-
-        <Button 
-          variant="primary" 
-          onClick={handleSendToFinalApproval} 
-          isLoading={isSending}
-          className="flex items-center gap-2 px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white font-semibold text-sm rounded-sm shadow-sm hover:shadow transition-all duration-200"
-        >
-          <Send className="w-4 h-4" /> Send to Final Approval
         </Button>
       </div>
 
