@@ -2,16 +2,16 @@ import type { PipelineStage } from '../types';
 import type { BadgeProps } from '../components/ui/Badge';
 
 export function stageLabel(stage: PipelineStage | string): string {
-  if (stage === 'CANDIDATE_FORM' || stage === 'CALL_LETTER') return 'Call Letter';
-  if (stage === 'BRANCH_INTERVIEW' || stage === 'INTERVIEWS') return 'Interviews';
-  if (stage === 'HO_INTERVIEWS') return 'Interviews';
-  if (stage === 'SALARY_DETAILS') return 'Salary Details';
+  if (stage === 'CANDIDATE_FORM' || stage === 'CALL_LETTER') return 'CALL LETTER';
+  if (stage === 'BRANCH_INTERVIEW' || stage === 'INTERVIEWS') return 'INTERVIEWS';
+  if (stage === 'HO_INTERVIEWS') return 'INTERVIEWS';
+  if (stage === 'SALARY_DETAILS') return 'SALARY DETAILS';
   if (stage === 'CSS') return 'CSS';
-  if (stage === 'TEST') return 'Technical Test';
-  if (stage === 'SENT_TO_HO') return 'Sent to Head Office';
+  if (stage === 'TEST') return 'TECHNICAL TEST';
+  if (stage === 'SENT_TO_HO') return 'SENT TO HEAD OFFICE';
   return stage
     .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+    .toUpperCase();
 }
 
 export function stageColor(stage: PipelineStage): string {
