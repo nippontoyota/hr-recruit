@@ -111,8 +111,8 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly }: Interview
       
       const evalName = ev.type === 'BRANCH_HR' ? 'HR INTERVIEW' 
         : ev.type === 'DEPT_HEAD' ? 'DEPARTMENT INTERVIEW' 
-        : ev.type === 'HQ_INTERVIEW_1' ? 'HR INTERVIEW'
-        : ev.type === 'HQ_INTERVIEW_2' ? 'DEPARTMENT INTERVIEW'
+        : ev.type === 'HQ_INTERVIEW_1' ? 'HEAD OFFICE INTERVIEW'
+        : ev.type === 'HQ_INTERVIEW_2' ? 'CMD INTERVIEW'
         : ev.type.replace(/_/g, ' ');
       toast.success(`${evalName} saved successfully`);
       setIsEditing(false);
@@ -138,7 +138,7 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly }: Interview
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 gap-3">
           <div className="flex items-center gap-3">
             <h3 className="font-bold text-lg uppercase tracking-wider text-foreground">
-              {ev.type === 'BRANCH_HR' ? 'HR INTERVIEW' : ev.type === 'DEPT_HEAD' ? 'DEPARTMENT INTERVIEW' : ev.type === 'HQ_INTERVIEW_1' ? 'HR INTERVIEW' : ev.type === 'HQ_INTERVIEW_2' ? 'DEPARTMENT INTERVIEW' : ev.type.replace(/_/g, ' ')}
+              {ev.type === 'BRANCH_HR' ? 'HR INTERVIEW' : ev.type === 'DEPT_HEAD' ? 'DEPARTMENT INTERVIEW' : ev.type === 'HQ_INTERVIEW_1' ? 'HEAD OFFICE INTERVIEW' : ev.type === 'HQ_INTERVIEW_2' ? 'CMD INTERVIEW' : ev.type.replace(/_/g, ' ')}
             </h3>
             {isCompleted && !isEditing && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm whitespace-nowrap bg-success/10 text-success border-success/20">
