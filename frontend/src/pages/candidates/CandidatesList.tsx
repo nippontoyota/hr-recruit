@@ -186,12 +186,14 @@ export default function CandidatesList() {
       <PageHeader
         title="Candidates"
         action={
-          <div className="flex gap-3">
-            <Button onClick={() => setIsAddOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Candidate
-            </Button>
-          </div>
+          candidates.length > 0 ? (
+            <div className="flex gap-3">
+              <Button onClick={() => setIsAddOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Candidate
+              </Button>
+            </div>
+          ) : null
         }
       />
 
