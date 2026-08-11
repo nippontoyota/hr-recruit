@@ -125,8 +125,12 @@ export default function CandidateProfile() {
     if (clickedStage === 'REJECTED' || clickedStage === 'ON_HOLD' || clickedStage === 'HIRED') return;
 
     const effectiveStages = user?.role === 'HO_HR' ? HO_LINEAR_STAGES : LINEAR_STAGES;
-    const currentIdx = effectiveStages.indexOf(candidate.current_stage);
+    let currentIdx = effectiveStages.indexOf(candidate.current_stage);
     const clickedIdx = effectiveStages.indexOf(clickedStage);
+
+    if (currentIdx === -1) {
+      currentIdx = Infinity;
+    }
 
     // Always update the viewed tab
     setViewedStage(clickedStage);

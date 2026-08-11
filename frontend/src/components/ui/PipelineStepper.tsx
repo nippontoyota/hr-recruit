@@ -107,7 +107,7 @@ export function PipelineStepper({
           const isCurrentViewed = index === viewedIndex;
           
           const Icon = STAGE_ICONS[stage] || CircleDashed;
-          const isClickable = !isLoading && !isTerminalStage && !isCurrentViewed;
+          const isClickable = !isLoading && !isCurrentViewed;
 
           return (
             <motion.div 
@@ -141,8 +141,7 @@ export function PipelineStepper({
                   isSkipped ? "border-warning border-dashed bg-warning/5 text-warning shadow-sm" :
                   isCurrentActual ? "border-success bg-success text-white shadow-md" :
                   "border-muted text-muted-foreground",
-                  isClickable && !isCurrentViewed ? "cursor-pointer hover:border-success hover:text-success" : "cursor-not-allowed",
-                  isTerminalStage && "opacity-60"
+                  isClickable && !isCurrentViewed ? "cursor-pointer hover:border-success hover:text-success" : "cursor-not-allowed"
                 )}
               >
                 <AnimatePresence mode="wait">
