@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
+import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper, Skeleton } from '../../components/ui';
 import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History, Edit2, Send } from 'lucide-react';
 import { getCandidateById, updateCandidateStage, unholdCandidate, resolveDuplicateCandidate } from '../../api/candidates';
 import { getCandidateEvaluations } from '../../api/evaluations';
@@ -129,6 +129,13 @@ export default function CandidateProfile() {
 
     // Only update the database if we are moving FORWARD in the pipeline
     if (clickedIdx > currentIdx) {
+      const isLocalHR = user?.role === 'LOCAL_HR';
+      const hasBeenSentToHO = ['SENT_TO_HO', 'FINAL_APPROVAL', 'HIRED'].includes(candidate.current_stage);
+      if (isLocalHR && hasBeenSentToHO) {
+         toast.error("Cannot change stages after sending to Head Office.");
+         return;
+      }
+
       setIsUpdating(true);
       try {
         await updateCandidateStage(candidate.id, clickedStage, '');
@@ -198,8 +205,9 @@ export default function CandidateProfile() {
 
   if (initialLoading) {
     return (
-      <div className="w-full min-h-[60vh] flex items-center justify-center">
-        <LoadingSpinner size="lg" />
+      <div className="flex justify-center items-center h-screen w-full flex-col">
+        <LoadingSpinner size="lg" className="text-blue-600 mb-4" />
+        <p className="text-muted-foreground font-medium animate-pulse">Loading candidate profile...</p>
       </div>
     );
   }
@@ -276,17 +284,9 @@ export default function CandidateProfile() {
     });
   }
 
-  const handlePrevStep = () => {
-    if (!isPrevDisabled && viewedIdx > 0) {
-      handleStageClick(stepperStages[viewedIdx - 1]);
-    }
-  };
-
-  const handleNextStep = () => {
-    if (!isNextDisabled && viewedIdx >= 0 && viewedIdx < stepperStages.length - 1) {
-      handleStageClick(stepperStages[viewedIdx + 1]);
-    }
-  };
+  const isLocalHR = user?.role === 'LOCAL_HR';
+  const hasBeenSentToHO = ['SENT_TO_HO', 'FINAL_APPROVAL', 'HIRED'].includes(candidate.current_stage);
+  const isReadOnly = isLocalHR && hasBeenSentToHO;
 
   return (
     <div className="flex items-start w-full min-h-screen">
@@ -295,7 +295,7 @@ export default function CandidateProfile() {
       <div className="flex-1 flex flex-col pl-4 sm:pl-6 lg:pl-8 pt-4 lg:pt-6 pr-0 lg:pr-8 pb-4 min-w-0 transition-all duration-300 ease-in-out">
 
         {/* ── CANDIDATE HEADER ── */}
-        <div className="pb-6 mb-6 border-b border-border">
+        <div className="pb-4 mb-4">
           <div className="w-full">
             <div className="flex items-center gap-2 mb-4">
               <button
@@ -333,49 +333,17 @@ export default function CandidateProfile() {
               const isCallLetterStage = stageToView === 'CALL_LETTER';
 
               const stepperBlock = (
-                <div className="flex items-center justify-between gap-4">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    disabled={isPrevDisabled}
-                    onClick={handlePrevStep}
-                    className={cn(
-                      "h-9 w-9 rounded-md border border-border bg-background shadow-sm shrink-0 flex items-center justify-center transition-all",
-                      !isPrevDisabled ? "hover:bg-muted hover:text-foreground text-muted-foreground" : "opacity-40 cursor-not-allowed"
-                    )}
-                    title="Previous Step"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-
-                  <div className="flex-1 min-w-0">
-                    <PipelineStepper
-                      stages={stepperStages}
-                      currentStage={stageToView}
-                      actualStage={actualStage}
-                      onStageClick={handleStageClick}
-                      isLoading={isUpdating}
-                      completedStages={completedStages}
-                      skippedStages={skippedStages}
-                      heldStages={heldStages}
-                    />
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    disabled={isNextDisabled}
-                    onClick={handleNextStep}
-                    className={cn(
-                      "h-9 w-9 rounded-md border border-border bg-background shadow-sm shrink-0 flex items-center justify-center transition-all",
-                      !isNextDisabled ? "hover:bg-muted hover:text-foreground text-muted-foreground" : "opacity-40 cursor-not-allowed"
-                    )}
-                    title="Next Step"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
+                <div className="w-full">
+                  <PipelineStepper
+                    stages={stepperStages}
+                    currentStage={stageToView}
+                    actualStage={actualStage}
+                    onStageClick={handleStageClick}
+                    isLoading={isUpdating}
+                    completedStages={completedStages}
+                    skippedStages={skippedStages}
+                    heldStages={heldStages}
+                  />
                 </div>
               );
 
@@ -389,120 +357,99 @@ export default function CandidateProfile() {
 
                   <div className={isCallLetterStage ? "flex flex-col items-center justify-center gap-6 mt-4 mb-8" : "flex flex-col md:flex-row md:items-start justify-between gap-6"}>
                     
-                    <div className={isCallLetterStage ? "flex flex-col items-center text-center max-w-2xl mx-auto space-y-4" : "flex-1 min-w-0 space-y-3"}>
-                      <div className={isCallLetterStage ? "flex flex-col items-center gap-2 w-full" : "flex items-center gap-4 flex-wrap"}>
-                        
-                        <div className={isCallLetterStage ? "relative group cursor-pointer mb-2" : "relative group cursor-pointer shrink-0"} onClick={() => document.getElementById('photo-upload')?.click()}>
-                          <input
-                            type="file"
-                            id="photo-upload"
-                            accept="image/jpeg,image/png,image/webp"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                if (file.size > 5 * 1024 * 1024) {
-                                  toast.error('Photo must be under 5MB');
-                                  return;
+                    {isCallLetterStage && (
+                      <div className="flex flex-col items-center text-center max-w-2xl mx-auto space-y-4">
+                        <div className="flex flex-col items-center gap-2 w-full">
+                          
+                          <div className="relative group cursor-pointer mb-2" onClick={() => document.getElementById('photo-upload')?.click()}>
+                            <input
+                              type="file"
+                              id="photo-upload"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  if (file.size > 5 * 1024 * 1024) {
+                                    toast.error('Photo must be under 5MB');
+                                    return;
+                                  }
+                                  setIsUpdating(true);
+                                  try {
+                                    const { uploadCandidatePhoto } = await import('../../api/candidates');
+                                    await uploadCandidatePhoto(candidate.id, file);
+                                    toast.success('Photo uploaded successfully');
+                                    handleUpdate();
+                                  } catch (err: any) {
+                                    toast.error(extractError(err, 'Failed to upload photo'));
+                                  } finally {
+                                    setIsUpdating(false);
+                                  }
                                 }
-                                setIsUpdating(true);
-                                try {
-                                  const { uploadCandidatePhoto } = await import('../../api/candidates');
-                                  await uploadCandidatePhoto(candidate.id, file);
-                                  toast.success('Photo uploaded successfully');
-                                  handleUpdate();
-                                } catch (err: any) {
-                                  toast.error(extractError(err, 'Failed to upload photo'));
-                                } finally {
-                                  setIsUpdating(false);
-                                }
-                              }
-                            }}
-                          />
-                          {candidate.profile?.photo_url ? (
-                            <img src={candidate.profile.photo_url} alt="Profile" className={cn("rounded-none object-cover border border-border bg-white", isCallLetterStage ? "w-28 h-36 mx-auto" : "w-20 h-24")} />
-                          ) : (
-                            <div className={cn("rounded-none bg-muted flex items-center justify-center border border-border text-muted-foreground font-bold", isCallLetterStage ? "w-28 h-36 text-4xl mx-auto" : "w-20 h-24 text-xl")}>
-                              {candidate.full_name.charAt(0)}
+                              }}
+                            />
+                            {candidate.profile?.photo_url ? (
+                              <img src={candidate.profile.photo_url} alt="Profile" className="rounded-none object-cover border border-border bg-white w-28 h-36 mx-auto" />
+                            ) : (
+                              <div className="rounded-none bg-muted flex items-center justify-center border border-border text-muted-foreground font-bold w-28 h-36 text-4xl mx-auto">
+                                {candidate.full_name.charAt(0)}
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-black/50 rounded-none opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                              <Edit2 className="w-6 h-6 text-white" />
                             </div>
-                          )}
-                          <div className="absolute inset-0 bg-black/50 rounded-none opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <Edit2 className="w-6 h-6 text-white" />
+                          </div>
+
+                          <div className="flex flex-col items-center gap-2">
+                            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{candidate.full_name}</h1>
+                            
+                            <div className="flex items-center gap-2 justify-center flex-wrap">
+                              {candidate.is_duplicate_flagged && (
+                                <span className="font-semibold text-warning bg-warning/10 border border-warning/20 rounded-md text-[10px] px-2 py-1">
+                                  Duplicate
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
-                        <div className={isCallLetterStage ? "flex flex-col items-center gap-2" : "flex items-center gap-4 flex-wrap"}>
-                          <h1 className={isCallLetterStage ? "text-3xl font-extrabold tracking-tight text-foreground" : "text-2xl font-bold tracking-tight text-foreground truncate"}>{candidate.full_name}</h1>
-                          
-                          <div className={isCallLetterStage ? "flex items-center gap-2 justify-center flex-wrap" : "flex items-center gap-2"}>
-                            {candidate.is_duplicate_flagged && (
-                              <span className={cn("font-semibold text-warning bg-warning/10 border border-warning/20 rounded-md", isCallLetterStage ? "text-[10px] px-2 py-1" : "text-[10px] px-2 py-0.5")}>
-                                Duplicate
+                        <div className="flex flex-col items-center gap-1.5 mt-2">
+                          {candidate.experience && (
+                            <div className="text-base">
+                              <span className="text-muted-foreground font-medium">Applying for: </span>
+                              <strong className="text-foreground">{candidate.experience}</strong>
+                            </div>
+                          )}
+
+                          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground mt-2">
+                            <span className="flex items-center gap-1.5">
+                              <Phone className="w-4 h-4 shrink-0" />
+                              <span className="text-foreground font-medium">+91 {candidate.phone}</span>
+                            </span>
+                            {candidate.email && (
+                              <span className="flex items-center gap-1.5">
+                                <Mail className="w-4 h-4 shrink-0" />
+                                <span className="text-foreground font-medium">{candidate.email}</span>
+                              </span>
+                            )}
+                            {candidate.branch_location && (
+                              <span className="flex items-center gap-1.5">
+                                <MapPin className="w-4 h-4 shrink-0" />
+                                <span className="text-foreground font-medium">{candidate.branch_location}</span>
+                              </span>
+                            )}
+                            {candidate.source && (
+                              <span className="flex items-center gap-1.5">
+                                <span className="text-muted-foreground font-medium">Source: </span>
+                                <span className="text-foreground font-medium">
+                                  {candidate.source === 'INDEED' ? 'Indeed' : candidate.source === 'NAUKRI' ? 'Naukri' : candidate.source.replace(/_/g, ' ')}
+                                </span>
                               </span>
                             )}
                           </div>
-
-                          {!isCallLetterStage && actualStage === 'ON_HOLD' && (
-                            <Button
-                              size="sm"
-                              onClick={async () => {
-                                if (!candidate) return;
-                                setIsResuming(true);
-                                try {
-                                  await unholdCandidate(candidate.id, 'Resumed from On Hold');
-                                  toast.success('Candidate resumed to previous stage');
-                                  handleUpdate();
-                                } catch (err: any) {
-                                  toast.error(extractError(err, 'Failed to resume candidate.'));
-                                } finally {
-                                  setIsResuming(false);
-                                }
-                              }}
-                              isLoading={isResuming}
-                              className="h-7 px-3 text-xs gap-1.5 bg-warning/90 hover:bg-warning text-white"
-                            >
-                              <Play className="w-3.5 h-3.5" /> Resume to previous
-                            </Button>
-                          )}
                         </div>
                       </div>
-
-                      <div className={isCallLetterStage ? "flex flex-col items-center gap-1.5 mt-2" : "flex flex-col gap-2 mt-2"}>
-                        {candidate.position_applied_for && (
-                          <div className={isCallLetterStage ? "text-base" : "text-sm"}>
-                            <span className="text-muted-foreground font-medium">Applying for: </span>
-                            <strong className="text-foreground">{candidate.position_applied_for}</strong>
-                          </div>
-                        )}
-
-                        <div className={isCallLetterStage ? "flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground mt-2" : "flex flex-col gap-2 text-sm text-muted-foreground"}>
-                          <span className={isCallLetterStage ? "flex items-center gap-1.5" : "flex items-center gap-2"}>
-                            <Phone className="w-4 h-4 shrink-0" />
-                            <span className="text-foreground font-medium">+91 {candidate.phone}</span>
-                          </span>
-                          {candidate.email && (
-                            <span className={isCallLetterStage ? "flex items-center gap-1.5" : "flex items-center gap-2"}>
-                              <Mail className="w-4 h-4 shrink-0" />
-                              <span className="text-foreground font-medium">{candidate.email}</span>
-                            </span>
-                          )}
-                          {candidate.branch_location && (
-                            <span className={isCallLetterStage ? "flex items-center gap-1.5" : "flex items-center gap-2"}>
-                              <MapPin className="w-4 h-4 shrink-0" />
-                              <span className="text-foreground font-medium">{candidate.branch_location}</span>
-                            </span>
-                          )}
-                          {candidate.source && (
-                            <span className={isCallLetterStage ? "flex items-center gap-1.5" : "flex items-center gap-2"}>
-                              <span className="text-muted-foreground font-medium">Source: </span>
-                              <span className="text-foreground font-medium">
-                                {candidate.source === 'INDEED' ? 'Indeed' : candidate.source === 'NAUKRI' ? 'Naukri' : candidate.source.replace(/_/g, ' ')}
-                              </span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                    )}
 
                     <div className={isCallLetterStage ? "flex flex-wrap items-center justify-center gap-2 mt-4" : "flex flex-wrap items-center gap-2 shrink-0"}>
                       {isCallLetterStage && actualStage === 'ON_HOLD' && (
@@ -530,25 +477,11 @@ export default function CandidateProfile() {
 
 
                       
-                      <Button
-                        variant="ghost"
-                        onClick={() => setIsActivityOpen(true)}
-                        className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
-                      >
-                        <History className="w-4 h-4 text-muted-foreground" /> Activity Log
-                      </Button>
-                      <a
-                        href={`https://wa.me/91${candidate.phone}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
-                      >
-                        <img src="/whatsapp.webp" className="w-4 h-4 object-contain" alt="WhatsApp" /> WhatsApp
-                      </a>
+
                       {candidate.email && (
                         <a
                           href={`mailto:${candidate.email}`}
-                          className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-lg border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
+                          className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-sm border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
                         >
                           <img src="/gmail.webp" className="w-4 h-4 object-contain" alt="Email" /> Email
                         </a>
@@ -560,22 +493,25 @@ export default function CandidateProfile() {
                           hasResume={candidate.has_resume}
                         />
                       )}
-                      {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && (
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => setShowRejectModal(true)}
-                          className="h-9 px-4 text-white bg-red-600 hover:bg-red-700 transition-colors shadow-sm font-bold"
-                        >
-                          Reject Candidate
-                        </Button>
-                      )}
                     </div>
                   </div>
 
                   {!isCallLetterStage && (
                     <div className="mt-8 pt-2">
                       {stepperBlock}
+                    </div>
+                  )}
+
+                  {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && !isReadOnly && (
+                    <div className="mt-8 flex justify-center w-full">
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => setShowRejectModal(true)}
+                        className="h-9 px-8 text-white bg-[#DC143C] hover:bg-[#B21030] transition-colors shadow-sm font-extrabold uppercase rounded-sm tracking-wider text-xs"
+                      >
+                        Reject Candidate
+                      </Button>
                     </div>
                   )}
                 </>
@@ -606,6 +542,7 @@ export default function CandidateProfile() {
                 candidate={candidate}
                 evalTypes={['BRANCH_HR', 'DEPT_HEAD']}
                 onUpdate={handleUpdate}
+                isReadOnly={isReadOnly}
               />
             )}
 
@@ -614,6 +551,7 @@ export default function CandidateProfile() {
                 candidate={candidate}
                 evalTypes={['TECHNICAL_TEST']}
                 onUpdate={handleUpdate}
+                isReadOnly={isReadOnly}
               />
             )}
 
@@ -621,6 +559,7 @@ export default function CandidateProfile() {
               <BackgroundVerificationWidget
                 candidate={candidate}
                 onUpdate={handleUpdate}
+                isReadOnly={isReadOnly}
               />
             )}
 
@@ -629,6 +568,18 @@ export default function CandidateProfile() {
                 candidate={candidate}
                 onUpdate={handleUpdate}
               />
+            )}
+
+            {stageToView === 'SENT_TO_HO' && (
+              <div className="bg-pink-50/50 border border-pink-200 p-8 rounded-xl mt-6 flex flex-col items-center">
+                <div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center shadow-sm mb-4">
+                  <Send className="w-8 h-8 text-pink-600" />
+                </div>
+                <h3 className="text-xl font-bold text-pink-900">Application Sent to HR</h3>
+                <p className="text-pink-700/80 mt-2 max-w-md mx-auto font-medium text-center">
+                  This candidate's application has been successfully forwarded to the Head Office HR for final review and approval.
+                </p>
+              </div>
             )}
 
             {stageToView === 'FINAL_APPROVAL' && (
