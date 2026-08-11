@@ -10,11 +10,19 @@ function App() {
       <AuthProvider>
         <RouterProvider router={router} />
         <Toaster 
-          position="top-right" 
+          position="bottom-right" 
           richColors
+          closeButton
+          expand={false}
+          duration={4000}
           toastOptions={{
             style: {
               fontFamily: 'var(--font-sans)',
+              padding: '16px 20px',
+              borderRadius: '16px',
+              boxShadow: '0 20px 40px -15px rgba(0,0,0,0.2)',
+              fontWeight: 700,
+              border: 'none'
             }
           }}
         />
