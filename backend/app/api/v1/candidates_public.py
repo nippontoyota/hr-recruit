@@ -13,10 +13,8 @@ from app.schemas.candidate import CandidateCreate, CandidateOut, DocumentOut, Pr
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
-from .candidates_core import *
-from .candidates_core import (
-    _save_resume_for_candidate
-)
+from app.services.candidate_service import create_candidate, to_candidate_out
+from app.services.document_service import save_resume_for_candidate, save_photo_for_candidate, resume_candidate_ids
 
 @router.post("/public-apply", response_model=CandidateOut, status_code=201)
 def public_apply(
@@ -79,6 +77,7 @@ def public_full_status(
     if not row:
         raise HTTPException(status_code=404, detail="Invalid token or candidate not found.")
     return {
+        "candidate_id": row.id,
         "full_name": row.full_name,
         "is_awaiting_full_fill": row.current_stage == PipelineStage.CALL_LETTER and row.pre_form_status in (FormStatus.SENT, FormStatus.VIEWED)
     }
@@ -100,7 +99,6 @@ def public_apply_full(
         profile = CandidateProfile(candidate_id=row.id)
         db.add(profile)
     
-    # Update profile fields from application_data
     if application_data.get("permDistrict"):
         profile.current_location = application_data["permDistrict"]
     
@@ -147,7 +145,19 @@ async def public_upload_resume(
     row = db.get(Candidate, candidate_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
-    if row.current_stage != PipelineStage.SCREENING:
-        raise HTTPException(status_code=400, detail="Resume upload is only allowed during screening.")
-    return await _save_resume_for_candidate(db, row, file, uploaded_by_user_id=None)
+    if row.current_stage not in (PipelineStage.SCREENING, PipelineStage.CALL_LETTER):
+        raise HTTPException(status_code=400, detail="Resume upload is only allowed during screening or call letter stages.")
+    return await save_resume_for_candidate(db, row, file, uploaded_by_user_id=None)
 
+@router.post("/public-photo/{candidate_id}", response_model=dict, status_code=201)
+async def public_upload_photo(
+    candidate_id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    row = db.get(Candidate, candidate_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Not found.")
+    if row.current_stage != PipelineStage.CALL_LETTER:
+        raise HTTPException(status_code=400, detail="Photo upload is only allowed during the call letter stage.")
+    return await save_photo_for_candidate(db, row, file)

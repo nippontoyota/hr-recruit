@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { initialCandidateData } from './wizard/wizardTypes';
 import type { CandidateFormData } from './wizard/wizardTypes';
-import { publicGetFullStatus, publicApplyFullCandidate } from '../../api/candidates';
+import { uploadResume, uploadPublicCandidatePhoto, publicGetFullStatus, publicApplyFullCandidate } from '../../api/candidates';
 import { LoadingSpinner, Button } from '../../components/ui';
 import { CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -161,9 +161,19 @@ export default function PreFormPage() {
     setErrorText('');
 
     try {
-      const { resumeFile: _resumeFile, resumeUrl: _resumeUrl, resumeFileObject: _resumeFileObject, profilePicture: _profilePicture, ...applicationData } = formData;
+      const { resumeFile: _resumeFile, resumeUrl: _resumeUrl, resumeFileObject: _resumeFileObject, photoFileObject: _photoFileObject, profilePicture: _profilePicture, ...applicationData } = formData;
+      // We know from validation that resumeFileObject and photoFileObject exist
       const candidateObj = await publicApplyFullCandidate(token, applicationData);
-      setSubmitSuccess(candidateObj.candidate_id);
+      
+      // Upload the mandatory files
+      if (formData.resumeFileObject) {
+        await uploadResume(candidateObj.id, formData.resumeFileObject, { public: true });
+      }
+      if (formData.photoFileObject) {
+        await uploadPublicCandidatePhoto(candidateObj.id, formData.photoFileObject);
+      }
+      
+      setSubmitSuccess(candidateObj.id);
     } catch (err: any) {
       setErrorText(err?.response?.data?.detail || err.message || 'Failed to submit application details.');
     } finally {

@@ -33,7 +33,7 @@ export function validateBasicCandidateForm(input: {
   phone: string;
   email?: string;
   emailRequired?: boolean;
-  position: string;
+  experience: string;
   source?: string;
   sourceRequired?: boolean;
 }): string | null {
@@ -41,7 +41,7 @@ export function validateBasicCandidateForm(input: {
     validateFullName(input.fullName),
     validatePhone(input.phone),
     validateEmail(input.email ?? '', input.emailRequired ?? false),
-    validateTextField(input.position, 'Position applied for', 2, 100),
+    validateSelect(input.experience, ['Fresher', 'Experienced'], 'Experience'),
   ];
 
   if (input.sourceRequired) {
@@ -286,6 +286,28 @@ export function validateSingleField(field: keyof CandidateFormData, data: Candid
 }
 
 export function validatePreForm(data: CandidateFormData): string | null {
+  if (!data.photoFileObject) {
+    return 'Candidate Photo (PNG or JPEG) is required.';
+  }
+  const photoName = data.photoFileObject.name.toLowerCase();
+  if (!photoName.endsWith('.png') && !photoName.endsWith('.jpg') && !photoName.endsWith('.jpeg')) {
+    return 'Candidate Photo must be a PNG or JPEG image.';
+  }
+  if (data.photoFileObject.size > 5 * 1024 * 1024) {
+    return 'Candidate Photo must be smaller than 5MB.';
+  }
+
+  if (!data.resumeFileObject) {
+    return 'Resume (PDF or Word) is required.';
+  }
+  const resumeName = data.resumeFileObject.name.toLowerCase();
+  if (!resumeName.endsWith('.pdf') && !resumeName.endsWith('.doc') && !resumeName.endsWith('.docx')) {
+    return 'Resume must be a PDF or Word document.';
+  }
+  if (data.resumeFileObject.size > 10 * 1024 * 1024) {
+    return 'Resume must be smaller than 10MB.';
+  }
+
   const fields: (keyof CandidateFormData)[] = [
     'nameAadhaar', 'gender', 'dateOfBirth', 'age', 'maritalStatus', 'bloodGroup', 'height', 'weight', 'religionCaste',
     'permHouseName', 'permPostOffice', 'permLandmark', 'permDistrict', 'permPinCode',

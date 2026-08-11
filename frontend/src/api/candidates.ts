@@ -208,6 +208,15 @@ export const uploadCandidatePhoto = async (candidateId: string, file: File): Pro
   return response.data;
 };
 
+export const uploadPublicCandidatePhoto = async (candidateId: string, file: File): Promise<{ status: string, photo_url: string }> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await request('POST', `/candidates/public-photo/${candidateId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
 
 
 export const uploadBulkSalary = async (file: File) => {

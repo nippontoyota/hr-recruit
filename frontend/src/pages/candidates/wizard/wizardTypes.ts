@@ -11,6 +11,7 @@ export interface CandidateFormData {
   resumeFileObject: File | null;
   resumeUrl: string | null;
   profilePicture: string | null;
+  photoFileObject: File | null;
 
   nameAadhaar: string;
   gender: string;
@@ -99,6 +100,7 @@ export const initialCandidateData: CandidateFormData = {
   resumeFileObject: null,
   resumeUrl: null,
   profilePicture: null,
+  photoFileObject: null,
   nameAadhaar: '',
   gender: '',
   dateOfBirth: '',
