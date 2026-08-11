@@ -10,21 +10,23 @@ import { cn, extractError } from '../../lib/utils';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../../auth/AuthContext';
 
-interface EvaluationStageWidgetProps {
+interface HOInterviewWidgetProps {
   candidate: Candidate;
   evalTypes: string[];
   onUpdate: () => void;
+  isReadOnly?: boolean;
 }
 
 // Simple global cache to allow stale-while-revalidate (instant loading)
 const evaluationsCache: Record<string, Evaluation[]> = {};
 
 
-export function EvaluationStageWidget({
+export function HOInterviewWidget({
   candidate,
   evalTypes,
-  onUpdate
-}: EvaluationStageWidgetProps) {
+  onUpdate,
+  isReadOnly = false
+}: HOInterviewWidgetProps) {
   const { user } = useAuth();
   const cached = evaluationsCache[candidate.id];
   const [evaluations, setEvaluations] = useState<Evaluation[]>(cached ? cached.filter(e => evalTypes.includes(e.type)) : []);
@@ -272,13 +274,26 @@ export function EvaluationStageWidget({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end mb-4">
-        {evalTypes.includes('DEPT_HEAD') && evaluations.filter(e => e.type === 'DEPT_HEAD').length > 0 && evaluations.filter(e => e.type === 'DEPT_HEAD').length < 5 && (
-          <Button variant="primary" size="sm" onClick={handleAddDeptInterview} isLoading={submitting} className="bg-primary/10 text-primary hover:bg-primary/20 border-0 shadow-none">
-            <span className="font-bold text-[10px] uppercase tracking-wider">+ Add Another Dept Interview</span>
+      {!isReadOnly && (
+        <div className="flex justify-end mb-4">
+          <Button 
+            variant="primary" 
+            onClick={async () => {
+              try {
+                const { updateCandidateStage } = await import('../../api/candidates');
+                await updateCandidateStage(candidate.id, 'CSS', 'Completed HO Interviews');
+                toast.success('Moved to CSS Stage');
+                onUpdate();
+              } catch (err: any) {
+                toast.error(err.message || 'Failed to update stage');
+              }
+            }} 
+            className="bg-blue-600 text-white hover:bg-blue-700 shadow-sm font-semibold"
+          >
+            Complete HO Interviews & Move to CSS
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="grid gap-4 grid-cols-1">
           <AnimatePresence mode="wait">

@@ -127,6 +127,8 @@ class EvaluationType(str, enum.Enum):
     GM_LEVEL = "GM_LEVEL"
     TECHNICAL_TEST = "TECHNICAL_TEST"
     HQ_INTERVIEW = "HQ_INTERVIEW"
+    HQ_INTERVIEW_1 = "HQ_INTERVIEW_1"
+    HQ_INTERVIEW_2 = "HQ_INTERVIEW_2"
 
 
 class EvaluationVerdict(str, enum.Enum):
