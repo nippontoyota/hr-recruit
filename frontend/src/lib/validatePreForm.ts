@@ -298,11 +298,11 @@ export function validatePreForm(data: CandidateFormData): string | null {
   }
 
   if (!data.resumeFileObject) {
-    return 'Resume (PDF or Word) is required.';
+    return 'Resume (PDF format) is required.';
   }
   const resumeName = data.resumeFileObject.name.toLowerCase();
-  if (!resumeName.endsWith('.pdf') && !resumeName.endsWith('.doc') && !resumeName.endsWith('.docx')) {
-    return 'Resume must be a PDF or Word document.';
+  if (!resumeName.endsWith('.pdf')) {
+    return 'Resume must be a PDF document.';
   }
   if (data.resumeFileObject.size > 10 * 1024 * 1024) {
     return 'Resume must be smaller than 10MB.';

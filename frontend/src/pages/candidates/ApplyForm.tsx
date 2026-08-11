@@ -23,7 +23,7 @@ export default function ApplyForm() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [source, setSource] = useState('');
-  const [position, setPosition] = useState('');
+  const [experience, setExperience] = useState('Fresher');
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [existingResumeName, setExistingResumeName] = useState<string | null>(null);
 
@@ -52,7 +52,7 @@ export default function ApplyForm() {
           setPhone(candidate.phone);
           setEmail(candidate.email || '');
           setSource(candidate.source || '');
-          setPosition(candidate.position_applied_for || '');
+          setExperience(candidate.experience || 'Fresher');
           if (candidate.has_resume) {
             setExistingResumeName('Existing Resume Document');
           }
@@ -80,7 +80,7 @@ export default function ApplyForm() {
       phone,
       email,
       emailRequired: true,
-      position,
+      experience,
       source,
       sourceRequired: true,
     });
@@ -108,7 +108,7 @@ export default function ApplyForm() {
           phone: normalizedPhone,
           email: email.trim(),
           source: source,
-          position_applied_for: position.trim(),
+          experience: experience,
         });
         if (resumeFile) {
           await uploadResume(candidateId, resumeFile, { public: true });
@@ -120,7 +120,7 @@ export default function ApplyForm() {
           phone: normalizedPhone,
           email: email.trim(),
           source: source,
-          position_applied_for: position.trim(),
+          experience: experience,
         }, hrId);
         if (resumeFile) {
           await uploadResume(candidateObj.id, resumeFile, { public: true });
@@ -301,12 +301,12 @@ export default function ApplyForm() {
           </div>
 
           <div>
-            <label className="form-label">Resume (PDF or Word)</label>
+            <label className="form-label">Resume (PDF format)</label>
             <div className="border border-dashed border-border rounded-lg p-5 bg-content text-center relative hover:border-primary/40 transition-colors">
               <input
                 type="file"
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                accept=".pdf,.doc,.docx"
+                accept=".pdf"
                 onChange={(e) => {
                   if (e.target.files && e.target.files[0]) {
                     setResumeFile(e.target.files[0]);
@@ -316,7 +316,7 @@ export default function ApplyForm() {
               <div className="flex flex-col items-center justify-center pointer-events-none">
                 <UploadCloud className="w-8 h-8 text-text-secondary mb-2" />
                 <span className="text-xs text-text-secondary">
-                  {resumeFile ? resumeFile.name : (existingResumeName || 'Select your PDF or Word resume')}
+                  {resumeFile ? resumeFile.name : (existingResumeName || 'Select your PDF resume')}
                 </span>
               </div>
             </div>
