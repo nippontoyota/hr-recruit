@@ -151,17 +151,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Add Candidate" size="md">
       <form onSubmit={handleSubmit} className="p-6 space-y-6">
-        <div className="flex justify-between items-center bg-muted/45 p-3 rounded-xl border border-border">
-          <span className="text-xs text-text-secondary font-medium">Testing tools:</span>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={handleAutofill}
-          >
-            Autofill Dummy Data
-          </Button>
-        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2 sm:col-span-1">
             <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
