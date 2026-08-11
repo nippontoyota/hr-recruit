@@ -1231,35 +1231,6 @@ def generate_offer_letter_pdf(payload: dict) -> bytearray:
     pdf.set_font("Roboto", "", 11)
     pdf.cell(0, 6, "Nippon Toyota", ln=True)
     
-    # Salary Annexure Page
-    salary_data = candidate.get("salary_data")
-    if salary_data and isinstance(salary_data, dict):
-        pdf.add_page()
-        pdf.set_font("Roboto", "B", 14)
-        pdf.cell(0, 10, "Annexure A: Compensation Details", ln=True, align="C")
-        pdf.ln(10)
-        
-        pdf.set_font("Roboto", "", 11)
-        pdf.multi_cell(0, 6, f"Name: {full_name}\nPosition: {position}")
-        pdf.ln(10)
-        
-        # Table Header
-        pdf.set_font("Roboto", "B", 11)
-        pdf.set_fill_color(240, 240, 240)
-        pdf.cell(90, 8, " Component", border=1, fill=True)
-        pdf.cell(90, 8, " Amount (INR)", border=1, fill=True, ln=True)
-        
-        # Table Body
-        pdf.set_font("Roboto", "", 11)
-        for key, value in salary_data.items():
-            if str(key).lower() in ("candidate_id", "candidate id", "email"):
-                continue
-            pdf.cell(90, 8, f" {key}", border=1)
-            pdf.cell(90, 8, f" {value}", border=1, ln=True)
-            
-        pdf.ln(15)
-        pdf.multi_cell(0, 6, "Note: All compensation is subject to applicable taxes and statutory deductions.")
-    
     return pdf.output(dest="S")
 
 @router.post("/offer-letter")
