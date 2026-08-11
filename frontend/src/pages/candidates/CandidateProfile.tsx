@@ -612,18 +612,6 @@ export default function CandidateProfile() {
               </div>
             )}
 
-            {stageToView === 'SALARY_DETAILS' && (
-              <div className="bg-cyan-50/50 border border-cyan-200 p-8 rounded-xl mt-6 flex flex-col items-center">
-                <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center shadow-sm mb-4">
-                  <span className="text-2xl font-bold text-cyan-600">?</span>
-                </div>
-                <h3 className="text-xl font-bold text-cyan-900">Salary Details</h3>
-                <p className="text-cyan-700/80 mt-2 max-w-md mx-auto font-medium text-center">
-                  This stage is currently empty and will be configured later.
-                </p>
-              </div>
-            )}
-
             {stageToView === 'CSS' && (
               <div className="bg-teal-50/50 border border-teal-200 p-8 rounded-xl mt-6 flex flex-col items-center">
                 <div className="w-16 h-16 bg-teal-100 rounded-full flex items-center justify-center shadow-sm mb-4">

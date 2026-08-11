@@ -27,7 +27,6 @@ export type PipelineStage =
 export const HO_LINEAR_STAGES: PipelineStage[] = [
   'SENT_TO_HO',
   'HO_INTERVIEWS',
-  'SALARY_DETAILS',
   'CSS',
   'FINAL_APPROVAL',
   'HIRED'
