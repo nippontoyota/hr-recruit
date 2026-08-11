@@ -72,10 +72,10 @@ def draw_tech_test_page(pdf, candidate, questions, tech_eval=None):
     pdf.set_font("Roboto", "B", 9)
     pdf.cell(50, 6, "Position Applied For:")
     pdf.set_font("Roboto", "B", 10)
-    pdf.cell(0, 6, candidate.get("position_applied_for", ""), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, candidate.get("department", ""), new_x="LMARGIN", new_y="NEXT")
 
     pdf.ln(5)
-    pdf.cell(0, 8, f"Question Paper - {candidate.get('position_applied_for', '')}", new_x="LMARGIN", new_y="NEXT", align="C")
+    pdf.cell(0, 8, f"Question Paper - {candidate.get('department', '')}", new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.ln(5)
 
     # Questions Table Header
@@ -243,7 +243,7 @@ def generate_candidate_summary_pdf(payload: dict) -> bytes:
         
         row = table.row()
         row.cell("Post Applied", style=bold_bg_gray)
-        row.cell(s(candidate.get("position_applied_for", "")), colspan=2)
+        row.cell(s(candidate.get("department", "")), colspan=2)
         row.cell("Source", style=bold_bg_gray)
         row.cell(s(raw_data.get("sourceOfOpening", "NA")))
         row.cell(s(raw_data.get("preferredRegion", "NA")), colspan=2)
@@ -555,7 +555,7 @@ def generate_candidate_summary_pdf(payload: dict) -> bytes:
         
         row = table.row()
         row.cell("Department")
-        row.cell(s(candidate.get("position_applied_for", "")))
+        row.cell(s(candidate.get("department", "")))
         
         row = table.row()
         row.cell("Designation")
@@ -778,7 +778,7 @@ def generate_candidate_summary_pdf(payload: dict) -> bytes:
         
         row = table.row()
         row.cell("Post Applied", style=bold_style)
-        row.cell(s(candidate.get("position_applied_for", "")))
+        row.cell(s(candidate.get("department", "")))
         row.cell("Nippon Branch", colspan=2, style=bold_style)
 
     pdf.ln(2)
@@ -1145,7 +1145,7 @@ async def generate_dynamic_form(request: Request):
 def generate_offer_letter_pdf(payload: dict) -> bytearray:
     candidate = payload.get("candidate", {})
     full_name = s(candidate.get("full_name"))
-    position = s(candidate.get("position_applied_for"))
+    position = s(candidate.get("department"))
     
     from datetime import datetime
     today = datetime.now().strftime("%B %d, %Y")
@@ -1172,19 +1172,55 @@ def generate_offer_letter_pdf(payload: dict) -> bytearray:
     pdf.cell(0, 8, f"Dear {full_name},", ln=True)
     pdf.ln(5)
     
-    # Body
+    # Subject
+    pdf.set_font("Roboto", "B", 12)
+    pdf.cell(0, 8, "Subject: Offer of Employment", ln=True)
+    pdf.ln(5)
+    
+    # Intro
     pdf.set_font("Roboto", "", 11)
-    pdf.multi_cell(0, 6, f"We are thrilled to formally offer you the position of {position} at Nippon Toyota. "
-                         "Our team was highly impressed by your skills and background, and we believe you will make "
-                         "a fantastic addition to our company.")
+    pdf.multi_cell(0, 6, f"We are delighted to extend this offer of employment for the position of {position} with Nippon Toyota. "
+                         "We were highly impressed with your background and believe your skills and experience will be a "
+                         "tremendous asset to our team.")
     pdf.ln(5)
     
-    pdf.multi_cell(0, 6, "As discussed, you will be receiving a comprehensive compensation package along with standard "
-                         "company benefits. Your exact compensation structure and joining details will be finalized shortly.")
+    # 1. Position and Reporting
+    pdf.set_font("Roboto", "B", 11)
+    pdf.cell(0, 6, "1. Position and Reporting", ln=True)
+    pdf.set_font("Roboto", "", 11)
+    branch = s(candidate.get("branch_location")) or "[Branch Location]"
+    pdf.multi_cell(0, 6, f"You will be employed in the capacity of {position}, operating out of our {branch} branch. "
+                         "In this role, you will report directly to the Branch Manager.")
     pdf.ln(5)
     
-    pdf.multi_cell(0, 6, "We look forward to welcoming you to the Nippon Toyota family. "
-                         "Please respond to this email to indicate your acceptance of this offer.")
+    # 2. Remuneration and Benefits
+    pdf.set_font("Roboto", "B", 11)
+    pdf.cell(0, 6, "2. Remuneration and Benefits", ln=True)
+    pdf.set_font("Roboto", "", 11)
+    pdf.multi_cell(0, 6, "* Base Salary: Your Annual Cost to Company (CTC) is detailed in Annexure A, subject to applicable statutory deductions.\n"
+                         "* Incentives: You will be eligible for performance-based incentives as per the company's prevailing policy.\n"
+                         "* Benefits: You will be entitled to company benefits including Health Insurance, PF, and Gratuity in accordance with statutory requirements.")
+    pdf.ln(5)
+    
+    # 3. Working Hours and Leave
+    pdf.set_font("Roboto", "B", 11)
+    pdf.cell(0, 6, "3. Working Hours and Leave", ln=True)
+    pdf.set_font("Roboto", "", 11)
+    pdf.multi_cell(0, 6, "* Working Hours: Standard working hours are from 9:30 AM to 6:00 PM, Monday through Saturday.\n"
+                         "* Leave Policy: You will be entitled to Casual Leaves, Sick Leaves, and Earned Leaves as per the Nippon Toyota leave policy.")
+    pdf.ln(5)
+    
+    # 4. Probation Period
+    pdf.set_font("Roboto", "B", 11)
+    pdf.cell(0, 6, "4. Probation Period", ln=True)
+    pdf.set_font("Roboto", "", 11)
+    pdf.multi_cell(0, 6, "Your employment will be subject to a probation period of 6 months. Upon successful completion of the probation period, your employment will be confirmed in writing.")
+    pdf.ln(5)
+    
+    # Acceptance
+    pdf.multi_cell(0, 6, "Please review this offer letter and sign the enclosed copy to indicate your acceptance. "
+                         "This offer is contingent upon the successful completion of a background verification and reference check.\n\n"
+                         "We are excited about the prospect of you joining the Nippon Toyota family and look forward to a mutually rewarding relationship.")
     pdf.ln(10)
     
     # Sign-off
