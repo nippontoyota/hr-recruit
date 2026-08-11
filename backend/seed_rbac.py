@@ -32,7 +32,7 @@ def reset_db():
                 pass
 
         # Just drop users
-        db.execute(text("DELETE FROM recruitment.users"))
+        db.execute(text("TRUNCATE TABLE recruitment.users CASCADE"))
         db.commit()
         print("Cleared existing users.")
         
@@ -53,25 +53,23 @@ def reset_db():
                 hashed_password=hash_password("HOHR@123!"),
                 role=UserRole.HO_HR,
                 branch_location=None
-            ),
-            User(
-                id=uuid.uuid4(),
-                email="nettoor@nipponhr.com",
-                full_name="Nettoor Branch HR",
-                hashed_password=hash_password("Nettoor@123!"),
-                role=UserRole.LOCAL_HR,
-                branch_location="Nettoor"
-            ),
-            User(
-                id=uuid.uuid4(),
-                email="enchakkal@nipponhr.com",
-                full_name="Enchakkal Branch HR",
-                hashed_password=hash_password("Enchakkal@123!"),
-                role=UserRole.LOCAL_HR,
-                branch_location="Enchakkal"
             )
         ]
-        
+
+        branches = [
+            'Trivandrum', 'Kollam', 'Pathanamthitta', 'Kayamkulam', 
+            'Kottayam', 'Muvattupuzha', 'Kalamassery', 'Cochin', 'Thrissur'
+        ]
+
+        for branch in branches:
+            users.append(User(
+                id=uuid.uuid4(),
+                email=f"{branch.lower()}@nipponhr.com",
+                full_name=f"{branch} Branch HR",
+                hashed_password=hash_password(f"{branch}@123!"),
+                role=UserRole.LOCAL_HR,
+                branch_location=branch
+            ))
         db.add_all(users)
         db.commit()
         print("Successfully seeded testing credentials.")

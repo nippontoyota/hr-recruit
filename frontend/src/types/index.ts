@@ -34,22 +34,15 @@ export const HO_LINEAR_STAGES: PipelineStage[] = [
 ];
 
 export const NIPPON_BRANCHES = [
-  'Enchakkal',
-  'Kazhakootam',
-  'Kochuveli',
-  'Kalamassery (Nippon Towers)',
-  'Nettoor',
-  'Muvattupuzha',
-  'Puzhakkal (Ayyanthole)',
-  'Nadathara',
-  'Vellangallur (Irinjalakuda)',
-  'Nattakom',
-  'Thellakom',
-  'Pala',
-  'Kottiyam (Kollam)',
+  'Trivandrum',
+  'Kollam',
   'Pathanamthitta',
-  'Thiruvalla',
-  'Kayamkulam'
+  'Kayamkulam',
+  'Kottayam',
+  'Muvattupuzha',
+  'Kalamassery',
+  'Cochin',
+  'Thrissur'
 ];
 
 export interface User {
