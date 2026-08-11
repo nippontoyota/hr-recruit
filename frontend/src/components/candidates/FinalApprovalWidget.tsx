@@ -67,26 +67,24 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
 
   return (
     <div className="space-y-6 w-full">
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2 pb-4">
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 pb-2">
         <Button 
           variant="secondary"
           onClick={handlePreviewOffer} 
           disabled={generatingPdf}
-          size="lg"
-          className="!bg-white !rounded-[10px] shadow-sm !font-bold tracking-wide w-full sm:w-auto sm:min-w-[240px] h-12 border border-border"
+          className="!bg-white !rounded-[8px] shadow-sm !font-medium w-full sm:w-auto sm:min-w-[180px] h-10 border border-border"
         >
           {generatingPdf ? <LoadingSpinner className="h-4 w-4 mr-2" /> : <FileText className="h-4 w-4 mr-2" />}
-          {generatingPdf ? 'Generating Preview...' : 'View Offer Letter'}
+          {generatingPdf ? 'Generating...' : 'View Offer Letter'}
         </Button>
         {user?.role !== 'LOCAL_HR' && (
           <Button 
             onClick={handleSendOffer} 
             disabled={sendingOffer}
-            size="lg"
-            className="!bg-green-700 hover:!bg-green-800 !text-white !border-none !rounded-[10px] shadow-sm !font-bold tracking-wide w-full sm:w-auto sm:min-w-[240px] h-12"
+            className="!bg-green-700 hover:!bg-green-800 !text-white !border-none !rounded-[8px] shadow-sm !font-medium w-full sm:w-auto sm:min-w-[180px] h-10"
           >
             {sendingOffer ? <LoadingSpinner className="h-4 w-4 mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
-            {sendingOffer ? 'Sending Offer Letter...' : 'Send Offer Letter'}
+            {sendingOffer ? 'Sending...' : 'Send Offer Letter'}
           </Button>
         )}
       </div>
