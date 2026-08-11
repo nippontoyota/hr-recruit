@@ -102,17 +102,17 @@ export const AppShell = () => {
             {/* Profile & Actions */}
             <div className="flex items-center justify-end gap-3 w-1/4">
               {role === 'LOCAL_HR' && user?.branch_location ? (
-                <span className={`px-3 py-1.5 border-t border-x border-b-[3px] rounded-md shadow-sm text-[11px] font-accent font-black uppercase tracking-widest hidden sm:inline-block ${getBranchColor(user.branch_location)}`}>
+                <span className={`px-3 py-1.5 border rounded shadow-md text-[11px] font-accent font-bold uppercase tracking-widest hidden sm:inline-block ${getBranchColor(user.branch_location)}`}>
                   {user.branch_location}
                 </span>
               ) : role && (
-                <span className="px-3 py-1.5 bg-gradient-to-b from-slate-700 to-slate-800 text-white border-t border-x border-slate-700 border-b-[3px] border-b-slate-900 shadow-sm rounded-md text-[11px] font-accent font-black uppercase tracking-widest hidden sm:inline-block">
+                <span className="px-3 py-1.5 bg-slate-800 text-white border border-slate-700 shadow-md rounded text-[11px] font-accent font-bold uppercase tracking-widest hidden sm:inline-block">
                   {role.replace(/_/g, ' ')}
                 </span>
               )}
               <button
                 onClick={logout}
-                className="px-4 py-1.5 bg-gradient-to-b from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-t border-x border-red-700 border-b-[3px] border-b-red-800 shadow-sm active:border-b-0 active:translate-y-[3px] active:shadow-inner rounded-md transition-all text-[11px] font-accent font-black uppercase tracking-widest"
+                className="px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white border border-red-700 shadow-md hover:shadow-lg hover:-translate-y-0.5 rounded transition-all duration-200 text-[11px] font-accent font-bold uppercase tracking-widest"
                 title="Log out"
               >
                 Log out
