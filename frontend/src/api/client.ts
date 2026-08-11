@@ -17,10 +17,6 @@ export async function request(method: string, endpoint: string, body?: any, conf
     ...(config?.headers || {}),
   };
 
-  const token = localStorage.getItem('token');
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
 
   let fetchBody: any = body;
   if (body instanceof FormData) {
@@ -35,10 +31,10 @@ export async function request(method: string, endpoint: string, body?: any, conf
     method,
     headers,
     body: fetchBody,
+    credentials: 'include',
   });
 
-  if (response.status === 401) {
-    localStorage.removeItem('token');
+  if (response.status === 401 && endpoint !== '/auth/login') {
     localStorage.removeItem('user');
     window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
   }
@@ -75,3 +71,6 @@ export const login = async (email: string, password: string) => {
   return response.data;
 };
 
+export const logoutApi = async () => {
+  await request('POST', '/auth/logout');
+};

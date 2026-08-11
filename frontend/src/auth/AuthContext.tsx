@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Listen for 401 expired-auth events from the API interceptor
   useEffect(() => {
-    const handleAuthExpired = () => logout();
+    const handleAuthExpired = () => logout(false);
     window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
   }, [logout]);
