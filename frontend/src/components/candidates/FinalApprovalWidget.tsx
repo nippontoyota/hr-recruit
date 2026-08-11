@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button, LoadingSpinner } from '../ui';
-import { CandidateSummaryDocument } from './CandidateSummaryDocument';
-import { getCandidateEvaluations } from '../../api/evaluations';
 import { sendOfferLetter } from '../../api/candidates';
-import type { Candidate, Evaluation } from '../../types';
+import type { Candidate } from '../../types';
 import { Mail, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -16,15 +14,7 @@ interface FinalApprovalWidgetProps {
 
 export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidgetProps) {
   const { user } = useAuth();
-  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-  const [fetching, setFetching] = useState(true);
   const [sendingOffer, setSendingOffer] = useState(false);
-
-  useEffect(() => {
-    getCandidateEvaluations(candidate.id)
-      .then(setEvaluations)
-      .finally(() => setFetching(false));
-  }, [candidate.id]);
 
   const handleSendOffer = async () => {
     if (!candidate.email) {
@@ -59,15 +49,38 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
         )}
       </div>
 
-      {fetching ? (
-        <div className="flex justify-center p-12"><LoadingSpinner /></div>
-      ) : (
-        <CandidateSummaryDocument 
-          candidate={candidate} 
-          evaluations={evaluations} 
-          hidePrintButton={false} 
-        />
-      )}
+      <div className="bg-white border border-border shadow-sm rounded-xl p-8 max-w-3xl mx-auto mt-2">
+        <div className="flex flex-col items-center mb-8 border-b border-border pb-6">
+           <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-inner">
+             <FileText className="w-8 h-8" />
+           </div>
+           <h3 className="text-2xl font-bold text-foreground">Offer of Employment</h3>
+           <p className="text-muted-foreground mt-1 text-center max-w-md">
+             An official offer letter document will be generated and emailed to the candidate containing the following details.
+           </p>
+        </div>
+
+        <div className="space-y-6">
+          <div className="bg-muted/30 p-5 rounded-xl border border-border/50">
+            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-2 text-primary">1. Position & Reporting</h4>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              The candidate will be offered the position of <strong className="text-foreground">{candidate.experience || 'TBD'}</strong> operating out of the <strong className="text-foreground">{candidate.branch_location || '[Branch]'}</strong> branch.
+            </p>
+          </div>
+          <div className="bg-muted/30 p-5 rounded-xl border border-border/50">
+            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-2 text-primary">2. Remuneration & Benefits</h4>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Subject to standard company Annexure A structure. Includes standard health insurance, PF, and Gratuity as per company policy.
+            </p>
+          </div>
+          <div className="bg-muted/30 p-5 rounded-xl border border-border/50">
+            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-2 text-primary">3. Probation & Hours</h4>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Standard 6-month probation period applies before permanent confirmation. Working hours are from 9:30 AM to 6:00 PM, Monday through Saturday.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
