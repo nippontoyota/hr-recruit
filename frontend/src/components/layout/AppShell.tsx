@@ -102,17 +102,17 @@ export const AppShell = () => {
             {/* Profile & Actions */}
             <div className="flex items-center justify-end gap-3 w-1/4">
               {role === 'LOCAL_HR' && user?.branch_location ? (
-                <span className={`px-2 py-1 border rounded-lg shadow-sm text-[10px] font-accent font-bold uppercase tracking-widest hidden sm:inline-block ${getBranchColor(user.branch_location)}`}>
+                <span className={`px-2 py-1 border rounded-md shadow-sm text-[10px] font-accent font-bold uppercase tracking-widest hidden sm:inline-block ${getBranchColor(user.branch_location)}`}>
                   {user.branch_location}
                 </span>
               ) : role && (
-                <span className="px-2 py-1 bg-slate-800 text-white border border-slate-900 shadow-sm rounded-lg text-[10px] font-accent font-bold uppercase tracking-widest hidden sm:inline-block">
+                <span className="px-2 py-1 bg-slate-800 text-white border border-slate-900 shadow-sm rounded-md text-[10px] font-accent font-bold uppercase tracking-widest hidden sm:inline-block">
                   {role.replace(/_/g, ' ')}
                 </span>
               )}
               <button
                 onClick={logout}
-                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white border border-red-700 shadow-sm rounded-lg transition-colors text-xs font-accent font-bold uppercase tracking-wider"
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white border border-red-700 shadow-sm rounded-md transition-colors text-xs font-accent font-bold uppercase tracking-wider"
                 title="Log out"
               >
                 Log out
