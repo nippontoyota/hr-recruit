@@ -72,7 +72,7 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
           variant="secondary"
           onClick={handlePreviewOffer} 
           disabled={generatingPdf}
-          className="!bg-white !rounded-[8px] shadow-sm !font-medium w-full sm:w-auto sm:min-w-[180px] h-10 border border-border"
+          className="!bg-white !rounded-md shadow-sm !font-medium w-full sm:w-auto sm:min-w-[180px] h-10 border border-border"
         >
           {generatingPdf ? <LoadingSpinner className="h-4 w-4 mr-2" /> : <FileText className="h-4 w-4 mr-2" />}
           {generatingPdf ? 'Generating...' : 'View Offer Letter'}
@@ -81,10 +81,10 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
           <Button 
             onClick={handleSendOffer} 
             disabled={sendingOffer}
-            className="!bg-green-700 hover:!bg-green-800 !text-white !border-none !rounded-[8px] shadow-sm !font-medium w-full sm:w-auto sm:min-w-[180px] h-10"
+            className="!bg-green-700 hover:!bg-green-800 !text-white !border-none !rounded-md shadow-sm !font-medium w-full sm:w-auto sm:min-w-[180px] h-10"
           >
             {sendingOffer ? <LoadingSpinner className="h-4 w-4 mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
-            {sendingOffer ? 'Sending...' : 'Send Offer Letter'}
+            {sendingOffer ? 'Sending...' : 'Send Offer Letter via Email'}
           </Button>
         )}
       </div>
