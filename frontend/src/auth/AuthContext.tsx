@@ -2,30 +2,29 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type { User, UserRole } from '../types';
-import { login as apiLogin, AUTH_EXPIRED_EVENT } from '../api/client';
+import { login as apiLogin, logoutApi, AUTH_EXPIRED_EVENT } from '../api/client';
+
+import { toast } from 'sonner';
 
 interface AuthContextType {
   user: User | null;
   role: UserRole | null;
-  token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: (showToast?: boolean) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     try {
-      const storedToken = localStorage.getItem('token');
       const storedUser = localStorage.getItem('user');
 
-      if (storedToken && storedUser) {
+      if (storedUser) {
         const parsed: unknown = JSON.parse(storedUser);
 
         // Validate the shape before trusting it
@@ -36,17 +35,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           'email' in parsed &&
           'role' in parsed
         ) {
-          setToken(storedToken);
           setUser(parsed as User);
         } else {
           // Invalid shape — clear corrupted session
-          localStorage.removeItem('token');
           localStorage.removeItem('user');
         }
       }
     } catch {
       // Corrupted localStorage — clear and continue
-      localStorage.removeItem('token');
       localStorage.removeItem('user');
     }
     setIsLoading(false);
@@ -57,19 +53,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await apiLogin(email, password);
       setUser(response.user);
-      setToken(response.token);
-      localStorage.setItem('token', response.token);
       localStorage.setItem('user', JSON.stringify(response.user));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async (showToast = true) => {
+    try {
+      await logoutApi();
+    } catch (e) {
+      // Ignore errors on logout
+    }
     setUser(null);
-    setToken(null);
-    localStorage.removeItem('token');
     localStorage.removeItem('user');
+    if (showToast) {
+      toast.success('Successfully logged out');
+    }
   }, []);
 
   // Listen for 401 expired-auth events from the API interceptor
@@ -82,11 +82,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const contextValue = React.useMemo(() => ({
     user,
     role: user?.role || null,
-    token,
     isLoading,
     login,
     logout
-  }), [user, token, isLoading, login, logout]);
+  }), [user, isLoading, login, logout]);
 
   return (
     <AuthContext.Provider value={contextValue}>
