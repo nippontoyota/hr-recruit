@@ -247,7 +247,7 @@ export default function CandidatesList() {
                 <option value="">All Stages</option>
                 {PIPELINE_STAGES.filter((s) => {
                   if (user?.role === 'HO_HR') {
-                    return ['SENT_TO_HO', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD'].includes(s);
+                    return ['SENT_TO_HO', 'HO_INTERVIEWS', 'CSS', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD'].includes(s);
                   }
                   return true;
                 }).map((s) => (
