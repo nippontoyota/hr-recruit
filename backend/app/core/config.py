@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     waba_phone_number_id: str = ""
     # Comma-separated origins for the SPA (Vite default included)
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    # Regex for Vercel production + preview deploys (override via env if needed)
+    cors_origin_regex: str = r"https://hr-recruit[a-z0-9-]*\.vercel\.app"
     public_app_url: str = "http://localhost:5173"
     rate_limit_per_minute: int = 60
     redis_url: str = ""
