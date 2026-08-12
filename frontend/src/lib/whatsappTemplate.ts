@@ -1,5 +1,3 @@
-import { findBranch } from './branchLocations';
-
 export interface WhatsAppTemplateVars {
   candidateName: string;
   position: string;
@@ -10,51 +8,85 @@ export interface WhatsAppTemplateVars {
   mapsLink: string;
   recruiterName: string;
   extraInstructions: string;
-  inviteType?: 'pre' | 'post';
 }
 
-export const DOUBLETICK_TEMPLATE_NAME = 'nippon_pre_interview_invite';
+/** DoubleTick template name for the interview call letter */
+export const DOUBLETICK_TEMPLATE_NAME = 'nippon_interview_call_letter';
 
-/** Variable order for DoubleTick template mapping */
+/**
+ * Placeholder order for DoubleTick {{1}}…{{9}}.
+ * Keep in sync with backend candidates_actions.send_whatsapp_invite.
+ */
 export const DOUBLETICK_VARIABLE_KEYS: (keyof WhatsAppTemplateVars)[] = [
   'candidateName',
   'position',
-  'formLink',
-  'branchName',
   'visitDate',
+  'branchName',
+  'formLink',
   'arrivalTime',
+  'extraInstructions',
   'mapsLink',
   'recruiterName',
-  'extraInstructions',
 ];
 
+const DEFAULT_EXTRA =
+  'Meeting Point – Floor 3rd – Sales Training Room / HR Department\nTouch Point 1 – Sreehari (HRD) 8606986060\nTouch Point 2 – Mathew (HRD) 9544286099';
+
 export function buildWhatsAppMessage(vars: WhatsAppTemplateVars): string {
-  const branch = findBranch(vars.branchName);
-  const maps = vars.mapsLink || branch?.mapsUrl || '';
+  const dateLabel = vars.visitDate.trim() || '(select visit date)';
+  const branchLabel = vars.branchName.trim() || '(select location)';
+  const maps = vars.mapsLink.trim() || '(select location link)';
+  const extra = vars.extraInstructions.trim() || DEFAULT_EXTRA;
 
   return [
-    `Hello ${vars.candidateName},`,
+    `Dear ${vars.candidateName},`,
     '',
-    `Thank you for your interest in the *${vars.position}* role at Nippon Toyota.`,
+    `"Greetings from Nippon HRD"`,
     '',
-    vars.inviteType === 'post'
-      ? 'Congratulations on clearing the interview! Please complete your Candidate Information form using the link below:'
-      : 'Please complete your pre-interview form using the link below:',
+    `This is to inform you that, pertaining to your application for *${vars.position}*, we have scheduled a direct interview on *${dateLabel}* at Nippon Toyota, *${branchLabel}*. Please bring an updated bio-data and a passport size photo.`,
+    '',
+    'Also complete the Job Application Form using the link below without fail:',
     vars.formLink,
     '',
-    vars.extraInstructions.trim() ? vars.extraInstructions.trim() : 'Fill all sections carefully. Incomplete forms may delay your application.',
+    `Reporting Time – *${vars.arrivalTime}*`,
+    'Dress Code – Formal Wear with Proper Grooming (Mandatory)',
+    extra,
     '',
-    `Date: *${vars.visitDate}*`,
-    `Arrival time: *${vars.arrivalTime}*`,
-    `Location: *${vars.branchName}*`,
-    '',
-    'Google Maps:',
+    'Location Link –',
     maps,
     '',
-    `Regards,`,
-    `${vars.recruiterName}`,
-    'Nippon Toyota — HR Team',
+    'Regards',
+    vars.recruiterName,
+    'Talent Acquisition Team',
+    'Nippon Toyota',
   ].join('\n');
+}
+
+export function formatVisitDate(input: Date | string): string {
+  const d = typeof input === 'string' ? new Date(input) : input;
+  if (Number.isNaN(d.getTime())) return typeof input === 'string' ? input : '';
+  return new Intl.DateTimeFormat('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(d);
+}
+
+/** ISO date (yyyy-mm-dd) for <input type="date"> from display string or ISO. */
+export function toDateInputValue(visitDate: string): string {
+  if (!visitDate.trim()) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(visitDate)) return visitDate;
+  const d = new Date(visitDate);
+  if (Number.isNaN(d.getTime())) return '';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+export function canSendWhatsAppInvite(vars: WhatsAppTemplateVars): boolean {
+  return Boolean(vars.visitDate.trim() && vars.branchName.trim() && vars.mapsLink.trim());
 }
 
 export function defaultTemplateVars(input: {
@@ -62,33 +94,38 @@ export function defaultTemplateVars(input: {
   position?: string;
   formLink?: string;
   branchName?: string;
-  visitDate?: Date;
-  mapsLink?: string;
+  visitDate?: Date | string | null;
+  mapsLink?: string | null;
   recruiterName?: string;
-  inviteType?: 'pre' | 'post';
+  arrivalTime?: string;
+  extraInstructions?: string;
 }): WhatsAppTemplateVars {
-  const branch = findBranch(input.branchName);
-  const visit = input.visitDate ?? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+  const visitDate =
+    input.visitDate == null || input.visitDate === ''
+      ? ''
+      : formatVisitDate(input.visitDate);
 
   return {
     candidateName: input.candidateName,
-    position: input.position || 'the applied',
+    position: input.position?.trim() || 'the applied',
     formLink: input.formLink || '(form link will appear after save)',
-    branchName: branch?.name ?? input.branchName ?? 'Kalamassery (Nippon Towers)',
-    visitDate: new Intl.DateTimeFormat('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(visit),
-    arrivalTime: '10:30 AM',
-    mapsLink: input.mapsLink || branch?.mapsUrl || '',
+    // Location + maps chosen explicitly via place picker
+    branchName: '',
+    visitDate,
+    arrivalTime: input.arrivalTime?.trim() || '9:15 AM',
+    mapsLink: '',
     recruiterName: input.recruiterName || 'HR Team',
-    extraInstructions:
-      'Bring a copy of your resume and valid ID proof when you visit the branch.',
-    inviteType: input.inviteType || 'pre',
+    extraInstructions: input.extraInstructions?.trim() || DEFAULT_EXTRA,
   };
 }
 
 export function loadStoredTemplateVars(candidateId: string): Partial<WhatsAppTemplateVars> | null {
   try {
     const raw = localStorage.getItem(`whatsapp-template:${candidateId}`);
-    return raw ? (JSON.parse(raw) as Partial<WhatsAppTemplateVars>) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<WhatsAppTemplateVars> & { inviteType?: string };
+    delete parsed.inviteType;
+    return parsed;
   } catch {
     return null;
   }

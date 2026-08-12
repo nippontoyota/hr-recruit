@@ -65,7 +65,15 @@ def _get_candidate_department(position: str | None) -> str:
         return "INSURANCE"
     if any(k in pos for k in ["FINANCE", "ACCOUNT", "BILLING", "CASHIER"]):
         return "FINANCE"
+    if any(k in pos for k in ["CALL", "TELE", "CENTRE", "CENTER", "CUSTOMER SERVICE", "CUSTOMER SUPPORT"]):
+        return "Call Centre"
+    if "HR" in pos or "HUMAN RESOURCE" in pos:
+        return "HR"
     return "SALES"  # default
+
+
+def _candidate_dept_key(candidate: Candidate) -> str:
+    return _get_candidate_department(candidate.department or candidate.position_applied_for)
 
 
 @router.get("/questions", response_model=list[TechnicalQuestionOut])
@@ -245,7 +253,7 @@ def generate_evaluation_token(
     test_data = None
     if evaluation.type == EvaluationType.TECHNICAL_TEST:
         candidate = db.get(Candidate, evaluation.candidate_id)
-        dept = _get_candidate_department(candidate.position_applied_for)
+        dept = _candidate_dept_key(candidate)
         q_rows = db.scalars(
             select(TechnicalQuestion).where(TechnicalQuestion.department == dept)
         ).all()
@@ -295,6 +303,19 @@ def submit_scorecard(
     if body.remarks:
         evaluation.remarks = body.remarks
     if body.scores:
+        if evaluation.type in (
+            EvaluationType.BRANCH_HR,
+            EvaluationType.DEPT_HEAD,
+            EvaluationType.HQ_INTERVIEW,
+            EvaluationType.HQ_INTERVIEW_1,
+            EvaluationType.HQ_INTERVIEW_2,
+        ):
+            name = str(body.scores.get("interviewer_name") or "").strip()
+            if not name:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Interviewer name is required for this interview.",
+                )
         evaluation.scores = body.scores
         
     evaluation.status = InterviewStatus.EVALUATED
@@ -560,7 +581,7 @@ def get_public_test_questions(
          raise HTTPException(status_code=400, detail="This evaluation is not a technical test")
          
     candidate = db.get(Candidate, evaluation.candidate_id)
-    dept = _get_candidate_department(candidate.position_applied_for)
+    dept = _candidate_dept_key(candidate)
     
     if token_row.test_data and "questions" in token_row.test_data:
         public_questions = token_row.test_data["questions"]
@@ -601,7 +622,7 @@ def submit_public_test(
          raise HTTPException(status_code=400, detail="This evaluation is not a technical test")
          
     candidate = db.get(Candidate, evaluation.candidate_id)
-    dept = _get_candidate_department(candidate.position_applied_for)
+    dept = _candidate_dept_key(candidate)
     
     answers_map = token_row.test_data.get("answers", {})
     correct_count = 0

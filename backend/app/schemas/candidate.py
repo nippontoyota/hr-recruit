@@ -533,6 +533,17 @@ class VisitScheduleUpdate(BaseModel):
     visit_instructions: str | None = None
 
 
+class CandidateDepartmentUpdate(BaseModel):
+    """Mid-process change of what the candidate is being considered for."""
+
+    department: str = Field(..., min_length=1, max_length=255)
+    position_applied_for: str | None = Field(
+        None,
+        max_length=255,
+        description="Role being considered for (e.g. Sales Consultant → Customer Support Executive)",
+    )
+
+
 class StageHistoryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

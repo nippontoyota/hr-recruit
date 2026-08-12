@@ -34,6 +34,18 @@ export const updateCandidateRawData = async (id: string, rawData: Record<string,
   return response.data;
 };
 
+export const updateCandidateDepartment = async (
+  id: string,
+  department: string,
+  positionAppliedFor?: string
+): Promise<Candidate> => {
+  const response = await request('PATCH', `/candidates/${id}/department`, {
+    department,
+    ...(positionAppliedFor !== undefined ? { position_applied_for: positionAppliedFor } : {}),
+  });
+  return response.data;
+};
+
 export const createCandidate = async (candidateData: Partial<Candidate>): Promise<Candidate> => {
   const response = await request('POST', '/candidates', candidateData);
   return response.data;

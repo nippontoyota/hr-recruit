@@ -1,6 +1,6 @@
-"""Seed auth test users. Password for all: password123
+"""Seed auth users. Password for all: password123
 
-Includes SPA mock emails (hrexec@, hr@, gm@) mapped to the same backend roles.
+One LOCAL_HR account per HR branch + admin.
 """
 
 from sqlalchemy import select
@@ -8,7 +8,16 @@ from sqlalchemy import select
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.enums import UserRole
+from app.models.settings import HR_BRANCHES
 from app.models.user import User
+
+PASSWORD = "password123"
+
+
+def _email_for_branch(branch: str) -> str:
+    slug = branch.lower().replace(" ", "")
+    return f"hr.{slug}@nippon.local"
+
 
 SEED_USERS = [
     {
@@ -18,14 +27,21 @@ SEED_USERS = [
         "branch_location": None,
     },
     {
-        "email": "hr@nippon.test",
-        "full_name": "Local HR",
-        "role": UserRole.LOCAL_HR,
-        "branch_location": "Coimbatore",
+        "email": "hohr@nippon.local",
+        "full_name": "Head Office HR",
+        "role": UserRole.HO_HR,
+        "branch_location": None,
     },
+    *[
+        {
+            "email": _email_for_branch(branch),
+            "full_name": f"{branch} HR",
+            "role": UserRole.LOCAL_HR,
+            "branch_location": branch,
+        }
+        for branch in HR_BRANCHES
+    ],
 ]
-
-PASSWORD = "password123"
 
 
 def seed_users() -> None:
@@ -51,8 +67,14 @@ def seed_users() -> None:
                     is_active=True,
                 )
             )
+        # Retire old Coimbatore seed if present
+        legacy = db.scalar(select(User).where(User.email == "hr@nippon.test"))
+        if legacy and legacy.branch_location == "Coimbatore":
+            legacy.is_active = False
         db.commit()
         print(f"Seeded {len(SEED_USERS)} users (password: {PASSWORD})")
+        for u in SEED_USERS:
+            print(f"  {u['email']}  role={u['role'].value}  branch={u['branch_location']}")
     finally:
         db.close()
 

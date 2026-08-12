@@ -14,9 +14,9 @@ from app.models.stage_history import StageHistory
 from app.models.user import User
 from app.models.communication import Communication
 from app.models.enums import CommunicationType, CommunicationDirection, CommunicationStatus
-from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, VisitScheduleUpdate, WhatsAppInviteCreate
+from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, VisitScheduleUpdate, WhatsAppInviteCreate, CandidateDepartmentUpdate
 from app.services.workflow import transition
-from app.services.doubletick import send_template
+from app.services.doubletick import send_template, DoubleTickError, friendly_doubletick_error
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
@@ -174,6 +174,58 @@ def update_visit_schedule(
     db.refresh(candidate)
     return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]))
 
+
+ALLOWED_DEPARTMENTS = {
+    "Sales",
+    "Service",
+    "Customer Service",
+    "Insurance",
+    "Call Center",
+    "HR",
+}
+
+
+@router.patch("/{id}/department", response_model=CandidateOut)
+def update_candidate_department(
+    id: UUID,
+    body: CandidateDepartmentUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    """Change the department and/or role the candidate is being considered for."""
+    candidate = get_candidate_for_user(db, id, user)
+    department = body.department.strip()
+    if department not in ALLOWED_DEPARTMENTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Department must be one of: {', '.join(sorted(ALLOWED_DEPARTMENTS))}",
+        )
+
+    role = (body.position_applied_for or "").strip() or department
+    previous_dept = candidate.department
+    previous_role = candidate.position_applied_for
+
+    if previous_dept == department and previous_role == role:
+        return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]))
+
+    candidate.department = department
+    candidate.position_applied_for = role
+    db.add(
+        ActivityLog(
+            candidate_id=id,
+            activity_type=ActivityType.SYSTEM,
+            title="Consideration Updated",
+            description=(
+                f"Considering for changed from {previous_dept or '—'} / {previous_role or '—'} "
+                f"to {department} / {role}."
+            ),
+            created_by_user_id=user.id,
+        )
+    )
+    db.commit()
+    db.refresh(candidate)
+    return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]))
+
 @router.post("/{id}/pre-form/send", response_model=CandidateOut)
 def send_pre_form(
     id: UUID,
@@ -194,66 +246,83 @@ def send_whatsapp_invite(
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     candidate = get_candidate_for_user(db, id, user)
-    
-    # Map variables in the correct order for the template nippon_pre_interview_invite
+    vars_map = body.variables or {}
+    if not (vars_map.get("visitDate") or "").strip():
+        raise HTTPException(status_code=400, detail="Visit date is required before sending.")
+    if not (vars_map.get("branchName") or "").strip() or not (vars_map.get("mapsLink") or "").strip():
+        raise HTTPException(status_code=400, detail="Location and maps link are required before sending.")
+
+    # Order must match DoubleTick template nippon_interview_call_letter {{1}}…{{9}}
     DOUBLETICK_VARIABLE_KEYS = [
         "candidateName",
         "position",
-        "formLink",
-        "extraInstructions",
         "visitDate",
-        "arrivalTime",
         "branchName",
+        "formLink",
+        "arrivalTime",
+        "extraInstructions",
         "mapsLink",
         "recruiterName",
     ]
-    
+
     placeholders = []
     for key in DOUBLETICK_VARIABLE_KEYS:
-        val = (body.variables or {}).get(key, "")
-        placeholders.append(val)
-        
+        placeholders.append(vars_map.get(key, ""))
+
     try:
         res = send_template(
             to_phone=candidate.phone,
-            template_name="nippon_pre_interview_invite",
+            template_name="nippon_interview_call_letter",
             placeholders=placeholders,
         )
         external_message_id = None
         messages = res.get("messages", [])
         if messages:
             external_message_id = messages[0].get("id")
-            
+
         status = CommunicationStatus.SENT
         err_msg = None
+    except DoubleTickError as e:
+        status = CommunicationStatus.FAILED
+        err_msg = e.user_message
     except Exception as e:
         status = CommunicationStatus.FAILED
-        err_msg = str(e)
-        
-    # Construct content preview
+        err_msg = friendly_doubletick_error(str(e))
+
+    extra = (vars_map.get("extraInstructions") or "").strip() or (
+        "Meeting Point – Floor 3rd – Sales Training Room / HR Department\n"
+        "Touch Point 1 – Sreehari (HRD) 8606986060\n"
+        "Touch Point 2 – Mathew (HRD) 9544286099"
+    )
     content_lines = [
-        f"Hello {(body.variables or {}).get('candidateName', '')},",
+        f"Dear {vars_map.get('candidateName', '')},",
         "",
-        f"Thank you for your interest in the *{(body.variables or {}).get('position', '')}* role at Nippon Toyota.",
+        '"Greetings from Nippon HRD"',
         "",
-        "Please complete your pre-interview form using the link below:",
-        (body.variables or {}).get('formLink', ''),
+        (
+            f"This is to inform you that, pertaining to your application for "
+            f"*{vars_map.get('position', '')}*, we have scheduled a direct interview on "
+            f"*{vars_map.get('visitDate', '')}* at Nippon Toyota, *{vars_map.get('branchName', '')}*. "
+            "Please bring an updated bio-data and a passport size photo."
+        ),
         "",
-        (body.variables or {}).get('extraInstructions', '').strip() or "Fill all sections carefully. Incomplete forms may delay your application.",
+        "Also complete the Job Application Form using the link below without fail:",
+        vars_map.get("formLink", ""),
         "",
-        f"Date: *{(body.variables or {}).get('visitDate', '')}*",
-        f"Arrival time: *{(body.variables or {}).get('arrivalTime', '')}*",
-        f"Location: *{(body.variables or {}).get('branchName', '')}*",
+        f"Reporting Time – *{vars_map.get('arrivalTime', '')}*",
+        "Dress Code – Formal Wear with Proper Grooming (Mandatory)",
+        extra,
         "",
-        "Google Maps:",
-        (body.variables or {}).get('mapsLink', ''),
+        "Location Link –",
+        vars_map.get("mapsLink", ""),
         "",
-        "Regards,",
-        (body.variables or {}).get('recruiterName', ''),
-        "Nippon Toyota — HR Team"
+        "Regards",
+        vars_map.get("recruiterName", ""),
+        "Talent Acquisition Team",
+        "Nippon Toyota",
     ]
     full_content = "\n".join(content_lines)
-    
+
     comm = Communication(
         candidate_id=id,
         type=CommunicationType.WHATSAPP,
@@ -264,8 +333,8 @@ def send_whatsapp_invite(
         created_by=user.id
     )
     db.add(comm)
-    
-    activity_desc = f"Template: nippon_pre_interview_invite. Status: {status.value}."
+
+    activity_desc = f"Template: nippon_interview_call_letter. Status: {status.value}."
     if err_msg:
         activity_desc += f" Error: {err_msg}"
         
@@ -280,7 +349,7 @@ def send_whatsapp_invite(
     db.commit()
     
     if status == CommunicationStatus.FAILED:
-        raise HTTPException(status_code=400, detail=f"Failed to send WhatsApp invite: {err_msg}")
+        raise HTTPException(status_code=400, detail=err_msg)
         
     _store_whatsapp_invite(db, candidate, user)
     db.commit()

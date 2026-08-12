@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+import secrets
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,7 +16,7 @@ from app.models.evaluation import Evaluation
 from app.models.stage_history import StageHistory
 from app.models.document import Document
 from app.models.user import User
-from app.models.enums import PipelineStage, UserRole, ActivityType, EvaluationType
+from app.models.enums import PipelineStage, UserRole, ActivityType, EvaluationType, FormStatus
 from app.schemas.candidate import (
     CandidateCreate,
     CandidatePaginatedOut,
@@ -33,10 +34,46 @@ from app.services.candidate_service import (
     to_candidate_out,
     bulk_delete_candidates,
 )
-from app.services.document_service import resume_candidate_ids, process_photo_url
+from app.services.document_service import (
+    document_out as _document_out,
+    get_resume_document as _get_resume_document,
+    process_photo_url,
+    resume_candidate_ids,
+    save_photo_for_candidate as _save_photo_for_candidate,
+    save_resume_for_candidate as _save_resume_for_candidate,
+)
 from app.services import storage
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
+
+
+def _issue_pre_form(db: Session, candidate: Candidate, user: User) -> None:
+    candidate.pre_form_token = secrets.token_urlsafe(32)
+    candidate.pre_form_status = FormStatus.SENT
+    candidate.pre_form_sent_at = datetime.now(UTC)
+    candidate.pre_form_submitted_at = None
+    db.add(
+        ActivityLog(
+            candidate_id=candidate.id,
+            activity_type=ActivityType.FORM,
+            title="Pre Form Sent",
+            description="A new candidate pre-form link was issued.",
+            created_by_user_id=user.id,
+        )
+    )
+
+
+def _store_whatsapp_invite(db: Session, candidate: Candidate, user: User) -> None:
+    if candidate.profile is None:
+        candidate.profile = CandidateProfile(candidate_id=candidate.id)
+        db.add(candidate.profile)
+    raw_data = dict(candidate.profile.raw_data or {})
+    raw_data["whatsapp_invite"] = {
+        "sent_at": datetime.now(UTC).isoformat(),
+        "sent_by_user_id": str(user.id),
+    }
+    candidate.profile.raw_data = raw_data
+
 
 @router.get("/portal/{token}", response_model=CandidatePortalOut)
 def get_candidate_portal(token: str, db: Session = Depends(get_db)):
@@ -65,7 +102,7 @@ def get_candidate_portal(token: str, db: Session = Depends(get_db)):
     return CandidatePortalOut(
         id=candidate.id,
         full_name=candidate.full_name,
-        experience=candidate.experience,
+        position_applied_for=candidate.position_applied_for,
         phone=candidate.phone,
         email=candidate.email,
         branch_location=candidate.branch_location,
