@@ -14,6 +14,7 @@ import {
   validatePercentage,
   validatePhone,
   validatePinCode,
+  validateResumeFile,
   validateSalary,
   validateEmail,
   validateSelect,
@@ -27,6 +28,73 @@ import {
   REF_ROLES,
   SOURCES,
 } from './validation';
+
+function anyFilled(...values: string[]): boolean {
+  return values.some((value) => (value || '').trim().length > 0);
+}
+
+function validateJobRow(
+  data: CandidateFormData,
+  opts: {
+    label: string;
+    nameKey: keyof CandidateFormData;
+    positionKey: keyof CandidateFormData;
+    reportingKey: keyof CandidateFormData;
+    fromKey: keyof CandidateFormData;
+    toKey: keyof CandidateFormData;
+    salaryKey: keyof CandidateFormData;
+    reasonKey: keyof CandidateFormData;
+    required: boolean;
+  },
+): string | null {
+  const name = String(data[opts.nameKey] ?? '');
+  const position = String(data[opts.positionKey] ?? '');
+  const reporting = String(data[opts.reportingKey] ?? '');
+  const fromDate = String(data[opts.fromKey] ?? '');
+  const toDate = String(data[opts.toKey] ?? '');
+  const salary = String(data[opts.salaryKey] ?? '');
+  const reason = String(data[opts.reasonKey] ?? '');
+
+  const filled = anyFilled(name, position, reporting, fromDate, toDate, salary, reason);
+  if (!opts.required && !filled) return null;
+
+  return firstError(
+    validateTextField(name, `${opts.label} company name`, 2, 150),
+    validateTextField(position, `${opts.label} position`, 2, 100),
+    validateTextField(reporting, `${opts.label} reporting person`, 2, 100),
+    validateTextField(fromDate, `${opts.label} from date`, 2, 50),
+    validateTextField(toDate, `${opts.label} to date`, 2, 50),
+    validateSalary(salary, `${opts.label} salary`),
+    validateTextField(reason, `${opts.label} reason for leaving`, 2, 200),
+  );
+}
+
+function validateDeclarationDate(value: string): ValidationResult {
+  const trimmed = value.trim();
+  if (!trimmed) return { ok: false, message: 'Declaration date is required.' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return { ok: false, message: 'Declaration date is invalid.' };
+  }
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) {
+    return { ok: false, message: 'Declaration date is invalid.' };
+  }
+  return { ok: true };
+}
+
+function gradAnyFilled(data: CandidateFormData): boolean {
+  return anyFilled(data.gradCourse, data.gradCollege, data.gradPercentage, data.gradPassingYear, data.gradMode);
+}
+
+function postGradAnyFilled(data: CandidateFormData): boolean {
+  return anyFilled(
+    data.postGradCourse,
+    data.postGradCollege,
+    data.postGradPercentage,
+    data.postGradPassingYear,
+    data.postGradMode,
+  );
+}
 
 export function validateBasicCandidateForm(input: {
   fullName: string;
@@ -167,47 +235,57 @@ export function validateSingleField(field: keyof CandidateFormData, data: Candid
 
     // Graduation (Optional, but validated if filled)
     case 'gradCourse':
-      if (data.gradCourse.trim() || data.gradCollege.trim() || data.gradPercentage.trim() || data.gradPassingYear.trim()) {
-        res = validateTextField(data.gradCourse, 'Graduation course name', 2, 100);
+      if (gradAnyFilled(data)) {
+        res = validateTextField(data.gradCourse, 'Graduation course', 2, 100);
       }
       break;
     case 'gradCollege':
-      if (data.gradCourse.trim() || data.gradCollege.trim() || data.gradPercentage.trim() || data.gradPassingYear.trim()) {
-        res = validateTextField(data.gradCollege, 'Graduation college/university', 2, 100);
+      if (gradAnyFilled(data)) {
+        res = validateTextField(data.gradCollege, 'Graduation college', 2, 100);
       }
       break;
     case 'gradPercentage':
-      if (data.gradCourse.trim() || data.gradCollege.trim() || data.gradPercentage.trim() || data.gradPassingYear.trim()) {
-        res = validatePercentage(data.gradPercentage, 'Graduation percentage', true);
+      if (gradAnyFilled(data)) {
+        res = validatePercentage(data.gradPercentage, 'Graduation percentage');
       }
       break;
     case 'gradPassingYear':
-      if (data.gradCourse.trim() || data.gradCollege.trim() || data.gradPercentage.trim() || data.gradPassingYear.trim()) {
+      if (gradAnyFilled(data)) {
         const current = new Date().getFullYear();
         res = validatePassingYear(data.gradPassingYear, 'Graduation passing year', true, current + 4);
+      }
+      break;
+    case 'gradMode':
+      if (gradAnyFilled(data)) {
+        res = validateSelect(data.gradMode, STUDY_MODES, 'Graduation mode of study');
       }
       break;
 
     // Post Graduation (Optional, but validated if filled)
     case 'postGradCourse':
-      if (data.postGradCourse.trim() || data.postGradCollege.trim() || data.postGradPercentage.trim() || data.postGradPassingYear.trim()) {
-        res = validateTextField(data.postGradCourse, 'Post graduation course name', 2, 100);
+      if (postGradAnyFilled(data)) {
+        res = validateTextField(data.postGradCourse, 'Post graduation course', 2, 100);
       }
       break;
     case 'postGradCollege':
-      if (data.postGradCourse.trim() || data.postGradCollege.trim() || data.postGradPercentage.trim() || data.postGradPassingYear.trim()) {
-        res = validateTextField(data.postGradCollege, 'Post graduation college/university', 2, 100);
+      if (postGradAnyFilled(data)) {
+        res = validateTextField(data.postGradCollege, 'Post graduation college', 2, 100);
       }
       break;
     case 'postGradPercentage':
-      if (data.postGradCourse.trim() || data.postGradCollege.trim() || data.postGradPercentage.trim() || data.postGradPassingYear.trim()) {
-        res = validatePercentage(data.postGradPercentage, 'Post graduation percentage', true);
+      if (postGradAnyFilled(data)) {
+        res = validatePercentage(data.postGradPercentage, 'Post graduation percentage');
       }
       break;
     case 'postGradPassingYear':
-      if (data.postGradCourse.trim() || data.postGradCollege.trim() || data.postGradPercentage.trim() || data.postGradPassingYear.trim()) {
+      if (postGradAnyFilled(data)) {
         const current = new Date().getFullYear();
         res = validatePassingYear(data.postGradPassingYear, 'Post graduation passing year', true, current + 4);
+      }
+      break;
+    case 'postGradMode':
+      if (postGradAnyFilled(data)) {
+        res = validateSelect(data.postGradMode, STUDY_MODES, 'Post graduation mode of study');
       }
       break;
 
@@ -222,17 +300,92 @@ export function validateSingleField(field: keyof CandidateFormData, data: Candid
       res = validateTextField(data.languagesSpeak, 'Languages to speak', 2, 200);
       break;
 
+    // Family
+    case 'fatherName':
+      res = validateTextField(data.fatherName, 'Father name', 2, 100);
+      break;
+    case 'motherName':
+      res = validateTextField(data.motherName, 'Mother name', 2, 100);
+      break;
+    case 'spouseName':
+      if (data.maritalStatus === 'Married') {
+        res = validateTextField(data.spouseName, 'Spouse name', 2, 100);
+      }
+      break;
+
     // Experience (Conditional on previousExperience)
     case 'prevCompanyName':
-      if (data.previousExperience) {
-        res = validateTextField(data.prevCompanyName, 'Previous company name', 2, 150);
-      }
-      break;
     case 'prevPosition':
-      if (data.previousExperience) {
-        res = validateTextField(data.prevPosition, 'Previous position', 2, 100);
-      }
-      break;
+    case 'prev1Reporting':
+    case 'prev1From':
+    case 'prev1To':
+    case 'prev1Salary':
+    case 'prev1Reason':
+      return validateJobRow(data, {
+        label: 'Previous job 1',
+        nameKey: 'prevCompanyName',
+        positionKey: 'prevPosition',
+        reportingKey: 'prev1Reporting',
+        fromKey: 'prev1From',
+        toKey: 'prev1To',
+        salaryKey: 'prev1Salary',
+        reasonKey: 'prev1Reason',
+        required: data.previousExperience,
+      });
+    case 'prev2Name':
+    case 'prev2Position':
+    case 'prev2Reporting':
+    case 'prev2From':
+    case 'prev2To':
+    case 'prev2Salary':
+    case 'prev2Reason':
+      return validateJobRow(data, {
+        label: 'Previous job 2',
+        nameKey: 'prev2Name',
+        positionKey: 'prev2Position',
+        reportingKey: 'prev2Reporting',
+        fromKey: 'prev2From',
+        toKey: 'prev2To',
+        salaryKey: 'prev2Salary',
+        reasonKey: 'prev2Reason',
+        required: false,
+      });
+    case 'prev3Name':
+    case 'prev3Position':
+    case 'prev3Reporting':
+    case 'prev3From':
+    case 'prev3To':
+    case 'prev3Salary':
+    case 'prev3Reason':
+      return validateJobRow(data, {
+        label: 'Previous job 3',
+        nameKey: 'prev3Name',
+        positionKey: 'prev3Position',
+        reportingKey: 'prev3Reporting',
+        fromKey: 'prev3From',
+        toKey: 'prev3To',
+        salaryKey: 'prev3Salary',
+        reasonKey: 'prev3Reason',
+        required: false,
+      });
+    case 'prev4Name':
+    case 'prev4Position':
+    case 'prev4Reporting':
+    case 'prev4From':
+    case 'prev4To':
+    case 'prev4Salary':
+    case 'prev4Reason':
+      return validateJobRow(data, {
+        label: 'Previous job 4',
+        nameKey: 'prev4Name',
+        positionKey: 'prev4Position',
+        reportingKey: 'prev4Reporting',
+        fromKey: 'prev4From',
+        toKey: 'prev4To',
+        salaryKey: 'prev4Salary',
+        reasonKey: 'prev4Reason',
+        required: false,
+      });
     case 'totalExperience':
       if (data.previousExperience) {
         res = validateExperienceText(data.totalExperience);
@@ -278,6 +431,58 @@ export function validateSingleField(field: keyof CandidateFormData, data: Candid
         res = validatePhone(data.refContactNumber, 'Reference contact number');
       }
       break;
+
+    // Emergency contacts
+    case 'emergency1Relation':
+      res = validateTextField(data.emergency1Relation, 'Emergency contact 1 relation', 2, 50);
+      break;
+    case 'emergency1Name':
+      res = validateTextField(data.emergency1Name, 'Emergency contact 1 name', 2, 100);
+      break;
+    case 'emergency1Address':
+      res = validateTextField(data.emergency1Address, 'Emergency contact 1 address', 2, 200);
+      break;
+    case 'emergency1Contact':
+      res = validatePhone(data.emergency1Contact, 'Emergency contact 1 phone');
+      break;
+    case 'emergency2Relation':
+    case 'emergency2Name':
+    case 'emergency2Address':
+    case 'emergency2Contact':
+      if (
+        anyFilled(
+          data.emergency2Relation,
+          data.emergency2Name,
+          data.emergency2Address,
+          data.emergency2Contact,
+        )
+      ) {
+        if (field === 'emergency2Relation') {
+          res = validateTextField(data.emergency2Relation, 'Emergency contact 2 relation', 2, 50);
+        } else if (field === 'emergency2Name') {
+          res = validateTextField(data.emergency2Name, 'Emergency contact 2 name', 2, 100);
+        } else if (field === 'emergency2Address') {
+          res = validateTextField(data.emergency2Address, 'Emergency contact 2 address', 2, 200);
+        } else {
+          res = validatePhone(data.emergency2Contact, 'Emergency contact 2 phone');
+        }
+      }
+      break;
+
+    // Declaration
+    case 'emailId':
+      res = validateEmail(data.emailId, true, 'Email');
+      break;
+    case 'declarationPlace':
+      res = validateTextField(data.declarationPlace, 'Declaration place', 2, 100);
+      break;
+    case 'declarationDate':
+      res = validateDeclarationDate(data.declarationDate);
+      break;
+    case 'declarationName':
+      res = validateTextField(data.declarationName, 'Declaration name', 2, 100);
+      break;
+
     default:
       break;
   }
@@ -298,14 +503,15 @@ export function validatePreForm(data: CandidateFormData): string | null {
   }
 
   if (!data.resumeFileObject) {
-    return 'Resume (PDF format) is required.';
+    return 'Resume (PDF or Word) is required.';
   }
-  const resumeName = data.resumeFileObject.name.toLowerCase();
-  if (!resumeName.endsWith('.pdf')) {
-    return 'Resume must be a PDF document.';
+  const resumeResult = validateResumeFile(data.resumeFileObject, true);
+  if (!resumeResult.ok) {
+    return resumeResult.message;
   }
-  if (data.resumeFileObject.size > 10 * 1024 * 1024) {
-    return 'Resume must be smaller than 10MB.';
+
+  if (typeof data.confidentToDrive !== 'boolean') {
+    return 'Confident to drive is required.';
   }
 
   const fields: (keyof CandidateFormData)[] = [
@@ -315,13 +521,20 @@ export function validatePreForm(data: CandidateFormData): string | null {
     'aadhaarNumber', 'panNumber', 'drivingLicenseNumber', 'passportNumber',
     'class10School', 'class10Board', 'class10Percentage', 'class10PassingYear', 'class10Mode',
     'class12School', 'class12Stream', 'class12Percentage', 'class12PassingYear', 'class12Mode',
-    'gradCourse', 'gradCollege', 'gradPercentage', 'gradPassingYear',
-    'postGradCourse', 'postGradCollege', 'postGradPercentage', 'postGradPassingYear',
+    'gradCourse', 'gradCollege', 'gradPercentage', 'gradPassingYear', 'gradMode',
+    'postGradCourse', 'postGradCollege', 'postGradPercentage', 'postGradPassingYear', 'postGradMode',
     'languagesRead', 'languagesWrite', 'languagesSpeak',
-    'prevCompanyName', 'prevPosition', 'totalExperience', 'expectedSalary',
+    'fatherName', 'motherName', 'spouseName',
+    'prevCompanyName', 'prevPosition', 'prev1Reporting', 'prev1From', 'prev1To', 'prev1Salary', 'prev1Reason',
+    'prev2Name', 'prev2Position', 'prev2Reporting', 'prev2From', 'prev2To', 'prev2Salary', 'prev2Reason',
+    'prev3Name', 'prev3Position', 'prev3Reporting', 'prev3From', 'prev3To', 'prev3Salary', 'prev3Reason',
+    'prev4Name', 'prev4Position', 'prev4Reporting', 'prev4From', 'prev4To', 'prev4Salary', 'prev4Reason',
+    'totalExperience', 'expectedSalary',
     'sourceOfOpening', 'referredBy', 'preferredRegion', 'expectedJoiningDate',
     'refRole', 'refName', 'refPanchayat', 'refContactNumber',
-    'medicalRemarks'
+    'emergency1Relation', 'emergency1Name', 'emergency1Address', 'emergency1Contact',
+    'emergency2Relation', 'emergency2Name', 'emergency2Address', 'emergency2Contact',
+    'emailId', 'declarationPlace', 'declarationDate', 'declarationName',
   ];
 
   for (const f of fields) {
