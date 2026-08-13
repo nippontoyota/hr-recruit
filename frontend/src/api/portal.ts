@@ -14,7 +14,7 @@ export interface CandidatePortalEvaluationOut {
 export interface CandidatePortalOut {
   id: string;
   full_name: string;
-  position_applied_for: string;
+  experience: string;
   phone: string;
   email: string | null;
   branch_location: string | null;

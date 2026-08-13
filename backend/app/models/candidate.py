@@ -35,7 +35,7 @@ class Candidate(Base):
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     source: Mapped[str] = mapped_column(String(100), nullable=False, server_default="Unknown")
     source_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    position_applied_for: Mapped[str] = mapped_column(String(255), nullable=False, server_default="Unknown")
+    experience: Mapped[str] = mapped_column(String(50), nullable=False, server_default="Fresher")
     current_stage: Mapped[PipelineStage] = mapped_column(
         Enum(PipelineStage, name="pipeline_stage", schema=SCHEMA, create_type=False),
         nullable=False,

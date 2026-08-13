@@ -102,10 +102,10 @@ export default function CandidatePortalPage() {
 
             {/* Bottom row: Details below photo and name */}
             <div className="flex flex-col gap-2 mt-2">
-              {portalData.position_applied_for && (
+              {portalData.department && (
                 <div className="text-lg">
                   <span className="text-gray-500 font-medium">Applying for: </span>
-                  <strong className="text-gray-900">{portalData.position_applied_for}</strong>
+                  <strong className="text-gray-900">{portalData.department}</strong>
                 </div>
               )}
 

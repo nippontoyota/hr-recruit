@@ -8,3 +8,4 @@ export * from './Modal';
 export * from './PdfViewer';
 export * from './Badge';
 export * from './LoadingSpinner';
+export * from './Skeleton';

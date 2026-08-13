@@ -18,7 +18,7 @@ class CandidateCreate(BaseModel):
     email: str | None = None
     source: str = "Unknown"
     source_reference: str | None = None
-    position_applied_for: str = "Unknown"
+    experience: str = "Fresher"
     department: str | None = None
     branch_location: str | None = Field(
         default=None,
@@ -41,7 +41,7 @@ class CandidateCreate(BaseModel):
     def check_email(cls, value: str | None) -> str | None:
         return v.validate_email(value, required=False)
 
-    @field_validator("position_applied_for")
+    @field_validator("experience")
     @classmethod
     def check_position(cls, value: str) -> str:
         if value == "Unknown":
@@ -448,7 +448,7 @@ class CandidateOut(BaseModel):
     email: str | None
     source: str
     source_reference: str | None
-    position_applied_for: str
+    experience: str
     department: str | None = None
     share_url: str | None = None
     pre_form_status: FormStatus
@@ -487,7 +487,7 @@ class CandidateListOut(BaseModel):
     email: str | None
     source: str
     source_reference: str | None
-    position_applied_for: str
+    experience: str
     department: str | None = None
     share_url: str | None = None
     pre_form_status: FormStatus
@@ -588,7 +588,7 @@ class CandidatePortalEvaluationOut(BaseModel):
 class CandidatePortalOut(BaseModel):
     id: UUID
     full_name: str
-    position_applied_for: str
+    experience: str
     phone: str
     email: str | None = None
     branch_location: str | None = None

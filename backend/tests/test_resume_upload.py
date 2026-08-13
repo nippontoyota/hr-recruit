@@ -8,7 +8,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.api.v1.candidates_core import _resume_extension, _safe_filename, _validate_resume_content_type
+from app.services.document_service import _resume_extension, _safe_filename, _validate_resume_content_type
 from app.core.database import get_db
 from app.core.deps import get_current_active_user
 from app.main import app
@@ -127,9 +127,9 @@ def test_upload_success_mocked_storage():
     app.dependency_overrides[get_db] = lambda: db
     try:
         with (
-            patch("app.api.v1.candidates_actions.storage.upload_object") as upload,
+            patch("app.services.document_service.storage.upload_object") as upload,
             patch(
-                "app.api.v1.candidates.storage.create_signed_url",
+                "app.services.document_service.storage.create_signed_url",
                 return_value="https://signed.example/r.pdf",
             ),
         ):
@@ -164,8 +164,8 @@ def test_upload_rolls_back_storage_when_db_commit_fails():
     app.dependency_overrides[get_db] = lambda: db
     try:
         with (
-            patch("app.api.v1.candidates_actions.storage.upload_object"),
-            patch("app.api.v1.candidates_actions.storage.delete_object") as delete,
+            patch("app.services.document_service.storage.upload_object"),
+            patch("app.services.document_service.storage.delete_object") as delete,
         ):
             response = client.post(
                 f"/api/v1/candidates/{candidate_id}/resume",

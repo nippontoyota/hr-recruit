@@ -141,7 +141,15 @@ def list_candidates(
     if user.role == UserRole.ADMIN:
         pass
     elif user.role == UserRole.HO_HR:
-        q = q.where(Candidate.current_stage.in_([PipelineStage.SENT_TO_HO, PipelineStage.FINAL_APPROVAL, PipelineStage.HIRED]))
+        q = q.where(Candidate.current_stage.in_([
+            PipelineStage.SENT_TO_HO, 
+            PipelineStage.HO_INTERVIEWS, 
+            PipelineStage.CSS, 
+            PipelineStage.FINAL_APPROVAL, 
+            PipelineStage.HIRED, 
+            PipelineStage.REJECTED, 
+            PipelineStage.ON_HOLD
+        ]))
     elif user.role == UserRole.LOCAL_HR:
         q = q.where(
             Candidate.branch_location == user.branch_location

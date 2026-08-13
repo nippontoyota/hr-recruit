@@ -15,8 +15,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window_seconds = window_seconds
         self._hits: dict[str, deque[float]] = defaultdict(deque)
 
-    def _should_limit(self, path: str) -> bool:
-        return path.endswith("/auth/login") or "/candidates/public" in path
 
     def _client_key(self, request: Request) -> str:
         forwarded = request.headers.get("x-forwarded-for")
@@ -26,22 +24,30 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return request.client.host
         return "unknown"
 
-    def _allow(self, key: str) -> bool:
+    def _allow(self, key: str, max_hits: int) -> bool:
         now = time.monotonic()
         bucket = self._hits[key]
         while bucket and now - bucket[0] > self.window_seconds:
             bucket.popleft()
-        if len(bucket) >= self.limit:
+        if len(bucket) >= max_hits:
             return False
         bucket.append(now)
         return True
 
     async def dispatch(self, request: Request, call_next):
-        if request.method == "OPTIONS" or not self._should_limit(request.url.path):
+        if request.method == "OPTIONS":
             return await call_next(request)
 
-        key = f"{self._client_key(request)}:{request.url.path}"
-        if not self._allow(key):
+        path = request.url.path
+        is_login = path.endswith("/auth/login")
+        is_public = "/candidates/public" in path
+
+        if not (is_login or is_public):
+            return await call_next(request)
+
+        limit = 5 if is_login else self.limit
+        key = f"{self._client_key(request)}:{path}"
+        if not self._allow(key, limit):
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests. Try again later."},

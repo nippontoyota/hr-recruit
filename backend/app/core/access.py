@@ -12,7 +12,17 @@ def assert_candidate_access(user: User, candidate: Candidate) -> None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Candidate is not in your branch.")
             
     if user.role == UserRole.HO_HR:
-        if candidate.current_stage not in [PipelineStage.SENT_TO_HO, PipelineStage.FINAL_APPROVAL, PipelineStage.HIRED]:
+        if candidate.current_stage not in [
+            PipelineStage.SENT_TO_HO, 
+            PipelineStage.HO_INTERVIEWS, 
+            PipelineStage.CSS, 
+            PipelineStage.FINAL_APPROVAL, 
+            PipelineStage.HIRED, 
+            PipelineStage.REJECTED, 
+            PipelineStage.ON_HOLD
+        ]:
+            # Allow access if they have a history of being in HO stages? No, keep it simple: 
+            # We will allow REJECTED/ON_HOLD since they might have rejected them from HO.
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Candidate has not been handed over to Head Office yet.")
 
 

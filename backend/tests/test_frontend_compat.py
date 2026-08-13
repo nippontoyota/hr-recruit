@@ -24,9 +24,8 @@ client = TestClient(app)
 @pytest.mark.parametrize(
     ("role", "expected"),
     [
-        (UserRole.SUPER_ADMIN, "SUPER_ADMIN"),
-        (UserRole.HR, "HR"),
-        (UserRole.ADMIN, "SUPER_ADMIN"),
+        (UserRole.ADMIN, "ADMIN"),
+        (UserRole.HO_HR, "HR"),
         (UserRole.LOCAL_HR, "HR"),
     ],
 )

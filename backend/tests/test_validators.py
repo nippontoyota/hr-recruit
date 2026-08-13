@@ -86,7 +86,7 @@ def _valid_pre_form() -> dict:
         "expectedSalary": "25000",
         "sourceOfOpening": "Walk-in",
         "preferredRegion": "Kochi",
-        "expectedJoiningDate": "2026-08-01",
+        "expectedJoiningDate": "2030-01-01",
         "hasReference": True,
         "refRole": "Professor",
         "refName": "Anil Nair",

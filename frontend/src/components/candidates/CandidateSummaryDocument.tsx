@@ -10,6 +10,8 @@ export function CandidateSummaryDocument({ candidate, evaluations }: CandidateSu
   const getEval = (type: string) => evaluations.find(e => e.type === type);
   const hrEval = getEval('BRANCH_HR');
   const deptEval = getEval('DEPT_HEAD');
+  const hqEval1 = getEval('HQ_INTERVIEW_1');
+  const hqEval2 = getEval('HQ_INTERVIEW_2');
   const techEval = getEval('TECHNICAL_TEST');
 
   // Format Date safely
@@ -53,7 +55,7 @@ export function CandidateSummaryDocument({ candidate, evaluations }: CandidateSu
           </tr>
           <tr className="border border-black text-[10px]">
             <td className="border border-black p-1 font-semibold">Post Applied</td>
-            <td className="border border-black p-1">{candidate.position_applied_for}</td>
+            <td className="border border-black p-1">{candidate.department}</td>
             <td className="border border-black p-1 font-semibold">Source</td>
             <td className="border border-black p-1">{candidate.source}</td>
             <td className="border border-black p-1 font-semibold">Location</td>
@@ -229,9 +231,22 @@ export function CandidateSummaryDocument({ candidate, evaluations }: CandidateSu
           </tr>
           <tr className="border border-black text-center h-16">
              <td className="border border-black p-1">HEAD OFFICE</td>
-             <td className="border border-black p-2 text-left align-top"></td>
-             <td className="border border-black p-1"></td>
-             <td className="border border-black p-1"></td>
+             <td className="border border-black p-2 text-left align-top">{hqEval1?.remarks || ''}</td>
+             <td className="border border-black p-1">{hqEval1?.verdict?.charAt(0) || ''}</td>
+             <td className="border border-black p-1">{hqEval1?.scores?.total_score || ''}</td>
+          </tr>
+          <tr className="border border-black text-center h-16">
+             <td className="border border-black p-1 font-bold text-center align-middle" colSpan={2}>CMD</td>
+             <td className="border border-black p-2 text-left align-top">{hqEval2?.remarks || ''}</td>
+             <td className="border border-black p-1">{hqEval2?.verdict?.charAt(0) || ''}</td>
+             <td className="border border-black p-1">{hqEval2?.scores?.total_score || ''}</td>
+          </tr>
+          <tr className="border border-black text-center">
+             <td colSpan={3} className="border border-black p-1"></td>
+             <td className="border border-black p-1 font-bold text-right">Total Marks</td>
+             <td className="border border-black p-1 font-bold">
+               { [hrEval, deptEval, hqEval1, hqEval2].reduce((sum, ev) => sum + (Number(ev?.scores?.total_score) || 0), 0) || '' }
+             </td>
           </tr>
         </tbody>
       </table>

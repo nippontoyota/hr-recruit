@@ -89,7 +89,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
   const [vars, setVars] = useState<WhatsAppTemplateVars>(() => {
     const defaults = defaultTemplateVars({
       candidateName: candidate.full_name,
-      position: candidate.position_applied_for,
+      position: candidate.department,
       formLink: candidate.share_url || `${window.location.origin}/#/apply/pending`,
       branchName: 'Nippon Toyota Kochi - Edappally',
       mapsLink: 'https://maps.google.com/?q=Nippon+Toyota+Kochi+Edappally',

@@ -58,7 +58,7 @@ export function BackgroundVerificationDocument({ candidate }: BackgroundVerifica
           </tr>
           <tr className="border border-black">
             <td className="border border-black p-1 font-semibold">Post Applied</td>
-            <td className="border border-black p-1">{candidate.position_applied_for}</td>
+            <td className="border border-black p-1">{candidate.department}</td>
             <td colSpan={2} className="border border-black p-1 text-center font-semibold">Nippon Branch: {candidate.branch_location || ''}</td>
             <td className="border border-black p-1">Date: <span className="font-semibold">{formatDate(candidate.created_at)}</span></td>
           </tr>

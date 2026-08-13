@@ -129,17 +129,15 @@ def create_evaluation(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    # Prevent duplicate TECHNICAL_TEST evaluations per candidate
-    if body.type == EvaluationType.TECHNICAL_TEST:
-        existing = db.scalar(
-            select(Evaluation).where(
-                Evaluation.candidate_id == candidate_id,
-                Evaluation.type == EvaluationType.TECHNICAL_TEST,
-            )
+    # Prevent duplicate evaluations per candidate for any type
+    existing = db.scalar(
+        select(Evaluation).where(
+            Evaluation.candidate_id == candidate_id,
+            Evaluation.type == body.type,
         )
-        if existing:
-            return existing
-        
+    )
+    if existing:
+        return existing
     scores = {}
     if body.interviewer_name:
         scores["interviewer_name"] = body.interviewer_name
@@ -245,7 +243,7 @@ def generate_evaluation_token(
     test_data = None
     if evaluation.type == EvaluationType.TECHNICAL_TEST:
         candidate = db.get(Candidate, evaluation.candidate_id)
-        dept = _get_candidate_department(candidate.position_applied_for)
+        dept = _get_candidate_department(candidate.department)
         q_rows = db.scalars(
             select(TechnicalQuestion).where(TechnicalQuestion.department == dept)
         ).all()
@@ -440,7 +438,7 @@ def get_public_evaluation_details(
         id=evaluation.id,
         type=evaluation.type,
         candidate_name=candidate.full_name,
-        candidate_position=candidate.position_applied_for or "Unknown",
+        candidate_position=candidate.department or "Unknown",
         candidate_resume_url=resume_url,
         candidate_experience=candidate.profile.total_experience if candidate.profile else None,
         candidate_education=candidate.profile.raw_data.get("highestQual", "") if candidate.profile and candidate.profile.raw_data else "",
@@ -560,7 +558,7 @@ def get_public_test_questions(
          raise HTTPException(status_code=400, detail="This evaluation is not a technical test")
          
     candidate = db.get(Candidate, evaluation.candidate_id)
-    dept = _get_candidate_department(candidate.position_applied_for)
+    dept = _get_candidate_department(candidate.department)
     
     if token_row.test_data and "questions" in token_row.test_data:
         public_questions = token_row.test_data["questions"]
@@ -601,7 +599,7 @@ def submit_public_test(
          raise HTTPException(status_code=400, detail="This evaluation is not a technical test")
          
     candidate = db.get(Candidate, evaluation.candidate_id)
-    dept = _get_candidate_department(candidate.position_applied_for)
+    dept = _get_candidate_department(candidate.department)
     
     answers_map = token_row.test_data.get("answers", {})
     correct_count = 0

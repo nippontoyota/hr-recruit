@@ -178,7 +178,7 @@ def test_public_rejected_submission_uses_assigned_hr_user():
 
     app.dependency_overrides[get_db] = lambda: db
     try:
-        with patch("app.api.v1.evaluations.workflow.transition") as transition_mock:
+        with patch("app.services.workflow.transition") as transition_mock:
             response = client.post(
                 f"/api/v1/evaluations/public/{token}/submit",
                 json={

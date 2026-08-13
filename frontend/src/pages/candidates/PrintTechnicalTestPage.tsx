@@ -28,7 +28,7 @@ export default function PrintTechnicalTestPage() {
         const data = await getCandidateById(id);
         if (data) {
           setCandidate(data as Candidate);
-          const dept = data.position_applied_for || 'Call Centre';
+          const dept = data.department || 'Call Centre';
           const qs = await getDepartmentQuestions(dept);
           setQuestions(qs);
         }
@@ -121,7 +121,7 @@ export default function PrintTechnicalTestPage() {
           <div className="flex text-[11px] px-1">
             <span className="font-semibold mr-2 whitespace-nowrap">Position Applied For:</span>
             <span className="flex-1 font-medium font-sans uppercase border-b border-gray-400 leading-tight flex items-end">
-              {candidate.position_applied_for}
+              {candidate.department}
             </span>
           </div>
         </div>

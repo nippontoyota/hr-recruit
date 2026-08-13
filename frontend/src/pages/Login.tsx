@@ -9,6 +9,9 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  
   const { login, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -17,6 +20,18 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    let valid = true;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError("Please enter a valid email address.");
+      valid = false;
+    }
+    if (!password) {
+      setPasswordError("Password is required.");
+      valid = false;
+    }
+    if (!valid) return;
+
     try {
       await login(email, password);
       toast.success("Successfully logged in");
@@ -77,10 +92,14 @@ export default function Login() {
                 required
                 autoComplete="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (emailError) setEmailError("");
+                }}
                 placeholder="admin@nippon.local"
-                className="h-12 text-base px-4 rounded-xl bg-muted/30 focus:bg-surface transition-colors"
+                className={`h-12 text-base px-4 rounded-xl transition-colors ${emailError ? 'bg-red-50 focus:bg-red-50 border-red-500' : 'bg-muted/30 focus:bg-surface'}`}
               />
+              {emailError && <p className="text-sm text-red-500 font-medium">{emailError}</p>}
             </div>
 
             <div className="space-y-2">
@@ -93,9 +112,12 @@ export default function Login() {
                 required
                 autoComplete="current-password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (passwordError) setPasswordError("");
+                }}
                 placeholder="Enter your password"
-                className="h-12 text-base px-4 rounded-xl bg-muted/30 focus:bg-surface transition-colors pr-12"
+                className={`h-12 text-base px-4 rounded-xl transition-colors pr-12 ${passwordError ? 'bg-red-50 focus:bg-red-50 border-red-500' : 'bg-muted/30 focus:bg-surface'}`}
                 rightElement={
                   <button
                     type="button"
@@ -107,10 +129,11 @@ export default function Login() {
                   </button>
                 }
               />
+              {passwordError && <p className="text-sm text-red-500 font-medium">{passwordError}</p>}
             </div>
 
-            <Button type="submit" className="w-full h-12 text-base font-bold rounded-xl shadow-md mt-4" isLoading={isLoading}>
-              Sign in
+            <Button type="submit" className="w-full h-12 text-base font-bold rounded-xl shadow-md mt-4" isLoading={isLoading} disabled={isLoading}>
+              {isLoading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
         </div>

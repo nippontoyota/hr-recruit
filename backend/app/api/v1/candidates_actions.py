@@ -7,9 +7,8 @@ from app.core.database import get_db
 from app.core.deps import require_roles
 from app.core.access import get_candidate_for_user
 from app.models.candidate import Candidate
-from app.models.candidate_screening import CandidateScreening
 from app.models.activity_log import ActivityLog
-from app.models.enums import PipelineStage, UserRole, ActivityType, ScreeningStatus
+from app.models.enums import PipelineStage, UserRole, ActivityType
 from app.models.stage_history import StageHistory
 from app.models.user import User
 from app.models.communication import Communication
@@ -18,13 +17,20 @@ from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageH
 from app.services.workflow import transition
 from app.services.doubletick import send_template
 
-router = APIRouter(prefix="/candidates", tags=["candidates"])
-
-from .candidates_core import *
-from .candidates_core import (
-    _get_resume_document,
-    _document_out, _save_resume_for_candidate, _save_photo_for_candidate, _issue_pre_form, _store_whatsapp_invite
+from app.services.candidate_service import (
+    to_candidate_out,
+    issue_pre_form,
+    store_whatsapp_invite,
 )
+from app.services.document_service import (
+    get_resume_document,
+    document_out,
+    save_resume_for_candidate,
+    save_photo_for_candidate,
+    resume_candidate_ids,
+)
+
+router = APIRouter(prefix="/candidates", tags=["candidates"])
 
 @router.post("/{id}/resume", response_model=DocumentOut, status_code=201)
 async def upload_resume(
@@ -34,7 +40,7 @@ async def upload_resume(
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
-    return await _save_resume_for_candidate(db, row, file, uploaded_by_user_id=user.id)
+    return await save_resume_for_candidate(db, row, file, uploaded_by_user_id=user.id)
 
 
 @router.post("/{id}/photo", response_model=dict, status_code=201)
@@ -42,13 +48,12 @@ async def upload_photo(
     id: UUID,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    # Can be uploaded by candidate via public form or HR
 ):
     row = db.get(Candidate, id)
     if not row:
         raise HTTPException(status_code=404, detail="Candidate not found")
         
-    return await _save_photo_for_candidate(db, row, file)
+    return await save_photo_for_candidate(db, row, file)
 
 
 @router.get("/{id}/resume", response_model=DocumentOut)
@@ -58,10 +63,10 @@ def get_resume(
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     get_candidate_for_user(db, id, user)
-    doc = _get_resume_document(db, id)
+    doc = get_resume_document(db, id)
     if not doc:
         raise HTTPException(status_code=404, detail="Resume not found.")
-    return _document_out(doc)
+    return document_out(doc)
 
 
 @router.post("/{id}/transition", response_model=CandidateOut)
@@ -95,14 +100,7 @@ def unhold_candidate(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    """Resume a candidate from ON_HOLD back to the previous stage recorded in stage history.
-
-    This convenience endpoint finds the most recent StageHistory entry that moved the
-    candidate to ON_HOLD and attempts to transition them back to the stage they were
-    in previously. Requires ADMIN or LOCAL_HR role.
-    """
     candidate = get_candidate_for_user(db, id, user)
-    # Find most recent history where to_stage == ON_HOLD
     last_hold = db.scalars(
         select(StageHistory)
         .where(StageHistory.candidate_id == id, StageHistory.to_stage == PipelineStage.ON_HOLD)
@@ -181,7 +179,7 @@ def send_pre_form(
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
-    _issue_pre_form(db, row, user)
+    issue_pre_form(db, row, user)
     db.commit()
     db.refresh(row)
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
@@ -195,7 +193,6 @@ def send_whatsapp_invite(
 ):
     candidate = get_candidate_for_user(db, id, user)
     
-    # Map variables in the correct order for the template nippon_pre_interview_invite
     DOUBLETICK_VARIABLE_KEYS = [
         "candidateName",
         "position",
@@ -230,7 +227,6 @@ def send_whatsapp_invite(
         status = CommunicationStatus.FAILED
         err_msg = str(e)
         
-    # Construct content preview
     content_lines = [
         f"Hello {(body.variables or {}).get('candidateName', '')},",
         "",
@@ -282,7 +278,7 @@ def send_whatsapp_invite(
     if status == CommunicationStatus.FAILED:
         raise HTTPException(status_code=400, detail=f"Failed to send WhatsApp invite: {err_msg}")
         
-    _store_whatsapp_invite(db, candidate, user)
+    store_whatsapp_invite(db, candidate, user)
     db.commit()
     return {"status": "success", "message_id": external_message_id}
 
@@ -307,23 +303,21 @@ def send_offer_letter(
     if not row.email:
         raise HTTPException(status_code=400, detail="Candidate does not have an email address.")
         
-    # Generate the PDF
     payload = {
         "candidate": {
             "full_name": row.full_name,
-            "position_applied_for": row.position_applied_for,
+            "position_applied_for": row.department,
             "salary_data": row.salary_data
         }
     }
     pdf_bytes = generate_offer_letter_pdf(payload)
     
-    # Send Email
-    subject = f"Offer of Employment - {row.position_applied_for} at Nippon Toyota"
+    subject = f"Offer of Employment - {row.department} at Nippon Toyota"
     body_html = f"""
     <html>
         <body>
             <p>Dear {row.full_name},</p>
-            <p>We are delighted to offer you the position of <strong>{row.position_applied_for}</strong> at Nippon Toyota.</p>
+            <p>We are delighted to offer you the position of <strong>{row.department}</strong> at Nippon Toyota.</p>
             <p>Please find your official offer letter attached as a PDF.</p>
             <p>We look forward to welcoming you to the team!</p>
             <br/>
@@ -340,7 +334,6 @@ def send_offer_letter(
         pdf_filename="OfferLetter_NipponToyota.pdf"
     )
     
-    # Log communication
     comm = Communication(
         candidate_id=id,
         type=CommunicationType.EMAIL,
@@ -352,7 +345,6 @@ def send_offer_letter(
     )
     db.add(comm)
     
-    # Log Activity
     log = ActivityLog(
         candidate_id=id,
         activity_type=ActivityType.EMAIL,
@@ -362,7 +354,6 @@ def send_offer_letter(
     )
     db.add(log)
     
-    # Update candidate offer_status
     row.offer_status = "SENT"
     
     db.commit()
@@ -370,15 +361,14 @@ def send_offer_letter(
     
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
 
-import openpyxl
-import io
-
 @router.post("/bulk-salary", status_code=200)
 async def upload_bulk_salary(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
 ):
+    import openpyxl
+    import io
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported.")
     
