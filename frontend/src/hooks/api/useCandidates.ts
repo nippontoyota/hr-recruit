@@ -1,40 +1,38 @@
-import { useState, useCallback, useEffect } from 'react';
-import { getCandidates, deleteCandidate, bulkDeleteCandidates, unholdCandidate } from '../../api/candidates';
-import { useAsync } from './useAsync';
+import { useCallback, useEffect, useState } from 'react';
+import { getCandidates } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
-import { toast } from 'sonner';
 
-export function useCandidatesList(initialPage = 1, limit = 50) {
+export function useCandidatesList(initialPage = 1, initialLimit = 50) {
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(initialPage);
+  const [limit] = useState(initialLimit);
   const [searchQuery, setSearchQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<PipelineStage | ''>('');
 
-  const { data, loading, error, execute: fetchCandidates } = useAsync(
-    () => getCandidates(page, limit, searchQuery, stageFilter),
-    { immediate: false }
-  );
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getCandidates(page, limit, searchQuery || undefined, stageFilter || undefined);
+      setCandidates(res.data);
+      setTotalCount(res.total_count);
+    } catch {
+      setCandidates([]);
+      setTotalCount(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, limit, searchQuery, stageFilter]);
 
-  // Fetch when dependencies change
   useEffect(() => {
-    fetchCandidates();
-  }, [page, limit, searchQuery, stageFilter, fetchCandidates]);
-
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery, stageFilter]);
-
-  const removeCandidateLocally = useCallback((id: string) => {
-    // We can't mutate `data` directly easily since it's {data, total_count}
-    // Easiest is just to refetch for accuracy of pagination.
-    fetchCandidates();
-  }, [fetchCandidates]);
+    void refetch();
+  }, [refetch]);
 
   return {
-    candidates: data?.data || [],
-    totalCount: data?.total_count || 0,
+    candidates,
+    totalCount,
     loading,
-    error,
     page,
     setPage,
     searchQuery,
@@ -42,7 +40,6 @@ export function useCandidatesList(initialPage = 1, limit = 50) {
     stageFilter,
     setStageFilter,
     limit,
-    refetch: fetchCandidates,
-    removeCandidateLocally
+    refetch,
   };
 }

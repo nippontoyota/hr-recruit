@@ -11,10 +11,17 @@ class LocationTemplateBase(BaseModel):
     location_or_link: str = Field(..., description="The physical address or meeting link")
     mode: InterviewMode = Field(..., description="PHYSICAL or ONLINE")
     is_default: bool = Field(False, description="Whether this is the default location")
+    branch_location: str = Field(..., max_length=255)
 
 
-class LocationTemplateCreate(LocationTemplateBase):
-    pass
+class LocationTemplateCreate(BaseModel):
+    name: str = Field(..., max_length=255)
+    location_or_link: str = Field(..., description="Physical address or maps link")
+    mode: InterviewMode = Field(InterviewMode.PHYSICAL, description="PHYSICAL or ONLINE")
+    is_default: bool = Field(False)
+    branch_location: str | None = Field(
+        None, max_length=255, description="Required for ADMIN/HO_HR; LOCAL_HR uses their account branch"
+    )
 
 
 class LocationTemplateUpdate(BaseModel):
@@ -57,5 +64,21 @@ class MessageTemplateResponse(MessageTemplateBase):
     id: uuid.UUID
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InterviewerNameCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    branch_location: str | None = Field(
+        None, max_length=255, description="Required for ADMIN/HO_HR; LOCAL_HR uses their account branch"
+    )
+
+
+class InterviewerNameResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    branch_location: str
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

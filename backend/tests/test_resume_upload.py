@@ -198,3 +198,18 @@ def test_cors_allows_vite_origin():
     )
     assert response.status_code in (200, 204)
     assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+
+def test_cors_allows_vercel_preview_origin():
+    origin = (
+        "https://hr-recruit-git-feature-hr-ops-cal-3ff3db-nippontoyotas-projects.vercel.app"
+    )
+    response = client.options(
+        "/api/v1/auth/login",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert response.status_code in (200, 204)
+    assert response.headers.get("access-control-allow-origin") == origin

@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper, Skeleton } from '../../components/ui';
+import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
 import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History, Edit2, Send } from 'lucide-react';
-import { getCandidateById, updateCandidateStage, unholdCandidate, resolveDuplicateCandidate } from '../../api/candidates';
+import { getCandidateById, updateCandidateStage, unholdCandidate, resolveDuplicateCandidate, updateCandidateDepartment } from '../../api/candidates';
 import { getCandidateEvaluations } from '../../api/evaluations';
 import type { Candidate, PipelineStage } from '../../types';
+import { CANDIDATE_DEPARTMENTS } from '../../types';
 import { toast } from 'sonner';
 import { validateRejectRemarks } from '../../lib/validation';
 import { stageLabel, stageColor } from '../../lib/stages';
@@ -32,9 +33,135 @@ const HO_LINEAR_STAGES: PipelineStage[] = [
   'SENT_TO_HO', 'HO_INTERVIEWS', 'CSS', 'FINAL_APPROVAL'
 ];
 
-
 // Simple global cache to allow stale-while-revalidate (instant loading)
 const profileCache: Record<string, Candidate> = {};
+
+function ConsiderationEditor({
+  candidate,
+  readOnly,
+  onSaved,
+  compact,
+}: {
+  candidate: Candidate;
+  readOnly?: boolean;
+  onSaved: (c: Candidate) => void;
+  compact?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [department, setDepartment] = useState(candidate.department || '');
+  const [role, setRole] = useState(candidate.position_applied_for || candidate.department || '');
+  const [saving, setSaving] = useState(false);
+
+  const openEditor = () => {
+    setDepartment(candidate.department || '');
+    setRole(candidate.position_applied_for || candidate.department || '');
+    setOpen(true);
+  };
+
+  const save = async () => {
+    if (!department.trim()) {
+      toast.error('Select a department');
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await updateCandidateDepartment(
+        candidate.id,
+        department.trim(),
+        (role.trim() || department.trim())
+      );
+      profileCache[candidate.id] = updated;
+      onSaved(updated);
+      setOpen(false);
+      toast.success(`Now considering for ${updated.department} — ${updated.position_applied_for}`);
+    } catch (err: any) {
+      toast.error(extractError(err, 'Failed to update consideration'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const label = [candidate.department, candidate.position_applied_for]
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .join(' · ') || '—';
+
+  return (
+    <>
+      <div className={cn('flex items-center gap-2', compact ? 'text-sm' : 'text-base')}>
+        <span className="text-muted-foreground font-medium whitespace-nowrap">
+          {compact ? 'Considering:' : 'Considering for:'}
+        </span>
+        <strong className="text-foreground">{label}</strong>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={openEditor}
+            className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+          >
+            <Edit2 className="w-3 h-3" /> Change
+          </button>
+        )}
+      </div>
+
+      <Modal
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title="Change consideration"
+        description="Switch department/role if this candidate fits another opening mid-process."
+        size="sm"
+      >
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="form-label">Department</label>
+            <select
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              value={department}
+              onChange={(e) => {
+                setDepartment(e.target.value);
+                if (!role.trim() || role === candidate.department || role === department) {
+                  setRole(e.target.value);
+                }
+              }}
+            >
+              <option value="" disabled>
+                Select department
+              </option>
+              {CANDIDATE_DEPARTMENTS.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+              {department && !(CANDIDATE_DEPARTMENTS as readonly string[]).includes(department) && (
+                <option value={department}>{department}</option>
+              )}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Role / position</label>
+            <input
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              placeholder="e.g. Customer Support Executive"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Example: Sales → Customer Service, role “Customer Support Executive”.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={save} isLoading={saving}>
+              Save
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
 
 export default function CandidateProfile() {
   const { id } = useParams<{ id: string }>();
@@ -429,10 +556,16 @@ export default function CandidateProfile() {
                         <div className="flex flex-col items-center gap-1.5 mt-2">
                           {candidate.experience && (
                             <div className="text-base">
-                              <span className="text-muted-foreground font-medium">Applying for: </span>
+                              <span className="text-muted-foreground font-medium">Experience: </span>
                               <strong className="text-foreground">{candidate.experience}</strong>
                             </div>
                           )}
+
+                          <ConsiderationEditor
+                            candidate={candidate}
+                            readOnly={isReadOnly}
+                            onSaved={setCandidate}
+                          />
 
                           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground mt-2">
                             <span className="flex items-center gap-1.5">
@@ -465,6 +598,16 @@ export default function CandidateProfile() {
                     )}
 
                     <div className={isCallLetterStage ? "flex flex-wrap items-center justify-center gap-2 mt-4" : "flex flex-wrap items-center gap-2 shrink-0"}>
+                      {!isCallLetterStage && (
+                        <div className="flex items-center h-9 px-3 rounded-sm border border-border bg-background shadow-sm">
+                          <ConsiderationEditor
+                            candidate={candidate}
+                            readOnly={isReadOnly}
+                            onSaved={setCandidate}
+                            compact
+                          />
+                        </div>
+                      )}
                       {isCallLetterStage && actualStage === 'ON_HOLD' && (
                         <Button
                           size="sm"

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { Button, Modal, LoadingSpinner, EmptyState, Badge, Select, Skeleton } from '../../components/ui';
+import { Button, Modal, LoadingSpinner, EmptyState, Badge, Select } from '../../components/ui';
 import { Plus,  RefreshCw, Trash, Search, X, CheckSquare, Square, Minus, Play } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { getCandidates, deleteCandidate, bulkDeleteCandidates, unholdCandidate } from '../../api/candidates';

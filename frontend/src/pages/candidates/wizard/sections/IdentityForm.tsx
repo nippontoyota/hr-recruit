@@ -61,6 +61,84 @@ export const IdentityForm = ({ data, update }: IdentityFormProps) => {
           />
         </div>
       </div>
+
+      <div className="space-y-4 pt-2 border-t border-border/40">
+        <div>
+          <label className="block text-sm font-medium text-text-primary mb-2">
+            Confident to Drive <span className="text-danger">*</span>
+          </label>
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+              <input
+                type="radio"
+                name="confidentToDrive"
+                checked={data.confidentToDrive === true}
+                onChange={() => update('confidentToDrive', true)}
+                className="text-primary focus:ring-primary"
+              />
+              Yes
+            </label>
+            <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+              <input
+                type="radio"
+                name="confidentToDrive"
+                checked={data.confidentToDrive === false}
+                onChange={() => {
+                  update('confidentToDrive', false);
+                  update('drive2Wheeler', false);
+                  update('drive3Wheeler', false);
+                  update('drive4Wheeler', false);
+                  update('driveHeavy', false);
+                }}
+                className="text-primary focus:ring-primary"
+              />
+              No
+            </label>
+          </div>
+        </div>
+
+        {data.confidentToDrive && (
+          <div className="animate-in fade-in duration-300">
+            <label className="block text-sm font-medium text-text-primary mb-2">
+              Vehicle types (optional)
+            </label>
+            <div className="flex flex-wrap gap-4">
+              {(
+                [
+                  ['drive2Wheeler', '2 Wheeler'],
+                  ['drive3Wheeler', '3 Wheeler'],
+                  ['drive4Wheeler', '4 Wheeler'],
+                  ['driveHeavy', 'Heavy'],
+                ] as const
+              ).map(([field, label]) => (
+                <label
+                  key={field}
+                  className="flex items-center gap-2 text-sm text-text-primary cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={data[field]}
+                    onChange={(e) => update(field, e.target.checked)}
+                    className="rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-text-primary mb-1">
+          Other Languages
+        </label>
+        <Input
+          value={data.languagesOther}
+          onChange={(e) => update('languagesOther', e.target.value)}
+          placeholder="Optional — languages beyond read/write/speak above"
+        />
+      </div>
     </div>
   );
 };

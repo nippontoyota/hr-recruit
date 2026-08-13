@@ -34,6 +34,18 @@ export const updateCandidateRawData = async (id: string, rawData: Record<string,
   return response.data;
 };
 
+export const updateCandidateDepartment = async (
+  id: string,
+  department: string,
+  positionAppliedFor?: string
+): Promise<Candidate> => {
+  const response = await request('PATCH', `/candidates/${id}/department`, {
+    department,
+    ...(positionAppliedFor !== undefined ? { position_applied_for: positionAppliedFor } : {}),
+  });
+  return response.data;
+};
+
 export const createCandidate = async (candidateData: Partial<Candidate>): Promise<Candidate> => {
   const response = await request('POST', '/candidates', candidateData);
   return response.data;
@@ -74,21 +86,6 @@ export const fetchPublicPreForm = async (token: string) => {
 
 export const submitPublicPreForm = async (token: string, data: any) => {
   const res = await request('POST', `/candidates/public-pre-form/${token}`, data);
-  return res.data;
-};
-
-export const fetchPublicPostForm = async (token: string) => {
-  const res = await request('GET', `/candidates/public-post-form/${token}`);
-  return res.data;
-};
-
-export const submitPublicPostForm = async (token: string, data: any) => {
-  const res = await request('POST', `/candidates/public-post-form/${token}`, data);
-  return res.data;
-};
-
-export const sendPostForm = async (id: string) => {
-  const res = await request('POST', `/candidates/${id}/post-form/send`);
   return res.data;
 };
 

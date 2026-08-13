@@ -8,6 +8,8 @@ interface RecruitmentFormProps {
 }
 
 export const RecruitmentForm = ({ data, update }: RecruitmentFormProps) => {
+  const referralRequired = data.sourceOfOpening === 'Employee Referral';
+
   return (
     <div className="space-y-6 pb-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -30,7 +32,10 @@ export const RecruitmentForm = ({ data, update }: RecruitmentFormProps) => {
 
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1">
-            Referred By (if applicable) <span className="text-danger">*</span>
+            Referred By {referralRequired && <span className="text-danger">*</span>}
+            {!referralRequired && (
+              <span className="text-muted-foreground font-normal"> (if applicable)</span>
+            )}
           </label>
           <Input
             value={data.referredBy}
@@ -41,7 +46,7 @@ export const RecruitmentForm = ({ data, update }: RecruitmentFormProps) => {
 
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1">
-            Preferred Region <span className="text-danger">*</span>
+            Ready to work in below-mentioned branches <span className="text-danger">*</span>
           </label>
           <Input
             value={data.preferredRegion}
@@ -52,7 +57,7 @@ export const RecruitmentForm = ({ data, update }: RecruitmentFormProps) => {
 
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1">
-            Expected Joining Date <span className="text-danger">*</span>
+            If selected, when can you join? <span className="text-danger">*</span>
           </label>
           <Input
             type="date"

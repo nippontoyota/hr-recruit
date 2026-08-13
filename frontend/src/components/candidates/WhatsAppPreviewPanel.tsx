@@ -1,22 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { ArrowLeft, Pencil, Send, Video, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCheck } from 'lucide-react';
+import { ArrowLeft, Pencil, Send, Video, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCheck, Trash2 } from 'lucide-react';
 import type { Candidate } from '../../types';
 import { Button, Input, Modal } from '../ui';
 import {
   buildWhatsAppMessage,
+  canSendWhatsAppInvite,
   defaultTemplateVars,
+  formatVisitDate,
   isWhatsAppUrl,
   loadStoredTemplateVars,
   splitMessageLinks,
   storeTemplateVars,
+  toDateInputValue,
   type WhatsAppTemplateVars,
 } from '../../lib/whatsappTemplate';
 import { useAuth } from '../../auth';
 import { toast } from 'sonner';
-import { cn } from '../../lib/utils';
+import { cn, extractError } from '../../lib/utils';
 import { sendWhatsAppInvite } from '../../api/candidates';
-
+import {
+  createLocation,
+  deleteLocation,
+  listLocations,
+  type LocationTemplateRow,
+} from '../../api/settings';
 interface WhatsAppPreviewPanelProps {
   candidate: Candidate;
   className?: string;
@@ -25,10 +33,8 @@ interface WhatsAppPreviewPanelProps {
 const FIELD_LABELS: Partial<Record<keyof WhatsAppTemplateVars, string>> = {
   candidateName: 'Candidate name',
   position: 'Position',
-  visitDate: 'Arrival date',
+  visitDate: 'Visit date',
   arrivalTime: 'Arrival time',
-  branchName: 'Location',
-  mapsLink: 'Google Maps link',
   extraInstructions: 'Instructions',
   recruiterName: 'Recruiter name',
 };
@@ -36,10 +42,7 @@ const FIELD_LABELS: Partial<Record<keyof WhatsAppTemplateVars, string>> = {
 const EDITABLE_FIELDS: (keyof WhatsAppTemplateVars)[] = [
   'candidateName',
   'position',
-  'visitDate',
   'arrivalTime',
-  'branchName',
-  'mapsLink',
   'extraInstructions',
   'recruiterName',
 ];
@@ -82,48 +85,134 @@ function WhatsAppMessageBody({ text }: { text: string }) {
 
 export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPanelProps) {
   const { user } = useAuth();
+  const branch = user?.branch_location || candidate.branch_location || null;
   const [isEditing, setIsEditing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [places, setPlaces] = useState<LocationTemplateRow[]>([]);
+  const [newPlaceName, setNewPlaceName] = useState('');
+  const [newPlaceUrl, setNewPlaceUrl] = useState('');
+
+  const refreshPlaces = async () => {
+    try {
+      setPlaces(await listLocations(branch));
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to load locations'));
+    }
+  };
 
   const [vars, setVars] = useState<WhatsAppTemplateVars>(() => {
+    const screening = candidate.screening;
     const defaults = defaultTemplateVars({
       candidateName: candidate.full_name,
-      position: candidate.department,
+      position: candidate.position_applied_for || candidate.department,
       formLink: candidate.share_url || `${window.location.origin}/#/apply/pending`,
-      branchName: 'Nippon Toyota Kochi - Edappally',
-      mapsLink: 'https://maps.google.com/?q=Nippon+Toyota+Kochi+Edappally',
+      extraInstructions: screening?.extra_instructions,
       recruiterName: user?.full_name,
-      inviteType: 'pre',
     });
 
+    const stored = loadStoredTemplateVars(candidate.id);
     return {
       ...defaults,
-      ...loadStoredTemplateVars(candidate.id),
+      ...stored,
+      candidateName: candidate.full_name || defaults.candidateName,
+      position: candidate.position_applied_for || candidate.department || defaults.position,
       formLink: candidate.share_url || defaults.formLink,
-      inviteType: 'pre',
+      // Never auto-fill date / maps — user must pick
+      visitDate: stored?.visitDate?.trim() || '',
+      branchName: stored?.branchName?.trim() || '',
+      mapsLink: stored?.mapsLink?.trim() || '',
+      arrivalTime: stored?.arrivalTime?.trim() || '9:15 AM',
     };
   });
   const [draft, setDraft] = useState(vars);
 
   useEffect(() => {
-    if (!candidate.share_url) return;
-    setVars((current) => ({ ...current, formLink: candidate.share_url! }));
-  }, [candidate.share_url]);
+    setVars((current) => ({
+      ...current,
+      candidateName: candidate.full_name || current.candidateName,
+      position: candidate.position_applied_for || candidate.department || current.position,
+      formLink: candidate.share_url || current.formLink,
+      ...(candidate.screening?.extra_instructions
+        ? { extraInstructions: candidate.screening.extra_instructions }
+        : {}),
+    }));
+  }, [
+    candidate.full_name,
+    candidate.position_applied_for,
+    candidate.department,
+    candidate.share_url,
+    candidate.screening?.extra_instructions,
+  ]);
 
   useEffect(() => {
     storeTemplateVars(candidate.id, vars);
   }, [candidate.id, vars]);
 
   const message = useMemo(() => buildWhatsAppMessage(vars), [vars]);
+  const readyToSend = canSendWhatsAppInvite(vars);
 
   const openEditor = () => {
     setDraft(vars);
+    void refreshPlaces();
+    setNewPlaceName('');
+    setNewPlaceUrl('');
     setIsEditing(true);
   };
 
   const updateDraft = (key: keyof WhatsAppTemplateVars, value: string) => {
     setDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const selectPlace = (id: string) => {
+    const place = places.find((p) => p.id === id);
+    if (!place) {
+      setDraft((current) => ({ ...current, branchName: '', mapsLink: '' }));
+      return;
+    }
+    setDraft((current) => ({
+      ...current,
+      branchName: place.name,
+      mapsLink: place.location_or_link,
+    }));
+  };
+
+  const handleSavePlace = async () => {
+    if (!newPlaceName.trim() || !newPlaceUrl.trim()) {
+      toast.error('Enter both location name and maps link');
+      return;
+    }
+    try {
+      const row = await createLocation({
+        name: newPlaceName,
+        location_or_link: newPlaceUrl,
+        branch,
+      });
+      setPlaces(await listLocations(branch));
+      setDraft((current) => ({
+        ...current,
+        branchName: row.name,
+        mapsLink: row.location_or_link,
+      }));
+      setNewPlaceName('');
+      setNewPlaceUrl('');
+      toast.success('Location saved for this branch');
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to save location'));
+    }
+  };
+
+  const handleRemovePlace = async (place: LocationTemplateRow) => {
+    try {
+      await deleteLocation(place.id, branch);
+      setPlaces(await listLocations(branch));
+      if (draft.branchName.toLowerCase() === place.name.toLowerCase()) {
+        setDraft((current) => ({ ...current, branchName: '', mapsLink: '' }));
+      }
+      toast.success('Location removed');
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to remove location'));
+    }
   };
 
   const saveDraft = () => {
@@ -132,7 +221,19 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
     toast.success('Preview updated');
   };
 
+  const trySend = () => {
+    if (!canSendWhatsAppInvite(vars)) {
+      toast.error('Set visit date and location before sending');
+      return;
+    }
+    setIsConfirming(true);
+  };
+
   const confirmSend = async () => {
+    if (!canSendWhatsAppInvite(vars)) {
+      toast.error('Set visit date and location before sending');
+      return;
+    }
     setIsConfirming(false);
     setIsSending(true);
     try {
@@ -140,7 +241,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
       toast.success('WhatsApp invitation sent successfully!');
     } catch (err: any) {
       console.error(err);
-      toast.error(err?.response?.data?.detail || 'Failed to send WhatsApp invitation.');
+      toast.error(extractError(err, 'Failed to send WhatsApp invitation.'), { duration: 8000 });
     } finally {
       setIsSending(false);
     }
@@ -154,7 +255,6 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
           className
         )}
       >
-        {/* Header */}
         <div className="shrink-0 px-6 pt-5 pb-4 flex items-center justify-between bg-white/80 backdrop-blur-xl border-b border-black/5">
           <div>
             <h2 className="text-xl font-bold text-foreground">Live Preview</h2>
@@ -172,7 +272,6 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
           </button>
         </div>
 
-        {/* Phone Mockup — fills remaining space */}
         <div className="flex-1 min-h-0 flex justify-center px-6 py-4 overflow-hidden">
           <div className="relative flex w-full max-w-[340px] h-full flex-col overflow-hidden rounded-[38px] border-[6px] border-[#18181b] bg-[#efeae2] shadow-[0_20px_40px_rgba(17,24,39,0.2)]">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[20px] w-[110px] bg-[#18181b] rounded-b-[16px] z-20"></div>
@@ -239,12 +338,17 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="shrink-0 border-t border-border bg-white p-4">
+        <div className="shrink-0 border-t border-border bg-white p-4 space-y-2">
+          {!readyToSend && (
+            <p className="text-xs text-muted-foreground text-center">
+              Set visit date and location in Edit before sending.
+            </p>
+          )}
           <Button
             className="w-full !bg-[#08796b] hover:!bg-[#06685c]"
-            onClick={() => setIsConfirming(true)}
+            onClick={trySend}
             isLoading={isSending}
+            disabled={!readyToSend}
           >
             <Send className="mr-2 h-4 w-4" />
             Send to candidate
@@ -261,10 +365,22 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
       >
         <div className="max-h-[72vh] overflow-y-auto p-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="form-label">{FIELD_LABELS.visitDate}</label>
+              <Input
+                type="date"
+                value={toDateInputValue(draft.visitDate)}
+                onChange={(event) => {
+                  const raw = event.target.value;
+                  updateDraft('visitDate', raw ? formatVisitDate(raw) : '');
+                }}
+              />
+            </div>
+
             {EDITABLE_FIELDS.map((key) => (
               <div
                 key={key}
-                className={key === 'mapsLink' || key === 'extraInstructions' ? 'sm:col-span-2' : undefined}
+                className={key === 'extraInstructions' ? 'sm:col-span-2' : undefined}
               >
                 <label className="form-label">{FIELD_LABELS[key]}</label>
                 {key === 'extraInstructions' ? (
@@ -279,10 +395,67 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
               </div>
             ))}
 
+            <div className="sm:col-span-2 space-y-3 rounded-lg border border-border p-3">
+              <label className="form-label">Location (name + maps link)</label>
+              <select
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                value={places.find((p) => p.name === draft.branchName)?.id || ''}
+                onChange={(event) => selectPlace(event.target.value)}
+              >
+                <option value="">Select location…</option>
+                {places.map((place) => (
+                  <option key={place.id} value={place.id}>
+                    {place.name}
+                  </option>
+                ))}
+              </select>
+              {draft.mapsLink ? (
+                <p className="text-xs text-muted-foreground break-all">{draft.mapsLink}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">No maps link selected.</p>
+              )}
+
+              <ul className="space-y-1">
+                {places.map((place) => (
+                  <li
+                    key={place.id}
+                    className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm"
+                  >
+                    <span className="truncate font-medium">{place.name}</span>
+                    <button
+                      type="button"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => handleRemovePlace(place)}
+                      title={`Remove ${place.name}`}
+                      aria-label={`Remove ${place.name}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <Input
+                  placeholder="New location name"
+                  value={newPlaceName}
+                  onChange={(event) => setNewPlaceName(event.target.value)}
+                />
+                <Input
+                  placeholder="Maps link"
+                  value={newPlaceUrl}
+                  onChange={(event) => setNewPlaceUrl(event.target.value)}
+                />
+                <Button type="button" variant="secondary" onClick={handleSavePlace}>
+                  Save
+                </Button>
+              </div>
+            </div>
+
             <div className="sm:col-span-2">
               <label className="form-label flex items-center gap-1.5">
                 <img src="/link-icon.png" alt="Link" className="w-4 h-4 object-contain" />
-                CALL LETTER link
+                Job application form link
               </label>
               <Input value={candidate.share_url || draft.formLink} readOnly disabled />
               <p className="mt-1.5 text-xs text-muted-foreground">Uses this candidate&apos;s generated form link.</p>

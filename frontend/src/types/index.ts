@@ -44,6 +44,15 @@ export const NIPPON_BRANCHES = [
   'Thrissur'
 ];
 
+export const CANDIDATE_DEPARTMENTS = [
+  'Sales',
+  'Service',
+  'Customer Service',
+  'Insurance',
+  'Call Center',
+  'HR',
+] as const;
+
 export interface User {
   id: string;
   email: string;
@@ -62,6 +71,8 @@ export interface Candidate {
   source: string;
   source_reference?: string;
   experience?: string;
+  department?: string;
+  position_applied_for?: string;
   share_url?: string;
   pre_form_status: FormStatus;
   pre_form_sent_at?: string;

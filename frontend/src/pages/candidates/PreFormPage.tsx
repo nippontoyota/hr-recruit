@@ -13,9 +13,11 @@ import { PersonalInfoForm } from './wizard/sections/PersonalInfoForm';
 import { AddressForm } from './wizard/sections/AddressForm';
 import { IdentityForm } from './wizard/sections/IdentityForm';
 import { EducationForm } from './wizard/sections/EducationForm';
+import { FamilyForm } from './wizard/sections/FamilyForm';
 import { EmploymentForm } from './wizard/sections/EmploymentForm';
 import { RecruitmentForm } from './wizard/sections/RecruitmentForm';
 import { MedicalForm } from './wizard/sections/MedicalForm';
+import { EmergencySocialForm } from './wizard/sections/EmergencySocialForm';
 
 export default function PreFormPage() {
   const { token } = useParams<{ token: string }>();
@@ -70,9 +72,13 @@ export default function PreFormPage() {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const expectedJoining = tomorrow.toISOString().split('T')[0];
 
-    setFormData(prev => ({
+    const todayIso = today.toISOString().split('T')[0];
+
+    setFormData(prev => {
+      const displayName = prev.fullName || 'Rahul Sharma';
+      return {
       ...prev,
-      nameAadhaar: prev.fullName || 'Rahul Sharma',
+      nameAadhaar: displayName,
       gender: 'Male',
       dateOfBirth: dob,
       age: age.toString(),
@@ -100,6 +106,10 @@ export default function PreFormPage() {
       drivingLicenseNumber: 'KL0720230001234',
       passportNumber: 'Z1234567',
 
+      confidentToDrive: true,
+      drive2Wheeler: true,
+      drive4Wheeler: true,
+
       class10School: 'St. Marys High School',
       class10Board: 'CBSE',
       class10Percentage: '85',
@@ -116,19 +126,29 @@ export default function PreFormPage() {
       gradCollege: 'Sacred Heart College',
       gradPercentage: '78',
       gradPassingYear: '2021',
+      gradMode: 'Regular',
 
       postGradCourse: '',
       postGradCollege: '',
       postGradPercentage: '',
       postGradPassingYear: '',
+      postGradMode: '',
 
       languagesRead: 'English, Malayalam',
       languagesWrite: 'English, Malayalam',
       languagesSpeak: 'English, Hindi, Malayalam',
 
+      fatherName: 'Ravi Sharma',
+      motherName: 'Meera Sharma',
+
       previousExperience: true,
       prevCompanyName: 'Tata Consultancy Services',
       prevPosition: 'Junior Associate',
+      prev1Reporting: 'Suresh Menon',
+      prev1From: '2022-06',
+      prev1To: '2024-05',
+      prev1Salary: '22000',
+      prev1Reason: 'Career growth',
       totalExperience: '2 Years',
       expectedSalary: '25000',
 
@@ -143,8 +163,26 @@ export default function PreFormPage() {
       preferredRegion: 'Ernakulam',
       expectedJoiningDate: expectedJoining,
 
+      achievements: '',
+      hobbies: '',
+      prevTerminated: false,
+      nervousDisorder: false,
+      physicalDisability: false,
+      eyeVision: false,
+      criminalConviction: false,
       medicalRemarks: 'None',
-    }));
+
+      emergency1Relation: 'Uncle',
+      emergency1Name: 'Suresh Nair',
+      emergency1Address: 'Kalamassery, Ernakulam',
+      emergency1Contact: '9876501234',
+
+      emailId: 'rahul.sharma@example.com',
+      declarationPlace: 'Kochi',
+      declarationDate: todayIso,
+      declarationName: displayName,
+    };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -302,6 +340,11 @@ export default function PreFormPage() {
           </section>
 
           <section className="pb-8 border-b border-border">
+            <h2 className="section-heading mb-6">Family details</h2>
+            <FamilyForm data={formData} update={handleUpdateField} />
+          </section>
+
+          <section className="pb-8 border-b border-border">
             <h2 className="section-heading mb-6">Employment history</h2>
             <EmploymentForm data={formData} update={handleUpdateField} />
           </section>
@@ -312,8 +355,13 @@ export default function PreFormPage() {
           </section>
 
           <section className="pb-8 border-b border-border">
-            <h2 className="section-heading mb-6">Medical and declaration</h2>
+            <h2 className="section-heading mb-6">General information</h2>
             <MedicalForm data={formData} update={handleUpdateField} />
+          </section>
+
+          <section className="pb-8 border-b border-border">
+            <h2 className="section-heading mb-6">Emergency, social &amp; declaration</h2>
+            <EmergencySocialForm data={formData} update={handleUpdateField} />
           </section>
 
           <div className="pt-2 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">

@@ -23,9 +23,39 @@ export const BRANCH_LOCATIONS: BranchLocation[] = [
     mapsUrl: 'https://maps.google.com/?q=Nippon+Toyota+Kochuveli',
   },
   {
+    name: 'Kalamassery',
+    address: 'Nippon Toyota, Kalamassery, Kochi',
+    mapsUrl: 'https://www.google.com/maps/dir/?api=1&destination=Nippon+Toyota+Kalamassery&destination_place_id=ChIJY4b1sS0MCDsRJNItKoFWoFg',
+  },
+  {
     name: 'Kalamassery (Nippon Towers)',
     address: 'Nippon Towers, Kalamassery, Kochi',
     mapsUrl: 'https://maps.google.com/?q=Nippon+Toyota+Nippon+Towers+Kalamassery',
+  },
+  {
+    name: 'Trivandrum',
+    address: 'Nippon Toyota, Trivandrum',
+    mapsUrl: 'https://maps.google.com/?q=Nippon+Toyota+Trivandrum',
+  },
+  {
+    name: 'Kollam',
+    address: 'Nippon Toyota, Kollam',
+    mapsUrl: 'https://maps.google.com/?q=Nippon+Toyota+Kollam',
+  },
+  {
+    name: 'Cochin',
+    address: 'Nippon Toyota, Cochin',
+    mapsUrl: 'https://maps.google.com/?q=Nippon+Toyota+Cochin',
+  },
+  {
+    name: 'Thrissur',
+    address: 'Nippon Toyota, Thrissur',
+    mapsUrl: 'https://maps.google.com/?q=Nippon+Toyota+Thrissur',
+  },
+  {
+    name: 'Kottayam',
+    address: 'Nippon Toyota, Kottayam',
+    mapsUrl: 'https://maps.google.com/?q=Nippon+Toyota+Kottayam',
   },
   {
     name: 'Nettoor',

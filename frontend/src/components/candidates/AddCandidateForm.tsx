@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Input, Select, Modal } from '../ui';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { createCandidate } from '../../api/candidates';
-import { NIPPON_BRANCHES } from '../../types';
+import { NIPPON_BRANCHES, CANDIDATE_DEPARTMENTS } from '../../types';
 import { useAuth } from '../../auth/AuthContext';
 import { validateBasicCandidateForm } from '../../lib/validatePreForm';
 
@@ -83,6 +83,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
         source_reference: undefined,
         experience: experience,
         department: department.trim() || undefined,
+        position_applied_for: department.trim() || undefined,
         branch_location: branchLocation || undefined,
       } as any);
 
@@ -201,11 +202,9 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
               required
             >
               <option value="" disabled>Select Department</option>
-              <option value="Sales">Sales</option>
-              <option value="Service">Service</option>
-              <option value="Insurance">Insurance</option>
-              <option value="Call Center">Call Center</option>
-              <option value="HR">HR</option>
+              {CANDIDATE_DEPARTMENTS.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
             </Select>
           </div>
 

@@ -8,7 +8,7 @@ from .evaluation import Evaluation
 from .evaluation_token import EvaluationToken
 from .followup import FollowUp
 from .branch_interview import BranchInterview
-from .settings import LocationTemplate, MessageTemplate
+from .settings import InterviewerName, LocationTemplate, MessageTemplate
 from .stage_history import StageHistory
 from .technical_question import TechnicalQuestion
 from .user import User
@@ -24,6 +24,7 @@ __all__ = [
     "EvaluationToken",
     "FollowUp",
     "BranchInterview",
+    "InterviewerName",
     "LocationTemplate",
     "MessageTemplate",
     "StageHistory",
