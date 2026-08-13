@@ -14,11 +14,11 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
     <div className="space-y-6 pb-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
+          <div className="min-w-0">
             <label className="block text-sm font-medium text-text-primary mb-1">
               Candidate Photo (PNG/JPEG) <span className="text-danger">*</span>
             </label>
-            <div className={`border border-dashed ${errors.photoFileObject ? 'border-danger' : 'border-border'} rounded-lg p-5 bg-content text-center relative hover:border-primary/40 transition-colors`}>
+            <div className={`border border-dashed ${errors.photoFileObject ? 'border-danger' : 'border-border'} rounded-lg p-5 bg-content text-center relative hover:border-primary/40 transition-colors min-w-0 overflow-hidden`}>
               <input
                 type="file"
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -29,9 +29,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
                   }
                 }}
               />
-              <div className="flex flex-col items-center justify-center pointer-events-none">
-                <UploadCloud className="w-8 h-8 text-text-secondary mb-2" />
-                <span className="text-xs text-text-secondary">
+              <div className="flex flex-col items-center justify-center pointer-events-none min-w-0 w-full">
+                <UploadCloud className="w-8 h-8 text-text-secondary mb-2 shrink-0" />
+                <span className="text-xs text-text-secondary w-full min-w-0 break-all">
                   {data.photoFileObject ? data.photoFileObject.name : 'Select your photo (PNG or JPEG)'}
                 </span>
               </div>
@@ -39,11 +39,11 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             {errors.photoFileObject && <p className="text-xs text-danger mt-1">{errors.photoFileObject}</p>}
           </div>
 
-          <div>
+          <div className="min-w-0">
             <label className="block text-sm font-medium text-text-primary mb-1">
               Resume (PDF or Word) <span className="text-danger">*</span>
             </label>
-            <div className={`border border-dashed ${errors.resumeFileObject ? 'border-danger' : 'border-border'} rounded-lg p-5 bg-content text-center relative hover:border-primary/40 transition-colors`}>
+            <div className={`border border-dashed ${errors.resumeFileObject ? 'border-danger' : 'border-border'} rounded-lg p-5 bg-content text-center relative hover:border-primary/40 transition-colors min-w-0 overflow-hidden`}>
               <input
                 type="file"
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -54,9 +54,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
                   }
                 }}
               />
-              <div className="flex flex-col items-center justify-center pointer-events-none">
-                <UploadCloud className="w-8 h-8 text-text-secondary mb-2" />
-                <span className="text-xs text-text-secondary">
+              <div className="flex flex-col items-center justify-center pointer-events-none min-w-0 w-full">
+                <UploadCloud className="w-8 h-8 text-text-secondary mb-2 shrink-0" />
+                <span className="text-xs text-text-secondary w-full min-w-0 break-all">
                   {data.resumeFileObject ? data.resumeFileObject.name : 'Select your PDF or Word resume'}
                 </span>
               </div>
@@ -236,6 +236,21 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             placeholder="e.g. Hindu / General"
           />
           {errors.religionCaste && <p className="text-xs text-danger mt-1">{errors.religionCaste}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text-primary mb-1">
+            Position Suitable
+          </label>
+          <Input
+            value={data.positionSuitable}
+            onChange={(e) => update('positionSuitable', e.target.value)}
+            onBlur={() => onBlurField('positionSuitable')}
+            error={!!errors.positionSuitable}
+            placeholder="Optional — other role you may suit"
+            maxLength={100}
+          />
+          {errors.positionSuitable && <p className="text-xs text-danger mt-1">{errors.positionSuitable}</p>}
         </div>
       </div>
     </div>
