@@ -199,7 +199,7 @@ export function InterviewApplicationFormDocument({ candidate }: InterviewApplica
               <>
                 <span className="font-semibold">Position Suitable: </span>
                 {v('positionSuitable')}
-              />,
+              </>,
               'w-[20%]'
             )}
           </tr>
@@ -460,14 +460,14 @@ export function InterviewApplicationFormDocument({ candidate }: InterviewApplica
               <>
                 <span className="font-semibold">How did you learn of this opening? </span>
                 {v('sourceOfOpening')}
-              />,
+              </>,
               'w-[50%]'
             )}
             {cell(
               <>
                 <span className="font-semibold">Referred by: </span>
                 {v('referredBy')}
-              />,
+              </>,
               'w-[50%]'
             )}
           </tr>
@@ -476,7 +476,7 @@ export function InterviewApplicationFormDocument({ candidate }: InterviewApplica
               <>
                 <span className="font-semibold">Ready to work in branches / preferred region: </span>
                 {v('preferredRegion')}
-              />
+              </>
             )}
             {cell(
               <>
@@ -484,7 +484,7 @@ export function InterviewApplicationFormDocument({ candidate }: InterviewApplica
                 {formatDate(d.expectedJoiningDate) === '—'
                   ? v('expectedJoiningDate')
                   : formatDate(d.expectedJoiningDate)}
-              />
+              </>
             )}
           </tr>
           <tr>
@@ -492,13 +492,13 @@ export function InterviewApplicationFormDocument({ candidate }: InterviewApplica
               <>
                 <span className="font-semibold">Achievements: </span>
                 {v('achievements')}
-              />
+              </>
             )}
             {cell(
               <>
                 <span className="font-semibold">Hobbies: </span>
                 {v('hobbies')}
-              />
+              </>
             )}
           </tr>
         </tbody>
@@ -519,7 +519,7 @@ export function InterviewApplicationFormDocument({ candidate }: InterviewApplica
               {cell(
                 <>
                   <span className="font-semibold">({q.letter})</span> {q.label}
-                />,
+                </>,
                 'w-[88%]'
               )}
               {cell(yn(d[q.key]), 'w-[12%] text-center font-semibold')}
@@ -531,7 +531,7 @@ export function InterviewApplicationFormDocument({ candidate }: InterviewApplica
                 <>
                   <span className="font-semibold">Remarks: </span>
                   {v('medicalRemarks')}
-                />,
+                </>,
                 ''
               )}
               {cell('')}
@@ -584,28 +584,28 @@ export function InterviewApplicationFormDocument({ candidate }: InterviewApplica
               <>
                 <span className="font-semibold">Facebook: </span>
                 {v('facebookUrl')}
-              />,
+              </>,
               'w-[25%]'
             )}
             {cell(
               <>
                 <span className="font-semibold">Instagram: </span>
                 {v('instagramUrl')}
-              />,
+              </>,
               'w-[25%]'
             )}
             {cell(
               <>
                 <span className="font-semibold">Twitter / X: </span>
                 {v('twitterUrl')}
-              />,
+              </>,
               'w-[25%]'
             )}
             {cell(
               <>
                 <span className="font-semibold">E-Mail ID: </span>
                 {blank(email)}
-              />,
+              </>,
               'w-[25%]'
             )}
           </tr>
@@ -632,7 +632,7 @@ export function InterviewApplicationFormDocument({ candidate }: InterviewApplica
               <>
                 <span className="font-semibold">Place: </span>
                 {v('declarationPlace')}
-              />,
+              </>,
               'w-[33%]'
             )}
             {cell(
@@ -641,14 +641,14 @@ export function InterviewApplicationFormDocument({ candidate }: InterviewApplica
                 {formatDate(d.declarationDate) === '—'
                   ? v('declarationDate')
                   : formatDate(d.declarationDate)}
-              />,
+              </>,
               'w-[33%]'
             )}
             {cell(
               <>
                 <span className="font-semibold">Signature / Name: </span>
                 {v('declarationName')}
-              />,
+              </>,
               'w-[34%]'
             )}
           </tr>
