@@ -68,7 +68,6 @@ def create_candidate(
         email=body.email,
         source=body.source,
         source_reference=body.source_reference,
-        position_applied_for=body.position_applied_for,
         department=body.department,
         branch_location=body.branch_location,
         assigned_hr_user_id=body.assigned_hr_user_id,
