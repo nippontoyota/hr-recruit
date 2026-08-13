@@ -17,13 +17,14 @@ interface PreFormStatusProps {
 const HIDDEN_RAW_KEYS = new Set(['whatsapp_invite', 'resumeFileObject', 'resume_file', 'resume']);
 
 // Thematic categorizations for candidate responses
-const PERSONAL_FIELDS = ['age', 'gender', 'height', 'weight', 'bloodGroup', 'maritalStatus', 'religionCaste', 'dateOfBirth'];
+const PERSONAL_FIELDS = ['age', 'gender', 'height', 'weight', 'bloodGroup', 'maritalStatus', 'religionCaste', 'dateOfBirth', 'positionSuitable', 'emailId'];
 const ADDRESS_FIELDS = ['permHouseName', 'permPostOffice', 'permLandmark', 'permDistrict', 'permPinCode', 'presHouseName', 'presPostOffice', 'presLandmark', 'presDistrict', 'presPinCode', 'sameAsPermanent'];
 const EDUCATION_FIELDS = [
   'class10School', 'class10Board', 'class10Percentage', 'class10PassingYear', 'class10Mode',
   'class12School', 'class12Stream', 'class12Percentage', 'class12PassingYear', 'class12Mode',
   'gradCourse', 'gradCollege', 'gradPercentage', 'gradPassingYear', 'gradMode',
-  'postGradCourse', 'postGradCollege', 'postGradPercentage', 'postGradPassingYear', 'postGradMode'
+  'postGradCourse', 'postGradCollege', 'postGradPercentage', 'postGradPassingYear', 'postGradMode',
+  'compWord', 'compExcel', 'compPowerPoint', 'compTally', 'compOther', 'softwareCerts',
 ];
 const EMPLOYMENT_FIELDS = [
   'prevCompanyName', 'prevPosition', 'totalExperience', 'expectedSalary', 'currentSalary', 'noticePeriod',
@@ -31,9 +32,13 @@ const EMPLOYMENT_FIELDS = [
   'prev2Name', 'prev2From', 'prev2To', 'prev2Salary', 'prev2Reason', 'prev2Position', 'prev2Reporting',
   'prev3Name', 'prev3From', 'prev3To', 'prev3Salary', 'prev3Reason', 'prev3Position', 'prev3Reporting',
   'prev4Name', 'prev4From', 'prev4To', 'prev4Salary', 'prev4Reason', 'prev4Position', 'prev4Reporting',
-  'previousExperience'
+  'previousExperience',
 ];
-const IDENTITY_FIELDS = ['aadhaarNumber', 'panNumber', 'drivingLicenseNumber', 'passportNumber', 'languagesRead', 'languagesWrite', 'languagesSpeak', 'languagesOther', 'hobbies'];
+const IDENTITY_FIELDS = [
+  'aadhaarNumber', 'panNumber', 'drivingLicenseNumber', 'passportNumber',
+  'languagesRead', 'languagesWrite', 'languagesSpeak', 'languagesOther',
+  'confidentToDrive', 'drive2Wheeler', 'drive3Wheeler', 'drive4Wheeler', 'driveHeavy',
+];
 const FAMILY_FIELDS = [
   'fatherName', 'fatherAge', 'fatherPhone', 'fatherCompany', 'fatherOccupation',
   'motherName', 'motherAge', 'motherPhone', 'motherCompany', 'motherOccupation',
@@ -43,10 +48,17 @@ const FAMILY_FIELDS = [
   'sibling3Name', 'sibling3Age', 'sibling3Phone', 'sibling3Company', 'sibling3Relation', 'sibling3Occupation',
   'child1Name', 'child1Age', 'child1Phone', 'child1Company', 'child1Relation', 'child1Occupation',
   'child2Name', 'child2Age', 'child2Phone', 'child2Company', 'child2Relation', 'child2Occupation',
-  'child3Name', 'child3Age', 'child3Phone', 'child3Company', 'child3Relation', 'child3Occupation'
+  'child3Name', 'child3Age', 'child3Phone', 'child3Company', 'child3Relation', 'child3Occupation',
 ];
 const REFERENCES_FIELDS = ['refName', 'refRole', 'refContactNumber', 'refPanchayat', 'hasReference', 'referredBy', 'sourceOfOpening', 'preferredRegion', 'expectedJoiningDate'];
-const MEDICAL_FIELDS = ['medicalRemarks', 'physicalDisability', 'nervousDisorder', 'criminalConviction', 'prevTerminated', 'compWord', 'compExcel', 'compPowerPoint', 'compTally', 'compOther', 'softwareCerts', 'drive2Wheeler', 'drive3Wheeler', 'drive4Wheeler', 'driveHeavy', 'emergency1Name', 'emergency1Contact', 'emergency1Address', 'emergency1Relation', 'emergency2Name', 'emergency2Contact', 'emergency2Address', 'emergency2Relation'];
+const MEDICAL_FIELDS = [
+  'achievements', 'hobbies',
+  'medicalRemarks', 'physicalDisability', 'nervousDisorder', 'eyeVision', 'criminalConviction', 'prevTerminated',
+  'emergency1Name', 'emergency1Contact', 'emergency1Address', 'emergency1Relation',
+  'emergency2Name', 'emergency2Contact', 'emergency2Address', 'emergency2Relation',
+  'facebookUrl', 'instagramUrl', 'twitterUrl',
+  'declarationPlace', 'declarationDate', 'declarationName',
+];
 
 const ALL_CATEGORIZED_KEYS = new Set([
   ...PERSONAL_FIELDS,

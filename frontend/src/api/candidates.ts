@@ -89,21 +89,6 @@ export const submitPublicPreForm = async (token: string, data: any) => {
   return res.data;
 };
 
-export const fetchPublicPostForm = async (token: string) => {
-  const res = await request('GET', `/candidates/public-post-form/${token}`);
-  return res.data;
-};
-
-export const submitPublicPostForm = async (token: string, data: any) => {
-  const res = await request('POST', `/candidates/public-post-form/${token}`, data);
-  return res.data;
-};
-
-export const sendPostForm = async (id: string) => {
-  const res = await request('POST', `/candidates/${id}/post-form/send`);
-  return res.data;
-};
-
 export const publicGetBasicCandidate = async (candidateId: string): Promise<Candidate> => {
   const response = await request('GET', `/candidates/public-basic/${candidateId}`);
   return response.data;
