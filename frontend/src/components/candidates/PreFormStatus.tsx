@@ -6,6 +6,7 @@ import type { Candidate } from '../../types';
 import { toast } from 'sonner';
 import { updateCandidateRawData, sendPreForm } from '../../api/candidates';
 import { WhatsAppPreviewPanel } from './WhatsAppPreviewPanel';
+import { InterviewApplicationFormDocument } from './InterviewApplicationFormDocument';
 import { cn } from '../../lib/utils';
 
 interface PreFormStatusProps {
@@ -77,7 +78,7 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
   const componentRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({
     contentRef: componentRef,
-    documentTitle: `PreForm_${candidate.full_name}`,
+    documentTitle: `ApplicationForm_${candidate.full_name}`,
   });
 
   const [copied, setCopied] = useState(false);
@@ -93,6 +94,14 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
   useEffect(() => {
     setLocalRawData(candidate.profile?.raw_data ?? {});
   }, [candidate.profile?.raw_data]);
+
+  const printCandidate: Candidate = {
+    ...candidate,
+    profile: {
+      ...(candidate.profile || {}),
+      raw_data: localRawData,
+    } as any,
+  };
 
   const formEntries = Object.entries(localRawData).filter(
     ([key, value]) => !HIDDEN_RAW_KEYS.has(key) && value !== null && value !== undefined && typeof value !== 'object'
@@ -192,35 +201,17 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
     );
 
     return (
-      <div ref={componentRef} className="py-8 w-full max-w-4xl mx-auto print-container">
+      <div className="py-8 w-full max-w-4xl mx-auto print-container">
         <div className="flex flex-col items-center mb-8 no-print">
           <CheckCircle2 className="w-10 h-10 text-success mb-3" />
           <h3 className="text-2xl font-bold text-foreground">Form Submitted</h3>
           <p className="text-text-secondary mt-1">Pre-interview responses from the candidate</p>
         </div>
 
-        {/* Print Header Visible Only on Print */}
-        <div className="hidden print-header mb-8 border-b-2 border-black pb-6 font-sans">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h1 className="text-3xl font-black uppercase tracking-tight text-black mb-1">Nippon Toyota</h1>
-              <h2 className="text-sm font-bold uppercase tracking-widest text-gray-700">Human Resources Department</h2>
-            </div>
-            <img src="/nippon-toyota-logo.png" alt="Toyota Logo" className="h-12 object-contain" />
-          </div>
-          
-          <div className="bg-gray-100 p-4 border border-black/20 rounded-lg">
-            <h2 className="text-xl font-bold text-black uppercase tracking-wide mb-3 text-center border-b border-black/10 pb-2">Candidate Application Form</h2>
-            <div className="flex justify-between text-sm font-medium">
-              <div>
-                <span className="text-gray-500 uppercase text-xs font-bold mr-2">Candidate Name:</span>
-                <span className="text-black text-base">{candidate.full_name}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 uppercase text-xs font-bold mr-2">Submitted On:</span>
-                <span className="text-black text-base">{candidate.pre_form_submitted_at ? new Date(candidate.pre_form_submitted_at).toLocaleDateString() : '-'}</span>
-              </div>
-            </div>
+        {/* Off-screen print target (`hidden`/`opacity-0` can break react-to-print clones) */}
+        <div className="fixed top-0 left-[-9999px] pointer-events-none w-[210mm]">
+          <div ref={componentRef}>
+            <InterviewApplicationFormDocument candidate={printCandidate} />
           </div>
         </div>
 
@@ -231,7 +222,7 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
               <div className="flex items-center gap-2">
                 {!isEditing ? (
                   <>
-                    <Button variant="ghost" size="sm" onClick={handlePrint} className="h-8 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 font-semibold">
+                    <Button variant="ghost" size="sm" onClick={handlePrint} className="h-8 bg-muted text-text-secondary hover:bg-muted/80 hover:text-text-primary font-semibold">
                       <Printer className="w-4 h-4 mr-1.5" />
                       Print
                     </Button>
