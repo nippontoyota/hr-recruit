@@ -73,7 +73,7 @@ class CandidateResolveDuplicate(BaseModel):
 
 
 class PreFormApplicationData(BaseModel):
-    """Validated payload for public pre-interview form submission."""
+    """Validated payload for public call-letter / pre-interview application form."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -86,6 +86,7 @@ class PreFormApplicationData(BaseModel):
     weight: str
     bloodGroup: str
     religionCaste: str
+    positionSuitable: str = ""
 
     permHouseName: str
     permPostOffice: str
@@ -105,6 +106,12 @@ class PreFormApplicationData(BaseModel):
     drivingLicenseNumber: str
     passportNumber: str = ""
 
+    confidentToDrive: bool
+    drive2Wheeler: bool = False
+    drive3Wheeler: bool = False
+    drive4Wheeler: bool = False
+    driveHeavy: bool = False
+
     class10School: str
     class10Board: str
     class10Percentage: str
@@ -121,141 +128,12 @@ class PreFormApplicationData(BaseModel):
     gradCollege: str = ""
     gradPercentage: str = ""
     gradPassingYear: str = ""
+    gradMode: str = ""
 
     postGradCourse: str = ""
     postGradCollege: str = ""
     postGradPercentage: str = ""
     postGradPassingYear: str = ""
-
-    languagesRead: str
-    languagesWrite: str
-    languagesSpeak: str
-
-    previousExperience: bool = False
-    prevCompanyName: str = ""
-    prevPosition: str = ""
-    totalExperience: str = "Fresher"
-    expectedSalary: str
-
-    sourceOfOpening: str
-    referredBy: str = ""
-    preferredRegion: str
-    expectedJoiningDate: str
-
-    hasReference: bool = False
-    refRole: str = ""
-    refName: str = ""
-    refPanchayat: str = ""
-    refContactNumber: str = ""
-
-    prevTerminated: bool = False
-    physicalDisability: bool = False
-    nervousDisorder: bool = False
-    eyeVision: bool = False
-    criminalConviction: bool = False
-    medicalRemarks: str = ""
-
-    @model_validator(mode="after")
-    def validate_all(self) -> "PreFormApplicationData":
-        v.validate_full_name(self.nameAadhaar, "Name (as per Aadhaar)")
-        v.validate_select(self.gender, v.GENDERS, "Gender")
-        v.validate_dob(self.dateOfBirth, self.age)
-        v.validate_select(self.maritalStatus, v.MARITAL_STATUSES, "Marital status")
-        v.validate_select(self.bloodGroup, v.BLOOD_GROUPS, "Blood group")
-        v.validate_number_range(self.height, "Height", 100, 250)
-        v.validate_number_range(self.weight, "Weight", 30, 200)
-        v.validate_text_field(self.religionCaste, "Religion & caste", 2, 100)
-
-        for prefix, label in (
-            ("perm", "Permanent"),
-        ):
-            v.validate_text_field(getattr(self, f"{prefix}HouseName"), f"{label} house name", 2, 200)
-            v.validate_text_field(getattr(self, f"{prefix}PostOffice"), f"{label} post office", 2, 100)
-            v.validate_text_field(getattr(self, f"{prefix}Landmark"), f"{label} landmark", 2, 100)
-            v.validate_text_field(getattr(self, f"{prefix}District"), f"{label} district", 2, 100)
-            v.validate_pin_code(getattr(self, f"{prefix}PinCode"), f"{label} PIN code")
-
-        if not self.sameAsPermanent:
-            for prefix, label in (("pres", "Present"),):
-                v.validate_text_field(getattr(self, f"{prefix}HouseName"), f"{label} house name", 2, 200)
-                v.validate_text_field(getattr(self, f"{prefix}PostOffice"), f"{label} post office", 2, 100)
-                v.validate_text_field(getattr(self, f"{prefix}Landmark"), f"{label} landmark", 2, 100)
-                v.validate_text_field(getattr(self, f"{prefix}District"), f"{label} district", 2, 100)
-                v.validate_pin_code(getattr(self, f"{prefix}PinCode"), f"{label} PIN code")
-
-        v.validate_aadhaar(self.aadhaarNumber)
-        v.validate_pan(self.panNumber)
-        v.validate_driving_license(self.drivingLicenseNumber)
-        v.validate_passport(self.passportNumber)
-
-        v.validate_text_field(self.class10School, "10th school name", 2, 150)
-        v.validate_text_field(self.class10Board, "10th board", 2, 100)
-        v.validate_percentage(self.class10Percentage, "10th percentage")
-        v.validate_passing_year(self.class10PassingYear, "10th passing year")
-        v.validate_select(self.class10Mode, v.STUDY_MODES, "10th mode of study")
-
-        v.validate_text_field(self.class12School, "12th school name", 2, 150)
-        v.validate_text_field(self.class12Stream, "12th stream", 2, 100)
-        v.validate_percentage(self.class12Percentage, "12th percentage")
-        v.validate_passing_year(self.class12PassingYear, "12th passing year")
-        v.validate_select(self.class12Mode, v.STUDY_MODES, "12th mode of study")
-
-        if self.gradCourse.strip() or self.gradCollege.strip() or self.gradPercentage.strip() or self.gradPassingYear.strip():
-            v.validate_text_field(self.gradCourse, "Graduation course", 2, 100)
-            v.validate_text_field(self.gradCollege, "Graduation college", 2, 100)
-            v.validate_percentage(self.gradPercentage, "Graduation percentage")
-            current_year = datetime.now(timezone.utc).year
-            v.validate_passing_year(self.gradPassingYear, "Graduation passing year", max_year=current_year + 4)
-
-        if self.postGradCourse.strip() or self.postGradCollege.strip() or self.postGradPercentage.strip() or self.postGradPassingYear.strip():
-            v.validate_text_field(self.postGradCourse, "Post graduation course", 2, 100)
-            v.validate_text_field(self.postGradCollege, "Post graduation college", 2, 100)
-            v.validate_percentage(self.postGradPercentage, "Post graduation percentage")
-            current_year = datetime.now(timezone.utc).year
-            v.validate_passing_year(self.postGradPassingYear, "Post graduation passing year", max_year=current_year + 4)
-
-        v.validate_text_field(self.languagesRead, "Languages to read", 2, 200)
-        v.validate_text_field(self.languagesWrite, "Languages to write", 2, 200)
-        v.validate_text_field(self.languagesSpeak, "Languages to speak", 2, 200)
-
-        v.validate_salary(self.expectedSalary)
-
-        if self.previousExperience:
-            v.validate_experience_text(self.totalExperience)
-            v.validate_text_field(self.prevCompanyName, "Previous company name", 2, 150)
-            v.validate_text_field(self.prevPosition, "Previous position", 2, 100)
-        else:
-            if not self.totalExperience.strip():
-                self.totalExperience = "Fresher"
-
-        v.validate_select(self.sourceOfOpening, v.OPENING_SOURCES, "Source of opening")
-        if self.sourceOfOpening == "Employee Referral" or self.referredBy.strip():
-            v.validate_text_field(self.referredBy, "Referred by", 2, 100)
-
-        v.validate_text_field(self.preferredRegion, "Preferred region", 2, 100)
-        v.validate_future_date(self.expectedJoiningDate, "Expected joining date")
-
-        if self.hasReference:
-            v.validate_select(self.refRole, v.REF_ROLES, "Reference role")
-            v.validate_text_field(self.refName, "Reference name", 2, 100)
-            v.validate_text_field(self.refPanchayat, "Reference panchayat / location", 2, 100)
-            v.validate_phone(self.refContactNumber, "Reference contact number")
-
-        return self
-
-
-class PostFormApplicationData(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    languagesWrite: str = ""
-    languagesSpeak: str = ""
-    languagesOther: str = ""
-    drive2Wheeler: bool = False
-    drive3Wheeler: bool = False
-    drive4Wheeler: bool = False
-    driveHeavy: bool = False
-
-    gradMode: str = ""
     postGradMode: str = ""
 
     compWord: bool = False
@@ -265,13 +143,18 @@ class PostFormApplicationData(BaseModel):
     compOther: bool = False
     softwareCerts: str = ""
 
-    fatherName: str = ""
+    languagesRead: str
+    languagesWrite: str
+    languagesSpeak: str
+    languagesOther: str = ""
+
+    fatherName: str
     fatherAge: str = ""
     fatherOccupation: str = ""
     fatherCompany: str = ""
     fatherPhone: str = ""
 
-    motherName: str = ""
+    motherName: str
     motherAge: str = ""
     motherOccupation: str = ""
     motherCompany: str = ""
@@ -325,19 +208,9 @@ class PostFormApplicationData(BaseModel):
     sibling3Company: str = ""
     sibling3Phone: str = ""
 
-    hobbies: str = ""
-    achievements: str = ""
-
-    emergency1Relation: str = ""
-    emergency1Name: str = ""
-    emergency1Address: str = ""
-    emergency1Contact: str = ""
-
-    emergency2Relation: str = ""
-    emergency2Name: str = ""
-    emergency2Address: str = ""
-    emergency2Contact: str = ""
-
+    previousExperience: bool = False
+    prevCompanyName: str = ""
+    prevPosition: str = ""
     prev1Reporting: str = ""
     prev1From: str = ""
     prev1To: str = ""
@@ -368,9 +241,230 @@ class PostFormApplicationData(BaseModel):
     prev4Salary: str = ""
     prev4Reason: str = ""
 
+    totalExperience: str = "Fresher"
+    expectedSalary: str
+
+    sourceOfOpening: str
+    referredBy: str = ""
+    preferredRegion: str
+    expectedJoiningDate: str
+
+    hasReference: bool = False
+    refRole: str = ""
+    refName: str = ""
+    refPanchayat: str = ""
+    refContactNumber: str = ""
+
+    achievements: str = ""
+    hobbies: str = ""
+
+    prevTerminated: bool = False
+    physicalDisability: bool = False
+    nervousDisorder: bool = False
+    eyeVision: bool = False
+    criminalConviction: bool = False
+    medicalRemarks: str = ""
+
+    emergency1Relation: str
+    emergency1Name: str
+    emergency1Address: str
+    emergency1Contact: str
+
+    emergency2Relation: str = ""
+    emergency2Name: str = ""
+    emergency2Address: str = ""
+    emergency2Contact: str = ""
+
     facebookUrl: str = ""
     instagramUrl: str = ""
     twitterUrl: str = ""
+
+    emailId: str
+    declarationPlace: str
+    declarationDate: str
+    declarationName: str
+
+    @staticmethod
+    def _any_filled(*values: str) -> bool:
+        return any((value or "").strip() for value in values)
+
+    @classmethod
+    def _validate_job_row(
+        cls,
+        *,
+        label: str,
+        name: str,
+        position: str,
+        reporting: str,
+        from_date: str,
+        to_date: str,
+        salary: str,
+        reason: str,
+        required: bool,
+    ) -> None:
+        filled = cls._any_filled(name, position, reporting, from_date, to_date, salary, reason)
+        if not required and not filled:
+            return
+        v.validate_text_field(name, f"{label} company name", 2, 150)
+        v.validate_text_field(position, f"{label} position", 2, 100)
+        v.validate_text_field(reporting, f"{label} reporting person", 2, 100)
+        v.validate_text_field(from_date, f"{label} from date", 2, 50)
+        v.validate_text_field(to_date, f"{label} to date", 2, 50)
+        v.validate_salary(salary, f"{label} salary")
+        v.validate_text_field(reason, f"{label} reason for leaving", 2, 200)
+
+    @model_validator(mode="after")
+    def validate_all(self) -> "PreFormApplicationData":
+        v.validate_full_name(self.nameAadhaar, "Name (as per Aadhaar)")
+        v.validate_select(self.gender, v.GENDERS, "Gender")
+        v.validate_dob(self.dateOfBirth, self.age)
+        v.validate_select(self.maritalStatus, v.MARITAL_STATUSES, "Marital status")
+        v.validate_select(self.bloodGroup, v.BLOOD_GROUPS, "Blood group")
+        v.validate_number_range(self.height, "Height", 100, 250)
+        v.validate_number_range(self.weight, "Weight", 30, 200)
+        v.validate_text_field(self.religionCaste, "Religion & caste", 2, 100)
+
+        for prefix, label in (
+            ("perm", "Permanent"),
+        ):
+            v.validate_text_field(getattr(self, f"{prefix}HouseName"), f"{label} house name", 2, 200)
+            v.validate_text_field(getattr(self, f"{prefix}PostOffice"), f"{label} post office", 2, 100)
+            v.validate_text_field(getattr(self, f"{prefix}Landmark"), f"{label} landmark", 2, 100)
+            v.validate_text_field(getattr(self, f"{prefix}District"), f"{label} district", 2, 100)
+            v.validate_pin_code(getattr(self, f"{prefix}PinCode"), f"{label} PIN code")
+
+        if not self.sameAsPermanent:
+            for prefix, label in (("pres", "Present"),):
+                v.validate_text_field(getattr(self, f"{prefix}HouseName"), f"{label} house name", 2, 200)
+                v.validate_text_field(getattr(self, f"{prefix}PostOffice"), f"{label} post office", 2, 100)
+                v.validate_text_field(getattr(self, f"{prefix}Landmark"), f"{label} landmark", 2, 100)
+                v.validate_text_field(getattr(self, f"{prefix}District"), f"{label} district", 2, 100)
+                v.validate_pin_code(getattr(self, f"{prefix}PinCode"), f"{label} PIN code")
+
+        v.validate_aadhaar(self.aadhaarNumber)
+        v.validate_pan(self.panNumber)
+        v.validate_driving_license(self.drivingLicenseNumber)
+        v.validate_passport(self.passportNumber)
+
+        if not isinstance(self.confidentToDrive, bool):
+            raise ValueError("Confident to drive is required.")
+
+        v.validate_text_field(self.class10School, "10th school name", 2, 150)
+        v.validate_text_field(self.class10Board, "10th board", 2, 100)
+        v.validate_percentage(self.class10Percentage, "10th percentage")
+        v.validate_passing_year(self.class10PassingYear, "10th passing year")
+        v.validate_select(self.class10Mode, v.STUDY_MODES, "10th mode of study")
+
+        v.validate_text_field(self.class12School, "12th school name", 2, 150)
+        v.validate_text_field(self.class12Stream, "12th stream", 2, 100)
+        v.validate_percentage(self.class12Percentage, "12th percentage")
+        v.validate_passing_year(self.class12PassingYear, "12th passing year")
+        v.validate_select(self.class12Mode, v.STUDY_MODES, "12th mode of study")
+
+        if self._any_filled(
+            self.gradCourse, self.gradCollege, self.gradPercentage, self.gradPassingYear, self.gradMode
+        ):
+            v.validate_text_field(self.gradCourse, "Graduation course", 2, 100)
+            v.validate_text_field(self.gradCollege, "Graduation college", 2, 100)
+            v.validate_percentage(self.gradPercentage, "Graduation percentage")
+            current_year = datetime.now(timezone.utc).year
+            v.validate_passing_year(self.gradPassingYear, "Graduation passing year", max_year=current_year + 4)
+            v.validate_select(self.gradMode, v.STUDY_MODES, "Graduation mode of study")
+
+        if self._any_filled(
+            self.postGradCourse,
+            self.postGradCollege,
+            self.postGradPercentage,
+            self.postGradPassingYear,
+            self.postGradMode,
+        ):
+            v.validate_text_field(self.postGradCourse, "Post graduation course", 2, 100)
+            v.validate_text_field(self.postGradCollege, "Post graduation college", 2, 100)
+            v.validate_percentage(self.postGradPercentage, "Post graduation percentage")
+            current_year = datetime.now(timezone.utc).year
+            v.validate_passing_year(self.postGradPassingYear, "Post graduation passing year", max_year=current_year + 4)
+            v.validate_select(self.postGradMode, v.STUDY_MODES, "Post graduation mode of study")
+
+        v.validate_text_field(self.languagesRead, "Languages to read", 2, 200)
+        v.validate_text_field(self.languagesWrite, "Languages to write", 2, 200)
+        v.validate_text_field(self.languagesSpeak, "Languages to speak", 2, 200)
+
+        v.validate_text_field(self.fatherName, "Father name", 2, 100)
+        v.validate_text_field(self.motherName, "Mother name", 2, 100)
+        if self.maritalStatus == "Married":
+            v.validate_text_field(self.spouseName, "Spouse name", 2, 100)
+
+        v.validate_salary(self.expectedSalary)
+
+        if self.previousExperience:
+            v.validate_experience_text(self.totalExperience)
+            self._validate_job_row(
+                label="Previous job 1",
+                name=self.prevCompanyName,
+                position=self.prevPosition,
+                reporting=self.prev1Reporting,
+                from_date=self.prev1From,
+                to_date=self.prev1To,
+                salary=self.prev1Salary,
+                reason=self.prev1Reason,
+                required=True,
+            )
+        else:
+            if not self.totalExperience.strip():
+                self.totalExperience = "Fresher"
+
+        for idx, prefix in ((2, "prev2"), (3, "prev3"), (4, "prev4")):
+            self._validate_job_row(
+                label=f"Previous job {idx}",
+                name=getattr(self, f"{prefix}Name"),
+                position=getattr(self, f"{prefix}Position"),
+                reporting=getattr(self, f"{prefix}Reporting"),
+                from_date=getattr(self, f"{prefix}From"),
+                to_date=getattr(self, f"{prefix}To"),
+                salary=getattr(self, f"{prefix}Salary"),
+                reason=getattr(self, f"{prefix}Reason"),
+                required=False,
+            )
+
+        v.validate_select(self.sourceOfOpening, v.OPENING_SOURCES, "Source of opening")
+        if self.sourceOfOpening == "Employee Referral" or self.referredBy.strip():
+            v.validate_text_field(self.referredBy, "Referred by", 2, 100)
+
+        v.validate_text_field(self.preferredRegion, "Preferred region", 2, 100)
+        v.validate_future_date(self.expectedJoiningDate, "Expected joining date")
+
+        if self.hasReference:
+            v.validate_select(self.refRole, v.REF_ROLES, "Reference role")
+            v.validate_text_field(self.refName, "Reference name", 2, 100)
+            v.validate_text_field(self.refPanchayat, "Reference panchayat / location", 2, 100)
+            v.validate_phone(self.refContactNumber, "Reference contact number")
+
+        v.validate_text_field(self.emergency1Relation, "Emergency contact 1 relation", 2, 50)
+        v.validate_text_field(self.emergency1Name, "Emergency contact 1 name", 2, 100)
+        v.validate_text_field(self.emergency1Address, "Emergency contact 1 address", 2, 200)
+        v.validate_phone(self.emergency1Contact, "Emergency contact 1 phone")
+
+        if self._any_filled(
+            self.emergency2Relation, self.emergency2Name, self.emergency2Address, self.emergency2Contact
+        ):
+            v.validate_text_field(self.emergency2Relation, "Emergency contact 2 relation", 2, 50)
+            v.validate_text_field(self.emergency2Name, "Emergency contact 2 name", 2, 100)
+            v.validate_text_field(self.emergency2Address, "Emergency contact 2 address", 2, 200)
+            v.validate_phone(self.emergency2Contact, "Emergency contact 2 phone")
+
+        v.validate_email(self.emailId, required=True, label="Email")
+        v.validate_text_field(self.declarationPlace, "Declaration place", 2, 100)
+        try:
+            datetime.strptime(self.declarationDate.strip(), "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValueError("Declaration date is invalid.") from exc
+        v.validate_text_field(self.declarationName, "Declaration name", 2, 100)
+
+        return self
+
+
+# Kept for import compatibility; post-form fields are merged into PreFormApplicationData.
+PostFormApplicationData = PreFormApplicationData
 
 
 class CandidateProfileRawDataUpdate(BaseModel):
