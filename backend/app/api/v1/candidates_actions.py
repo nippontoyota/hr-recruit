@@ -19,8 +19,10 @@ from app.services.doubletick import send_template, DoubleTickError, friendly_dou
 
 from app.services.candidate_service import (
     to_candidate_out,
-    issue_pre_form,
-    store_whatsapp_invite,
+)
+from app.api.v1.candidates_core import (
+    _issue_pre_form as issue_pre_form,
+    _store_whatsapp_invite as store_whatsapp_invite,
 )
 from app.services.document_service import (
     get_resume_document,
