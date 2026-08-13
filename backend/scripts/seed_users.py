@@ -11,36 +11,39 @@ from app.models.enums import UserRole
 from app.models.settings import HR_BRANCHES
 from app.models.user import User
 
-PASSWORD = "password123"
+PASSWORD = "nippon2026"
 
-
-def _email_for_branch(branch: str) -> str:
-    slug = branch.lower().replace(" ", "")
-    return f"hr.{slug}@nippon.local"
-
+def _make_user(email: str, name: str, role: UserRole, branch: str = None):
+    # If the email doesn't have a domain, add @nippontoyota.com
+    if "@" not in email or email.endswith("@"):
+        email = email.rstrip("@") + "@nippontoyota.com"
+    return {
+        "email": email,
+        "full_name": name,
+        "role": role,
+        "branch_location": branch,
+    }
 
 SEED_USERS = [
-    {
-        "email": "admin@nippon.local",
-        "full_name": "Portal Admin",
-        "role": UserRole.ADMIN,
-        "branch_location": None,
-    },
-    {
-        "email": "hohr@nippon.local",
-        "full_name": "Head Office HR",
-        "role": UserRole.HO_HR,
-        "branch_location": None,
-    },
-    *[
-        {
-            "email": _email_for_branch(branch),
-            "full_name": f"{branch} HR",
-            "role": UserRole.LOCAL_HR,
-            "branch_location": branch,
-        }
-        for branch in HR_BRANCHES
-    ],
+    _make_user("admin@nippon.local", "Portal Admin", UserRole.ADMIN),
+    _make_user("recruitment@nippontoyota.com", "Head Office HR", UserRole.HO_HR),
+    
+    _make_user("hrenc@", "Trivandrum HR 1", UserRole.LOCAL_HR, "Trivandrum"),
+    _make_user("hrtvm@", "Trivandrum HR 2", UserRole.LOCAL_HR, "Trivandrum"),
+    
+    _make_user("hrklm@", "Kollam HR", UserRole.LOCAL_HR, "Kollam"),
+    _make_user("hrpta@", "Pathanamthitta HR", UserRole.LOCAL_HR, "Pathanamthitta"),
+    
+    _make_user("hrktm@", "Kottayam HR 1", UserRole.LOCAL_HR, "Kottayam"),
+    _make_user("hrtvl@", "Kottayam HR 2", UserRole.LOCAL_HR, "Kottayam"),
+    
+    _make_user("hrmpa@", "Muvattupuzha HR", UserRole.LOCAL_HR, "Muvattupuzha"),
+    _make_user("hrcoc@", "Cochin HR", UserRole.LOCAL_HR, "Cochin"),
+    _make_user("hrkly@", "Kalamassery HR", UserRole.LOCAL_HR, "Kalamassery"),
+    _make_user("hrkym@", "Kayamkulam HR", UserRole.LOCAL_HR, "Kayamkulam"),
+    
+    _make_user("hrtcr@", "Thrissur HR 1", UserRole.LOCAL_HR, "Thrissur"),
+    _make_user("hrirj@", "Thrissur HR 2", UserRole.LOCAL_HR, "Thrissur"),
 ]
 
 
