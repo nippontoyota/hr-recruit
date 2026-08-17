@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Outlet, useLocation, Link } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '../../auth';
@@ -7,68 +7,62 @@ import { ResumeViewerProvider } from '../candidates/ResumeViewer';
 import { NAV_ITEMS } from '../../lib/navigation';
 import type { UserRole } from '../../types';
 import { cn } from '../../lib/utils';
+import { BrandMark } from './BrandMark';
+import { Button } from '../ui';
+
+function formatRole(role: string) {
+  if (role === 'LOCAL_HR') return 'Local HR';
+  if (role === 'HO_HR') return 'Head Office HR';
+  if (role === 'ADMIN') return 'Admin';
+  return role.replace(/_/g, ' ');
+}
 
 export const AppShell = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
   const { user, role, logout } = useAuth();
 
   const location = useLocation();
   const isCandidateProfile = location.pathname.match(/^\/candidates\/[a-zA-Z0-9_-]+$/);
 
-  const getBranchColor = (branch: string | null | undefined) => {
-    if (!branch) return 'bg-gray-100 text-gray-700 border-gray-200';
-    const colorList = [
-      'bg-blue-500 text-white border-blue-600 shadow-sm',
-      'bg-cyan-500 text-white border-cyan-600 shadow-sm',
-      'bg-sky-500 text-white border-sky-600 shadow-sm',
-      'bg-indigo-500 text-white border-indigo-600 shadow-sm',
-      'bg-violet-500 text-white border-violet-600 shadow-sm',
-      'bg-purple-500 text-white border-purple-600 shadow-sm',
-      'bg-fuchsia-500 text-white border-fuchsia-600 shadow-sm',
-      'bg-pink-500 text-white border-pink-600 shadow-sm',
-      'bg-rose-500 text-white border-rose-600 shadow-sm',
-      'bg-red-500 text-white border-red-600 shadow-sm',
-      'bg-orange-500 text-white border-orange-600 shadow-sm',
-      'bg-amber-500 text-white border-amber-600 shadow-sm',
-      'bg-lime-500 text-white border-lime-600 shadow-sm',
-      'bg-green-500 text-white border-green-600 shadow-sm',
-      'bg-emerald-500 text-white border-emerald-600 shadow-sm',
-    ];
-    let hash = 0;
-    for (let i = 0; i < branch.length; i++) {
-      hash = branch.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colorList[Math.abs(hash) % colorList.length];
-  };
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   const allowedNavItems = role ? NAV_ITEMS.filter((item) => item.roles.includes(role as UserRole)) : [];
+  const identityLabel = [
+    user?.full_name,
+    role === 'LOCAL_HR' ? user?.branch_location : role ? formatRole(role) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <ResumeViewerProvider>
-      <div className="flex h-screen w-full bg-background overflow-hidden font-sans flex-col">
+      <div className="flex h-dvh w-full flex-col overflow-hidden bg-background font-sans">
         {!isCandidateProfile && (
-          <header className="sticky top-0 z-[var(--z-sticky)] flex items-center justify-between h-14 bg-surface px-4 lg:px-6 shrink-0">
-            {/* Logo / Mobile Menu */}
-            <div className="flex items-center gap-4 flex-1">
-              {role === 'ADMIN' && (
+          <header className="sticky top-0 z-[var(--z-sticky)] flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-4 lg:px-6">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              {allowedNavItems.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  className="p-1 -ml-1 text-text-secondary hover:text-text-primary rounded-lg hover:bg-muted transition-colors md:hidden"
-                  aria-label="Toggle menu"
+                  onClick={() => setMobileMenuOpen((open) => !open)}
+                  className="flex h-11 w-11 items-center justify-center -ml-1 rounded-lg text-text-secondary transition-colors duration-150 hover:bg-muted hover:text-text-primary md:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                  aria-expanded={mobileMenuOpen}
+                  aria-controls="mobile-navigation"
                 >
-                  {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                  {mobileMenuOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
                 </button>
               )}
-              <span className="text-base font-accent font-extrabold text-text-primary tracking-tight hidden md:block">
-                Nippon Recruitment CRM
-              </span>
+              <div className="min-w-0">
+                <BrandMark compact />
+              </div>
             </div>
 
-            {/* Desktop Navigation Links */}
-            {role === 'ADMIN' && (
-              <nav className="hidden md:flex flex-1 justify-center items-center gap-2">
-                <div className="flex items-center gap-1 bg-muted/60 p-1.5 rounded-full border border-border shadow-inner">
+            {allowedNavItems.length > 0 && (
+              <nav aria-label="Primary navigation" className="hidden flex-1 items-center justify-center md:flex">
+                <div className="flex items-center gap-0.5 rounded-full border border-border bg-muted/70 p-1">
                   {allowedNavItems.map((item) => {
                     const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
                     const Icon = item.icon;
@@ -76,21 +70,20 @@ export const AppShell = () => {
                       <Link
                         key={item.name}
                         to={item.href}
+                        aria-current={isActive ? 'page' : undefined}
                         className={cn(
-                          'relative flex items-center gap-2 px-4 py-1.5 text-sm font-accent font-bold rounded-full transition-colors duration-200 z-10',
-                          isActive
-                            ? 'text-white drop-shadow-sm'
-                            : 'text-text-secondary hover:text-text-primary hover:bg-white/50'
+                          'relative z-10 flex min-h-9 items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+                          isActive ? 'text-white' : 'text-text-secondary hover:bg-surface hover:text-text-primary',
                         )}
                       >
                         {isActive && (
                           <motion.div
                             layoutId="active-nav-pill"
-                            className="absolute inset-0 bg-gradient-to-b from-primary to-[#b9181f] rounded-full shadow-[0_4px_10px_-2px_rgba(214,28,36,0.5),inset_0_2px_4px_rgba(255,255,255,0.3)] border border-primary -z-10"
-                            transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                            className="absolute inset-0 -z-10 rounded-full bg-primary"
+                            transition={reduceMotion ? { duration: 0 } : { type: 'spring', duration: 0.28, bounce: 0.12 }}
                           />
                         )}
-                        <Icon strokeWidth={isActive ? 2.5 : 2} className="h-4 w-4 relative z-10" />
+                        <Icon strokeWidth={isActive ? 2.25 : 2} className="relative z-10 h-4 w-4" />
                         <span className="relative z-10">{item.name}</span>
                       </Link>
                     );
@@ -99,38 +92,37 @@ export const AppShell = () => {
               </nav>
             )}
 
-            {/* Profile & Actions */}
-            <div className="flex items-center justify-end gap-3 w-1/4">
-              {role === 'LOCAL_HR' && user?.branch_location ? (
-                <span className={`px-3 py-1.5 border rounded shadow-md text-[11px] font-accent font-black uppercase tracking-widest hidden sm:inline-block ${getBranchColor(user.branch_location)}`}>
-                  {user.branch_location}
-                </span>
-              ) : role && (
-                <span className="px-3 py-1.5 bg-indigo-500 text-white border border-indigo-600 shadow-md rounded text-[11px] font-accent font-black uppercase tracking-widest hidden sm:inline-block">
-                  {role.replace(/_/g, ' ')}
-                </span>
+            <div className="flex w-auto min-w-0 flex-1 items-center justify-end gap-2 sm:gap-3">
+              {identityLabel && (
+                <p className="hidden min-w-0 truncate text-sm text-text-secondary sm:block" title={identityLabel}>
+                  {identityLabel}
+                </p>
               )}
-              <button
-                onClick={logout}
-                className="px-4 py-1.5 bg-red-500 hover:bg-red-400 text-white border border-red-600 shadow-md hover:shadow-lg hover:-translate-y-0.5 rounded transition-all duration-200 text-[11px] font-accent font-black uppercase tracking-widest"
-                title="Log out"
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                onClick={() => void logout()}
+                aria-label="Log out"
+                className="shrink-0"
               >
                 Log out
-              </button>
+              </Button>
             </div>
           </header>
         )}
 
-        {/* Mobile Navigation Menu Dropdown */}
         <AnimatePresence>
-          {!isCandidateProfile && mobileMenuOpen && role === 'ADMIN' && (
+          {!isCandidateProfile && mobileMenuOpen && allowedNavItems.length > 0 && (
             <motion.div
-              initial={{ height: 0, opacity: 0 }}
+              id="mobile-navigation"
+              initial={reduceMotion ? false : { height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="md:hidden border-b border-border bg-surface overflow-hidden z-[var(--z-sticky)] shadow-md"
+              exit={reduceMotion ? undefined : { height: 0, opacity: 0 }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+              className="z-[var(--z-sticky)] overflow-hidden border-b border-border bg-surface md:hidden"
             >
-              <nav className="flex flex-col p-2 space-y-1">
+              <nav aria-label="Mobile navigation" className="flex flex-col p-2">
                 {allowedNavItems.map((item) => {
                   const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
                   const Icon = item.icon;
@@ -139,11 +131,12 @@ export const AppShell = () => {
                       key={item.name}
                       to={item.href}
                       onClick={() => setMobileMenuOpen(false)}
+                      aria-current={isActive ? 'page' : undefined}
                       className={cn(
-                        'flex items-center gap-3 px-4 py-3 text-sm font-accent font-semibold rounded-xl transition-colors',
+                        'flex min-h-11 items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
                         isActive
                           ? 'bg-primary/10 text-primary'
-                          : 'text-text-secondary hover:bg-muted hover:text-text-primary'
+                          : 'text-text-secondary hover:bg-muted hover:text-text-primary',
                       )}
                     >
                       <Icon strokeWidth={2} className="h-5 w-5" />
@@ -156,26 +149,11 @@ export const AppShell = () => {
           )}
         </AnimatePresence>
 
-        <main className="flex-1 relative overflow-y-auto focus:outline-none bg-background">
-          <div
-            className={
-              isCandidateProfile
-                ? 'w-full min-h-full flex'
-                : 'p-2 sm:p-4 w-full h-full mx-auto'
-            }
-          >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={location.pathname}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-                className="w-full h-full flex flex-col"
-              >
-                <Outlet />
-              </motion.div>
-            </AnimatePresence>
+        <main className="custom-scrollbar relative flex-1 overflow-y-auto bg-background focus:outline-none">
+          <div className={isCandidateProfile ? 'flex min-h-full w-full' : 'mx-auto h-full w-full p-3 sm:p-5'}>
+            <div className="flex h-full w-full flex-col">
+              <Outlet />
+            </div>
           </div>
         </main>
       </div>

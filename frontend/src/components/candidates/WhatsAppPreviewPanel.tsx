@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { ArrowLeft, Pencil, Send, Video, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCheck, Trash2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Send, Video, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCheck, Trash2, Link, Loader2 } from 'lucide-react';
 import type { Candidate } from '../../types';
-import { Button, Input, Modal } from '../ui';
+import { formatTime } from '../../lib/dateTime';
+import { Button, Input, Modal, Select } from '../ui';
 import {
   buildWhatsAppMessage,
   canSendWhatsAppInvite,
@@ -10,15 +11,20 @@ import {
   formatVisitDate,
   isWhatsAppUrl,
   loadStoredTemplateVars,
+  openWhatsAppChat,
+  positionForWhatsApp,
+  sanitizeWhatsAppPosition,
   splitMessageLinks,
   storeTemplateVars,
   toDateInputValue,
+  whatsappInviteFieldErrors,
   type WhatsAppTemplateVars,
 } from '../../lib/whatsappTemplate';
+import { WhatsAppSendChoices } from './WhatsAppSendChoices';
 import { useAuth } from '../../auth';
 import { toast } from 'sonner';
 import { cn, extractError } from '../../lib/utils';
-import { sendWhatsAppInvite } from '../../api/candidates';
+import { sendPreForm, sendWhatsAppInvite } from '../../api/candidates';
 import {
   createLocation,
   deleteLocation,
@@ -28,6 +34,8 @@ import {
 interface WhatsAppPreviewPanelProps {
   candidate: Candidate;
   className?: string;
+  onUpdate?: () => void;
+  isReadOnly?: boolean;
 }
 
 const FIELD_LABELS: Partial<Record<keyof WhatsAppTemplateVars, string>> = {
@@ -83,15 +91,21 @@ function WhatsAppMessageBody({ text }: { text: string }) {
   );
 }
 
-export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPanelProps) {
+function FieldError({ error }: { error?: string }) {
+  if (!error) return null;
+  return (
+    <p className="text-xs text-danger mt-1" role="alert">
+      {error}
+    </p>
+  );
+}
+
+export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnly = false }: WhatsAppPreviewPanelProps) {
   const { user } = useAuth();
   const branch = user?.branch_location || candidate.branch_location || null;
   const [isEditing, setIsEditing] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [places, setPlaces] = useState<LocationTemplateRow[]>([]);
-  const [newPlaceName, setNewPlaceName] = useState('');
-  const [newPlaceUrl, setNewPlaceUrl] = useState('');
 
   const refreshPlaces = async () => {
     try {
@@ -101,12 +115,19 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
     }
   };
 
+  const candidatePosition = () =>
+    positionForWhatsApp({
+      positionAppliedFor: candidate.position_applied_for,
+      department: candidate.department,
+      experience: candidate.experience,
+    });
+
   const [vars, setVars] = useState<WhatsAppTemplateVars>(() => {
     const screening = candidate.screening;
     const defaults = defaultTemplateVars({
       candidateName: candidate.full_name,
-      position: candidate.position_applied_for || candidate.department,
-      formLink: candidate.share_url || `${window.location.origin}/#/apply/pending`,
+      position: '',
+      formLink: candidate.share_url || '',
       extraInstructions: screening?.extra_instructions,
       recruiterName: user?.full_name,
     });
@@ -116,9 +137,8 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
       ...defaults,
       ...stored,
       candidateName: candidate.full_name || defaults.candidateName,
-      position: candidate.position_applied_for || candidate.department || defaults.position,
+      position: sanitizeWhatsAppPosition(stored?.position),
       formLink: candidate.share_url || defaults.formLink,
-      // Never auto-fill date / maps — user must pick
       visitDate: stored?.visitDate?.trim() || '',
       branchName: stored?.branchName?.trim() || '',
       mapsLink: stored?.mapsLink?.trim() || '',
@@ -126,12 +146,14 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
     };
   });
   const [draft, setDraft] = useState(vars);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   useEffect(() => {
     setVars((current) => ({
       ...current,
       candidateName: candidate.full_name || current.candidateName,
-      position: candidate.position_applied_for || candidate.department || current.position,
+      position: sanitizeWhatsAppPosition(current.position),
       formLink: candidate.share_url || current.formLink,
       ...(candidate.screening?.extra_instructions
         ? { extraInstructions: candidate.screening.extra_instructions }
@@ -139,24 +161,24 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
     }));
   }, [
     candidate.full_name,
-    candidate.position_applied_for,
-    candidate.department,
     candidate.share_url,
     candidate.screening?.extra_instructions,
   ]);
 
-  useEffect(() => {
-    storeTemplateVars(candidate.id, vars);
-  }, [candidate.id, vars]);
-
   const message = useMemo(() => buildWhatsAppMessage(vars), [vars]);
+  const inviteErrors = whatsappInviteFieldErrors(vars);
+  const draftErrors = whatsappInviteFieldErrors(draft);
   const readyToSend = canSendWhatsAppInvite(vars);
 
   const openEditor = () => {
-    setDraft(vars);
+    const stored = loadStoredTemplateVars(candidate.id);
+    setDraft({
+      ...vars,
+      visitDate: vars.visitDate.trim() || stored?.visitDate?.trim() || '',
+      branchName: vars.branchName.trim() || stored?.branchName?.trim() || '',
+      mapsLink: vars.mapsLink.trim() || stored?.mapsLink?.trim() || '',
+    });
     void refreshPlaces();
-    setNewPlaceName('');
-    setNewPlaceUrl('');
     setIsEditing(true);
   };
 
@@ -178,24 +200,22 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
   };
 
   const handleSavePlace = async () => {
-    if (!newPlaceName.trim() || !newPlaceUrl.trim()) {
+    if (!draft.branchName.trim() || !draft.mapsLink.trim()) {
       toast.error('Enter both location name and maps link');
       return;
     }
     try {
       const row = await createLocation({
-        name: newPlaceName,
-        location_or_link: newPlaceUrl,
+        name: draft.branchName,
+        location_or_link: draft.mapsLink,
         branch,
       });
       setPlaces(await listLocations(branch));
-      setDraft((current) => ({
-        ...current,
-        branchName: row.name,
-        mapsLink: row.location_or_link,
-      }));
-      setNewPlaceName('');
-      setNewPlaceUrl('');
+      const locationFields = { branchName: row.name, mapsLink: row.location_or_link };
+      setDraft((current) => ({ ...current, ...locationFields }));
+      const nextVars = { ...vars, ...locationFields };
+      setVars(nextVars);
+      storeTemplateVars(candidate.id, nextVars);
       toast.success('Location saved for this branch');
     } catch (err) {
       toast.error(extractError(err, 'Failed to save location'));
@@ -215,36 +235,110 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
     }
   };
 
+  const applyFormLink = (url: string) => {
+    updateDraft('formLink', url);
+    setVars((current) => {
+      const next = { ...current, formLink: url };
+      storeTemplateVars(candidate.id, { ...draft, formLink: url });
+      return next;
+    });
+  };
+
+  const issuedFormLink =
+    [candidate.share_url, draft.formLink, vars.formLink].find((value) => isWhatsAppUrl(value || '')) || '';
+
+  const handleGenerateFormLink = async () => {
+    if (generatingLink) return;
+    setGeneratingLink(true);
+    try {
+      const updated = await sendPreForm(candidate.id);
+      const url = updated?.share_url || '';
+      if (!url) {
+        toast.error('Link was issued but no URL came back.');
+        return;
+      }
+      applyFormLink(url);
+      toast.success(issuedFormLink ? 'Form link regenerated' : 'Form link generated');
+      onUpdate?.();
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to generate form link'));
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const handleCopyFormLink = async () => {
+    const url = issuedFormLink;
+    if (!url) {
+      toast.error('Generate the form link first');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      toast.error('Failed to copy link');
+    }
+  };
+
   const saveDraft = () => {
-    setVars({ ...draft, formLink: candidate.share_url || draft.formLink });
+    const next = {
+      ...draft,
+      position: sanitizeWhatsAppPosition(draft.position),
+      branchName: draft.branchName.trim(),
+      mapsLink: draft.mapsLink.trim(),
+      formLink: candidate.share_url || draft.formLink,
+    };
+    setVars(next);
+    storeTemplateVars(candidate.id, next);
     setIsEditing(false);
     toast.success('Preview updated');
+
+    if (next.branchName && next.mapsLink) {
+      const alreadySaved = places.some(
+        (place) =>
+          place.name.toLowerCase() === next.branchName.toLowerCase() &&
+          place.location_or_link.trim() === next.mapsLink
+      );
+      if (!alreadySaved) {
+        void createLocation({
+          name: next.branchName,
+          location_or_link: next.mapsLink,
+          branch,
+        }).catch(() => {
+          /* preview already saved locally */
+        });
+      }
+    }
   };
 
-  const trySend = () => {
+  const sendViaDoubleTick = async () => {
     if (!canSendWhatsAppInvite(vars)) {
-      toast.error('Set visit date and location before sending');
       return;
     }
-    setIsConfirming(true);
-  };
-
-  const confirmSend = async () => {
-    if (!canSendWhatsAppInvite(vars)) {
-      toast.error('Set visit date and location before sending');
-      return;
-    }
-    setIsConfirming(false);
     setIsSending(true);
     try {
       await sendWhatsAppInvite(candidate.id, vars as unknown as Record<string, string>);
-      toast.success('WhatsApp invitation sent successfully!');
+      toast.success('WhatsApp message accepted by DoubleTick');
+      onUpdate?.();
     } catch (err: any) {
       console.error(err);
       toast.error(extractError(err, 'Failed to send WhatsApp invitation.'), { duration: 8000 });
     } finally {
       setIsSending(false);
     }
+  };
+
+  const openInWhatsApp = () => {
+    if (!canSendWhatsAppInvite(vars)) {
+      return;
+    }
+    if (!candidate.phone) {
+      return;
+    }
+    openWhatsAppChat(candidate.phone, message);
+    toast.success('Opened WhatsApp with the message ready to send');
   };
 
   return (
@@ -262,6 +356,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
               Candidate&apos;s perspective
             </p>
           </div>
+          {!isReadOnly && (
           <button
             type="button"
             onClick={openEditor}
@@ -270,6 +365,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
             <Pencil className="h-4 w-4" />
             Edit
           </button>
+          )}
         </div>
 
         <div className="flex-1 min-h-0 flex justify-center px-6 py-4 overflow-hidden">
@@ -317,7 +413,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
                     <WhatsAppMessageBody text={message} />
                   </div>
                   <div className="absolute bottom-1 right-2 flex items-center gap-1">
-                    <p className="text-[10px] text-[#667781] whitespace-nowrap">{new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date()).toLowerCase()}</p>
+                    <p className="text-[10px] text-[#667781] whitespace-nowrap">{formatTime(new Date())}</p>
                     <CheckCheck className="h-[15px] w-[15px] text-[#34B7F1]" strokeWidth={2.5} />
                   </div>
                 </div>
@@ -338,22 +434,29 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
           </div>
         </div>
 
+        {!isReadOnly && (
         <div className="shrink-0 border-t border-border bg-white p-4 space-y-2">
-          {!readyToSend && (
-            <p className="text-xs text-muted-foreground text-center">
-              Set visit date and location in Edit before sending.
-            </p>
+          {(!readyToSend || !candidate.phone) && (
+            <ul className="space-y-1 text-xs text-danger">
+              {inviteErrors.position && <li>{inviteErrors.position} Set it in Edit.</li>}
+              {inviteErrors.visitDate && <li>{inviteErrors.visitDate} Set it in Edit.</li>}
+              {inviteErrors.branchName && <li>{inviteErrors.branchName} Set it in Edit.</li>}
+              {!candidate.phone && <li>Phone number is required to open WhatsApp.</li>}
+            </ul>
           )}
-          <Button
-            className="w-full !bg-[#08796b] hover:!bg-[#06685c]"
-            onClick={trySend}
-            isLoading={isSending}
+          <p className="text-xs text-muted-foreground">
+            Opening WhatsApp prepares the message only; it is not recorded as delivered.
+          </p>
+          <WhatsAppSendChoices
+            stacked
+            onDoubleTick={() => void sendViaDoubleTick()}
+            onOpenWhatsApp={openInWhatsApp}
+            doubleTickLoading={isSending}
             disabled={!readyToSend}
-          >
-            <Send className="mr-2 h-4 w-4" />
-            Send to candidate
-          </Button>
+            openWhatsAppDisabled={!candidate.phone}
+          />
         </div>
+        )}
       </aside>
 
       <Modal
@@ -366,23 +469,28 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
         <div className="max-h-[72vh] overflow-y-auto p-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="form-label">{FIELD_LABELS.visitDate}</label>
+              <label className="form-label form-label-required">{FIELD_LABELS.visitDate}</label>
               <Input
                 type="date"
+                error={!!draftErrors.visitDate}
                 value={toDateInputValue(draft.visitDate)}
                 onChange={(event) => {
                   const raw = event.target.value;
                   updateDraft('visitDate', raw ? formatVisitDate(raw) : '');
                 }}
               />
+              <FieldError error={draftErrors.visitDate} />
             </div>
 
-            {EDITABLE_FIELDS.map((key) => (
+            {EDITABLE_FIELDS.map((key) => {
+              const required = key === 'position';
+              const fieldError = required ? draftErrors.position : undefined;
+              return (
               <div
                 key={key}
                 className={key === 'extraInstructions' ? 'sm:col-span-2' : undefined}
               >
-                <label className="form-label">{FIELD_LABELS[key]}</label>
+                <label className={cn('form-label', required && 'form-label-required')}>{FIELD_LABELS[key]}</label>
                 {key === 'extraInstructions' ? (
                   <textarea
                     value={draft[key]}
@@ -390,17 +498,28 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
                     className="min-h-24 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 ) : (
-                  <Input value={draft[key]} onChange={(event) => updateDraft(key, event.target.value)} />
+                  <Input
+                    value={draft[key]}
+                    error={!!fieldError}
+                    placeholder={key === 'position' ? candidatePosition() || 'e.g. Accessories - Fresher' : undefined}
+                    onChange={(event) => updateDraft(key, event.target.value)}
+                  />
                 )}
+                <FieldError error={fieldError} />
               </div>
-            ))}
+              );
+            })}
 
-            <div className="sm:col-span-2 space-y-3 rounded-lg border border-border p-3">
-              <label className="form-label">Location (name + maps link)</label>
-              <select
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+            <div className={cn(
+              'sm:col-span-2 space-y-3 rounded-lg border p-3',
+              draftErrors.branchName ? 'border-danger' : 'border-border'
+            )}>
+              <label className="form-label form-label-required">Location (name + maps link)</label>
+              <Select
                 value={places.find((p) => p.name === draft.branchName)?.id || ''}
                 onChange={(event) => selectPlace(event.target.value)}
+                searchable
+                error={!!draftErrors.branchName}
               >
                 <option value="">Select location…</option>
                 {places.map((place) => (
@@ -408,12 +527,7 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
                     {place.name}
                   </option>
                 ))}
-              </select>
-              {draft.mapsLink ? (
-                <p className="text-xs text-muted-foreground break-all">{draft.mapsLink}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">No maps link selected.</p>
-              )}
+              </Select>
 
               <ul className="space-y-1">
                 {places.map((place) => (
@@ -437,19 +551,25 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
 
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
                 <Input
-                  placeholder="New location name"
-                  value={newPlaceName}
-                  onChange={(event) => setNewPlaceName(event.target.value)}
+                  placeholder="Location name"
+                  error={!!draftErrors.branchName}
+                  value={draft.branchName}
+                  onChange={(event) => updateDraft('branchName', event.target.value)}
                 />
                 <Input
                   placeholder="Maps link"
-                  value={newPlaceUrl}
-                  onChange={(event) => setNewPlaceUrl(event.target.value)}
+                  error={!!draftErrors.branchName}
+                  value={draft.mapsLink}
+                  onChange={(event) => updateDraft('mapsLink', event.target.value)}
                 />
                 <Button type="button" variant="secondary" onClick={handleSavePlace}>
                   Save
                 </Button>
               </div>
+              <FieldError error={draftErrors.branchName} />
+              <p className="text-xs text-muted-foreground">
+                Save remembers this location for the branch. Save changes keeps it on this preview.
+              </p>
             </div>
 
             <div className="sm:col-span-2">
@@ -457,8 +577,40 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
                 <img src="/link-icon.png" alt="Link" className="w-4 h-4 object-contain" />
                 Job application form link
               </label>
-              <Input value={candidate.share_url || draft.formLink} readOnly disabled />
-              <p className="mt-1.5 text-xs text-muted-foreground">Uses this candidate&apos;s generated form link.</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input
+                  value={issuedFormLink}
+                  readOnly
+                  disabled
+                  placeholder="Generate a link for this candidate"
+                />
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleGenerateFormLink}
+                    aria-busy={generatingLink}
+                  >
+                    {generatingLink ? (
+                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Link className="w-3.5 h-3.5 mr-1.5" />
+                    )}
+                    {issuedFormLink ? 'Regenerate' : 'Generate link'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleCopyFormLink}
+                    disabled={!issuedFormLink}
+                  >
+                    {copiedLink ? 'Copied!' : 'Copy'}
+                  </Button>
+                </div>
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Generates this candidate&apos;s pre-interview form link. Regenerating replaces the old one.
+              </p>
             </div>
           </div>
 
@@ -469,25 +621,6 @@ export function WhatsAppPreviewPanel({ candidate, className }: WhatsAppPreviewPa
         </div>
       </Modal>
 
-      <Modal
-        isOpen={isConfirming}
-        onClose={() => setIsConfirming(false)}
-        title="Send WhatsApp message?"
-        description={`Send this message to ${candidate.full_name} at +91 ${candidate.phone}?`}
-        size="sm"
-      >
-        <div className="p-6">
-          <p className="text-sm leading-6 text-muted-foreground">
-            Review the preview before confirming.
-          </p>
-          <div className="mt-6 flex justify-end gap-2 border-t border-border pt-4">
-            <Button variant="ghost" onClick={() => setIsConfirming(false)}>No, go back</Button>
-            <Button className="!bg-[#08796b] hover:!bg-[#06685c]" onClick={confirmSend}>
-              Yes, send
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </>
   );
 }

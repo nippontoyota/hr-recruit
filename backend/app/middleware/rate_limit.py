@@ -6,6 +6,20 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 
+def public_rate_bucket(path: str) -> str | None:
+    if path.endswith("/auth/login"):
+        return "auth/login"
+    if "/candidates/public" in path:
+        return "candidates/public"
+    if "/candidates/portal/" in path:
+        return "candidates/portal"
+    if "/evaluations/public/" in path:
+        return "evaluations/public"
+    if "/auth/users/" in path and path.endswith("/public"):
+        return "auth/public-user"
+    return None
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Simple in-memory rate limiter for auth and public candidate endpoints."""
 
@@ -16,7 +30,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._hits: dict[str, deque[float]] = defaultdict(deque)
 
     def _should_limit(self, path: str) -> bool:
-        return path.endswith("/auth/login") or "/candidates/public" in path
+        return public_rate_bucket(path) is not None
 
     def _client_key(self, request: Request) -> str:
         forwarded = request.headers.get("x-forwarded-for")
@@ -40,7 +54,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS" or not self._should_limit(request.url.path):
             return await call_next(request)
 
-        key = f"{self._client_key(request)}:{request.url.path}"
+        key = f"{self._client_key(request)}:{public_rate_bucket(request.url.path)}"
         if not self._allow(key):
             return JSONResponse(
                 status_code=429,

@@ -9,9 +9,9 @@ function App() {
     <ErrorBoundary>
       <AuthProvider>
         <RouterProvider router={router} />
-        <Toaster 
-          position="bottom-right" 
-          theme="dark"
+        <Toaster
+          position="bottom-right"
+          theme="light"
           richColors
           closeButton
           expand={false}
@@ -19,13 +19,12 @@ function App() {
           toastOptions={{
             style: {
               fontFamily: 'var(--font-sans)',
-              padding: '16px 20px',
-              borderRadius: '16px',
-              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.4)',
-              fontWeight: 600,
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              padding: '12px 16px',
+              borderRadius: '10px',
+              boxShadow: 'var(--shadow-md)',
+              fontWeight: 500,
+              border: '1px solid var(--border)',
             },
-            className: 'backdrop-blur-xl bg-opacity-95'
           }}
         />
       </AuthProvider>

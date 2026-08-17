@@ -1,78 +1,68 @@
-/* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import type { User, UserRole } from '../types';
-import { login as apiLogin, logoutApi, AUTH_EXPIRED_EVENT } from '../api/client';
-
+import type { User } from '../types';
+import { login as apiLogin, logoutApi, AUTH_EXPIRED_EVENT, setAccessToken } from '../api/client';
 import { toast } from 'sonner';
+import { AuthContext } from './auth-context';
+export { useAuth } from './useAuth';
 
-interface AuthContextType {
-  user: User | null;
-  role: UserRole | null;
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: (showToast?: boolean) => Promise<void>;
+function readStoredUser(): User | null {
+  try {
+    const storedUser = localStorage.getItem('user');
+    const token = localStorage.getItem('access_token');
+    if (storedUser && !token) {
+      localStorage.removeItem('user');
+      return null;
+    }
+    if (!storedUser) return null;
+    const parsed: unknown = JSON.parse(storedUser);
+    if (
+      parsed !== null &&
+      typeof parsed === 'object' &&
+      'id' in parsed &&
+      'email' in parsed &&
+      'role' in parsed
+    ) {
+      return parsed as User;
+    }
+    localStorage.removeItem('user');
+    setAccessToken(null);
+  } catch {
+    localStorage.removeItem('user');
+  }
+  return null;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(readStoredUser);
+  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem('user');
-
-      if (storedUser) {
-        const parsed: unknown = JSON.parse(storedUser);
-
-        // Validate the shape before trusting it
-        if (
-          parsed !== null &&
-          typeof parsed === 'object' &&
-          'id' in parsed &&
-          'email' in parsed &&
-          'role' in parsed
-        ) {
-          setUser(parsed as User);
-        } else {
-          // Invalid shape — clear corrupted session
-          localStorage.removeItem('user');
-        }
-      }
-    } catch {
-      // Corrupted localStorage — clear and continue
-      localStorage.removeItem('user');
-    }
-    setIsLoading(false);
-  }, []);
-
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
     try {
       const response = await apiLogin(email, password);
       setUser(response.user);
       localStorage.setItem('user', JSON.stringify(response.user));
+      setAccessToken(response.access_token || response.token);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const logout = useCallback(async (showToast = true) => {
     try {
       await logoutApi();
-    } catch (e) {
+    } catch {
       // Ignore errors on logout
     }
     setUser(null);
     localStorage.removeItem('user');
+    setAccessToken(null);
     if (showToast) {
       toast.success('Successfully logged out');
     }
   }, []);
 
-  // Listen for 401 expired-auth events from the API interceptor
   useEffect(() => {
     const handleAuthExpired = () => logout(false);
     window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
@@ -84,7 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     role: user?.role || null,
     isLoading,
     login,
-    logout
+    logout,
   }), [user, isLoading, login, logout]);
 
   return (
@@ -92,12 +82,4 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 };

@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     public_app_url: str = "http://localhost:5173"
     rate_limit_per_minute: int = 60
     redis_url: str = ""
+    technical_test_duration_minutes: int = 8
+    technical_test_link_expire_days: int = 7
+
+    # Offer letter (DOCX template + WhatsApp intimation)
+    offer_letter_docx_path: str = r"C:\Users\krish\Downloads\Offer Letter.docx"
+    offer_whatsapp_intimation_template_name: str = "nippon_offer_intimation"
+
+    # CC recipients for offer email copy
+    jerry_email: str = ""
+    naveen_email: str = ""
 
     # SMTP Configuration
     smtp_host: str = "smtp.sendgrid.net"

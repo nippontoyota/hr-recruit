@@ -1,6 +1,28 @@
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 export const AUTH_EXPIRED_EVENT = 'auth:expired';
+const ACCESS_TOKEN_KEY = 'access_token';
+
+function getAccessToken(): string | null {
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function setAccessToken(token: string | null) {
+  if (token) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+  }
+}
+
+export function getAuthHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  const token = getAccessToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 class FetchError extends Error {
   response: { status: number; data?: any };
@@ -10,12 +32,28 @@ class FetchError extends Error {
   }
 }
 
-export async function request(method: string, endpoint: string, body?: any, config?: { headers?: Record<string, string> }) {
+const inflightGets = new Map<string, Promise<{ data: any }>>();
+
+export async function request(method: string, endpoint: string, body?: any, config?: { headers?: Record<string, string>; signal?: AbortSignal }) {
+  const coalesceKey = method === 'GET' && body == null && !config?.signal ? endpoint : null;
+  if (coalesceKey) {
+    const existing = inflightGets.get(coalesceKey);
+    if (existing) return existing;
+  }
+
+  const pending = executeRequest(method, endpoint, body, config).finally(() => {
+    if (coalesceKey) inflightGets.delete(coalesceKey);
+  });
+  if (coalesceKey) inflightGets.set(coalesceKey, pending);
+  return pending;
+}
+
+async function executeRequest(method: string, endpoint: string, body?: any, config?: { headers?: Record<string, string>; signal?: AbortSignal }) {
   const url = `${baseURL}${endpoint}`;
-  const headers: Record<string, string> = {
+  const headers: Record<string, string> = getAuthHeaders({
     'Content-Type': 'application/json',
     ...(config?.headers || {}),
-  };
+  });
 
 
   let fetchBody: any = body;
@@ -27,15 +65,36 @@ export async function request(method: string, endpoint: string, body?: any, conf
     fetchBody = JSON.stringify(body);
   }
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: fetchBody,
-    credentials: 'include',
-  });
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 30000);
+  const onCallerAbort = () => controller.abort();
+  if (config?.signal) {
+    if (config.signal.aborted) controller.abort();
+    else config.signal.addEventListener('abort', onCallerAbort, { once: true });
+  }
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: fetchBody,
+      credentials: 'include',
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      if (config?.signal?.aborted) throw err;
+      throw new FetchError(408, { detail: 'Request timed out. Try again.' });
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timeoutId);
+    config?.signal?.removeEventListener('abort', onCallerAbort);
+  }
 
   if (response.status === 401 && endpoint !== '/auth/login') {
     localStorage.removeItem('user');
+    setAccessToken(null);
     window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
   }
 

@@ -8,7 +8,11 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.api.v1.candidates_core import _resume_extension, _safe_filename, _validate_resume_content_type
+from app.services.document_service import (
+    resume_extension,
+    safe_filename,
+    resolve_resume_content_type,
+)
 from app.core.database import get_db
 from app.core.deps import get_current_active_user
 from app.main import app
@@ -31,21 +35,31 @@ def _hr_user() -> User:
 
 
 def test_resume_extension_accepts_pdf():
-    assert _resume_extension("cv.PDF") == ".pdf"
+    assert resume_extension("cv.PDF") == ".pdf"
+
+
+def test_resume_extension_accepts_docx():
+    assert resume_extension("cv.docx") == ".docx"
 
 
 def test_resume_extension_rejects_exe():
     with pytest.raises(HTTPException) as exc:
-        _resume_extension("malware.exe")
+        resume_extension("malware.exe")
     assert exc.value.status_code == 400
 
 
 def test_safe_filename_strips_path():
-    assert _safe_filename("../../etc/passwd.pdf", ".pdf") == "passwd.pdf"
+    assert safe_filename("../../etc/passwd.pdf", ".pdf") == "passwd.pdf"
 
 
 def test_content_type_maps_octet_stream():
-    assert _validate_resume_content_type("application/octet-stream", ".pdf") == "application/pdf"
+    assert resolve_resume_content_type("application/octet-stream", ".pdf") == "application/pdf"
+
+
+def test_content_type_maps_octet_stream_docx():
+    assert resolve_resume_content_type("application/octet-stream", ".docx") == (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
 
 
 def test_upload_requires_auth():
@@ -77,7 +91,7 @@ def test_upload_rejects_bad_extension_when_authenticated():
             files={"file": ("notes.txt", b"hello", "text/plain")},
         )
         assert response.status_code == 400
-        assert "PDF" in response.json()["detail"]
+        assert "PDF" in response.json()["detail"] or "DOC" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()
 

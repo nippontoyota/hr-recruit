@@ -7,8 +7,11 @@ from uuid import UUID
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
-from app.core.access import assert_candidate_access
+from app.core.access import assert_candidate_access, assert_local_hr_can_mutate, can_view_salary
 from app.core.config import settings
+from app.core.ho_pipeline import handed_over_to_ho
+from app.core.public_token import PURPOSE_APPLY, expire_pre_form_if_needed, issue_public_token
+from app.core.offer_gate import offer_blockers
 from app.models.activity_log import ActivityLog
 from app.models.candidate import Candidate
 from app.models.document import Document
@@ -16,31 +19,52 @@ from app.models.enums import ActivityType, PipelineStage
 from app.models.stage_history import StageHistory
 from app.models.user import User
 from app.schemas.candidate import CandidateCreate, CandidateListOut, CandidateOut
+from app.services.document_service import process_photo_url
 from app.services import storage
 
 
 def _share_url(candidate: Candidate) -> str | None:
     if not candidate.pre_form_token:
         return None
-    return f"{settings.public_app_url.rstrip('/')}/#/pre-form/{candidate.pre_form_token}"
+    return f"{settings.public_app_url.rstrip('/')}/pre-form/{candidate.pre_form_token}"
 
 
-def to_candidate_out(candidate: Candidate, has_resume: bool) -> CandidateOut:
-    return CandidateOut.model_validate(candidate).model_copy(
+def to_candidate_out(
+    candidate: Candidate,
+    has_resume: bool,
+    db: Session | None = None,
+    viewer: User | None = None,
+) -> CandidateOut:
+    expire_pre_form_if_needed(candidate)
+    out = CandidateOut.model_validate(candidate).model_copy(
         update={
             "share_url": _share_url(candidate),
             "has_resume": has_resume,
             "is_rejoining": False,
+            "handed_over_to_ho": handed_over_to_ho(candidate, db),
+            "offer_blockers": offer_blockers(candidate, has_resume=has_resume, db=db) if db is not None else [],
+            "salary_data": candidate.salary_data if can_view_salary(viewer) else None,
         }
     )
+    if out.profile and out.profile.photo_url:
+        out = out.model_copy(
+            update={
+                "profile": out.profile.model_copy(
+                    update={"photo_url": process_photo_url(out.profile.photo_url)}
+                )
+            }
+        )
+    return out
 
 
-def to_candidate_list_out(candidate: Candidate, has_resume: bool) -> CandidateListOut:
+def to_candidate_list_out(candidate: Candidate, has_resume: bool, db: Session | None = None) -> CandidateListOut:
+    expire_pre_form_if_needed(candidate)
     return CandidateListOut.model_validate(candidate).model_copy(
         update={
             "share_url": _share_url(candidate),
             "has_resume": has_resume,
             "is_rejoining": False,
+            "handed_over_to_ho": handed_over_to_ho(candidate, db),
         }
     )
 
@@ -69,6 +93,7 @@ def create_candidate(
         source=body.source,
         source_reference=body.source_reference,
         position_applied_for=body.position_applied_for,
+        experience=body.experience,
         department=body.department,
         branch_location=body.branch_location,
         assigned_hr_user_id=body.assigned_hr_user_id,
@@ -78,6 +103,8 @@ def create_candidate(
     )
     db.add(candidate)
     db.flush()
+    if created_via_public_apply:
+        issue_public_token(candidate, PURPOSE_APPLY)
 
     origin = "public application" if created_via_public_apply else "HR"
     db.add(
@@ -105,7 +132,8 @@ async def bulk_delete_candidates(
 
     candidates = list(db.scalars(select(Candidate).where(Candidate.id.in_(ids))).all())
     for candidate in candidates:
-        assert_candidate_access(user, candidate)
+        assert_candidate_access(user, candidate, db)
+        assert_local_hr_can_mutate(user, candidate, db)
 
     found_ids = [candidate.id for candidate in candidates]
     if not found_ids:

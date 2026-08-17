@@ -1,18 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Star, Trash2 } from 'lucide-react';
+import { Check, CheckCircle, Link, Loader2, Pencil, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Input } from '../ui';
-import { submitScorecardDirect, deleteEvaluation } from '../../api/evaluations';
+import { Button, Input, Select } from '../ui';
+import {
+  submitScorecardDirect,
+  deleteEvaluation,
+  updateEvaluationTitle,
+  updateEvaluationInterviewer,
+  generateEvaluationToken,
+  sendEvaluationWhatsAppInvite,
+} from '../../api/evaluations';
+import { canRenameInterview, defaultInterviewTitle, interviewTitle } from '../../lib/interviewTitle';
 import {
   createInterviewer,
   deleteInterviewer,
   listInterviewers,
+  updateInterviewerPhone,
   type InterviewerNameRow,
 } from '../../api/settings';
+import { buildInterviewerWhatsAppMessage, openWhatsAppChat } from '../../lib/whatsappTemplate';
+import { WhatsAppShareModal } from './WhatsAppSendChoices';
 import type { Candidate, Evaluation, EvaluationVerdict } from '../../types';
 import { cn, extractError } from '../../lib/utils';
 import { useAuth } from '../../auth';
+import { digitsOnly, validatePhone } from '../../lib/validation';
+import { formatDate, formatTime } from '../../lib/dateTime';
 
 const PREDEFINED_REMARKS = [
   'Excellent candidate, highly recommended.',
@@ -25,7 +38,7 @@ interface InterviewFormCardProps {
   ev: Evaluation;
   index: number;
   candidate: Candidate;
-  onUpdate: () => void;
+  onUpdate: (opts?: { candidate?: boolean }) => void;
   isReadOnly?: boolean;
 }
 
@@ -53,7 +66,9 @@ const StarInput = ({
           type="button"
           key={star}
           onClick={() => setVal(star)}
-          className="p-0.5 transition-transform hover:scale-110 focus:outline-none"
+          aria-label={`${star} out of ${maxStars} stars`}
+          aria-pressed={star === val}
+          className="min-h-11 min-w-11 rounded-md p-0.5 transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <Star
             className={cn(
@@ -89,7 +104,20 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
   );
   const [savedNames, setSavedNames] = useState<InterviewerNameRow[]>([]);
   const [newNameDraft, setNewNameDraft] = useState('');
+  const [newPhoneDraft, setNewPhoneDraft] = useState('');
   const [loadingNames, setLoadingNames] = useState(true);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const [pendingLink, setPendingLink] = useState('');
+  const [sendPhone, setSendPhone] = useState('');
+  const [sendPhoneError, setSendPhoneError] = useState('');
+  const [phoneEdits, setPhoneEdits] = useState<Record<string, string>>({});
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [savingTitle, setSavingTitle] = useState(false);
+  const skipTitleSaveRef = useRef(false);
 
   const requireInterviewer =
     ev.type === 'BRANCH_HR' ||
@@ -98,7 +126,7 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
     ev.type === 'HQ_INTERVIEW_2' ||
     ev.type === 'HQ_INTERVIEW';
 
-  const refreshNames = async () => {
+  const refreshNames = useCallback(async () => {
     try {
       setSavedNames(await listInterviewers(branch));
     } catch (err) {
@@ -106,11 +134,14 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
     } finally {
       setLoadingNames(false);
     }
-  };
+  }, [branch]);
+
+  const showForm = !isCompleted || isEditing;
 
   useEffect(() => {
+    if (!showForm) return;
     void refreshNames();
-  }, [branch]);
+  }, [refreshNames, showForm]);
 
   const handleEdit = () => {
     setVerdict(ev.verdict as EvaluationVerdict);
@@ -125,12 +156,43 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
     setIsEditing(true);
   };
 
+  const startRename = () => {
+    if (isReadOnly || !canRenameInterview(ev.type)) return;
+    setTitleDraft(interviewTitle(ev));
+    setEditingTitle(true);
+  };
+
+  const saveTitle = async () => {
+    if (savingTitle) return;
+    if (skipTitleSaveRef.current) {
+      skipTitleSaveRef.current = false;
+      setEditingTitle(false);
+      return;
+    }
+    const next = titleDraft.trim();
+    const current = interviewTitle(ev);
+    if (!next || next === current) {
+      setEditingTitle(false);
+      return;
+    }
+    setSavingTitle(true);
+    try {
+      await updateEvaluationTitle(ev.id, next);
+      setEditingTitle(false);
+      onUpdate({ candidate: false });
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to rename interview'));
+    } finally {
+      setSavingTitle(false);
+    }
+  };
+
   const handleDelete = async () => {
     setDeleting(true);
     try {
       await deleteEvaluation(ev.id);
       toast.success('Interview deleted successfully');
-      onUpdate();
+      onUpdate({ candidate: false });
     } catch (err) {
       toast.error(extractError(err, 'Failed to delete interview'));
     } finally {
@@ -138,19 +200,184 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
     }
   };
 
+  const selectedInterviewer = savedNames.find(
+    (row) => row.name.toLowerCase() === interviewerName.trim().toLowerCase()
+  );
+  const selectedPhone = String(selectedInterviewer?.phone || '').trim();
+
+  const persistInterviewerName = async (name: string) => {
+    setInterviewerName(name);
+    try {
+      await updateEvaluationInterviewer(ev.id, name);
+    } catch {
+      /* still usable locally */
+    }
+  };
+
+  const buildEvalLink = async () => {
+    const tokenData = await generateEvaluationToken(ev.id);
+    return `${window.location.origin}/eval/${tokenData.token}`;
+  };
+
+  const handleCopyLink = async () => {
+    if (generatingLink) return;
+    setGeneratingLink(true);
+    try {
+      const url = await buildEvalLink();
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success('Interviewer link copied');
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to copy link'));
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const handleOpenWhatsApp = async () => {
+    if (!interviewerName.trim()) {
+      toast.error('Select or add an interviewer first');
+      return;
+    }
+    setGeneratingLink(true);
+    try {
+      const url = await buildEvalLink();
+      await updateEvaluationInterviewer(ev.id, interviewerName.trim());
+      setPendingLink(url);
+      setSendPhone(selectedPhone);
+      setSendPhoneError(selectedPhone ? '' : 'Enter the interviewer phone number to send.');
+      setWhatsappOpen(true);
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to generate link'));
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const interviewerMessage = () =>
+    buildInterviewerWhatsAppMessage({
+      interviewerName,
+      candidateName: candidate.full_name,
+      interviewTitle: interviewTitle(ev),
+      link: pendingLink,
+    });
+
+  const resolveSendPhone = () => {
+    const phoneCheck = validatePhone(sendPhone, 'Interviewer phone');
+    if (!phoneCheck.ok) {
+      setSendPhoneError(phoneCheck.message);
+      toast.error(phoneCheck.message);
+      return null;
+    }
+    setSendPhoneError('');
+    return digitsOnly(sendPhone);
+  };
+
+  const persistSendPhone = async (phone: string) => {
+    const name = interviewerName.trim();
+    if (!name) return;
+    try {
+      if (selectedInterviewer) {
+        if (selectedInterviewer.phone !== phone) {
+          await updateInterviewerPhone(selectedInterviewer.id, phone, branch);
+          setSavedNames(await listInterviewers(branch));
+        }
+        return;
+      }
+      await createInterviewer(name, branch, phone);
+      setSavedNames(await listInterviewers(branch));
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to save interviewer phone'));
+    }
+  };
+
+  const handleSendWhatsApp = async () => {
+    const phone = resolveSendPhone();
+    if (!phone || sendingWhatsApp) return;
+    setSendingWhatsApp(true);
+    try {
+      await persistSendPhone(phone);
+      const scheduled = ev.scheduled_time ? new Date(ev.scheduled_time) : null;
+      const dateStr = scheduled ? formatDate(scheduled) : 'as discussed';
+      const timeStr = scheduled ? formatTime(scheduled) : '';
+      await sendEvaluationWhatsAppInvite(ev.id, {
+        to_phone: phone,
+        recipient_type: 'INTERVIEWER',
+        variables: {
+          candidateName: candidate.full_name,
+          position: candidate.position_applied_for || candidate.department || 'the role',
+          date: dateStr,
+          time: timeStr,
+          mode: interviewTitle(ev),
+          locationOrLink: pendingLink,
+          recruiterName: user?.full_name || 'HR Team',
+        },
+      });
+      toast.success(`WhatsApp sent to ${interviewerName}`);
+      setWhatsappOpen(false);
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to send WhatsApp'));
+    } finally {
+      setSendingWhatsApp(false);
+    }
+  };
+
+  const handleOpenWhatsAppChat = async () => {
+    const phone = resolveSendPhone();
+    if (!phone) return;
+    await persistSendPhone(phone);
+    openWhatsAppChat(phone, interviewerMessage());
+    setWhatsappOpen(false);
+  };
+
   const handleAddInterviewerName = async () => {
     if (!newNameDraft.trim()) {
       toast.error('Enter an interviewer name');
       return;
     }
+    const phoneDraft = newPhoneDraft.trim();
+    if (phoneDraft) {
+      const phoneCheck = validatePhone(phoneDraft, 'Interviewer phone');
+      if (!phoneCheck.ok) {
+        toast.error(phoneCheck.message);
+        return;
+      }
+    }
     try {
-      const row = await createInterviewer(newNameDraft, branch);
+      const row = await createInterviewer(
+        newNameDraft,
+        branch,
+        phoneDraft ? digitsOnly(phoneDraft) : undefined,
+      );
       setSavedNames(await listInterviewers(branch));
-      setInterviewerName(row.name);
+      await persistInterviewerName(row.name);
       setNewNameDraft('');
-      toast.success('Interviewer name saved for this branch');
+      setNewPhoneDraft('');
+      toast.success(phoneDraft ? 'Interviewer saved for this branch' : 'Interviewer name saved');
     } catch (err) {
-      toast.error(extractError(err, 'Failed to save interviewer name'));
+      toast.error(extractError(err, 'Failed to save interviewer'));
+    }
+  };
+
+  const handleSavePhone = async (row: InterviewerNameRow) => {
+    const draft = phoneEdits[row.id] ?? row.phone ?? '';
+    const phoneCheck = validatePhone(draft, 'Interviewer phone');
+    if (!phoneCheck.ok) {
+      toast.error(phoneCheck.message);
+      return;
+    }
+    try {
+      await updateInterviewerPhone(row.id, digitsOnly(draft), branch);
+      setSavedNames(await listInterviewers(branch));
+      setPhoneEdits((prev) => {
+        const next = { ...prev };
+        delete next[row.id];
+        return next;
+      });
+      toast.success('Phone saved');
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to save phone'));
     }
   };
 
@@ -180,8 +407,8 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
     setSubmitting(true);
     try {
       const name = interviewerName.trim();
-      if (name) {
-        await createInterviewer(name, branch);
+      if (name && !selectedInterviewer) {
+        await createInterviewer(name, branch, selectedPhone || undefined);
         setSavedNames(await listInterviewers(branch));
       }
       await submitScorecardDirect(ev.id, {
@@ -197,17 +424,7 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
         },
       });
 
-      const evalName =
-        ev.type === 'BRANCH_HR'
-          ? 'HR INTERVIEW'
-          : ev.type === 'DEPT_HEAD'
-            ? 'DEPARTMENT INTERVIEW'
-            : ev.type === 'HQ_INTERVIEW_1'
-              ? 'HEAD OFFICE INTERVIEW'
-              : ev.type === 'HQ_INTERVIEW_2'
-                ? 'CMD INTERVIEW'
-                : ev.type.replace(/_/g, ' ');
-      toast.success(`${evalName} saved successfully`);
+      toast.success(`${interviewTitle(ev)} saved successfully`);
       setIsEditing(false);
       onUpdate();
     } catch (err) {
@@ -216,8 +433,6 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
       setSubmitting(false);
     }
   };
-
-  const showForm = !isCompleted || isEditing;
 
   return (
     <motion.div
@@ -229,35 +444,93 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
     >
       <div>
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 gap-3">
-          <div className="flex items-center gap-3">
-            <h3 className="font-bold text-lg uppercase tracking-wider text-foreground">
-              {ev.type === 'BRANCH_HR'
-                ? 'HR INTERVIEW'
-                : ev.type === 'DEPT_HEAD'
-                  ? 'DEPARTMENT INTERVIEW'
-                  : ev.type === 'HQ_INTERVIEW_1'
-                    ? 'HEAD OFFICE INTERVIEW'
-                    : ev.type === 'HQ_INTERVIEW_2'
-                      ? 'CMD INTERVIEW'
-                      : ev.type.replace(/_/g, ' ')}
-            </h3>
+          <div className="flex items-center gap-3 min-w-0">
+            {editingTitle ? (
+              <Input
+                autoFocus
+                value={titleDraft}
+                maxLength={80}
+                disabled={savingTitle}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={() => void saveTitle()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void saveTitle();
+                  }
+                  if (e.key === 'Escape') {
+                    skipTitleSaveRef.current = true;
+                    setEditingTitle(false);
+                  }
+                }}
+                className="h-9 max-w-sm font-bold"
+                placeholder={defaultInterviewTitle(ev.type)}
+              />
+            ) : (
+              <h3 className="font-bold text-lg tracking-wide text-foreground truncate">
+                {interviewTitle(ev)}
+              </h3>
+            )}
+            {canRenameInterview(ev.type) && !isReadOnly && !editingTitle && (
+              <button
+                type="button"
+                onClick={startRename}
+                className="text-muted-foreground hover:text-foreground transition-colors p-1 shrink-0"
+                title="Rename interview"
+                aria-label="Rename interview"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
             {isCompleted && !isEditing && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase shadow-sm whitespace-nowrap bg-success/10 text-success border-success/20">
                 Evaluated
               </span>
             )}
-            {ev.type === 'DEPT_HEAD' && index > 0 && (
+            {(ev.type === 'DEPT_HEAD' || ev.type === 'HQ_INTERVIEW_2') && index > 0 && !isReadOnly && (
               <button
                 type="button"
                 onClick={handleDelete}
                 disabled={deleting}
                 className="ml-2 text-muted-foreground hover:text-danger transition-colors p-1"
                 title="Delete this interview"
+                aria-label="Delete this interview"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
             )}
           </div>
+          {!isCompleted && !isReadOnly && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleCopyLink()}
+                disabled={generatingLink}
+                aria-label={copied ? 'Interview link copied' : 'Copy interview link'}
+                className="flex min-h-11 items-center gap-2 px-3 py-1.5 text-xs font-bold text-foreground bg-background border border-border hover:bg-muted rounded-lg shadow-sm transition-colors disabled:opacity-50"
+              >
+                {generatingLink ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : copied ? (
+                  <CheckCircle className="w-3.5 h-3.5 text-success" />
+                ) : (
+                  <Link className="w-3.5 h-3.5" />
+                )}
+                {copied ? 'Copied' : 'Copy link'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleOpenWhatsApp()}
+                disabled={generatingLink || loadingNames}
+                title={!interviewerName.trim() ? 'Select an interviewer first' : 'Send form on WhatsApp'}
+                aria-label="Send interview form on WhatsApp"
+                className="flex min-h-11 items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded-lg shadow-sm transition-colors disabled:opacity-50"
+              >
+                <img src="/whatsapp.webp" alt="" className="w-3.5 h-3.5 object-contain" />
+                WhatsApp
+              </button>
+            </div>
+          )}
         </div>
 
         {isCompleted && !isEditing ? (
@@ -280,7 +553,7 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
                   >
                     {ev.verdict?.replace(/_/g, ' ') || 'EVALUATED'}
                   </span>
-                  {ev.verdict === 'ON_HOLD' && (
+                  {ev.verdict === 'ON_HOLD' && !isReadOnly && (
                     <button
                       type="button"
                       onClick={handleEdit}
@@ -360,49 +633,71 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
           >
             <div className="rounded-lg border border-border p-3 space-y-2">
               <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider">
-                Interviewer name{requireInterviewer ? ' *' : ''}
+                Interviewer{requireInterviewer ? ' *' : ''}
               </label>
-              <select
-                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+              <Select
                 value={interviewerName}
-                onChange={(e) => setInterviewerName(e.target.value)}
+                onChange={(e) => void persistInterviewerName(e.target.value)}
                 disabled={!!isReadOnly || loadingNames}
+                searchable
               >
                 <option value="">{loadingNames ? 'Loading…' : 'Select interviewer…'}</option>
                 {savedNames.map((row) => (
                   <option key={row.id} value={row.name}>
-                    {row.name}
+                    {row.phone ? `${row.name} · ${row.phone}` : row.name}
                   </option>
                 ))}
                 {interviewerName &&
                   !savedNames.some((n) => n.name.toLowerCase() === interviewerName.toLowerCase()) && (
                     <option value={interviewerName}>{interviewerName}</option>
                   )}
-              </select>
+              </Select>
 
               {savedNames.length > 0 && (
-                <ul className="space-y-1 max-h-28 overflow-y-auto">
+                <ul className="space-y-1 max-h-36 overflow-y-auto">
                   {savedNames.map((row) => (
                     <li
                       key={row.id}
-                      className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1 text-sm"
+                      className="flex flex-col gap-1 rounded-md bg-muted/40 px-2 py-1.5 text-sm"
                     >
-                      <button
-                        type="button"
-                        className="truncate text-left font-medium hover:text-primary"
-                        onClick={() => setInterviewerName(row.name)}
-                      >
-                        {row.name}
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => handleRemoveSavedName(row)}
-                        title={`Remove ${row.name}`}
-                        aria-label={`Remove ${row.name}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          className="truncate text-left font-medium hover:text-primary"
+                          onClick={() => void persistInterviewerName(row.name)}
+                        >
+                          {row.name}
+                          {row.phone ? (
+                            <span className="ml-2 font-normal text-muted-foreground">+91 {row.phone}</span>
+                          ) : (
+                            <span className="ml-2 font-normal text-warning">No phone</span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => handleRemoveSavedName(row)}
+                          title={`Remove ${row.name}`}
+                          aria-label={`Remove ${row.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      {!row.phone && (
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="10-digit phone"
+                            inputMode="numeric"
+                            value={phoneEdits[row.id] ?? ''}
+                            onChange={(e) =>
+                              setPhoneEdits((prev) => ({ ...prev, [row.id]: digitsOnly(e.target.value, 10) }))
+                            }
+                          />
+                          <Button type="button" variant="secondary" size="sm" onClick={() => void handleSavePhone(row)}>
+                            Save phone
+                          </Button>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -410,13 +705,20 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
 
               <div className="flex flex-col sm:flex-row gap-2">
                 <Input
-                  placeholder="Add new interviewer name"
+                  placeholder="Name"
                   value={newNameDraft}
                   onChange={(e) => setNewNameDraft(e.target.value)}
+                  disabled={!!isReadOnly}
+                />
+                <Input
+                  placeholder="Phone (optional)"
+                  inputMode="numeric"
+                  value={newPhoneDraft}
+                  onChange={(e) => setNewPhoneDraft(digitsOnly(e.target.value, 10))}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      handleAddInterviewerName();
+                      void handleAddInterviewerName();
                     }
                   }}
                   disabled={!!isReadOnly}
@@ -424,10 +726,10 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={handleAddInterviewerName}
+                  onClick={() => void handleAddInterviewerName()}
                   disabled={!!isReadOnly}
                 >
-                  Save name
+                  Save
                 </Button>
               </div>
             </div>
@@ -617,6 +919,50 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
           </motion.div>
         </div>
       )}
+
+      <WhatsAppShareModal
+        isOpen={whatsappOpen}
+        onClose={() => setWhatsappOpen(false)}
+        title="Send interviewer form"
+        description={
+          <>
+            Send the evaluation link to <span className="font-semibold">{interviewerName || 'the interviewer'}</span> for{' '}
+            <span className="font-semibold">{candidate.full_name}</span>. Phone is required to send.
+          </>
+        }
+        preview={pendingLink}
+        onDoubleTick={() => void handleSendWhatsApp()}
+        onOpenWhatsApp={() => void handleOpenWhatsAppChat()}
+        doubleTickLoading={sendingWhatsApp}
+        sendDisabled={!validatePhone(sendPhone).ok}
+      >
+        <div>
+          <label className="block text-xs font-semibold text-foreground mb-1">
+            Interviewer phone <span className="text-danger">*</span>
+          </label>
+          <Input
+            autoFocus={!selectedPhone}
+            placeholder="10-digit mobile"
+            inputMode="numeric"
+            maxLength={10}
+            value={sendPhone}
+            error={!!sendPhoneError}
+            onChange={(e) => {
+              const next = digitsOnly(e.target.value, 10);
+              setSendPhone(next);
+              const check = validatePhone(next, 'Interviewer phone');
+              setSendPhoneError(check.ok ? '' : check.message);
+            }}
+          />
+          {sendPhoneError ? (
+            <p className="text-xs text-danger mt-1" role="alert">
+              {sendPhoneError}
+            </p>
+          ) : sendPhone ? (
+            <p className="text-xs text-muted-foreground mt-1">Will send to +91 {digitsOnly(sendPhone)}</p>
+          ) : null}
+        </div>
+      </WhatsAppShareModal>
     </motion.div>
   );
 }

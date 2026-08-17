@@ -1,5 +1,4 @@
 from datetime import UTC, datetime
-import secrets
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,7 +7,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.core.deps import require_roles
-from app.core.access import assert_candidate_access, get_candidate_for_user
+from app.core.access import assert_candidate_access, assert_local_hr_can_mutate, get_candidate_for_user
+from app.core.public_token import PURPOSE_PRE_FORM, candidate_by_public_token, expire_pre_form_if_needed, issue_public_token
 from app.models.candidate import Candidate
 from app.models.candidate_profile import CandidateProfile
 from app.models.activity_log import ActivityLog
@@ -16,6 +16,7 @@ from app.models.evaluation import Evaluation
 from app.models.stage_history import StageHistory
 from app.models.document import Document
 from app.models.user import User
+from app.core.ho_pipeline import HO_HR_PIPELINE_STAGES
 from app.models.enums import PipelineStage, UserRole, ActivityType, EvaluationType, FormStatus
 from app.schemas.candidate import (
     CandidateCreate,
@@ -34,6 +35,7 @@ from app.services.candidate_service import (
     to_candidate_out,
     bulk_delete_candidates,
 )
+from app.services.candidate_work import build_candidate_work_state, build_candidate_work_states
 from app.services.document_service import (
     document_out as _document_out,
     get_resume_document as _get_resume_document,
@@ -48,7 +50,7 @@ router = APIRouter(prefix="/candidates", tags=["candidates"])
 
 
 def _issue_pre_form(db: Session, candidate: Candidate, user: User) -> None:
-    candidate.pre_form_token = secrets.token_urlsafe(32)
+    issue_public_token(candidate, PURPOSE_PRE_FORM)
     candidate.pre_form_status = FormStatus.SENT
     candidate.pre_form_sent_at = datetime.now(UTC)
     candidate.pre_form_submitted_at = None
@@ -77,9 +79,9 @@ def _store_whatsapp_invite(db: Session, candidate: Candidate, user: User) -> Non
 
 @router.get("/portal/{token}", response_model=CandidatePortalOut)
 def get_candidate_portal(token: str, db: Session = Depends(get_db)):
-    candidate = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.pre_form_token == token))
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Invalid token")
+    candidate = candidate_by_public_token(
+        db, token, PURPOSE_PRE_FORM, options=(joinedload(Candidate.profile),)
+    )
         
     evaluations = db.scalars(select(Evaluation).where(Evaluation.candidate_id == candidate.id)).all()
     eval_outs = []
@@ -100,7 +102,6 @@ def get_candidate_portal(token: str, db: Session = Depends(get_db)):
         photo_url = process_photo_url(candidate.profile.photo_url)
             
     return CandidatePortalOut(
-        id=candidate.id,
         full_name=candidate.full_name,
         position_applied_for=candidate.position_applied_for,
         phone=candidate.phone,
@@ -115,9 +116,7 @@ def get_candidate_portal(token: str, db: Session = Depends(get_db)):
 
 @router.post("/portal/{token}/response")
 def submit_candidate_portal_response(token: str, body: CandidatePortalResponseIn, db: Session = Depends(get_db)):
-    candidate = db.scalar(select(Candidate).where(Candidate.pre_form_token == token))
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Invalid token")
+    candidate = candidate_by_public_token(db, token, PURPOSE_PRE_FORM)
         
     if body.action_type in ["INTERVIEW_CONFIRM", "INTERVIEW_DECLINE"]:
         if not body.evaluation_id:
@@ -162,7 +161,21 @@ def list_candidates(
 ):
     skip = (page - 1) * limit
     q = select(Candidate)
-    if stage:
+    if stage in (
+        PipelineStage.HO_INTERVIEWS,
+        PipelineStage.HO_HR_INTERVIEW,
+        PipelineStage.HO_DEPT_INTERVIEW,
+    ):
+        q = q.where(
+            Candidate.current_stage.in_(
+                (
+                    PipelineStage.HO_INTERVIEWS,
+                    PipelineStage.HO_HR_INTERVIEW,
+                    PipelineStage.HO_DEPT_INTERVIEW,
+                )
+            )
+        )
+    elif stage:
         q = q.where(Candidate.current_stage == stage)
     if search:
         search_term = f"%{search}%"
@@ -175,10 +188,8 @@ def list_candidates(
             )
         )
         
-    if user.role == UserRole.ADMIN:
-        pass
-    elif user.role == UserRole.HO_HR:
-        q = q.where(Candidate.current_stage.in_([PipelineStage.SENT_TO_HO, PipelineStage.FINAL_APPROVAL, PipelineStage.HIRED]))
+    if user.role in (UserRole.ADMIN, UserRole.HO_HR):
+        q = q.where(Candidate.current_stage.in_(HO_HR_PIPELINE_STAGES))
     elif user.role == UserRole.LOCAL_HR:
         q = q.where(
             Candidate.branch_location == user.branch_location
@@ -191,7 +202,13 @@ def list_candidates(
     q = q.order_by(Candidate.created_at.desc()).offset(skip).limit(limit)
     rows = list(db.scalars(q).all())
     with_resume = resume_candidate_ids(db, [row.id for row in rows])
-    data = [to_candidate_list_out(row, row.id in with_resume) for row in rows]
+    work_states = build_candidate_work_states(db, rows, resume_ids=with_resume)
+    data = [
+        to_candidate_list_out(row, row.id in with_resume, db).model_copy(
+            update={"work_state": work_states[row.id]}
+        )
+        for row in rows
+    ]
     
     return CandidatePaginatedOut(
         data=data,
@@ -205,14 +222,16 @@ def list_candidates(
 def create(
     body: CandidateCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.LOCAL_HR)),
 ):
     if body.assigned_hr_user_id is None:
         body = body.model_copy(update={"assigned_hr_user_id": user.id})
     if user.role == UserRole.LOCAL_HR:
         body = body.model_copy(update={"branch_location": user.branch_location})
     row = create_candidate(db, body, user.id, created_via_public_apply=False)
-    return to_candidate_out(row, False)
+    return to_candidate_out(row, False, db, viewer=user).model_copy(
+        update={"work_state": build_candidate_work_state(db, row)}
+    )
 
 
 @router.get("/{id}", response_model=CandidateOut)
@@ -224,8 +243,14 @@ def get_candidate(
     row = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.id == id))
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
-    assert_candidate_access(user, row)
-    return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
+    assert_candidate_access(user, row, db)
+    if expire_pre_form_if_needed(row):
+        db.commit()
+        db.refresh(row)
+    has_resume = id in resume_candidate_ids(db, [id])
+    return to_candidate_out(row, has_resume, db, viewer=user).model_copy(
+        update={"work_state": build_candidate_work_state(db, row, has_resume=has_resume)}
+    )
 
 
 @router.patch("/{id}/profile/raw_data", response_model=CandidateOut)
@@ -238,7 +263,8 @@ def update_profile_raw_data(
     row = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.id == id))
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
-    assert_candidate_access(user, row)
+    assert_candidate_access(user, row, db)
+    assert_local_hr_can_mutate(user, row, db)
 
     if not row.profile:
         row.profile = CandidateProfile(candidate_id=row.id, raw_data=body.raw_data)
@@ -256,7 +282,10 @@ def update_profile_raw_data(
     db.add(log)
     db.commit()
     db.refresh(row)
-    return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
+    has_resume = id in resume_candidate_ids(db, [id])
+    return to_candidate_out(row, has_resume, db, viewer=user).model_copy(
+        update={"work_state": build_candidate_work_state(db, row, has_resume=has_resume)}
+    )
 
 
 @router.delete("/{id}", status_code=204)
@@ -265,7 +294,7 @@ def delete_candidate_endpoint(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    row = get_candidate_for_user(db, id, user)
+    row = get_candidate_for_user(db, id, user, write=True)
     
     docs = db.scalars(select(Document).where(Document.candidate_id == id)).all()
     storage_paths = [doc.storage_path for doc in docs if doc.storage_path]
@@ -297,9 +326,7 @@ def resolve_duplicate(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    candidate = db.get(Candidate, id)
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+    candidate = get_candidate_for_user(db, id, current_user, write=True)
         
     if body.action == "NOT_DUPLICATE":
         candidate.is_duplicate_flagged = False

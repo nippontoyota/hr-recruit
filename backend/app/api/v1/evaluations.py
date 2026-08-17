@@ -1,11 +1,13 @@
-import random
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
+from app.core.access import get_candidate_for_user
+from app.core.ho_pipeline import handed_over_to_ho
 from app.core.database import get_db
 from app.core.deps import require_roles
 from app.core.security import generate_secure_token
@@ -23,7 +25,6 @@ from app.models.enums import (
 )
 from app.models.evaluation import Evaluation
 from app.models.evaluation_token import EvaluationToken
-from app.models.technical_question import TechnicalQuestion
 from app.models.user import User
 from app.models.communication import Communication
 from app.models.enums import (
@@ -37,54 +38,300 @@ from app.schemas.evaluation import (
     EvaluationSubmitScorecard,
     EvaluationPublicOut,
     EvaluationPublicSubmit,
+    PreviousInterviewOut,
     CandidateTestSubmit,
     EvaluationTokenOut,
     EvaluationWhatsAppInvite,
     TechnicalQuestionOut,
     EvaluationCreate,
+    EvaluationTitleUpdate,
+    EvaluationInterviewerUpdate,
 )
+from app.core.config import settings
+from app.core.interviewer_packet import filter_interviewer_packet
+from app.core.positions import paper_key, validate_assignment
+from app.core.test_paper import assemble_for_candidate, assemble_test_questions, to_test_data
 from app.services.workflow import transition
 from app.services import storage
+from app.services.document_service import process_photo_url
 from app.services.doubletick import send_template
 
 
 router = APIRouter(prefix="/evaluations", tags=["Evaluations"])
 
+INTERVIEW_LINK_TYPES = frozenset(
+    {
+        EvaluationType.BRANCH_HR,
+        EvaluationType.DEPT_HEAD,
+        EvaluationType.GM_LEVEL,
+        EvaluationType.HQ_INTERVIEW,
+        EvaluationType.HQ_INTERVIEW_1,
+        EvaluationType.HQ_INTERVIEW_2,
+    }
+)
+INTERVIEW_TOKEN_TTL = timedelta(days=3650)
+
+PUBLIC_SCORE_KEYS = (
+    "attitude",
+    "communication",
+    "knowledge",
+    "total_score",
+    "interviewer_name",
+    "percentage",
+    "correct_answers",
+    "total_questions",
+    "custom_title",
+)
 
 
+def _public_scores(scores: dict | None) -> dict | None:
+    if not scores:
+        return None
+    out = {key: scores[key] for key in PUBLIC_SCORE_KEYS if key in scores and scores[key] is not None}
+    return out or None
 
-def _get_candidate_department(position: str | None) -> str:
-    if not position:
-        return "SALES"
-    pos = position.upper()
-    if any(k in pos for k in ["SALES", "MARKETING", "ADVISOR", "CONSULTANT"]):
-        return "SALES"
-    if any(k in pos for k in ["SERVICE", "MECHANIC", "DIAGNOSTIC", "WORKSHOP", "TECHNICIAN"]):
-        return "SERVICE"
-    if any(k in pos for k in ["INSURANCE", "POLICY", "CLAIMS", "UNDERWRITER"]):
-        return "INSURANCE"
-    if any(k in pos for k in ["FINANCE", "ACCOUNT", "BILLING", "CASHIER"]):
-        return "FINANCE"
-    if any(k in pos for k in ["CALL", "TELE", "CENTRE", "CENTER", "CUSTOMER SERVICE", "CUSTOMER SUPPORT"]):
-        return "Call Centre"
-    if "HR" in pos or "HUMAN RESOURCE" in pos:
-        return "HR"
-    return "SALES"  # default
+
+def _eval_for_write(db: Session, eval_id: UUID, user: User) -> tuple[Evaluation, Candidate]:
+    evaluation = db.get(Evaluation, eval_id)
+    if not evaluation:
+        raise HTTPException(status_code=404, detail="Evaluation not found")
+    candidate = get_candidate_for_user(db, evaluation.candidate_id, user, write=True)
+    return evaluation, candidate
+
+
+def _mark_eval_tokens_used(db: Session, eval_id: UUID) -> None:
+    rows = db.scalars(
+        select(EvaluationToken).where(
+            EvaluationToken.evaluation_id == eval_id,
+            EvaluationToken.is_used.is_(False),
+        )
+    ).all()
+    for row in rows:
+        row.is_used = True
+
+
+def _set_score_value(evaluation: Evaluation, key: str, value: str) -> None:
+    scores = dict(evaluation.scores or {})
+    if value:
+        scores[key] = value
+    else:
+        scores.pop(key, None)
+    evaluation.scores = scores
+    flag_modified(evaluation, "scores")
+
+
+def _apply_evaluation_outcome(
+    db: Session,
+    evaluation: Evaluation,
+    candidate: Candidate,
+    verdict: EvaluationVerdict | None,
+    user: User | None,
+) -> None:
+    if not verdict or not user:
+        return
+
+    if verdict == EvaluationVerdict.REJECTED:
+        transition(
+            db=db,
+            candidate=candidate,
+            target_stage=PipelineStage.REJECTED,
+            user=user,
+            remarks=f"Rejected during {evaluation.type.value.replace('_', ' ').title()} evaluation.",
+            skip_handover_lock=True,
+        )
+        return
+    if verdict == EvaluationVerdict.ON_HOLD:
+        transition(
+            db=db,
+            candidate=candidate,
+            target_stage=PipelineStage.ON_HOLD,
+            user=user,
+            remarks=f"Placed on hold during {evaluation.type.value.replace('_', ' ').title()} evaluation.",
+            skip_handover_lock=True,
+        )
+        return
+    if verdict != EvaluationVerdict.SELECTED:
+        return
+
+    if candidate.current_stage == PipelineStage.BRANCH_INTERVIEW:
+        evals = db.scalars(
+            select(Evaluation).where(
+                Evaluation.candidate_id == candidate.id,
+                Evaluation.type.in_([EvaluationType.BRANCH_HR, EvaluationType.DEPT_HEAD]),
+            )
+        ).all()
+        hr_eval = next((e for e in evals if e.type == EvaluationType.BRANCH_HR), None)
+        dept_eval = next((e for e in evals if e.type == EvaluationType.DEPT_HEAD), None)
+        if (
+            hr_eval
+            and dept_eval
+            and hr_eval.status == InterviewStatus.EVALUATED
+            and dept_eval.status == InterviewStatus.EVALUATED
+            and hr_eval.verdict == EvaluationVerdict.SELECTED
+            and dept_eval.verdict == EvaluationVerdict.SELECTED
+        ):
+            transition(
+                db=db,
+                candidate=candidate,
+                target_stage=PipelineStage.TEST,
+                user=user,
+                remarks="Branch Interview completed by both HR and Department.",
+                skip_handover_lock=True,
+            )
+
+    ho_interview_stages = (
+        PipelineStage.SENT_TO_HO,
+        PipelineStage.HO_INTERVIEWS,
+        PipelineStage.HO_HR_INTERVIEW,
+        PipelineStage.HO_DEPT_INTERVIEW,
+    )
+    if evaluation.type == EvaluationType.HQ_INTERVIEW_1 and candidate.current_stage in ho_interview_stages:
+        if candidate.current_stage != PipelineStage.HO_INTERVIEWS:
+            transition(
+                db=db,
+                candidate=candidate,
+                target_stage=PipelineStage.HO_INTERVIEWS,
+                user=user,
+                remarks="HO interviews in progress.",
+                skip_handover_lock=True,
+            )
+    elif evaluation.type == EvaluationType.HQ_INTERVIEW_2:
+        ho_evals = db.scalars(
+            select(Evaluation).where(
+                Evaluation.candidate_id == candidate.id,
+                Evaluation.type.in_([EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2]),
+            )
+        ).all()
+        hr_eval = next((e for e in ho_evals if e.type == EvaluationType.HQ_INTERVIEW_1), None)
+        dept_eval = next((e for e in ho_evals if e.type == EvaluationType.HQ_INTERVIEW_2), None)
+        if (
+            hr_eval
+            and dept_eval
+            and hr_eval.status == InterviewStatus.EVALUATED
+            and dept_eval.status == InterviewStatus.EVALUATED
+            and hr_eval.verdict == EvaluationVerdict.SELECTED
+            and dept_eval.verdict == EvaluationVerdict.SELECTED
+            and candidate.current_stage in (*ho_interview_stages, PipelineStage.HO_DEPT_INTERVIEW)
+        ):
+            transition(
+                db=db,
+                candidate=candidate,
+                target_stage=PipelineStage.CSS,
+                user=user,
+                remarks="HO HR and department interviews completed. CSS ready.",
+                skip_handover_lock=True,
+            )
+
+
 
 
 def _candidate_dept_key(candidate: Candidate) -> str:
-    return _get_candidate_department(candidate.department or candidate.position_applied_for)
+    return candidate.department or candidate.position_applied_for or ""
+
+
+def _frozen_test_questions(db: Session, candidate_id: UUID) -> list[dict] | None:
+    evaluation = db.scalar(
+        select(Evaluation)
+        .where(
+            Evaluation.candidate_id == candidate_id,
+            Evaluation.type == EvaluationType.TECHNICAL_TEST,
+        )
+        .order_by(Evaluation.created_at.desc())
+    )
+    if not evaluation:
+        return None
+
+    scores = evaluation.scores or {}
+    snapshot = scores.get("questions") or []
+    answers_key = scores.get("answer_key") or {}
+    token_row = db.scalar(
+        select(EvaluationToken)
+        .where(EvaluationToken.evaluation_id == evaluation.id)
+        .order_by(EvaluationToken.created_at.desc())
+    )
+    if not snapshot and token_row and token_row.test_data:
+        snapshot = token_row.test_data.get("questions") or []
+        answers_key = token_row.test_data.get("answers") or {}
+    if not snapshot:
+        return None
+
+    candidate = db.get(Candidate, candidate_id)
+    dept = _candidate_dept_key(candidate) if candidate else ""
+    return [
+        {
+            "id": q["id"],
+            "department": dept or "",
+            "text": q["text"],
+            "options": q.get("options") or {},
+            "answer": answers_key.get(q["id"], answers_key.get(str(q["id"]), "")),
+        }
+        for q in snapshot
+    ]
+
+
+def _parse_utc_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _ensure_test_deadline(token_row: EvaluationToken, db: Session) -> datetime:
+    """Start the 8-minute test window on first open; return the submission deadline."""
+    now = datetime.now(UTC)
+    test_data = dict(token_row.test_data or {})
+    deadline_str = test_data.get("deadline_at")
+    if deadline_str:
+        deadline = _parse_utc_datetime(deadline_str)
+        if deadline <= now:
+            raise HTTPException(status_code=400, detail="Test time has expired")
+        return deadline
+
+    started_at = now
+    deadline = started_at + timedelta(minutes=settings.technical_test_duration_minutes)
+    test_data["started_at"] = started_at.isoformat()
+    test_data["deadline_at"] = deadline.isoformat()
+    token_row.test_data = test_data
+    db.add(token_row)
+    db.commit()
+    db.refresh(token_row)
+    return deadline
+
+
+def _assert_test_not_expired(token_row: EvaluationToken) -> None:
+    test_data = token_row.test_data or {}
+    deadline_str = test_data.get("deadline_at")
+    if not deadline_str:
+        return
+    if _parse_utc_datetime(deadline_str) <= datetime.now(UTC):
+        raise HTTPException(status_code=400, detail="Test time has expired")
 
 
 @router.get("/questions", response_model=list[TechnicalQuestionOut])
 def get_department_questions(
-    department: str,
+    department: str | None = None,
+    position: str | None = None,
+    experience: str | None = None,
+    candidate_id: UUID | None = None,
     db: Session = Depends(get_db),
     current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    norm_dept = _get_candidate_department(department)
-    questions = db.scalars(select(TechnicalQuestion).where(TechnicalQuestion.department == norm_dept)).all()
-    return questions
+    if candidate_id:
+        frozen = _frozen_test_questions(db, candidate_id)
+        if frozen:
+            return frozen
+        candidate = db.get(Candidate, candidate_id)
+        if not candidate:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        department = department or candidate.department
+        position = position or candidate.position_applied_for
+        if experience is None:
+            experience = candidate.experience
+    if not department or not position:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide candidate_id, or department and position.",
+        )
+    if not paper_key(department, position, experience):
+        return []
+    return assemble_test_questions(db, department, position, experience)
 
 
 
@@ -95,10 +342,8 @@ def get_candidate_evaluations(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    candidate = db.get(Candidate, candidate_id)
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-        
+    candidate = get_candidate_for_user(db, candidate_id, current_user)
+
     # Auto-initialize evaluations based on current stage for backward compatibility
     stage_to_types = {
         PipelineStage.BRANCH_INTERVIEW: [EvaluationType.BRANCH_HR, EvaluationType.DEPT_HEAD],
@@ -106,7 +351,8 @@ def get_candidate_evaluations(
     }
     
     req_types = stage_to_types.get(candidate.current_stage, [])
-    if req_types:
+    skip_auto = current_user.role == UserRole.LOCAL_HR and handed_over_to_ho(candidate, db)
+    if req_types and not skip_auto:
         existing_types = {e.type for e in db.scalars(
             select(Evaluation).where(Evaluation.candidate_id == candidate_id)
         ).all()}
@@ -133,9 +379,7 @@ def create_evaluation(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    candidate = db.get(Candidate, candidate_id)
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+    candidate = get_candidate_for_user(db, candidate_id, current_user, write=True)
 
     # Prevent duplicate TECHNICAL_TEST evaluations per candidate
     if body.type == EvaluationType.TECHNICAL_TEST:
@@ -166,23 +410,63 @@ def create_evaluation(
     return evaluation
 
 
+@router.patch("/{eval_id}/title", response_model=EvaluationOut)
+def update_evaluation_title(
+    eval_id: UUID,
+    body: EvaluationTitleUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    evaluation, _candidate = _eval_for_write(db, eval_id, current_user)
+    if evaluation.type not in (EvaluationType.DEPT_HEAD, EvaluationType.HQ_INTERVIEW_2):
+        raise HTTPException(status_code=400, detail="Only department interviews can be renamed.")
+
+    title = (body.title or "").strip()
+    if len(title) > 80:
+        raise HTTPException(status_code=400, detail="Title must be 80 characters or fewer.")
+
+    scores = dict(evaluation.scores or {})
+    if title:
+        scores["custom_title"] = title
+    else:
+        scores.pop("custom_title", None)
+    evaluation.scores = scores
+    flag_modified(evaluation, "scores")
+    db.commit()
+    db.refresh(evaluation)
+    return evaluation
+
+
+@router.patch("/{eval_id}/interviewer", response_model=EvaluationOut)
+def update_evaluation_interviewer(
+    eval_id: UUID,
+    body: EvaluationInterviewerUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    evaluation, _candidate = _eval_for_write(db, eval_id, current_user)
+    name = (body.interviewer_name or "").strip()
+    _set_score_value(evaluation, "interviewer_name", name)
+    db.commit()
+    db.refresh(evaluation)
+    return evaluation
+
+
 @router.delete("/{eval_id}")
 def delete_evaluation(
     eval_id: UUID,
     db: Session = Depends(get_db),
     current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    evaluation = db.get(Evaluation, eval_id)
-    if not evaluation:
-        raise HTTPException(status_code=404, detail="Evaluation not found")
+    evaluation, _candidate = _eval_for_write(db, eval_id, current_user)
         
-    if evaluation.type == EvaluationType.BRANCH_HR:
+    if evaluation.type in (EvaluationType.BRANCH_HR, EvaluationType.HQ_INTERVIEW_1):
         raise HTTPException(status_code=400, detail="Cannot delete HR interview")
-        
-    if evaluation.type == EvaluationType.DEPT_HEAD:
+
+    if evaluation.type in (EvaluationType.DEPT_HEAD, EvaluationType.HQ_INTERVIEW_2):
         count = db.query(Evaluation).filter(
-            Evaluation.candidate_id == evaluation.candidate_id, 
-            Evaluation.type == EvaluationType.DEPT_HEAD
+            Evaluation.candidate_id == evaluation.candidate_id,
+            Evaluation.type == evaluation.type,
         ).count()
         if count <= 1:
             raise HTTPException(status_code=400, detail="Cannot delete the mandatory department interview")
@@ -199,9 +483,7 @@ def schedule_evaluation(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    evaluation = db.get(Evaluation, eval_id)
-    if not evaluation:
-        raise HTTPException(status_code=404, detail="Evaluation not found")
+    evaluation, _candidate = _eval_for_write(db, eval_id, current_user)
         
     evaluation.interview_mode = body.interview_mode
     evaluation.scheduled_time = body.scheduled_time
@@ -227,58 +509,77 @@ def schedule_evaluation(
     return evaluation
 
 
+def _assign_test_position(candidate: Candidate, position: str | None) -> None:
+    if position:
+        if not candidate.department:
+            raise HTTPException(status_code=400, detail="Set a department on the candidate first.")
+        try:
+            validate_assignment(candidate.department, position, candidate.experience)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        candidate.position_applied_for = position
+    if not paper_key(candidate.department, candidate.position_applied_for, candidate.experience):
+        raise HTTPException(
+            status_code=400,
+            detail="Select a designation before generating the technical test.",
+        )
+
+
 @router.post("/{eval_id}/token", response_model=EvaluationTokenOut)
 def generate_evaluation_token(
     eval_id: UUID,
+    position: str | None = None,
     db: Session = Depends(get_db),
     current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     evaluation = db.get(Evaluation, eval_id)
     if not evaluation:
         raise HTTPException(status_code=404, detail="Evaluation not found")
-        
-    # Reuse existing active token if present
-    existing_token = db.scalar(
-        select(EvaluationToken).where(
-            EvaluationToken.evaluation_id == eval_id,
-            EvaluationToken.is_used.is_(False),
-            EvaluationToken.expires_at > datetime.now(UTC)
-        )
+
+    candidate = None
+    if evaluation.type == EvaluationType.TECHNICAL_TEST:
+        candidate = db.get(Candidate, evaluation.candidate_id)
+        if not candidate:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        _assign_test_position(candidate, position)
+
+    unused = select(EvaluationToken).where(
+        EvaluationToken.evaluation_id == eval_id,
+        EvaluationToken.is_used.is_(False),
     )
+    if evaluation.type == EvaluationType.TECHNICAL_TEST:
+        unused = unused.where(EvaluationToken.expires_at > datetime.now(UTC))
+    existing_token = db.scalar(unused)
     if existing_token:
+        if evaluation.type in INTERVIEW_LINK_TYPES:
+            existing_token.expires_at = datetime.now(UTC) + INTERVIEW_TOKEN_TTL
+        elif evaluation.type == EvaluationType.TECHNICAL_TEST and candidate:
+            test_data = dict(existing_token.test_data or {})
+            if not test_data.get("deadline_at"):
+                fresh = to_test_data(assemble_for_candidate(db, candidate))
+                test_data["questions"] = fresh["questions"]
+                test_data["answers"] = fresh["answers"]
+                existing_token.test_data = test_data
+                flag_modified(existing_token, "test_data")
+        db.commit()
+        db.refresh(existing_token)
         return existing_token
 
     token_str = generate_secure_token()
     
     test_data = None
     if evaluation.type == EvaluationType.TECHNICAL_TEST:
-        candidate = db.get(Candidate, evaluation.candidate_id)
-        dept = _candidate_dept_key(candidate)
-        q_rows = db.scalars(
-            select(TechnicalQuestion).where(TechnicalQuestion.department == dept)
-        ).all()
-        if not q_rows:
-            q_rows = db.scalars(
-                select(TechnicalQuestion).where(TechnicalQuestion.department == "SALES")
-            ).all()
-        q_list = list(q_rows)
-        random.shuffle(q_list)
-        test_data = {
-            "questions": [
-                {"id": q.id, "text": q.text, "options": q.options}
-                for q in q_list
-            ],
-            "answers": {
-                q.id: q.answer
-                for q in q_list
-            }
-        }
+        test_data = to_test_data(assemble_for_candidate(db, candidate))
 
     new_token = EvaluationToken(
         evaluation_id=eval_id,
         token=token_str,
         is_used=False,
-        expires_at=datetime.now(UTC) + timedelta(minutes=10),
+        expires_at=(
+            datetime.now(UTC) + timedelta(days=settings.technical_test_link_expire_days)
+            if evaluation.type == EvaluationType.TECHNICAL_TEST
+            else datetime.now(UTC) + INTERVIEW_TOKEN_TTL
+        ),
         test_data=test_data
     )
     db.add(new_token)
@@ -294,9 +595,7 @@ def submit_scorecard(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    evaluation = db.get(Evaluation, eval_id)
-    if not evaluation:
-        raise HTTPException(status_code=404, detail="Evaluation not found")
+    evaluation, _candidate = _eval_for_write(db, eval_id, current_user)
         
     if body.verdict:
         evaluation.verdict = body.verdict
@@ -319,70 +618,18 @@ def submit_scorecard(
         evaluation.scores = body.scores
         
     evaluation.status = InterviewStatus.EVALUATED
-    
+    _mark_eval_tokens_used(db, evaluation.id)
+
     candidate = db.get(Candidate, evaluation.candidate_id)
-    
-    # Write Activity Log
-    log = ActivityLog(
+
+    db.add(ActivityLog(
         candidate_id=candidate.id,
         activity_type=ActivityType.CALL,
         title=f"{evaluation.type.value.replace('_', ' ').title()} Scorecard Submitted",
         description=f"Verdict: {body.verdict.value if body.verdict else 'None'}. Remarks: {body.remarks or 'None'}",
         created_by_user_id=current_user.id
-    )
-    db.add(log)
-    
-    # Auto transition workflow on Reject or On Hold
-    if body.verdict == EvaluationVerdict.REJECTED:
-        transition(
-            db=db,
-            candidate=candidate,
-            target_stage=PipelineStage.REJECTED,
-            user=current_user,
-            remarks=f"Rejected during {evaluation.type.value.replace('_', ' ').title()} evaluation."
-        )
-    elif body.verdict == EvaluationVerdict.ON_HOLD:
-        transition(
-            db=db,
-            candidate=candidate,
-            target_stage=PipelineStage.ON_HOLD,
-            user=current_user,
-            remarks=f"Placed on hold during {evaluation.type.value.replace('_', ' ').title()} evaluation."
-        )
-    elif body.verdict == EvaluationVerdict.SELECTED and candidate.current_stage == PipelineStage.BRANCH_INTERVIEW:
-        # Check if both HR and Dept are evaluated
-        evals = db.scalars(
-            select(Evaluation).where(
-                Evaluation.candidate_id == candidate.id,
-                Evaluation.type.in_([EvaluationType.BRANCH_HR, EvaluationType.DEPT_HEAD])
-            )
-        ).all()
-        # If we have both and both are evaluated/selected
-        hr_eval = next((e for e in evals if e.type == EvaluationType.BRANCH_HR), None)
-        dept_eval = next((e for e in evals if e.type == EvaluationType.DEPT_HEAD), None)
-        
-        if hr_eval and dept_eval:
-            if hr_eval.status == InterviewStatus.EVALUATED and dept_eval.status == InterviewStatus.EVALUATED:
-                if hr_eval.verdict == EvaluationVerdict.SELECTED and dept_eval.verdict == EvaluationVerdict.SELECTED:
-                    transition(
-                        db=db,
-                        candidate=candidate,
-                        target_stage=PipelineStage.TEST,
-                        user=current_user,
-                        remarks="Branch Interview completed by both HR and Department."
-                    )
-        
-        
-    # Auto transition to Hired for HQ Interview
-    if evaluation.type == EvaluationType.HQ_INTERVIEW and body.verdict == EvaluationVerdict.SELECTED:
-        transition(
-            db=db,
-            candidate=candidate,
-            target_stage=PipelineStage.HIRED,
-            user=current_user,
-            remarks="HQ interview approved. Candidate hired."
-        )
-            
+    ))
+    _apply_evaluation_outcome(db, evaluation, candidate, body.verdict, current_user)
     db.commit()
     db.refresh(evaluation)
     return evaluation
@@ -393,19 +640,21 @@ def get_public_evaluation_details(
     token: str,
     db: Session = Depends(get_db),
 ):
-    token_row = db.scalar(
-        select(EvaluationToken).where(
-            EvaluationToken.token == token,
-            EvaluationToken.expires_at > datetime.now(UTC)
-        )
-    )
+    token_row = db.scalar(select(EvaluationToken).where(EvaluationToken.token == token))
     if not token_row:
         raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
-        
+
     evaluation = db.get(Evaluation, token_row.evaluation_id)
     if not evaluation:
         raise HTTPException(status_code=404, detail="Evaluation scorecard not found")
-        
+
+    if evaluation.type == EvaluationType.TECHNICAL_TEST:
+        expires = token_row.expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=UTC)
+        if expires <= datetime.now(UTC) and not token_row.is_used:
+            raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
+
     candidate = db.get(Candidate, evaluation.candidate_id)
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
@@ -426,54 +675,67 @@ def get_public_evaluation_details(
     
     # Retrieve previous remarks safely
     prior_evals = db.scalars(
-        select(Evaluation).where(
+        select(Evaluation)
+        .where(
             Evaluation.candidate_id == candidate.id,
             Evaluation.status == InterviewStatus.EVALUATED,
-            Evaluation.id != evaluation.id
+            Evaluation.id != evaluation.id,
         )
+        .order_by(Evaluation.created_at.asc())
     ).all()
-    
-    previous_remarks = []
-    
-    # 1. Fetch HR screening remarks (Chronologically first)
+
+    previous_remarks: list[PreviousInterviewOut] = []
+
     from app.models.candidate_screening import CandidateScreening
     screening = db.scalar(
         select(CandidateScreening).where(CandidateScreening.candidate_id == candidate.id)
     )
     if screening and screening.remarks:
-        previous_remarks.append({
-            "type": "HR_SCREENING",
-            "verdict": screening.status.value if hasattr(screening.status, 'value') else screening.status,
-            "remarks": screening.remarks
-        })
+        previous_remarks.append(
+            PreviousInterviewOut(
+                type="HR_SCREENING",
+                verdict=screening.status.value if hasattr(screening.status, "value") else screening.status,
+                remarks=screening.remarks,
+            )
+        )
 
-    # 2. Append prior evaluation stage remarks
     for pe in prior_evals:
-        previous_remarks.append({
-            "type": pe.type.value if hasattr(pe.type, 'value') else (pe.type or "EVALUATION"),
-            "verdict": pe.verdict.value if hasattr(pe.verdict, 'value') else pe.verdict,
-            "remarks": pe.remarks or ""
-        })
+        scores = _public_scores(pe.scores)
+        previous_remarks.append(
+            PreviousInterviewOut(
+                type=pe.type.value if hasattr(pe.type, "value") else (pe.type or "EVALUATION"),
+                verdict=pe.verdict.value if hasattr(pe.verdict, "value") else pe.verdict,
+                remarks=pe.remarks or "",
+                interviewer_name=str((scores or {}).get("interviewer_name") or "").strip() or None,
+                scores=scores,
+            )
+        )
         
     is_already_submitted = token_row.is_used or evaluation.status == InterviewStatus.EVALUATED
-        
+    raw = candidate.profile.raw_data if candidate.profile else None
+    photo_url = None
+    if candidate.profile and candidate.profile.photo_url:
+        try:
+            photo_url = process_photo_url(candidate.profile.photo_url)
+        except Exception:
+            photo_url = None
+
     return EvaluationPublicOut(
         id=evaluation.id,
         type=evaluation.type,
         candidate_name=candidate.full_name,
-        candidate_position=candidate.position_applied_for or "Unknown",
+        candidate_position=candidate.position_applied_for or candidate.department or "Unknown",
         candidate_resume_url=resume_url,
+        candidate_photo_url=photo_url,
         candidate_experience=candidate.profile.total_experience if candidate.profile else None,
-        candidate_education=candidate.profile.raw_data.get("highestQual", "") if candidate.profile and candidate.profile.raw_data else "",
-        candidate_email=candidate.email,
-        candidate_phone=candidate.phone,
+        candidate_education=(raw or {}).get("highestQual", "") if raw else "",
         candidate_location=candidate.branch_location,
-        candidate_source=candidate.source if candidate.source else None,
-        candidate_skills=candidate.profile.raw_data.get("skills", "") if candidate.profile and candidate.profile.raw_data else "",
-        candidate_current_salary=candidate.profile.raw_data.get("currentSalary", "") if candidate.profile and candidate.profile.raw_data else "",
-        candidate_expected_salary=candidate.profile.raw_data.get("expectedSalary", "") if candidate.profile and candidate.profile.raw_data else "",
-        candidate_notice_period=candidate.profile.raw_data.get("noticePeriod", "") if candidate.profile and candidate.profile.raw_data else "",
-        candidate_raw_data=candidate.profile.raw_data if candidate.profile else None,
+        candidate_skills=(raw or {}).get("skills", "") if raw else "",
+        candidate_current_salary=(raw or {}).get("currentSalary", "") if raw else "",
+        candidate_expected_salary=(raw or {}).get("expectedSalary", "") if raw else "",
+        candidate_notice_period=(raw or {}).get("noticePeriod", "") if raw else "",
+        interviewer_name=str((evaluation.scores or {}).get("interviewer_name") or "").strip() or None,
+        candidate_raw_data=filter_interviewer_packet(raw),
         previous_remarks=previous_remarks,
         is_already_submitted=is_already_submitted
     )
@@ -489,74 +751,46 @@ def submit_public_evaluation(
         select(EvaluationToken).where(
             EvaluationToken.token == token,
             EvaluationToken.is_used.is_(False),
-            EvaluationToken.expires_at > datetime.now(UTC)
         ).with_for_update()
     )
     if not token_row:
         raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
-        
+
     evaluation = db.get(Evaluation, token_row.evaluation_id)
+    if not evaluation:
+        raise HTTPException(status_code=404, detail="Evaluation scorecard not found")
+    if evaluation.status == InterviewStatus.EVALUATED:
+        raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
+
+    if evaluation.type == EvaluationType.TECHNICAL_TEST:
+        expires = token_row.expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=UTC)
+        if expires <= datetime.now(UTC):
+            raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
+
     candidate = db.get(Candidate, evaluation.candidate_id)
-    
+
     evaluation.verdict = body.verdict
     evaluation.remarks = body.remarks
+    scores = dict(evaluation.scores or {})
     if body.scores:
-        evaluation.scores = body.scores
-        
+        scores.update(body.scores)
+    evaluation.scores = scores
+    flag_modified(evaluation, "scores")
     evaluation.status = InterviewStatus.EVALUATED
     token_row.is_used = True
-    
-    # Write Activity Log
-    log = ActivityLog(
+    _mark_eval_tokens_used(db, evaluation.id)
+
+    db.add(ActivityLog(
         candidate_id=candidate.id,
         activity_type=ActivityType.CALL,
         title=f"{evaluation.type.value.replace('_', ' ').title()} Scorecard Submitted (via Link)",
         description=f"Verdict: {body.verdict.value}. Remarks: {body.remarks or 'None'}",
         created_by_user_id=None
-    )
-    db.add(log)
-    
-    # Auto transition to Reject or On Hold if appropriate
-    if body.verdict in (EvaluationVerdict.REJECTED, EvaluationVerdict.ON_HOLD):
-        # Since this is a public unauthenticated route, actor is system or candidate's assigned HR
-        system_user = db.get(User, candidate.assigned_hr_user_id) if candidate.assigned_hr_user_id else None
-        if system_user:
-            if body.verdict == EvaluationVerdict.REJECTED:
-                remarks = f"Rejected during public {evaluation.type.value.replace('_', ' ').title()} evaluation."
-                target = PipelineStage.REJECTED
-            else:
-                remarks = f"Placed on hold during public {evaluation.type.value.replace('_', ' ').title()} evaluation."
-                target = PipelineStage.ON_HOLD
-                
-            transition(
-                db=db,
-                candidate=candidate,
-                target_stage=target,
-                user=system_user,
-                remarks=remarks
-            )
-    elif body.verdict == EvaluationVerdict.SELECTED and candidate.stage == PipelineStage.BRANCH_INTERVIEW:
-        evals = db.scalars(
-            select(Evaluation).where(
-                Evaluation.candidate_id == candidate.id,
-                Evaluation.type.in_([EvaluationType.BRANCH_HR, EvaluationType.DEPT_HEAD])
-            )
-        ).all()
-        hr_eval = next((e for e in evals if e.type == EvaluationType.BRANCH_HR), None)
-        dept_eval = next((e for e in evals if e.type == EvaluationType.DEPT_HEAD), None)
-        
-        if hr_eval and dept_eval:
-            if hr_eval.status == InterviewStatus.EVALUATED and dept_eval.status == InterviewStatus.EVALUATED:
-                if hr_eval.verdict == EvaluationVerdict.SELECTED and dept_eval.verdict == EvaluationVerdict.SELECTED:
-                    system_user = db.get(User, candidate.assigned_hr_user_id) if candidate.assigned_hr_user_id else None
-                    if system_user:
-                        transition(
-                            db=db,
-                            candidate=candidate,
-                            target_stage=PipelineStage.TEST,
-                            user=system_user,
-                            remarks="Branch Interview completed by both HR and Department via public link."
-                        )
+    ))
+    actor = db.get(User, candidate.assigned_hr_user_id) if candidate.assigned_hr_user_id else None
+    _apply_evaluation_outcome(db, evaluation, candidate, body.verdict, actor)
     db.commit()
     return {"status": "success", "message": "Evaluation scorecard submitted"}
 
@@ -582,23 +816,24 @@ def get_public_test_questions(
          
     candidate = db.get(Candidate, evaluation.candidate_id)
     dept = _candidate_dept_key(candidate)
+
+    deadline = _ensure_test_deadline(token_row, db)
     
     if token_row.test_data and "questions" in token_row.test_data:
         public_questions = token_row.test_data["questions"]
     else:
-        q_rows = db.scalars(
-            select(TechnicalQuestion).where(TechnicalQuestion.department == dept)
-        ).all()
-        if not q_rows:
-            q_rows = db.scalars(
-                select(TechnicalQuestion).where(TechnicalQuestion.department == "SALES")
-            ).all()
+        q_rows = assemble_for_candidate(db, candidate)
         public_questions = [
             {"id": q.id, "text": q.text, "options": q.options}
             for q in q_rows
         ]
         
-    return {"department": dept, "questions": public_questions}
+    return {
+        "department": dept,
+        "questions": public_questions,
+        "expires_at": deadline.isoformat(),
+        "duration_seconds": settings.technical_test_duration_minutes * 60,
+    }
 
 
 @router.post("/public/{token}/submit-test")
@@ -616,6 +851,8 @@ def submit_public_test(
     )
     if not token_row:
         raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
+
+    _assert_test_not_expired(token_row)
         
     evaluation = db.get(Evaluation, token_row.evaluation_id)
     if evaluation.type != EvaluationType.TECHNICAL_TEST:
@@ -631,11 +868,13 @@ def submit_public_test(
     
     for q_id, correct_ans in answers_map.items():
         cand_ans = body.answers.get(q_id)
-        if cand_ans and cand_ans == correct_ans:
+        if cand_ans is None:
+            cand_ans = body.answers.get(str(q_id))
+        if cand_ans and str(cand_ans).strip().upper() == str(correct_ans).strip().upper():
             correct_count += 1
-            question_scores[q_id] = 1
+            question_scores[str(q_id)] = 1
         else:
-            question_scores[q_id] = 0
+            question_scores[str(q_id)] = 0
             
     percentage = int((correct_count / total_count) * 100) if total_count > 0 else 0
     
@@ -644,7 +883,9 @@ def submit_public_test(
         "question_scores": question_scores,
         "correct_answers": correct_count,
         "total_questions": total_count,
-        "percentage": percentage
+        "percentage": percentage,
+        "questions": (token_row.test_data or {}).get("questions") or [],
+        "answer_key": answers_map,
     }
     
     evaluation.status = InterviewStatus.EVALUATED
@@ -760,26 +1001,4 @@ def send_evaluation_whatsapp_invite(
     return {"status": "success", "message_id": external_message_id}
 
 
-@router.get("/questions")
-def get_department_questions(
-    department: str,
-    db: Session = Depends(get_db),
-    current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR))
-):
-    q_rows = db.scalars(
-        select(TechnicalQuestion).where(TechnicalQuestion.department == department)
-    ).all()
-    if not q_rows:
-        q_rows = db.scalars(
-            select(TechnicalQuestion).where(TechnicalQuestion.department == "SALES")
-        ).all()
-        
-    return [
-        {
-            "id": str(q.id),
-            "text": q.text,
-            "options": q.options,
-            "department": q.department
-        } for q in q_rows
-    ]
 

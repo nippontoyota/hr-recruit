@@ -157,3 +157,53 @@ def test_pre_form_accepts_fresher_without_job_rows():
     payload["previousExperience"] = False
     payload["totalExperience"] = "Fresher"
     PreFormApplicationData.model_validate(payload)
+
+
+def test_pre_form_rejects_incomplete_extra_previous_job():
+    payload = _valid_pre_form()
+    payload["previousExperience"] = True
+    payload["totalExperience"] = "3 Years"
+    payload["previousJobs"] = [
+        {
+            "company": "First Co",
+            "position": "Advisor",
+            "reporting": "Manager",
+            "fromDate": "2020-01",
+            "toDate": "2021-12",
+            "salary": "18000",
+            "reason": "Career growth",
+        },
+        {
+            "company": "Second Co",
+            "position": "",
+            "reporting": "",
+            "fromDate": "",
+            "toDate": "",
+            "salary": "",
+            "reason": "",
+        },
+    ]
+    with pytest.raises(ValueError):
+        PreFormApplicationData.model_validate(payload)
+
+
+def test_pre_form_accepts_extra_previous_jobs():
+    payload = _valid_pre_form()
+    payload["previousExperience"] = True
+    payload["totalExperience"] = "6 Years"
+    payload["previousJobs"] = [
+        {
+            "company": f"Company {i}",
+            "position": "Advisor",
+            "reporting": "Manager",
+            "fromDate": "2018-01",
+            "toDate": "2019-12",
+            "salary": "20000",
+            "reason": "Career growth",
+        }
+        for i in range(1, 6)
+    ]
+    parsed = PreFormApplicationData.model_validate(payload)
+    assert len(parsed.previousJobs) == 5
+    assert parsed.prevCompanyName == "Company 1"
+    assert parsed.prev4Name == "Company 4"

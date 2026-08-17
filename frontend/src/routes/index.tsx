@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createHashRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { ProtectedRoute } from '../components/guards/ProtectedRoute';
@@ -32,7 +32,7 @@ const PageSuspense = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<SuspenseFallback />}>{children}</Suspense>
 );
 
-export const router = createHashRouter([
+export const router = createBrowserRouter([
   {
     path: '/login',
     errorElement: <RouteErrorPage />,

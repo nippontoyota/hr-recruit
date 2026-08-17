@@ -1,9 +1,5 @@
 import type { CandidateFormData } from '../wizardTypes';
-
-interface MedicalFormProps {
-  data: CandidateFormData;
-  update: (field: keyof CandidateFormData, value: any) => void;
-}
+import type { FormSectionProps } from '../FormField';
 
 const GENERAL_QUESTIONS: {
   field: keyof CandidateFormData;
@@ -82,7 +78,7 @@ function YesNoRow({
   );
 }
 
-export const MedicalForm = ({ data, update }: MedicalFormProps) => {
+export const MedicalForm = ({ data, update }: FormSectionProps) => {
   return (
     <div className="space-y-8 pb-6 max-w-3xl">
       <div className="space-y-4">

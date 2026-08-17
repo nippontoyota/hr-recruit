@@ -1,4 +1,5 @@
-import type { CandidateFormData } from '../pages/candidates/wizard/wizardTypes';
+import type { CandidateFormData, PreviousJob } from '../pages/candidates/wizard/wizardTypes';
+import { EMPTY_PREVIOUS_JOB, previousJobsFromForm } from '../pages/candidates/wizard/wizardTypes';
 import {
   firstError,
   validateAadhaar,
@@ -33,40 +34,40 @@ function anyFilled(...values: string[]): boolean {
   return values.some((value) => (value || '').trim().length > 0);
 }
 
-function validateJobRow(
-  data: CandidateFormData,
-  opts: {
-    label: string;
-    nameKey: keyof CandidateFormData;
-    positionKey: keyof CandidateFormData;
-    reportingKey: keyof CandidateFormData;
-    fromKey: keyof CandidateFormData;
-    toKey: keyof CandidateFormData;
-    salaryKey: keyof CandidateFormData;
-    reasonKey: keyof CandidateFormData;
-    required: boolean;
-  },
-): string | null {
-  const name = String(data[opts.nameKey] ?? '');
-  const position = String(data[opts.positionKey] ?? '');
-  const reporting = String(data[opts.reportingKey] ?? '');
-  const fromDate = String(data[opts.fromKey] ?? '');
-  const toDate = String(data[opts.toKey] ?? '');
-  const salary = String(data[opts.salaryKey] ?? '');
-  const reason = String(data[opts.reasonKey] ?? '');
-
-  const filled = anyFilled(name, position, reporting, fromDate, toDate, salary, reason);
-  if (!opts.required && !filled) return null;
+function validateJobObject(job: PreviousJob, label: string, required: boolean): string | null {
+  const filled = anyFilled(
+    job.company,
+    job.position,
+    job.reporting,
+    job.fromDate,
+    job.toDate,
+    job.salary,
+    job.reason,
+  );
+  if (!required && !filled) return null;
 
   return firstError(
-    validateTextField(name, `${opts.label} company name`, 2, 150),
-    validateTextField(position, `${opts.label} position`, 2, 100),
-    validateTextField(reporting, `${opts.label} reporting person`, 2, 100),
-    validateTextField(fromDate, `${opts.label} from date`, 2, 50),
-    validateTextField(toDate, `${opts.label} to date`, 2, 50),
-    validateSalary(salary, `${opts.label} salary`),
-    validateTextField(reason, `${opts.label} reason for leaving`, 2, 200),
+    validateTextField(job.company, `${label} company name`, 2, 150),
+    validateTextField(job.position, `${label} position`, 2, 100),
+    validateTextField(job.reporting, `${label} reporting person`, 2, 100),
+    validateTextField(job.fromDate, `${label} from date`, 2, 50),
+    validateTextField(job.toDate, `${label} to date`, 2, 50),
+    validateSalary(job.salary, `${label} salary`),
+    validateTextField(job.reason, `${label} reason for leaving`, 2, 200),
   );
+}
+
+function validateExperienceJobs(data: CandidateFormData): string | null {
+  if (!data.previousExperience) return null;
+  const jobs = data.previousJobs?.length ? data.previousJobs : previousJobsFromForm(data);
+  if (jobs.length === 0) {
+    return validateJobObject(EMPTY_PREVIOUS_JOB, 'Previous job 1', true);
+  }
+  for (let i = 0; i < jobs.length; i += 1) {
+    const err = validateJobObject(jobs[i], `Previous job ${i + 1}`, i === 0);
+    if (err) return err;
+  }
+  return null;
 }
 
 function validateDeclarationDate(value: string): ValidationResult {
@@ -121,7 +122,7 @@ export function validateBasicCandidateForm(input: {
   return firstError(...checks);
 }
 
-export function validateSingleField(field: keyof CandidateFormData, data: CandidateFormData): string | null {
+function validateSingleField(field: keyof CandidateFormData, data: CandidateFormData): string | null {
   let res: ValidationResult = { ok: true };
 
   switch (field) {
@@ -313,7 +314,7 @@ export function validateSingleField(field: keyof CandidateFormData, data: Candid
       }
       break;
 
-    // Experience (Conditional on previousExperience)
+    case 'previousJobs':
     case 'prevCompanyName':
     case 'prevPosition':
     case 'prev1Reporting':
@@ -321,17 +322,6 @@ export function validateSingleField(field: keyof CandidateFormData, data: Candid
     case 'prev1To':
     case 'prev1Salary':
     case 'prev1Reason':
-      return validateJobRow(data, {
-        label: 'Previous job 1',
-        nameKey: 'prevCompanyName',
-        positionKey: 'prevPosition',
-        reportingKey: 'prev1Reporting',
-        fromKey: 'prev1From',
-        toKey: 'prev1To',
-        salaryKey: 'prev1Salary',
-        reasonKey: 'prev1Reason',
-        required: data.previousExperience,
-      });
     case 'prev2Name':
     case 'prev2Position':
     case 'prev2Reporting':
@@ -339,17 +329,6 @@ export function validateSingleField(field: keyof CandidateFormData, data: Candid
     case 'prev2To':
     case 'prev2Salary':
     case 'prev2Reason':
-      return validateJobRow(data, {
-        label: 'Previous job 2',
-        nameKey: 'prev2Name',
-        positionKey: 'prev2Position',
-        reportingKey: 'prev2Reporting',
-        fromKey: 'prev2From',
-        toKey: 'prev2To',
-        salaryKey: 'prev2Salary',
-        reasonKey: 'prev2Reason',
-        required: false,
-      });
     case 'prev3Name':
     case 'prev3Position':
     case 'prev3Reporting':
@@ -357,17 +336,6 @@ export function validateSingleField(field: keyof CandidateFormData, data: Candid
     case 'prev3To':
     case 'prev3Salary':
     case 'prev3Reason':
-      return validateJobRow(data, {
-        label: 'Previous job 3',
-        nameKey: 'prev3Name',
-        positionKey: 'prev3Position',
-        reportingKey: 'prev3Reporting',
-        fromKey: 'prev3From',
-        toKey: 'prev3To',
-        salaryKey: 'prev3Salary',
-        reasonKey: 'prev3Reason',
-        required: false,
-      });
     case 'prev4Name':
     case 'prev4Position':
     case 'prev4Reporting':
@@ -375,17 +343,7 @@ export function validateSingleField(field: keyof CandidateFormData, data: Candid
     case 'prev4To':
     case 'prev4Salary':
     case 'prev4Reason':
-      return validateJobRow(data, {
-        label: 'Previous job 4',
-        nameKey: 'prev4Name',
-        positionKey: 'prev4Position',
-        reportingKey: 'prev4Reporting',
-        fromKey: 'prev4From',
-        toKey: 'prev4To',
-        salaryKey: 'prev4Salary',
-        reasonKey: 'prev4Reason',
-        required: false,
-      });
+      return validateExperienceJobs(data);
     case 'totalExperience':
       if (data.previousExperience) {
         res = validateExperienceText(data.totalExperience);
@@ -412,24 +370,16 @@ export function validateSingleField(field: keyof CandidateFormData, data: Candid
       break;
 
     case 'refRole':
-      if (data.hasReference) {
-        res = validateSelect(data.refRole, REF_ROLES, 'Reference role');
-      }
+      res = validateSelect(data.refRole, REF_ROLES, 'Reference role');
       break;
     case 'refName':
-      if (data.hasReference) {
-        res = validateTextField(data.refName, 'Reference name', 2, 100);
-      }
+      res = validateTextField(data.refName, 'Reference name', 2, 100);
       break;
     case 'refPanchayat':
-      if (data.hasReference) {
-        res = validateTextField(data.refPanchayat, 'Reference panchayat / location', 2, 100);
-      }
+      res = validateTextField(data.refPanchayat, 'Reference panchayat / location', 2, 100);
       break;
     case 'refContactNumber':
-      if (data.hasReference) {
-        res = validatePhone(data.refContactNumber, 'Reference contact number');
-      }
+      res = validatePhone(data.refContactNumber, 'Reference contact number');
       break;
 
     // Emergency contacts
@@ -490,56 +440,71 @@ export function validateSingleField(field: keyof CandidateFormData, data: Candid
   return res.ok ? null : res.message;
 }
 
-export function validatePreForm(data: CandidateFormData): string | null {
+const PRE_FORM_FIELDS: (keyof CandidateFormData)[] = [
+  'nameAadhaar', 'gender', 'dateOfBirth', 'age', 'maritalStatus', 'bloodGroup', 'height', 'weight', 'religionCaste',
+  'permHouseName', 'permPostOffice', 'permLandmark', 'permDistrict', 'permPinCode',
+  'presHouseName', 'presPostOffice', 'presLandmark', 'presDistrict', 'presPinCode',
+  'aadhaarNumber', 'panNumber', 'drivingLicenseNumber', 'passportNumber',
+  'class10School', 'class10Board', 'class10Percentage', 'class10PassingYear', 'class10Mode',
+  'class12School', 'class12Stream', 'class12Percentage', 'class12PassingYear', 'class12Mode',
+  'gradCourse', 'gradCollege', 'gradPercentage', 'gradPassingYear', 'gradMode',
+  'postGradCourse', 'postGradCollege', 'postGradPercentage', 'postGradPassingYear', 'postGradMode',
+  'languagesRead', 'languagesWrite', 'languagesSpeak',
+  'fatherName', 'motherName', 'spouseName',
+  'previousJobs',
+  'totalExperience', 'expectedSalary',
+  'sourceOfOpening', 'referredBy', 'preferredRegion', 'expectedJoiningDate',
+  'refRole', 'refName', 'refPanchayat', 'refContactNumber',
+  'emergency1Relation', 'emergency1Name', 'emergency1Address', 'emergency1Contact',
+  'emergency2Relation', 'emergency2Name', 'emergency2Address', 'emergency2Contact',
+  'emailId', 'declarationPlace', 'declarationDate', 'declarationName',
+];
+
+export type PreFormFieldErrors = Partial<Record<keyof CandidateFormData, string>>;
+
+export function validatePreFormFields(data: CandidateFormData): PreFormFieldErrors {
+  const errors: PreFormFieldErrors = {};
+
   if (!data.photoFileObject) {
-    return 'Candidate Photo (PNG or JPEG) is required.';
-  }
-  const photoName = data.photoFileObject.name.toLowerCase();
-  if (!photoName.endsWith('.png') && !photoName.endsWith('.jpg') && !photoName.endsWith('.jpeg')) {
-    return 'Candidate Photo must be a PNG or JPEG image.';
-  }
-  if (data.photoFileObject.size > 5 * 1024 * 1024) {
-    return 'Candidate Photo must be smaller than 5MB.';
+    errors.photoFileObject = 'Candidate photo (PNG or JPEG) is required.';
+  } else {
+    const photoName = data.photoFileObject.name.toLowerCase();
+    if (!photoName.endsWith('.png') && !photoName.endsWith('.jpg') && !photoName.endsWith('.jpeg')) {
+      errors.photoFileObject = 'Candidate photo must be a PNG or JPEG image.';
+    } else if (data.photoFileObject.size > 5 * 1024 * 1024) {
+      errors.photoFileObject = 'Candidate photo must be smaller than 5MB.';
+    }
   }
 
   if (!data.resumeFileObject) {
-    return 'Resume (PDF or Word) is required.';
-  }
-  const resumeResult = validateResumeFile(data.resumeFileObject, true);
-  if (!resumeResult.ok) {
-    return resumeResult.message;
+    errors.resumeFileObject = 'Resume (PDF or Word) is required.';
+  } else {
+    const resumeResult = validateResumeFile(data.resumeFileObject, true);
+    if (!resumeResult.ok) errors.resumeFileObject = resumeResult.message;
   }
 
   if (typeof data.confidentToDrive !== 'boolean') {
-    return 'Confident to drive is required.';
+    errors.confidentToDrive = 'Confident to drive is required.';
   }
 
-  const fields: (keyof CandidateFormData)[] = [
-    'nameAadhaar', 'gender', 'dateOfBirth', 'age', 'maritalStatus', 'bloodGroup', 'height', 'weight', 'religionCaste',
-    'permHouseName', 'permPostOffice', 'permLandmark', 'permDistrict', 'permPinCode',
-    'presHouseName', 'presPostOffice', 'presLandmark', 'presDistrict', 'presPinCode',
-    'aadhaarNumber', 'panNumber', 'drivingLicenseNumber', 'passportNumber',
-    'class10School', 'class10Board', 'class10Percentage', 'class10PassingYear', 'class10Mode',
-    'class12School', 'class12Stream', 'class12Percentage', 'class12PassingYear', 'class12Mode',
-    'gradCourse', 'gradCollege', 'gradPercentage', 'gradPassingYear', 'gradMode',
-    'postGradCourse', 'postGradCollege', 'postGradPercentage', 'postGradPassingYear', 'postGradMode',
-    'languagesRead', 'languagesWrite', 'languagesSpeak',
-    'fatherName', 'motherName', 'spouseName',
-    'prevCompanyName', 'prevPosition', 'prev1Reporting', 'prev1From', 'prev1To', 'prev1Salary', 'prev1Reason',
-    'prev2Name', 'prev2Position', 'prev2Reporting', 'prev2From', 'prev2To', 'prev2Salary', 'prev2Reason',
-    'prev3Name', 'prev3Position', 'prev3Reporting', 'prev3From', 'prev3To', 'prev3Salary', 'prev3Reason',
-    'prev4Name', 'prev4Position', 'prev4Reporting', 'prev4From', 'prev4To', 'prev4Salary', 'prev4Reason',
-    'totalExperience', 'expectedSalary',
-    'sourceOfOpening', 'referredBy', 'preferredRegion', 'expectedJoiningDate',
-    'refRole', 'refName', 'refPanchayat', 'refContactNumber',
-    'emergency1Relation', 'emergency1Name', 'emergency1Address', 'emergency1Contact',
-    'emergency2Relation', 'emergency2Name', 'emergency2Address', 'emergency2Contact',
-    'emailId', 'declarationPlace', 'declarationDate', 'declarationName',
-  ];
-
-  for (const f of fields) {
-    const err = validateSingleField(f, data);
-    if (err) return err;
+  for (const field of PRE_FORM_FIELDS) {
+    const err = validateSingleField(field, data);
+    if (err) errors[field] = err;
   }
-  return null;
+  return errors;
+}
+
+export function validatePreForm(data: CandidateFormData): string | null {
+  const errors = validatePreFormFields(data);
+  return Object.values(errors)[0] || null;
+}
+
+export function validateOnePreFormField(
+  field: keyof CandidateFormData,
+  data: CandidateFormData,
+): string | null {
+  if (field === 'photoFileObject' || field === 'resumeFileObject') {
+    return validatePreFormFields(data)[field] || null;
+  }
+  return validateSingleField(field, data);
 }

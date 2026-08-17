@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useReactToPrint } from 'react-to-print';
+import { usePrint } from '../../hooks/usePrint';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getCandidateById } from '../../api/candidates';
 import { getDepartmentQuestions } from '../../api/evaluations';
@@ -10,7 +10,7 @@ export default function PrintTechnicalTestPage() {
   const { id } = useParams();
   const componentRef = useRef<HTMLDivElement>(null);
   
-  const handlePrint = useReactToPrint({
+  const handlePrint = usePrint({
     contentRef: componentRef,
     documentTitle: `TechnicalTest`,
   });
@@ -28,8 +28,7 @@ export default function PrintTechnicalTestPage() {
         const data = await getCandidateById(id);
         if (data) {
           setCandidate(data as Candidate);
-          const dept = data.position_applied_for || 'Call Centre';
-          const qs = await getDepartmentQuestions(dept);
+          const qs = await getDepartmentQuestions({ candidateId: data.id });
           setQuestions(qs);
         }
       } catch {

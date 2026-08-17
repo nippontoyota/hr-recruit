@@ -1,65 +1,70 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { Button, Modal, LoadingSpinner, EmptyState, Badge, Select } from '../../components/ui';
-import { Plus,  RefreshCw, Trash, Search, X, CheckSquare, Square, Minus, Play } from 'lucide-react';
-import { useAuth } from '../../auth/AuthContext';
-import { getCandidates, deleteCandidate, bulkDeleteCandidates, unholdCandidate } from '../../api/candidates';
-import { getStageBadgeVariant, stageLabel, formatSource } from '../../lib/stages';
+import { Button, Modal, LoadingSpinner, EmptyState, Badge } from '../../components/ui';
+import { Plus, RefreshCw, Trash, CheckSquare, Square, Minus, Play, Users } from 'lucide-react';
+import { useAuth } from '../../auth';
+import { deleteCandidate, bulkDeleteCandidates, unholdCandidate } from '../../api/candidates';
+import { getStageBadgeVariant, stageLabel, formatSource, isCandidateQueue, matchesQueue, type CandidateQueue } from '../../lib/stages';
 import type { Candidate, PipelineStage } from '../../types';
+import { HO_PIPELINE_STAGES, HO_POST_SEND_STAGES } from '../../types';
 import { AddCandidateForm } from '../../components/candidates/AddCandidateForm';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
+import { SalarySheetUpload } from '../../components/candidates/SalarySheetUpload';
 import { toast } from 'sonner';
 import { cn, extractError } from '../../lib/utils';
 import { useCandidatesList } from '../../hooks/api/useCandidates';
+import { WorkQueueSummary } from '../../components/candidates/WorkQueueSummary';
+import { CandidateFilters } from '../../components/candidates/CandidateFilters';
+import { getCandidateWorkState } from '../../lib/candidateWork';
 
 const PIPELINE_STAGES: PipelineStage[] = [
-  'CALL_LETTER', 'INTERVIEWS', 'TEST', 'BACKGROUND_VERIFICATION', 
-  'APPLICATION', 'SENT_TO_HO', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD',
+  'CALL_LETTER', 'INTERVIEWS', 'TEST', 'BACKGROUND_VERIFICATION',
+  'APPLICATION', 'SENT_TO_HO', 'HO_INTERVIEWS', 'CSS',
+  'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD',
 ];
 
 function formatDate(dateStr: string): string {
-  if (!dateStr) return '—';
+  if (!dateStr) return '-';
   return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function DebouncedSearchInput({ value, onChange, placeholder, className }: { value: string, onChange: (val: string) => void, placeholder?: string, className?: string }) {
-  const [localValue, setLocalValue] = useState(value);
-
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (localValue !== value) {
-        onChange(localValue);
-      }
-    }, 300);
-    return () => clearTimeout(timeout);
-  }, [localValue, value, onChange]);
-
+function CandidatesTableSkeleton() {
   return (
-    <input
-      type="text"
-      placeholder={placeholder}
-      value={localValue}
-      onChange={(e) => setLocalValue(e.target.value)}
-      className={className}
-    />
+    <div className="page-card overflow-hidden" aria-hidden="true">
+      <div className="divide-y divide-border">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div key={index} className="flex items-center gap-4 px-4 py-3.5">
+            <div className="skeleton h-4 w-4" />
+            <div className="skeleton h-4 w-40" />
+            <div className="skeleton hidden h-4 w-28 sm:block" />
+            <div className="skeleton h-5 w-24" />
+            <div className="skeleton ml-auto h-4 w-16" />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
+
 export default function CandidatesList() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedQueue: CandidateQueue | '' = isCandidateQueue(searchParams.get('queue')) ? searchParams.get('queue') as CandidateQueue : '';
   const { user } = useAuth();
+  const canRegister = user?.role === 'LOCAL_HR';
   const canDelete = ['ADMIN', 'HO_HR', 'LOCAL_HR'].includes(user?.role as string);
+  const isLocalHrLocked = (c: Candidate) =>
+    user?.role === 'LOCAL_HR' && (HO_POST_SEND_STAGES.includes(c.current_stage) || !!c.handed_over_to_ho);
 
   // Data & Filters from hook
   const {
     candidates,
     totalCount,
     loading,
+    refreshing,
+    loadError,
     page,
     setPage,
     searchQuery,
@@ -85,10 +90,20 @@ export default function CandidatesList() {
   const [isAddOpen, setIsAddOpen] = useState(false);
 
   // Clear selection when filters change
-  useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter]);
+  useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter, selectedQueue]);
 
-  // The backend now filters and paginates, so candidates is our filtered list
-  const filteredCandidates = candidates;
+  function setQueue(queue: CandidateQueue | '') {
+    const next = new URLSearchParams(searchParams);
+    if (queue) next.set('queue', queue);
+    else next.delete('queue');
+    setSearchParams(next);
+  }
+
+  // The backend filters and paginates; queue filtering is derived from the loaded page.
+  const filteredCandidates = useMemo(
+    () => selectedQueue ? candidates.filter((candidate) => matchesQueue(candidate, selectedQueue)) : candidates,
+    [candidates, selectedQueue]
+  );
 
   // Select-all derived state
   const allVisibleIds = useMemo(() => filteredCandidates.map((c) => c.id), [filteredCandidates]);
@@ -171,7 +186,7 @@ export default function CandidatesList() {
       if (failed_ids.length === 0) {
         toast.success(`${success_count} candidate${success_count > 1 ? 's' : ''} deleted`);
       } else {
-        toast.error(`${success_count} deleted, ${failed_ids.length} failed — still selected`);
+        toast.error(`${success_count} deleted, ${failed_ids.length} failed. Still selected.`);
       }
     } catch (err) {
       toast.error(extractError(err, 'Failed to bulk delete candidates'));
@@ -181,97 +196,93 @@ export default function CandidatesList() {
   };
 
 
+  const filtersActive = Boolean(searchQuery || stageFilter || selectedQueue);
+  const showEmptyRoster = !loading && !loadError && candidates.length === 0 && !filtersActive;
+  const noMatches = !loading && !loadError && candidates.length > 0 && filteredCandidates.length === 0;
+  const resultSummary = loading
+    ? 'Loading candidates'
+    : `${filteredCandidates.length} candidate${filteredCandidates.length === 1 ? '' : 's'} shown${totalCount !== filteredCandidates.length && !selectedQueue ? ` of ${totalCount}` : ''}`;
+
   return (
     <>
       <PageHeader
         title="Candidates"
         action={
-          candidates.length > 0 ? (
-            <div className="flex gap-3">
-              <Button onClick={() => setIsAddOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Candidate
-              </Button>
-            </div>
-          ) : null
+          <div className="flex gap-3">
+            {user?.role === 'HO_HR' && (
+              <SalarySheetUpload onDone={() => void fetchCandidatesList()} />
+            )}
+            {canRegister && (
+            <Button onClick={() => setIsAddOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add candidate
+            </Button>
+            )}
+          </div>
         }
       />
 
-      {loading ? (
-        <div className="flex justify-center items-center py-20">
-          <LoadingSpinner size="lg" className="text-blue-600" />
-        </div>
-      ) : candidates.length === 0 ? (
-        <div className="py-12">
-          <EmptyState
-            title="No Candidates Found"
-            description="No candidates have applied or been registered under your recruiter profile yet."
-            icon={<RefreshCw className="w-8 h-8 opacity-50" />}
-            action={
-              <Button onClick={() => setIsAddOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" /> Register Candidate
-              </Button>
-            }
+      <div className="space-y-3">
+          <WorkQueueSummary
+            candidates={candidates}
+            selectedQueue={selectedQueue}
+            onQueueChange={setQueue}
           />
-        </div>
-      ) : (
-        <div className="space-y-3">
+          <CandidateFilters
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            stageFilter={stageFilter}
+            onStageChange={setStageFilter}
+            stages={PIPELINE_STAGES.filter((stage) => user?.role === 'HO_HR' || user?.role === 'ADMIN'
+              ? HO_PIPELINE_STAGES.includes(stage) || stage === 'REJECTED'
+              : true)}
+            hasActiveFilters={filtersActive}
+            onClear={() => { setSearchQuery(''); setStageFilter(''); setQueue(''); }}
+          />
+          <p className="px-1 text-xs text-muted-foreground" aria-live="polite">{resultSummary}</p>
+          <div className="sr-only" aria-live="polite">{loading ? 'Loading candidates.' : `${filteredCandidates.length} candidates available.`}</div>
 
-          {/* ── Search + Filter bar ── */}
-          <div className="flex items-center gap-3 px-1 pt-2 w-full">
-            <div className="relative flex-1 min-w-0 md:max-w-xs">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-              <DebouncedSearchInput
-                placeholder="Search by name..."
-                value={searchQuery}
-                onChange={setSearchQuery}
-                className="w-full h-9 pl-9 pr-8 text-sm bg-background border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-foreground placeholder:text-muted-foreground"
+          {loading && candidates.length === 0 ? (
+            <div role="status" aria-label="Loading candidates">
+              <CandidatesTableSkeleton />
+              <span className="sr-only">Loading candidates</span>
+            </div>
+          ) : loadError && candidates.length === 0 ? (
+            <div className="py-12">
+              <EmptyState
+                title="Could not load candidates"
+                description={loadError}
+                icon={<RefreshCw className="w-8 h-8 opacity-50" />}
+                action={
+                  <Button onClick={() => void fetchCandidatesList()}>
+                    <RefreshCw className="w-4 h-4 mr-2" /> Try again
+                  </Button>
+                }
               />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
             </div>
-
-            <div className="ml-auto w-[140px] md:w-48 shrink-0">
-              <Select
-                value={stageFilter}
-                onChange={(e: any) => setStageFilter(e.target.value as PipelineStage | '')}
-                className="bg-surface border-border shadow-sm rounded-xl h-9 text-sm text-text-primary"
-              >
-                <option value="">All Stages</option>
-                {PIPELINE_STAGES.filter((s) => {
-                  if (user?.role === 'HO_HR') {
-                    return ['SENT_TO_HO', 'HO_INTERVIEWS', 'CSS', 'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD'].includes(s);
-                  }
-                  return true;
-                }).map((s) => (
-                  <option key={s} value={s}>{stageLabel(s)}</option>
-                ))}
-              </Select>
+          ) : showEmptyRoster ? (
+            <div className="py-12">
+              <EmptyState
+                title="No candidates yet"
+                description={
+                  canRegister
+                    ? 'No candidates have applied or been registered under your recruiter profile yet.'
+                    : 'No Head Office candidates yet. Salary sheets apply after HO interviews.'
+                }
+                icon={<Users className="w-8 h-8 opacity-50" />}
+                action={
+                  canRegister ? (
+                  <Button onClick={() => setIsAddOpen(true)}>
+                    <Plus className="w-4 h-4 mr-2" /> Register candidate
+                  </Button>
+                  ) : undefined
+                }
+              />
             </div>
-
-            {(searchQuery || stageFilter) && (
-              <button
-                type="button"
-                onClick={() => { setSearchQuery(''); setStageFilter(''); }}
-                className="text-xs text-muted-foreground hover:text-foreground font-medium underline underline-offset-2"
-              >
-                Clear filters
-              </button>
-            )}
-
-          </div>
-
-          {/* ── Table ── */}
-          <div className="page-card overflow-hidden">
+          ) : (
+          <div className={cn('page-card overflow-hidden', refreshing && 'opacity-60 pointer-events-none')}>
             <div className="overflow-x-auto">
-              <table className="data-table w-full text-left border-collapse whitespace-nowrap">
+              <table className="data-table w-full min-w-245 text-left border-collapse whitespace-nowrap">
                 <thead>
                   <tr>
                     {/* Select-all checkbox */}
@@ -280,6 +291,7 @@ export default function CandidatesList() {
                         type="button"
                         onClick={toggleSelectAll}
                         className="flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label={allSelected ? 'Deselect all visible candidates' : 'Select all visible candidates'}
                         title={allSelected ? 'Deselect all' : 'Select all visible'}
                       >
                         {allSelected ? (
@@ -295,60 +307,104 @@ export default function CandidatesList() {
                     <th>Position</th>
                     <th>Stage</th>
                     <th>Branch</th>
+                    <th>Next action</th>
                     <th>Source</th>
                     <th>Date Added</th>
                     <th className="text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCandidates.length === 0 ? (
+                  {noMatches ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-10 text-sm text-muted-foreground">
-                        No candidates match your search.
+                      <td colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                        No candidates match the selected search, stage, or queue. Try clearing a filter.
                       </td>
                     </tr>
                   ) : filteredCandidates.map((candidate) => {
                     const isSelected = selectedIds.has(candidate.id);
                     const isOnHold = candidate.current_stage === 'ON_HOLD';
+                    const workState = getCandidateWorkState(candidate);
                     return (
                       <tr
                         key={candidate.id}
                         onClick={() => navigate(`/candidates/${candidate.id}`)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            navigate(`/candidates/${candidate.id}`);
+                          }
+                        }}
+                        tabIndex={0}
+                        aria-label={`Open ${candidate.full_name} candidate profile`}
                         className={cn(
-                          "group border-b border-border transition-colors hover:bg-muted/50 cursor-pointer",
-                          isSelected ? "bg-primary/5" : isOnHold ? "bg-warning/5 hover:bg-warning/10" : ""
+                          'group cursor-pointer border-b border-border transition-colors hover:bg-muted/50 focus:outline-none focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                          isSelected ? 'bg-primary/5' : isOnHold ? 'bg-warning/5 hover:bg-warning/10' : ''
                         )}
                       >
                         {/* Row checkbox */}
-                        <td className="w-10 px-3" onClick={(e) => toggleSelect(candidate.id, e)}>
-                          <div className="flex items-center justify-center">
+                        <td className="w-10 px-3">
+                          <button
+                            type="button"
+                            aria-label={`${isSelected ? 'Deselect' : 'Select'} ${candidate.full_name}`}
+                            aria-pressed={isSelected}
+                            onClick={(event) => toggleSelect(candidate.id, event)}
+                            className="flex items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          >
                             {isSelected ? (
-                              <CheckSquare className="w-4 h-4 text-primary" />
+                              <CheckSquare className="h-4 w-4 text-primary" aria-hidden="true" />
                             ) : (
-                              <Square className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                              <Square className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" aria-hidden="true" />
                             )}
-                          </div>
+                          </button>
                         </td>
 
                         <td className="px-4 py-2">
                           <div className="flex flex-col">
-                            <span className="font-semibold text-text-primary">{candidate.full_name}</span>
-                            <span className="text-xs text-text-secondary">+91 {candidate.phone}</span>
+                            <a
+                              href={`/candidates/${candidate.id}`}
+                              onClick={(event) => { event.preventDefault(); event.stopPropagation(); navigate(`/candidates/${candidate.id}`); }}
+                              className="font-semibold text-text-primary underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            >
+                              {candidate.full_name}
+                            </a>
+                            <span className="text-xs text-text-secondary">{candidate.candidate_id} · +91 {candidate.phone}</span>
+                            <details className="mt-1 md:hidden">
+                              <summary className="cursor-pointer text-xs font-medium text-primary">Work details</summary>
+                              <div className="mt-2 space-y-1 whitespace-normal text-xs text-muted-foreground">
+                                <p><span className="font-semibold text-text-secondary">Next:</span> {workState.next_action}</p>
+                                <p><span className="font-semibold text-text-secondary">Stage age:</span> {workState.days_in_stage} day{workState.days_in_stage === 1 ? '' : 's'}</p>
+                                {workState.blockers.length > 0 && <p><span className="font-semibold text-text-secondary">Blockers:</span> {workState.blockers.join(', ')}</p>}
+                              </div>
+                            </details>
                           </div>
                         </td>
                         <td className="px-4 py-2 text-text-secondary font-medium">
-                          {candidate.experience || '—'}
+                          {candidate.position_applied_for || candidate.experience || '-'}
                         </td>
                         <td className="px-4 py-2">
-                          <Badge variant={getStageBadgeVariant(candidate.current_stage)} className="font-semibold px-2.5 py-0.5 rounded-lg">
-                            {stageLabel(candidate.current_stage)}
-                          </Badge>
+                          <div className="flex flex-col items-start gap-1">
+                            <Badge variant={getStageBadgeVariant(candidate.current_stage)}>
+                              {stageLabel(candidate.current_stage)}
+                            </Badge>
+                            {isLocalHrLocked(candidate) && candidate.current_stage !== 'SENT_TO_HO' && (
+                              <span className="text-[11px] font-medium text-info">
+                                Sent to HO
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-2 text-text-secondary font-medium">
-                          {candidate.branch_location || '—'}
+                          {candidate.branch_location || '-'}
+                        </td>
+                        <td className="hidden max-w-64 px-4 py-2 md:table-cell">
+                          <div className="flex max-w-64 flex-col gap-1 whitespace-normal">
+                            <span className="text-sm font-semibold text-text-primary">{workState.next_action}</span>
+                            <span className="text-xs text-muted-foreground">{workState.days_in_stage} day{workState.days_in_stage === 1 ? '' : 's'} in stage</span>
+                            {workState.blockers.length > 0 && <span className="text-xs text-amber-700 dark:text-amber-300">Blocked: {workState.blockers.join(', ')}</span>}
+                          </div>
                         </td>
                         <td className="px-4 py-2 text-text-secondary">
-                          <span className="px-2 py-1 bg-background border border-border rounded-[10px] text-xs font-medium">
+                          <span className="rounded-lg border border-border bg-background px-2 py-1 text-xs font-medium">
                             {formatSource(candidate.source)}
                           </span>
                         </td>
@@ -364,7 +420,7 @@ export default function CandidatesList() {
                               variant="icon"
                               onClick={(e) => e.stopPropagation()}
                             />
-                            {isOnHold && (
+                            {isOnHold && !isLocalHrLocked(candidate) && (
                               <button
                                 type="button"
                                 className="p-1.5 text-warning hover:text-white hover:bg-warning transition-colors rounded-sm focus:outline-none flex items-center justify-center"
@@ -379,7 +435,7 @@ export default function CandidatesList() {
                                 )}
                               </button>
                             )}
-                            {canDelete && (
+                            {canDelete && !isLocalHrLocked(candidate) && (
                               <button
                                 type="button"
                                 className="p-1.5 text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors rounded-sm focus:outline-none"
@@ -400,38 +456,37 @@ export default function CandidatesList() {
             <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/10 text-xs font-medium text-muted-foreground">
               <span>Showing {candidates.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, totalCount)} of {totalCount} candidates</span>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={page === 1} onClick={() => setPage(p => p - 1)} className="h-7 text-xs px-3">Previous</Button>
-                <Button size="sm" variant="outline" disabled={page * limit >= totalCount} onClick={() => setPage(p => p + 1)} className="h-7 text-xs px-3">Next</Button>
+                <Button size="sm" variant="secondary" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
+                <Button size="sm" variant="secondary" disabled={page * limit >= totalCount} onClick={() => setPage(p => p + 1)}>Next</Button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+          )}
+      </div>
 
       {/* ── Bulk action bar ── */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-200">
-          <div className="flex items-center gap-3 bg-foreground text-background rounded-2xl shadow-2xl px-5 py-3 border border-border/10">
-            {/* Count + deselect */}
-            <span className="text-sm font-bold tabular-nums">
+        <div className="fixed bottom-5 left-1/2 z-[var(--z-sticky)] -translate-x-1/2">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-2.5 shadow-md">
+            <span className="text-sm font-medium tabular-nums text-text-primary">
               {selectedIds.size} selected
             </span>
             <button
               type="button"
               onClick={clearSelection}
-              className="text-xs text-background/60 hover:text-background font-medium underline underline-offset-2 transition-colors"
+              className="text-xs font-medium text-text-secondary underline underline-offset-2 transition-colors hover:text-text-primary"
             >
               Clear
             </button>
 
-            <div className="h-4 w-px bg-background/20" />
+            <div className="h-4 w-px bg-border" />
 
             {canDelete && (
               <Button
                 variant="danger"
                 size="sm"
                 onClick={() => setShowBulkDeleteConfirm(true)}
-                className="h-8 px-4 gap-2 bg-danger hover:bg-danger/90 text-white border-0 shadow-none"
+                className="gap-2"
               >
                 <Trash className="w-3.5 h-3.5" />
                 Delete {selectedIds.size > 1 ? `${selectedIds.size} candidates` : 'candidate'}

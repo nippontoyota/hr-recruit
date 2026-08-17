@@ -1,25 +1,24 @@
-import type { CandidateFormData } from '../wizardTypes';
 import { Input, Select } from '../../../../components/ui';
 import { digitsOnly } from '../../../../lib/validation';
+import { FormField, type FormSectionProps } from '../FormField';
 
-interface RecruitmentFormProps {
-  data: CandidateFormData;
-  update: (field: keyof CandidateFormData, value: any) => void;
-}
-
-export const RecruitmentForm = ({ data, update }: RecruitmentFormProps) => {
+export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () => {} }: FormSectionProps) => {
   const referralRequired = data.sourceOfOpening === 'Employee Referral';
 
   return (
     <div className="space-y-6 pb-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
+        <FormField field="sourceOfOpening" error={errors.sourceOfOpening}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Source of Opening <span className="text-danger">*</span>
           </label>
           <Select
             value={data.sourceOfOpening}
-            onChange={(e) => update('sourceOfOpening', e.target.value)}
+            onChange={(e) => {
+              update('sourceOfOpening', e.target.value);
+              setTimeout(() => onBlurField('sourceOfOpening'), 0);
+            }}
+            error={!!errors.sourceOfOpening}
           >
             <option value="">Select Source</option>
             <option value="Advertisement">Advertisement</option>
@@ -28,9 +27,9 @@ export const RecruitmentForm = ({ data, update }: RecruitmentFormProps) => {
             <option value="Walk-in">Walk-in</option>
             <option value="Social Media">Social Media</option>
           </Select>
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="referredBy" error={errors.referredBy}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Referred By {referralRequired && <span className="text-danger">*</span>}
             {!referralRequired && (
@@ -40,22 +39,26 @@ export const RecruitmentForm = ({ data, update }: RecruitmentFormProps) => {
           <Input
             value={data.referredBy}
             onChange={(e) => update('referredBy', e.target.value)}
+            onBlur={() => onBlurField('referredBy')}
+            error={!!errors.referredBy}
             placeholder="Name or ID"
           />
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="preferredRegion" error={errors.preferredRegion}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Ready to work in below-mentioned branches <span className="text-danger">*</span>
           </label>
           <Input
             value={data.preferredRegion}
             onChange={(e) => update('preferredRegion', e.target.value)}
+            onBlur={() => onBlurField('preferredRegion')}
+            error={!!errors.preferredRegion}
             placeholder="e.g. Kochi, Trivandrum"
           />
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="expectedJoiningDate" error={errors.expectedJoiningDate}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             If selected, when can you join? <span className="text-danger">*</span>
           </label>
@@ -63,21 +66,27 @@ export const RecruitmentForm = ({ data, update }: RecruitmentFormProps) => {
             type="date"
             value={data.expectedJoiningDate}
             onChange={(e) => update('expectedJoiningDate', e.target.value)}
+            onBlur={() => onBlurField('expectedJoiningDate')}
+            error={!!errors.expectedJoiningDate}
             min={new Date().toISOString().split('T')[0]}
           />
-        </div>
+        </FormField>
       </div>
 
       <div className="pt-6 border-t border-border/40">
         <h4 className="text-sm font-semibold text-text-primary mb-4">Reference Details</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
+          <FormField field="refRole" error={errors.refRole}>
             <label className="block text-sm font-medium text-text-primary mb-1">
               Role of Reference <span className="text-danger">*</span>
             </label>
             <Select
               value={data.refRole}
-              onChange={(e) => update('refRole', e.target.value)}
+              onChange={(e) => {
+                update('refRole', e.target.value);
+                setTimeout(() => onBlurField('refRole'), 0);
+              }}
+              error={!!errors.refRole}
             >
               <option value="">Select Role</option>
               <option value="Manager">Previous Manager</option>
@@ -86,29 +95,33 @@ export const RecruitmentForm = ({ data, update }: RecruitmentFormProps) => {
               <option value="Relative">Relative</option>
               <option value="Other">Other</option>
             </Select>
-          </div>
+          </FormField>
 
-          <div>
+          <FormField field="refName" error={errors.refName}>
             <label className="block text-sm font-medium text-text-primary mb-1">
               Name <span className="text-danger">*</span>
             </label>
             <Input
               value={data.refName}
               onChange={(e) => update('refName', e.target.value)}
+              onBlur={() => onBlurField('refName')}
+              error={!!errors.refName}
             />
-          </div>
+          </FormField>
 
-          <div>
+          <FormField field="refPanchayat" error={errors.refPanchayat}>
             <label className="block text-sm font-medium text-text-primary mb-1">
               Panchayat / Location <span className="text-danger">*</span>
             </label>
             <Input
               value={data.refPanchayat}
               onChange={(e) => update('refPanchayat', e.target.value)}
+              onBlur={() => onBlurField('refPanchayat')}
+              error={!!errors.refPanchayat}
             />
-          </div>
+          </FormField>
 
-          <div>
+          <FormField field="refContactNumber" error={errors.refContactNumber}>
             <label className="block text-sm font-medium text-text-primary mb-1">
               Contact Number <span className="text-danger">*</span>
             </label>
@@ -116,11 +129,13 @@ export const RecruitmentForm = ({ data, update }: RecruitmentFormProps) => {
               type="tel"
               value={data.refContactNumber}
               onChange={(e) => update('refContactNumber', digitsOnly(e.target.value, 10))}
+              onBlur={() => onBlurField('refContactNumber')}
+              error={!!errors.refContactNumber}
               placeholder="9876543210"
               inputMode="numeric"
               maxLength={10}
             />
-          </div>
+          </FormField>
         </div>
       </div>
     </div>

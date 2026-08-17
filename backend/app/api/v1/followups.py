@@ -7,7 +7,7 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.core.deps import require_roles
-from app.core.access import assert_candidate_access, get_candidate_for_user
+from app.core.access import assert_candidate_access, assert_local_hr_can_mutate, get_candidate_for_user
 from app.models.candidate import Candidate
 from app.models.followup import FollowUp
 from app.models.enums import UserRole, FollowUpPriority, FollowUpStatus
@@ -61,7 +61,8 @@ def create_followup(
     row = db.get(Candidate, body.candidate_id)
     if not row:
         raise HTTPException(status_code=404, detail="Candidate not found.")
-    assert_candidate_access(user, row)
+    assert_candidate_access(user, row, db)
+    assert_local_hr_can_mutate(user, row, db)
         
     fu = FollowUp(
         candidate_id=body.candidate_id,
@@ -124,7 +125,7 @@ def update_followup(
     fu = db.get(FollowUp, id)
     if not fu:
         raise HTTPException(status_code=404, detail="FollowUp not found.")
-    get_candidate_for_user(db, fu.candidate_id, user)
+    get_candidate_for_user(db, fu.candidate_id, user, write=True)
     
     update_data = body.model_dump(exclude_unset=True)
     if "status" in update_data and update_data["status"] == FollowUpStatus.COMPLETED and fu.status != FollowUpStatus.COMPLETED:
@@ -146,6 +147,6 @@ def delete_followup(
     fu = db.get(FollowUp, id)
     if not fu:
         raise HTTPException(status_code=404, detail="FollowUp not found.")
-    get_candidate_for_user(db, fu.candidate_id, user)
+    get_candidate_for_user(db, fu.candidate_id, user, write=True)
     db.delete(fu)
     db.commit()

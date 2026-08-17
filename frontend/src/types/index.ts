@@ -3,6 +3,8 @@ export type UserRole =
   | 'HO_HR'
   | 'LOCAL_HR';
 
+export type FormStatus = 'NOT_SENT' | 'SENT' | 'VIEWED' | 'SUBMITTED' | 'EXPIRED';
+   
 /** Every role in the system — use when a route/nav item is accessible to all authenticated users. */
 export const ALL_ROLES: UserRole[] = ['ADMIN', 'HO_HR', 'LOCAL_HR'];
 
@@ -21,6 +23,8 @@ export type PipelineStage =
   | 'APPLICATION'
   | 'SENT_TO_HO'
   | 'HO_INTERVIEWS'
+  | 'HO_HR_INTERVIEW'
+  | 'HO_DEPT_INTERVIEW'
   | 'SALARY_DETAILS'
   | 'CSS';
 
@@ -29,7 +33,23 @@ export const HO_LINEAR_STAGES: PipelineStage[] = [
   'HO_INTERVIEWS',
   'CSS',
   'FINAL_APPROVAL',
-  'HIRED'
+  'HIRED',
+];
+
+export const HO_POST_SEND_STAGES: PipelineStage[] = [
+  'SENT_TO_HO',
+  'HO_INTERVIEWS',
+  'HO_HR_INTERVIEW',
+  'HO_DEPT_INTERVIEW',
+  'CSS',
+  'SALARY_DETAILS',
+  'FINAL_APPROVAL',
+  'HIRED',
+];
+
+export const HO_PIPELINE_STAGES: PipelineStage[] = [
+  ...HO_POST_SEND_STAGES,
+  'ON_HOLD',
 ];
 
 export const NIPPON_BRANCHES = [
@@ -44,14 +64,7 @@ export const NIPPON_BRANCHES = [
   'Thrissur'
 ];
 
-export const CANDIDATE_DEPARTMENTS = [
-  'Sales',
-  'Service',
-  'Customer Service',
-  'Insurance',
-  'Call Center',
-  'HR',
-] as const;
+export { CANDIDATE_DEPARTMENTS } from '../lib/positions';
 
 export interface User {
   id: string;
@@ -60,6 +73,23 @@ export interface User {
   role: UserRole;
   branch_location?: string;
   department?: string;
+}
+
+export type CandidateActionKey =
+  | 'NONE'
+  | 'SEND_TO_HO'
+  | 'RESUME_HOLD'
+  | 'ADVANCE_STAGE'
+  | 'WORKSPACE';
+
+export interface CandidateWorkState {
+  next_action: string;
+  action_key?: CandidateActionKey;
+  responsible_team: string;
+  blockers: string[];
+  days_in_stage: number;
+  days_since_activity: number | null;
+  queue_keys: string[];
 }
 
 export interface Candidate {
@@ -76,6 +106,7 @@ export interface Candidate {
   share_url?: string;
   pre_form_status: FormStatus;
   pre_form_sent_at?: string;
+  pre_form_expires_at?: string;
   pre_form_submitted_at?: string;
   pre_form_token?: string;
   current_stage: PipelineStage;
@@ -88,9 +119,13 @@ export interface Candidate {
   is_rejoining: boolean;
   assigned_hr_user_id?: string;
   offer_status?: string;
+  salary_data?: Record<string, unknown> | null;
   applied_at: string;
   has_resume?: boolean;
+  offer_blockers?: string[];
   created_at: string;
+  handed_over_to_ho?: boolean;
+  work_state?: CandidateWorkState | null;
 }
 
 export interface ResumeDocument {
@@ -145,21 +180,14 @@ export interface CandidateProfile {
 export type InterviewMode = 'PHYSICAL' | 'ONLINE';
 export type InterviewStatus = 'PENDING_SCHEDULE' | 'SCHEDULED' | 'EVALUATED';
 
-export interface BranchInterviewData {
-  id?: string;
-  candidate_id?: string;
-  interview_mode?: InterviewMode;
-  scheduled_time?: string;
-  location_or_link?: string;
-  status?: InterviewStatus;
-  
-
-  current_salary?: string;
-  expected_salary?: string;
-  notice_period?: string;
-}
-
-export type EvaluationType = 'BRANCH_HR' | 'DEPT_HEAD' | 'GM_LEVEL' | 'TECHNICAL_TEST' | 'HQ_INTERVIEW';
+export type EvaluationType =
+  | 'BRANCH_HR'
+  | 'DEPT_HEAD'
+  | 'GM_LEVEL'
+  | 'TECHNICAL_TEST'
+  | 'HQ_INTERVIEW'
+  | 'HQ_INTERVIEW_1'
+  | 'HQ_INTERVIEW_2';
 export type EvaluationVerdict = 'SELECTED' | 'REJECTED' | 'ON_HOLD' | 'PASS' | 'FAIL';
 
 export interface Evaluation {
@@ -188,6 +216,7 @@ export interface EvaluationPublicDetails {
   candidate_name: string;
   candidate_position: string;
   candidate_resume_url?: string;
+  candidate_photo_url?: string;
   candidate_experience?: string;
   candidate_education?: string;
   candidate_email?: string;
@@ -198,11 +227,24 @@ export interface EvaluationPublicDetails {
   candidate_current_salary?: string;
   candidate_expected_salary?: string;
   candidate_notice_period?: string;
+  interviewer_name?: string;
   candidate_raw_data?: Record<string, any>;
   previous_remarks: Array<{
     type: string;
     verdict?: string;
     remarks: string;
+    interviewer_name?: string;
+    scores?: {
+      attitude?: number;
+      communication?: number;
+      knowledge?: number;
+      total_score?: number;
+      interviewer_name?: string;
+      percentage?: number;
+      correct_answers?: number;
+      total_questions?: number;
+      custom_title?: string;
+    };
   }>;
   is_already_submitted?: boolean;
 }

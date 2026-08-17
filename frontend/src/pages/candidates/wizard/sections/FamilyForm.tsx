@@ -2,11 +2,7 @@ import { useState } from 'react';
 import type { CandidateFormData } from '../wizardTypes';
 import { Input, Button } from '../../../../components/ui';
 import { digitsOnly } from '../../../../lib/validation';
-
-interface FamilyFormProps {
-  data: CandidateFormData;
-  update: (field: keyof CandidateFormData, value: any) => void;
-}
+import { FormField, type FormSectionProps } from '../FormField';
 
 type MemberPrefix = 'father' | 'mother' | 'spouse' | 'child1' | 'child2' | 'sibling1' | 'sibling2';
 
@@ -26,13 +22,17 @@ function FamilyMemberRow({
   showRelation,
   data,
   update,
+  errors = {},
+  onBlurField = () => {},
 }: {
   title: string;
   prefix: MemberPrefix;
   required?: boolean;
   showRelation?: boolean;
   data: CandidateFormData;
-  update: (field: keyof CandidateFormData, value: any) => void;
+  update: FormSectionProps['update'];
+  errors?: FormSectionProps['errors'];
+  onBlurField?: FormSectionProps['onBlurField'];
 }) {
   const fields = memberFields(prefix);
   const relationKey = showRelation
@@ -56,15 +56,17 @@ function FamilyMemberRow({
             />
           </div>
         )}
-        <div>
+        <FormField field={fields.name} error={errors[fields.name]}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Name {required && <span className="text-danger">*</span>}
           </label>
           <Input
             value={data[fields.name]}
             onChange={(e) => update(fields.name, e.target.value)}
+            onBlur={() => onBlurField(fields.name)}
+            error={!!errors[fields.name]}
           />
-        </div>
+        </FormField>
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1">Age</label>
           <Input
@@ -128,7 +130,7 @@ function hasAnySibling(data: CandidateFormData, n: 1 | 2): boolean {
   );
 }
 
-export const FamilyForm = ({ data, update }: FamilyFormProps) => {
+export const FamilyForm = ({ data, update, errors = {}, onBlurField = () => {} }: FormSectionProps) => {
   const married = data.maritalStatus === 'Married';
   const [showChild1, setShowChild1] = useState(() => hasAnyChild(data, 1));
   const [showChild2, setShowChild2] = useState(() => hasAnyChild(data, 2));
@@ -137,12 +139,12 @@ export const FamilyForm = ({ data, update }: FamilyFormProps) => {
 
   return (
     <div className="space-y-6 pb-6">
-      <FamilyMemberRow title="Father" prefix="father" required data={data} update={update} />
-      <FamilyMemberRow title="Mother" prefix="mother" required data={data} update={update} />
+      <FamilyMemberRow title="Father" prefix="father" required data={data} update={update} errors={errors} onBlurField={onBlurField} />
+      <FamilyMemberRow title="Mother" prefix="mother" required data={data} update={update} errors={errors} onBlurField={onBlurField} />
 
       {married && (
         <div className="animate-in fade-in duration-300">
-          <FamilyMemberRow title="Spouse" prefix="spouse" required data={data} update={update} />
+          <FamilyMemberRow title="Spouse" prefix="spouse" required data={data} update={update} errors={errors} onBlurField={onBlurField} />
         </div>
       )}
 

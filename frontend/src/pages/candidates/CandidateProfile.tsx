@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Button, LoadingSpinner, EmptyState, Modal, PipelineStepper } from '../../components/ui';
-import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, ChevronLeft, ChevronRight, Pause, Play, History, Edit2, Send } from 'lucide-react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Button, Input, LoadingSpinner, EmptyState, Modal, PipelineStepper, Select } from '../../components/ui';
+import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, Pause, Play, History, Edit2, Check } from 'lucide-react';
 import { getCandidateById, updateCandidateStage, unholdCandidate, resolveDuplicateCandidate, updateCandidateDepartment } from '../../api/candidates';
 import { getCandidateEvaluations } from '../../api/evaluations';
 import type { Candidate, PipelineStage } from '../../types';
+import { HO_LINEAR_STAGES, HO_POST_SEND_STAGES } from '../../types';
 import { CANDIDATE_DEPARTMENTS } from '../../types';
+import { EXPERIENCE_LEVELS } from '../../lib/positions';
+import { SOURCE_OPTIONS, SOURCE_REFERENCE_LABELS, sourceNeedsReference } from '../../lib/candidateSources';
 import { toast } from 'sonner';
 import { validateRejectRemarks } from '../../lib/validation';
-import { stageLabel, stageColor } from '../../lib/stages';
+import { formatSource, stageLabel } from '../../lib/stages';
 import { cn } from '../../lib/utils';
 import { PreFormStatus } from '../../components/candidates/PreFormStatus';
 import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPreviewPanel';
@@ -19,19 +22,40 @@ import { ApplicationStageWidget } from '../../components/candidates/ApplicationS
 import { FinalApprovalWidget } from '../../components/candidates/FinalApprovalWidget';
 import { BackgroundVerificationWidget } from '../../components/candidates/BackgroundVerificationWidget';
 import { ActivityTimeline } from '../../components/candidates/ActivityTimeline';
+import { CommunicationTimeline } from '../../components/candidates/CommunicationTimeline';
 import { extractError } from '../../lib/utils';
-import { HOInterviewWidget } from '../../components/candidates/HOInterviewWidget';
 import { CSSStageWidget } from '../../components/candidates/CSSStageWidget';
+import { WorkQueue } from '../../components/candidates/WorkQueue';
+import { SalarySheetUpload } from '../../components/candidates/SalarySheetUpload';
+import { CandidateHeader } from '../../components/candidates/CandidateHeader';
+import { CandidateActionPanel } from '../../components/candidates/CandidateActionPanel';
+import { CandidateRecordSections } from '../../components/candidates/CandidateRecordSections';
+import { getCandidateWorkState } from '../../lib/candidateWork';
 
 
-import { useAuth } from '../../auth/AuthContext';
+import { useAuth } from '../../auth';
 
 const LINEAR_STAGES: PipelineStage[] = [
   'CALL_LETTER', 'INTERVIEWS', 'TEST', 'BACKGROUND_VERIFICATION', 'APPLICATION'
 ];
-const HO_LINEAR_STAGES: PipelineStage[] = [
-  'SENT_TO_HO', 'HO_INTERVIEWS', 'CSS', 'FINAL_APPROVAL'
+
+const LOCAL_FOLLOW_STAGES: PipelineStage[] = [
+  ...LINEAR_STAGES,
+  ...HO_LINEAR_STAGES,
 ];
+
+function mappedPipelineStage(stage: PipelineStage): PipelineStage {
+  if (stage === 'HO_HR_INTERVIEW' || stage === 'HO_DEPT_INTERVIEW') return 'HO_INTERVIEWS';
+  if (stage === 'SALARY_DETAILS') return 'FINAL_APPROVAL';
+  return stage;
+}
+
+function nextStageAfter(current: PipelineStage, stages: PipelineStage[]): PipelineStage | null {
+  const mapped = mappedPipelineStage(current);
+  const idx = stages.indexOf(mapped);
+  if (idx === -1 || idx >= stages.length - 1) return null;
+  return stages[idx + 1];
+}
 
 // Simple global cache to allow stale-while-revalidate (instant loading)
 const profileCache: Record<string, Candidate> = {};
@@ -49,12 +73,16 @@ function ConsiderationEditor({
 }) {
   const [open, setOpen] = useState(false);
   const [department, setDepartment] = useState(candidate.department || '');
-  const [role, setRole] = useState(candidate.position_applied_for || candidate.department || '');
+  const [experience, setExperience] = useState(candidate.experience || 'Fresher');
+  const [source, setSource] = useState(candidate.source || '');
+  const [sourceReference, setSourceReference] = useState(candidate.source_reference || '');
   const [saving, setSaving] = useState(false);
 
   const openEditor = () => {
     setDepartment(candidate.department || '');
-    setRole(candidate.position_applied_for || candidate.department || '');
+    setExperience(candidate.experience || 'Fresher');
+    setSource(candidate.source || '');
+    setSourceReference(candidate.source_reference || '');
     setOpen(true);
   };
 
@@ -63,17 +91,24 @@ function ConsiderationEditor({
       toast.error('Select a department');
       return;
     }
+    if (!source.trim()) {
+      toast.error('Select a source');
+      return;
+    }
     setSaving(true);
     try {
       const updated = await updateCandidateDepartment(
         candidate.id,
         department.trim(),
-        (role.trim() || department.trim())
+        undefined,
+        experience,
+        source,
+        sourceNeedsReference(source) ? sourceReference.trim() : undefined,
       );
       profileCache[candidate.id] = updated;
       onSaved(updated);
       setOpen(false);
-      toast.success(`Now considering for ${updated.department} — ${updated.position_applied_for}`);
+      toast.success(`Now considering for ${updated.department}`);
     } catch (err: any) {
       toast.error(extractError(err, 'Failed to update consideration'));
     } finally {
@@ -81,10 +116,9 @@ function ConsiderationEditor({
     }
   };
 
-  const label = [candidate.department, candidate.position_applied_for]
+  const label = [candidate.department, candidate.experience]
     .filter(Boolean)
-    .filter((v, i, a) => a.indexOf(v) === i)
-    .join(' · ') || '—';
+    .join(' · ') || '-';
 
   return (
     <>
@@ -107,22 +141,16 @@ function ConsiderationEditor({
       <Modal
         isOpen={open}
         onClose={() => setOpen(false)}
-        title="Change consideration"
-        description="Switch department/role if this candidate fits another opening mid-process."
+        title="Edit candidate details"
+        description="Update consideration and hiring source without reopening the original intake flow."
         size="sm"
       >
         <div className="p-6 space-y-4">
           <div>
             <label className="form-label">Department</label>
-            <select
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+            <Select
               value={department}
-              onChange={(e) => {
-                setDepartment(e.target.value);
-                if (!role.trim() || role === candidate.department || role === department) {
-                  setRole(e.target.value);
-                }
-              }}
+              onChange={(e) => setDepartment(e.target.value)}
             >
               <option value="" disabled>
                 Select department
@@ -135,20 +163,54 @@ function ConsiderationEditor({
               {department && !(CANDIDATE_DEPARTMENTS as readonly string[]).includes(department) && (
                 <option value={department}>{department}</option>
               )}
-            </select>
+            </Select>
           </div>
           <div>
-            <label className="form-label">Role / position</label>
-            <input
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              placeholder="e.g. Customer Support Executive"
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Example: Sales → Customer Service, role “Customer Support Executive”.
-            </p>
+            <label className="form-label">Experience</label>
+            <Select
+              value={experience}
+              onChange={(e) => setExperience(e.target.value)}
+            >
+              {EXPERIENCE_LEVELS.map((level) => (
+                <option key={level} value={level}>
+                  {level}
+                </option>
+              ))}
+            </Select>
           </div>
+          <div>
+            <label className="form-label">Source</label>
+            <Select
+              value={source}
+              onChange={(e) => {
+                setSource(e.target.value);
+                if (!sourceNeedsReference(e.target.value)) setSourceReference('');
+              }}
+            >
+              <option value="" disabled>
+                Select source
+              </option>
+              {SOURCE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+              {source && !SOURCE_OPTIONS.some((option) => option.value === source) && (
+                <option value={source}>{formatSource(source)}</option>
+              )}
+            </Select>
+          </div>
+          {sourceNeedsReference(source) && (
+            <div>
+              <label className="form-label">{SOURCE_REFERENCE_LABELS[source]}</label>
+              <Input
+                value={sourceReference}
+                onChange={(e) => setSourceReference(e.target.value)}
+                maxLength={100}
+                placeholder={source === 'REFERRAL' ? 'Employee or contact name' : 'LinkedIn, website, etc.'}
+              />
+            </div>
+          )}
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
@@ -166,6 +228,7 @@ function ConsiderationEditor({
 export default function CandidateProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
 
   const cachedCandidate = id ? profileCache[id] : null;
@@ -179,6 +242,7 @@ export default function CandidateProfile() {
 
 
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
 
@@ -189,99 +253,161 @@ export default function CandidateProfile() {
   const [resumeStage, setResumeStage] = useState<PipelineStage>('CALL_LETTER');
   const [isResuming, setIsResuming] = useState(false);
   const [isActivityOpen, setIsActivityOpen] = useState(false);
-  const [viewedStage, setViewedStage] = useState<PipelineStage | null>(null);
+  const stageParam = searchParams.get('stage') as PipelineStage | null;
+  const [viewedStage, setViewedStage] = useState<PipelineStage | null>(stageParam);
 
-  const workspaceRef = useRef<HTMLDivElement>(null);
+  const navigateToStage = (stage: PipelineStage) => {
+    setViewedStage(stage);
+    setSearchParams(prev => { prev.set('stage', stage); return prev; }, { replace: true });
+  };
 
+  const cancelledRef = useRef(false);
+  const goneRef = useRef(false);
+  const inFlightRef = useRef(false);
+  const candidateRef = useRef(candidate);
+  candidateRef.current = candidate;
 
-  const fetchCandidate = async (showLoading = true) => {
-    if (!id) return;
+  const fetchCandidate = async (opts?: { candidate?: boolean }) => {
+    if (!id || goneRef.current || cancelledRef.current) return;
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    const hasData = !!(profileCache[id] || candidateRef.current);
+    const skipCandidate = opts?.candidate === false && hasData;
     try {
-      if (showLoading && !profileCache[id]) {
-        setInitialLoading(true);
-      } else if (showLoading) {
-        setIsUpdating(true);
-      }
+      if (!hasData) setInitialLoading(true);
 
       const [res, evals] = await Promise.all([
-        getCandidateById(id),
+        skipCandidate
+          ? Promise.resolve(candidateRef.current ?? profileCache[id])
+          : getCandidateById(id),
         getCandidateEvaluations(id).catch(() => []),
       ]);
 
+      if (cancelledRef.current || goneRef.current) return;
+
       if (res) {
-        profileCache[id] = res;
+        if (!skipCandidate) profileCache[id] = res;
         setCandidate(res);
         setEvaluations(evals);
-      } else {
+        setError(null);
+      } else if (!hasData) {
         setError('Candidate not found.');
       }
     } catch (err: any) {
-      setError(extractError(err, 'Failed to fetch candidate details.'));
+      if (cancelledRef.current || goneRef.current) return;
+      if (err?.response?.status === 404) {
+        goneRef.current = true;
+        delete profileCache[id];
+        toast.error('This candidate no longer exists.');
+        navigate('/candidates', { replace: true });
+        return;
+      }
+      const message = extractError(err, 'Failed to fetch candidate details.');
+      if (!hasData) setError(message);
+      else toast.error(message);
     } finally {
+      inFlightRef.current = false;
       setInitialLoading(false);
-      setIsUpdating(false);
+
     }
   };
 
   useEffect(() => {
-    fetchCandidate(true);
-
-    const intervalId = setInterval(() => {
-      fetchCandidate(false);
-    }, 10000);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchCandidate(false);
-      }
-    };
-    window.addEventListener('visibilitychange', handleVisibilityChange);
-
+    cancelledRef.current = false;
+    goneRef.current = false;
+    void fetchCandidate();
     return () => {
-      clearInterval(intervalId);
-      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      cancelledRef.current = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const handleUpdate = () => {
-    fetchCandidate(true);
+  const handleUpdate = (opts?: { candidate?: boolean }) => {
+    void fetchCandidate(opts);
   };
 
-  const handleStageClick = async (clickedStage: PipelineStage) => {
+  const handleStageClick = (clickedStage: PipelineStage) => {
     if (!candidate) return;
-    // Prevent accidentally navigating into side/terminal states via the stepper
     if (clickedStage === 'REJECTED' || clickedStage === 'ON_HOLD' || clickedStage === 'HIRED') return;
+    navigateToStage(clickedStage);
+  };
 
-    const effectiveStages = user?.role === 'HO_HR' ? HO_LINEAR_STAGES : LINEAR_STAGES;
-    let currentIdx = effectiveStages.indexOf(candidate.current_stage);
-    const clickedIdx = effectiveStages.indexOf(clickedStage);
-
-    if (currentIdx === -1) {
-      currentIdx = Infinity;
+  const handleMarkStageComplete = async () => {
+    if (!candidate) return;
+    if (user?.role === 'ADMIN') return;
+    const localHr = user?.role === 'LOCAL_HR';
+    const sentToHo = HO_POST_SEND_STAGES.includes(candidate.current_stage) || !!candidate.handed_over_to_ho;
+    if (localHr && sentToHo) return;
+    if (['REJECTED', 'HIRED', 'ON_HOLD'].includes(candidate.current_stage)) return;
+    if (localHr && candidate.current_stage === 'APPLICATION') {
+      toast.error('Use Send to Head Office to finish this stage.');
+      return;
     }
 
-    // Always update the viewed tab
-    setViewedStage(clickedStage);
+    const stages = user?.role === 'HO_HR'
+      ? HO_LINEAR_STAGES
+      : localHr && sentToHo
+        ? LOCAL_FOLLOW_STAGES
+        : LINEAR_STAGES;
+    const next = nextStageAfter(candidate.current_stage, stages);
+    if (!next) return;
 
-    // Only update the database if we are moving FORWARD in the pipeline
-    if (clickedIdx > currentIdx) {
-      const isLocalHR = user?.role === 'LOCAL_HR';
-      const hasBeenSentToHO = ['SENT_TO_HO', 'FINAL_APPROVAL', 'HIRED'].includes(candidate.current_stage);
-      if (isLocalHR && hasBeenSentToHO) {
-         toast.error("Cannot change stages after sending to Head Office.");
-         return;
-      }
+    setIsUpdating(true);
+    try {
+      await updateCandidateStage(candidate.id, next, '');
+      navigateToStage(next);
+      handleUpdate();
+      toast.success(getCandidateWorkState(candidate).next_action);
+    } catch (err: unknown) {
+      toast.error(extractError(err, 'Failed to mark stage complete.'));
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
-      setIsUpdating(true);
-      try {
-        await updateCandidateStage(candidate.id, clickedStage, '');
-        handleUpdate();
-      } catch (err: any) {
-        toast.error(extractError(err, 'Failed to update stage.'));
-      } finally {
-        setIsUpdating(false);
-      }
+  const handleSendToHO = async () => {
+    if (!candidate) return;
+    setIsUpdating(true);
+    try {
+      await updateCandidateStage(candidate.id, 'SENT_TO_HO', 'Sent to Head Office HR for final review.');
+      navigateToStage('SENT_TO_HO');
+      handleUpdate();
+      toast.success('Application sent to Head Office successfully!');
+    } catch (err: unknown) {
+      toast.error(extractError(err, 'Failed to send to Head Office'));
+      throw err;
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleResume = async () => {
+    if (!candidate) return;
+    setIsResuming(true);
+    try {
+      await unholdCandidate(candidate.id, 'Resumed from On Hold');
+      toast.success('Candidate resumed to previous stage');
+      handleUpdate();
+    } catch (err: unknown) {
+      toast.error(extractError(err, 'Failed to resume candidate.'));
+      throw err;
+    } finally {
+      setIsResuming(false);
+    }
+  };
+
+  const handleHold = async (remarks: string) => {
+    if (!candidate) return;
+    setIsUpdating(true);
+    try {
+      await updateCandidateStage(candidate.id, 'ON_HOLD', remarks);
+      handleUpdate();
+      toast.success('Candidate placed on hold');
+    } catch (err: unknown) {
+      toast.error(extractError(err, 'Failed to place candidate on hold.'));
+      throw err;
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -289,7 +415,7 @@ export default function CandidateProfile() {
     if (!candidate) return;
     const validation = validateRejectRemarks(rejectRemarks);
     if (!validation.ok) {
-      toast.error(validation.message);
+      toast.error('message' in validation ? validation.message : 'Rejection reason is required.');
       return;
     }
     setIsRejecting(true);
@@ -343,7 +469,7 @@ export default function CandidateProfile() {
   if (initialLoading) {
     return (
       <div className="flex justify-center items-center h-screen w-full flex-col">
-        <LoadingSpinner size="lg" className="text-blue-600 mb-4" />
+        <LoadingSpinner size="lg" className="text-primary mb-4" />
         <p className="text-muted-foreground font-medium animate-pulse">Loading candidate profile...</p>
       </div>
     );
@@ -369,14 +495,19 @@ export default function CandidateProfile() {
 
   const actualStage = candidate.current_stage;
   const stageToView = viewedStage || actualStage;
-  const showWhatsAppSidebar = stageToView === 'CALL_LETTER' && candidate.pre_form_status !== 'SUBMITTED';
-
+  const isAdmin = user?.role === 'ADMIN';
   const isHO = user?.role === 'HO_HR';
-  const effectiveStages = isHO ? HO_LINEAR_STAGES : LINEAR_STAGES;
+  const isLocalHR = user?.role === 'LOCAL_HR';
+  const showWhatsAppSidebar = !isAdmin && stageToView === 'CALL_LETTER' && candidate.pre_form_status !== 'SUBMITTED';
+  const hasBeenSentToHO = HO_POST_SEND_STAGES.includes(candidate.current_stage) || !!candidate.handed_over_to_ho;
+  const isReadOnly = (isLocalHR && hasBeenSentToHO) || isAdmin;
+  const followsHoPipeline = isHO || isAdmin;
+  const effectiveStages = followsHoPipeline
+    ? HO_LINEAR_STAGES
+    : isLocalHR && hasBeenSentToHO
+      ? LOCAL_FOLLOW_STAGES
+      : LINEAR_STAGES;
   const stepperStages = effectiveStages.filter((s): s is Exclude<PipelineStage, 'HIRED'> => s !== 'HIRED');
-  const viewedIdx = stepperStages.findIndex((s) => s === stageToView);
-  const isPrevDisabled = viewedIdx <= 0 || isUpdating;
-  const isNextDisabled = viewedIdx === -1 || viewedIdx >= stepperStages.length - 1 || isUpdating;
 
   const completedStages: PipelineStage[] = [];
   const skippedStages: PipelineStage[] = [];
@@ -402,7 +533,20 @@ export default function CandidateProfile() {
       else completedStages.push('TEST');
     }
 
-    // 6. FINAL_APPROVAL
+    // HO interview completion markers
+    const hoHrEval = evaluations.find(e => e.type === 'HQ_INTERVIEW_1');
+    const hoDeptEval = evaluations.find(e => e.type === 'HQ_INTERVIEW_2');
+    if (hoHrEval?.verdict === 'ON_HOLD' || hoDeptEval?.verdict === 'ON_HOLD') {
+      heldStages.push('HO_INTERVIEWS');
+    } else if (hoHrEval?.verdict && hoDeptEval?.verdict) {
+      completedStages.push('HO_INTERVIEWS');
+    }
+
+    if (candidate.current_stage === 'CSS' || candidate.current_stage === 'FINAL_APPROVAL' || candidate.current_stage === 'HIRED') {
+      completedStages.push('CSS');
+    }
+
+    // 6. FINAL_APPROVAL (legacy HQ eval marker)
     const hqEval = evaluations.find(e => e.type === 'HQ_INTERVIEW');
     if (hqEval && hqEval.verdict) {
       if (hqEval.verdict === 'ON_HOLD') heldStages.push('FINAL_APPROVAL');
@@ -414,8 +558,15 @@ export default function CandidateProfile() {
       completedStages.push('HIRED');
     }
 
+    if (hasBeenSentToHO) {
+      completedStages.push('APPLICATION');
+      if (candidate.current_stage !== 'SENT_TO_HO') {
+        completedStages.push('SENT_TO_HO');
+      }
+    }
+
     // A stage is skipped if it is not completed and not held, but the candidate's current stage is past it in the linear sequence!
-    const currentIdx = effectiveStages.indexOf(candidate.current_stage);
+    const currentIdx = effectiveStages.indexOf(mappedPipelineStage(candidate.current_stage));
     effectiveStages.forEach((stage, idx) => {
       if (idx < currentIdx && !completedStages.includes(stage) && !heldStages.includes(stage)) {
         skippedStages.push(stage);
@@ -423,9 +574,21 @@ export default function CandidateProfile() {
     });
   }
 
-  const isLocalHR = user?.role === 'LOCAL_HR';
-  const hasBeenSentToHO = ['SENT_TO_HO', 'FINAL_APPROVAL', 'HIRED'].includes(candidate.current_stage);
-  const isReadOnly = isLocalHR && hasBeenSentToHO;
+  const mappedActual = mappedPipelineStage(actualStage);
+  const mappedView = mappedPipelineStage(stageToView);
+  const nextStage = nextStageAfter(actualStage, effectiveStages);
+  const viewIdx = (stepperStages as PipelineStage[]).indexOf(mappedView);
+  const actualIdx = (stepperStages as PipelineStage[]).indexOf(mappedActual);
+  const viewedStageComplete =
+    completedStages.includes(mappedView) ||
+    (viewIdx !== -1 && actualIdx !== -1 && viewIdx < actualIdx);
+  const canAdvanceCurrent =
+    !isReadOnly &&
+    !!nextStage &&
+    actualStage !== 'REJECTED' &&
+    actualStage !== 'HIRED' &&
+    actualStage !== 'ON_HOLD' &&
+    !(isLocalHR && actualStage === 'APPLICATION');
 
   return (
     <div className="flex items-start w-full min-h-screen">
@@ -450,6 +613,26 @@ export default function CandidateProfile() {
               <span className="text-sm font-medium text-foreground">{candidate.full_name}</span>
             </div>
 
+            <div className="mb-6 space-y-3">
+              <CandidateHeader candidate={candidate} />
+              <CandidateActionPanel
+                candidate={candidate}
+                readOnly={isReadOnly}
+                loading={isUpdating || isResuming}
+                onSendToHo={isLocalHR ? handleSendToHO : undefined}
+                onAdvance={canAdvanceCurrent ? handleMarkStageComplete : undefined}
+                onResume={handleResume}
+                onReject={() => setShowRejectModal(true)}
+                onHold={handleHold}
+              />
+            </div>
+
+            {isLocalHR && hasBeenSentToHO && (
+              <div className="mb-6 rounded-lg border border-info/20 bg-info/5 px-4 py-3 text-sm font-medium text-info">
+                Already sent to Head Office. You can follow HO updates on the pipeline below, but you cannot edit this candidate.
+              </div>
+            )}
+
             {candidate.is_duplicate_flagged && (
               <div className="mb-6 bg-orange-50 border border-orange-200 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3 text-orange-800">
@@ -461,10 +644,12 @@ export default function CandidateProfile() {
                     <p className="text-xs opacity-90 mt-0.5">This candidate was flagged as a duplicate of another application.</p>
                   </div>
                 </div>
+                {!isReadOnly && (
                 <div className="flex flex-wrap gap-2 shrink-0">
                   <Button variant="ghost" size="sm" onClick={() => handleResolveDuplicate('NOT_DUPLICATE')} disabled={isUpdating} className="border border-orange-200 hover:bg-orange-100 text-orange-700 bg-white">Not a Duplicate</Button>
-                  <Button variant="primary" size="sm" onClick={() => handleResolveDuplicate('MERGE')} disabled={isUpdating} className="bg-orange-600 hover:bg-orange-700 text-white border-0 shadow-sm">Archive as Duplicate</Button>
+                  <Button variant="primary" size="sm" onClick={() => setShowArchiveModal(true)} disabled={isUpdating} className="bg-orange-600 hover:bg-orange-700 text-white border-0 shadow-sm">Archive as Duplicate</Button>
                 </div>
+                )}
               </div>
             )}
 
@@ -475,14 +660,22 @@ export default function CandidateProfile() {
                 <div className="w-full">
                   <PipelineStepper
                     stages={stepperStages}
-                    currentStage={stageToView}
-                    actualStage={actualStage}
+                    currentStage={mappedView}
+                    actualStage={mappedActual}
                     onStageClick={handleStageClick}
                     isLoading={isUpdating}
                     completedStages={completedStages}
                     skippedStages={skippedStages}
                     heldStages={heldStages}
-                    customLabels={isHO ? { 'SENT_TO_HO': 'CANDIDATE APPLICATION', 'FINAL_APPROVAL': 'OFFER LETTER' } : undefined}
+                    customLabels={followsHoPipeline ? {
+                      'SENT_TO_HO': 'CANDIDATE APPLICATION',
+                      'HO_INTERVIEWS': 'INTERVIEWS',
+                      'FINAL_APPROVAL': 'OFFER LETTER',
+                    } : isLocalHR && hasBeenSentToHO ? {
+                      'SENT_TO_HO': 'SENT TO HO',
+                      'HO_INTERVIEWS': 'HO INTERVIEWS',
+                      'FINAL_APPROVAL': 'OFFER',
+                    } : undefined}
                   />
                 </div>
               );
@@ -501,7 +694,15 @@ export default function CandidateProfile() {
                       <div className="flex flex-col items-center text-center max-w-2xl mx-auto space-y-4">
                         <div className="flex flex-col items-center gap-2 w-full">
                           
-                          <div className="relative group cursor-pointer mb-2" onClick={() => document.getElementById('photo-upload')?.click()}>
+                          <div
+                            className={cn(
+                              "relative group mb-2 h-36 w-28 shrink-0 overflow-hidden border border-border bg-muted",
+                              !isReadOnly && "cursor-pointer"
+                            )}
+                            onClick={() => {
+                              if (!isReadOnly) document.getElementById('photo-upload')?.click();
+                            }}
+                          >
                             <input
                               type="file"
                               id="photo-upload"
@@ -529,15 +730,21 @@ export default function CandidateProfile() {
                               }}
                             />
                             {candidate.profile?.photo_url ? (
-                              <img src={candidate.profile.photo_url} alt="Profile" className="rounded-none object-cover border border-border bg-white w-28 h-36 mx-auto" />
+                              <img
+                                src={candidate.profile.photo_url}
+                                alt="Profile"
+                                className="h-full w-full object-cover object-left-top"
+                              />
                             ) : (
-                              <div className="rounded-none bg-muted flex items-center justify-center border border-border text-muted-foreground font-bold w-28 h-36 text-4xl mx-auto">
+                              <div className="flex h-full w-full items-center justify-center text-4xl font-bold text-muted-foreground">
                                 {candidate.full_name.charAt(0)}
                               </div>
                             )}
-                            <div className="absolute inset-0 bg-black/50 rounded-none opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            {!isReadOnly && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
                               <Edit2 className="w-6 h-6 text-white" />
                             </div>
+                            )}
                           </div>
 
                           <div className="flex flex-col items-center gap-2">
@@ -608,28 +815,6 @@ export default function CandidateProfile() {
                           />
                         </div>
                       )}
-                      {isCallLetterStage && actualStage === 'ON_HOLD' && (
-                        <Button
-                          size="sm"
-                          onClick={async () => {
-                            if (!candidate) return;
-                            setIsResuming(true);
-                            try {
-                              await unholdCandidate(candidate.id, 'Resumed from On Hold');
-                              toast.success('Candidate resumed to previous stage');
-                              handleUpdate();
-                            } catch (err: any) {
-                              toast.error(extractError(err, 'Failed to resume candidate.'));
-                            } finally {
-                              setIsResuming(false);
-                            }
-                          }}
-                          isLoading={isResuming}
-                          className="h-8 px-4 text-xs gap-1.5 bg-warning/90 hover:bg-warning text-white"
-                        >
-                          <Play className="w-3.5 h-3.5" /> Resume to previous
-                        </Button>
-                      )}
 
 
                       
@@ -676,8 +861,34 @@ export default function CandidateProfile() {
           </div>
         </div>
 
+        {/* ── WORK QUEUE (HO HR + Admin) ── */}
+        {(isHO || user?.role === 'ADMIN') && hasBeenSentToHO && (
+          <div className="mb-6 space-y-3">
+            {isHO && (
+              <SalarySheetUpload candidateId={candidate.id} onDone={handleUpdate} compact />
+            )}
+            {typeof candidate.salary_data?._uploaded_by === 'string' && (
+              <p className="text-xs text-muted-foreground">
+                Salary uploaded by {String(candidate.salary_data._uploaded_by)}
+                {typeof candidate.salary_data._uploaded_at === 'string'
+                  ? ` on ${new Date(String(candidate.salary_data._uploaded_at)).toLocaleString('en-IN', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}`
+                  : ''}
+              </p>
+            )}
+            <WorkQueue candidate={candidate} evaluations={evaluations} />
+          </div>
+        )}
+
         {/* ── DYNAMIC STAGE WORKSPACE ── */}
-        <div ref={workspaceRef} className="relative min-h-[400px] scroll-mt-8">
+        <CandidateRecordSections
+          taskContent={(
+            <div className="relative min-h-[400px]">
           {isUpdating && (
             <div className="absolute inset-0 z-50 bg-background/40 backdrop-blur-sm flex items-center justify-center rounded-xl transition-all duration-300">
               <LoadingSpinner size="md" className="text-primary/70" />
@@ -685,15 +896,34 @@ export default function CandidateProfile() {
           )}
 
           <div className={cn("transition-opacity duration-300", isUpdating ? "opacity-50 pointer-events-none" : "opacity-100")}>
-            {stageToView === 'CALL_LETTER' && (
-              <PreFormStatus candidate={candidate} onUpdate={handleUpdate} />
+            {viewedStageComplete && (
+              <div className="flex justify-center mb-6">
+                <div className="flex flex-col items-center gap-1.5">
+                  <span className="w-11 h-11 rounded-full border-2 border-success bg-success/10 text-success flex items-center justify-center shadow-sm">
+                    <Check className="w-5 h-5 stroke-[2.5]" />
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-success">
+                    Stage complete
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {isAdmin && !hasBeenSentToHO && (
+              <div className="rounded-xl border border-border bg-surface p-6 text-sm text-muted-foreground">
+                Still in the branch pipeline. Admin work starts after Local HR sends this candidate to Head Office.
+              </div>
+            )}
+
+            {!isAdmin && stageToView === 'CALL_LETTER' && (
+              <PreFormStatus candidate={candidate} onUpdate={handleUpdate} isReadOnly={isReadOnly} />
             )}
 
             {showWhatsAppSidebar && (
-              <WhatsAppPreviewPanel candidate={candidate} className="lg:hidden mt-6 rounded-xl border border-border overflow-hidden" />
+              <WhatsAppPreviewPanel candidate={candidate} onUpdate={handleUpdate} isReadOnly={isReadOnly} className="lg:hidden mt-6 rounded-xl border border-border overflow-hidden" />
             )}
 
-            {stageToView === 'INTERVIEWS' && (
+            {!isAdmin && stageToView === 'INTERVIEWS' && (
               <EvaluationStageWidget
                 candidate={candidate}
                 evalTypes={['BRANCH_HR', 'DEPT_HEAD']}
@@ -702,7 +932,7 @@ export default function CandidateProfile() {
               />
             )}
 
-            {stageToView === 'TEST' && (
+            {!isAdmin && stageToView === 'TEST' && (
               <EvaluationStageWidget
                 candidate={candidate}
                 evalTypes={['TECHNICAL_TEST']}
@@ -711,7 +941,7 @@ export default function CandidateProfile() {
               />
             )}
 
-            {stageToView === 'BACKGROUND_VERIFICATION' && (
+            {!isAdmin && stageToView === 'BACKGROUND_VERIFICATION' && (
               <BackgroundVerificationWidget
                 candidate={candidate}
                 onUpdate={handleUpdate}
@@ -719,34 +949,28 @@ export default function CandidateProfile() {
               />
             )}
 
-            {stageToView === 'APPLICATION' && (
+            {!isAdmin && stageToView === 'APPLICATION' && (
               <ApplicationStageWidget
                 candidate={candidate}
+                evaluations={evaluations}
                 onUpdate={handleUpdate}
+                isReadOnly={isReadOnly}
               />
             )}
 
-            {stageToView === 'SENT_TO_HO' && (
-              isHO ? (
-                <ApplicationStageWidget
-                  candidate={candidate}
-                  onUpdate={handleUpdate}
-                />
-              ) : (
-                <div className="bg-pink-50/50 border border-pink-200 p-8 rounded-xl mt-6 flex flex-col items-center">
-                  <div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center shadow-sm mb-4">
-                    <Send className="w-8 h-8 text-pink-600" />
-                  </div>
-                  <h3 className="text-xl font-bold text-pink-900">Application Sent to HR</h3>
-                  <p className="text-pink-700/80 mt-2 max-w-md mx-auto font-medium text-center">
-                    This candidate's application has been successfully forwarded to the Head Office HR for final review and approval.
-                  </p>
-                </div>
-              )
+            {!isAdmin && stageToView === 'SENT_TO_HO' && (
+              <ApplicationStageWidget
+                candidate={candidate}
+                evaluations={evaluations}
+                onUpdate={handleUpdate}
+                isReadOnly={isReadOnly}
+              />
             )}
 
-            {stageToView === 'HO_INTERVIEWS' && (
-              <HOInterviewWidget
+            {!isAdmin && (stageToView === 'HO_INTERVIEWS' ||
+              stageToView === 'HO_HR_INTERVIEW' ||
+              stageToView === 'HO_DEPT_INTERVIEW') && (
+              <EvaluationStageWidget
                 candidate={candidate}
                 evalTypes={['HQ_INTERVIEW_1', 'HQ_INTERVIEW_2']}
                 onUpdate={handleUpdate}
@@ -754,18 +978,30 @@ export default function CandidateProfile() {
               />
             )}
 
-            {stageToView === 'CSS' && (
+            {!isAdmin && stageToView === 'CSS' && (
               <CSSStageWidget
                 candidate={candidate}
+                evaluations={evaluations}
                 onUpdate={handleUpdate}
               />
             )}
 
-            {stageToView === 'FINAL_APPROVAL' && (
+            {isAdmin && stageToView === 'CSS' && (
+              <div className="rounded-xl border border-border bg-surface p-6 text-sm text-muted-foreground">
+                CSS and the salary setting sheet are prepared by Head Office HR.
+              </div>
+            )}
+
+            {stageToView === 'FINAL_APPROVAL' && !isLocalHR && (
               <FinalApprovalWidget
                 candidate={candidate}
                 onUpdate={handleUpdate}
               />
+            )}
+            {stageToView === 'FINAL_APPROVAL' && isLocalHR && (
+              <div className="rounded-xl border border-border bg-surface p-6 text-sm text-muted-foreground">
+                Offer letter and salary details are handled by Head Office.
+              </div>
             )}
 
 
@@ -776,18 +1012,21 @@ export default function CandidateProfile() {
                 </div>
                 <h3 className="text-xl font-bold text-warning">Candidate On Hold</h3>
                 <p className="text-warning/80 mt-2 max-w-md mx-auto font-medium text-center">
-                  This candidate has been placed on hold. Select a stage below to resume their pipeline.
+                  {isReadOnly
+                    ? 'This candidate has been placed on hold at Head Office. Local HR cannot change the record.'
+                    : 'This candidate has been placed on hold. Select a stage below to resume their pipeline.'}
                 </p>
+                {!isReadOnly && (
                 <div className="mt-6 flex flex-col sm:flex-row items-center gap-3 w-full max-w-sm">
-                  <select
+                  <Select
                     value={resumeStage}
                     onChange={(e) => setResumeStage(e.target.value as PipelineStage)}
-                    className="flex-1 w-full sm:w-auto bg-background border border-border rounded-lg px-3 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-warning/40"
+                    className="font-medium"
                   >
                     {effectiveStages.filter(s => s !== 'HIRED').map(s => (
                       <option key={s} value={s}>{stageLabel(s)}</option>
                     ))}
-                  </select>
+                  </Select>
                   <Button
                     onClick={async () => {
                       setIsResuming(true);
@@ -807,6 +1046,7 @@ export default function CandidateProfile() {
                     <Play className="w-4 h-4" /> Resume
                   </Button>
                 </div>
+                )}
               </div>
             )}
 
@@ -821,13 +1061,15 @@ export default function CandidateProfile() {
                 </p>
               </div>
             )}
-          </div>
-        </div>
+            </div>
+            </div>
+          )}
+        />
 
       </div>
 
       {showWhatsAppSidebar && (
-        <WhatsAppPreviewPanel candidate={candidate} className="hidden lg:flex sticky top-0 h-screen" />
+        <WhatsAppPreviewPanel candidate={candidate} onUpdate={handleUpdate} isReadOnly={isReadOnly} className="hidden lg:flex sticky top-0 h-screen" />
       )}
 
       {/* ── ACTIVITY TIMELINE SIDEBAR ── */}
@@ -837,7 +1079,7 @@ export default function CandidateProfile() {
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 350, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            transition={{ ease: 'easeInOut', duration: 0.3 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 38, mass: 0.8 }}
             className="flex-shrink-0 h-screen sticky top-0 bg-background border-l border-border flex flex-col overflow-hidden shadow-sm z-40"
           >
             <div className="w-[350px] flex flex-col h-full">
@@ -850,8 +1092,12 @@ export default function CandidateProfile() {
                   <X className="w-4 h-4 text-muted-foreground" />
                 </Button>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-background">
-                <ActivityTimeline candidateId={candidate.id} />
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-background space-y-8">
+                <CommunicationTimeline candidateId={candidate.id} candidate={candidate} />
+                <div className="border-t border-border pt-6">
+                  <h3 className="mb-2 text-sm font-bold">Activity history</h3>
+                  <ActivityTimeline candidateId={candidate.id} />
+                </div>
               </div>
             </div>
           </motion.div>
@@ -882,6 +1128,18 @@ export default function CandidateProfile() {
         </div>
       </Modal>
 
+      <Modal isOpen={showArchiveModal} onClose={() => setShowArchiveModal(false)} title="Archive duplicate candidate" description="Confirm this administrative correction before changing the record." size="sm">
+        <div className="space-y-4 p-6">
+          <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">
+            Archive <strong>{candidate.full_name}</strong> as a duplicate. The candidate will leave the active workflow, while the record and audit history remain available. If this is wrong, use the duplicate-resolution controls or ask an administrator to restore it.
+          </div>
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button variant="ghost" onClick={() => setShowArchiveModal(false)}>Cancel</Button>
+            <Button variant="danger" onClick={async () => { setShowArchiveModal(false); await handleResolveDuplicate('MERGE'); }}>Archive duplicate</Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* 📝 EDIT STAGE MODAL 📝 */}
       <Modal isOpen={showEditStageModal} onClose={() => setShowEditStageModal(false)} title="Edit Candidate Stage" size="sm">
         <div className="space-y-4 p-6">
@@ -894,12 +1152,11 @@ export default function CandidateProfile() {
               <label className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
                 New Stage
               </label>
-              <select
+              <Select
                 value={editStageSelection}
                 onChange={(e) => setEditStageSelection(e.target.value as PipelineStage)}
-                className="w-full bg-background border border-border rounded-[10px] p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
               >
-                <option value="CALL_LETTER">Call Letter</option>
+                <option value="CALL_LETTER">Initial Review</option>
                 <option value="INTERVIEWS">Interviews</option>
                 <option value="TEST">Technical Test</option>
                 <option value="BACKGROUND_VERIFICATION">Background Verification</option>
@@ -909,7 +1166,7 @@ export default function CandidateProfile() {
                 <option value="ON_HOLD">On Hold</option>
                 <option value="REJECTED">Rejected</option>
                 <option value="HIRED">Hired</option>
-              </select>
+              </Select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">

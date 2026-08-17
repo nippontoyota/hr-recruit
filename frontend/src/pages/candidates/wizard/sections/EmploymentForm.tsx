@@ -1,63 +1,46 @@
-import { useState } from 'react';
-import type { CandidateFormData } from '../wizardTypes';
+import type { CandidateFormData, PreviousJob } from '../wizardTypes';
+import {
+  EMPTY_PREVIOUS_JOB,
+  MAX_PREVIOUS_JOBS,
+  previousJobsFromForm,
+  previousJobsPatch,
+} from '../wizardTypes';
 import { Input, Button } from '../../../../components/ui';
 import { digitsOnly } from '../../../../lib/validation';
-
-interface EmploymentFormProps {
-  data: CandidateFormData;
-  update: (field: keyof CandidateFormData, value: any) => void;
-}
-
-function hasPrevJob(data: CandidateFormData, n: 2 | 3 | 4): boolean {
-  const prefix = `prev${n}` as const;
-  return !!(
-    data[`${prefix}Name`] ||
-    data[`${prefix}Position`] ||
-    data[`${prefix}Reporting`] ||
-    data[`${prefix}From`] ||
-    data[`${prefix}To`] ||
-    data[`${prefix}Salary`] ||
-    data[`${prefix}Reason`]
-  );
-}
+import { FormField, type FormSectionProps } from '../FormField';
 
 function JobFields({
   title,
-  companyField,
-  positionField,
-  reportingField,
-  fromField,
-  toField,
-  salaryField,
-  reasonField,
+  job,
   required,
-  data,
-  update,
+  onChange,
+  onRemove,
 }: {
   title: string;
-  companyField: keyof CandidateFormData;
-  positionField: keyof CandidateFormData;
-  reportingField: keyof CandidateFormData;
-  fromField: keyof CandidateFormData;
-  toField: keyof CandidateFormData;
-  salaryField: keyof CandidateFormData;
-  reasonField: keyof CandidateFormData;
+  job: PreviousJob;
   required?: boolean;
-  data: CandidateFormData;
-  update: (field: keyof CandidateFormData, value: any) => void;
+  onChange: (patch: Partial<PreviousJob>) => void;
+  onRemove?: () => void;
 }) {
   const star = required ? <span className="text-danger">*</span> : null;
   return (
     <div className="space-y-4 rounded-lg border border-border/60 p-4 animate-in fade-in duration-300">
-      <h5 className="text-sm font-semibold text-text-primary">{title}</h5>
+      <div className="flex items-center justify-between gap-3">
+        <h5 className="text-sm font-semibold text-text-primary">{title}</h5>
+        {onRemove && (
+          <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
+            Remove
+          </Button>
+        )}
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-text-primary mb-1">
             Company &amp; Address {star}
           </label>
           <Input
-            value={String(data[companyField] ?? '')}
-            onChange={(e) => update(companyField, e.target.value)}
+            value={job.company}
+            onChange={(e) => onChange({ company: e.target.value })}
             placeholder="Company name and address"
           />
         </div>
@@ -66,8 +49,8 @@ function JobFields({
             Position {star}
           </label>
           <Input
-            value={String(data[positionField] ?? '')}
-            onChange={(e) => update(positionField, e.target.value)}
+            value={job.position}
+            onChange={(e) => onChange({ position: e.target.value })}
           />
         </div>
         <div>
@@ -75,8 +58,8 @@ function JobFields({
             Reporting To {star}
           </label>
           <Input
-            value={String(data[reportingField] ?? '')}
-            onChange={(e) => update(reportingField, e.target.value)}
+            value={job.reporting}
+            onChange={(e) => onChange({ reporting: e.target.value })}
             placeholder="Manager / supervisor name"
           />
         </div>
@@ -86,8 +69,8 @@ function JobFields({
           </label>
           <Input
             type="month"
-            value={String(data[fromField] ?? '')}
-            onChange={(e) => update(fromField, e.target.value)}
+            value={job.fromDate}
+            onChange={(e) => onChange({ fromDate: e.target.value })}
           />
         </div>
         <div>
@@ -96,8 +79,8 @@ function JobFields({
           </label>
           <Input
             type="month"
-            value={String(data[toField] ?? '')}
-            onChange={(e) => update(toField, e.target.value)}
+            value={job.toDate}
+            onChange={(e) => onChange({ toDate: e.target.value })}
           />
         </div>
         <div>
@@ -105,8 +88,8 @@ function JobFields({
             Last Salary {star}
           </label>
           <Input
-            value={String(data[salaryField] ?? '')}
-            onChange={(e) => update(salaryField, digitsOnly(e.target.value, 8))}
+            value={job.salary}
+            onChange={(e) => onChange({ salary: digitsOnly(e.target.value, 8) })}
             placeholder="₹"
             inputMode="numeric"
             maxLength={8}
@@ -117,8 +100,8 @@ function JobFields({
             Reason for Leaving {star}
           </label>
           <Input
-            value={String(data[reasonField] ?? '')}
-            onChange={(e) => update(reasonField, e.target.value)}
+            value={job.reason}
+            onChange={(e) => onChange({ reason: e.target.value })}
           />
         </div>
       </div>
@@ -126,22 +109,60 @@ function JobFields({
   );
 }
 
-export const EmploymentForm = ({ data, update }: EmploymentFormProps) => {
-  const [extraJobs, setExtraJobs] = useState(() => {
-    if (hasPrevJob(data, 4)) return 3;
-    if (hasPrevJob(data, 3)) return 2;
-    if (hasPrevJob(data, 2)) return 1;
-    return 0;
-  });
+export const EmploymentForm = ({ data, update, patch, errors = {}, onBlurField = () => {} }: FormSectionProps) => {
+  const jobs = data.previousExperience
+    ? (data.previousJobs?.length ? data.previousJobs : previousJobsFromForm(data))
+    : [];
+  const visibleJobs = data.previousExperience && jobs.length === 0 ? [EMPTY_PREVIOUS_JOB] : jobs;
+
+  const writeJobs = (next: PreviousJob[]) => {
+    const nextFields = previousJobsPatch(next);
+    if (patch) {
+      patch(nextFields);
+      return;
+    }
+    (Object.entries(nextFields) as [keyof CandidateFormData, CandidateFormData[keyof CandidateFormData]][]).forEach(
+      ([field, value]) => update(field, value),
+    );
+  };
 
   const handleExperienceToggle = (checked: boolean) => {
-    update('previousExperience', checked);
     if (!checked) {
+      update('previousExperience', false);
       update('totalExperience', 'Fresher');
-      setExtraJobs(0);
-    } else if (data.totalExperience === 'Fresher' || !data.totalExperience) {
+      writeJobs([]);
+      return;
+    }
+    const existing = data.previousJobs?.length ? data.previousJobs : previousJobsFromForm(data);
+    const nextJobs = existing.length ? existing : [{ ...EMPTY_PREVIOUS_JOB }];
+    if (patch) {
+      patch({
+        previousExperience: true,
+        totalExperience: data.totalExperience === 'Fresher' || !data.totalExperience ? '' : data.totalExperience,
+        ...previousJobsPatch(nextJobs),
+      });
+      return;
+    }
+    update('previousExperience', true);
+    if (data.totalExperience === 'Fresher' || !data.totalExperience) {
       update('totalExperience', '');
     }
+    writeJobs(nextJobs);
+  };
+
+  const updateJob = (index: number, jobPatch: Partial<PreviousJob>) => {
+    const next = visibleJobs.map((job, i) => (i === index ? { ...job, ...jobPatch } : job));
+    writeJobs(next);
+  };
+
+  const addJob = () => {
+    if (visibleJobs.length >= MAX_PREVIOUS_JOBS) return;
+    writeJobs([...visibleJobs, { ...EMPTY_PREVIOUS_JOB }]);
+  };
+
+  const removeJob = (index: number) => {
+    if (visibleJobs.length <= 1) return;
+    writeJobs(visibleJobs.filter((_, i) => i !== index));
   };
 
   return (
@@ -159,71 +180,23 @@ export const EmploymentForm = ({ data, update }: EmploymentFormProps) => {
       </div>
 
       {data.previousExperience && (
-        <div className="space-y-4">
-          <JobFields
-            title="Previous Employer 1"
-            companyField="prevCompanyName"
-            positionField="prevPosition"
-            reportingField="prev1Reporting"
-            fromField="prev1From"
-            toField="prev1To"
-            salaryField="prev1Salary"
-            reasonField="prev1Reason"
-            required
-            data={data}
-            update={update}
-          />
+        <div className="space-y-4" data-field="previousJobs">
+          {errors.previousJobs && (
+            <p className="text-xs text-danger" role="alert">{errors.previousJobs}</p>
+          )}
+          {visibleJobs.map((job, index) => (
+            <JobFields
+              key={index}
+              title={`Previous Employer ${index + 1}`}
+              job={job}
+              required={index === 0}
+              onChange={(patch) => updateJob(index, patch)}
+              onRemove={visibleJobs.length > 1 ? () => removeJob(index) : undefined}
+            />
+          ))}
 
-          {extraJobs >= 1 && (
-            <JobFields
-              title="Previous Employer 2"
-              companyField="prev2Name"
-              positionField="prev2Position"
-              reportingField="prev2Reporting"
-              fromField="prev2From"
-              toField="prev2To"
-              salaryField="prev2Salary"
-              reasonField="prev2Reason"
-              data={data}
-              update={update}
-            />
-          )}
-          {extraJobs >= 2 && (
-            <JobFields
-              title="Previous Employer 3"
-              companyField="prev3Name"
-              positionField="prev3Position"
-              reportingField="prev3Reporting"
-              fromField="prev3From"
-              toField="prev3To"
-              salaryField="prev3Salary"
-              reasonField="prev3Reason"
-              data={data}
-              update={update}
-            />
-          )}
-          {extraJobs >= 3 && (
-            <JobFields
-              title="Previous Employer 4"
-              companyField="prev4Name"
-              positionField="prev4Position"
-              reportingField="prev4Reporting"
-              fromField="prev4From"
-              toField="prev4To"
-              salaryField="prev4Salary"
-              reasonField="prev4Reason"
-              data={data}
-              update={update}
-            />
-          )}
-
-          {extraJobs < 3 && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => setExtraJobs((n) => Math.min(3, n + 1))}
-            >
+          {visibleJobs.length < MAX_PREVIOUS_JOBS && (
+            <Button type="button" variant="secondary" size="sm" onClick={addJob}>
               Add previous employer
             </Button>
           )}
@@ -231,29 +204,33 @@ export const EmploymentForm = ({ data, update }: EmploymentFormProps) => {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
+        <FormField field="totalExperience" error={errors.totalExperience}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Total Experience (Years/Months) <span className="text-danger">*</span>
           </label>
           <Input
             value={data.totalExperience}
             onChange={(e) => update('totalExperience', e.target.value)}
+            onBlur={() => onBlurField('totalExperience')}
+            error={!!errors.totalExperience}
             placeholder={data.previousExperience ? 'e.g. 2 Years 3 Months' : 'Fresher'}
           />
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="expectedSalary" error={errors.expectedSalary}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Expected Salary <span className="text-danger">*</span>
           </label>
           <Input
             value={data.expectedSalary}
             onChange={(e) => update('expectedSalary', digitsOnly(e.target.value, 8))}
+            onBlur={() => onBlurField('expectedSalary')}
+            error={!!errors.expectedSalary}
             placeholder="₹"
             inputMode="numeric"
             maxLength={8}
           />
-        </div>
+        </FormField>
       </div>
     </div>
   );

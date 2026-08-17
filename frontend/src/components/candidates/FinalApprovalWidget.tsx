@@ -1,133 +1,238 @@
-import { useState } from 'react';
-import { Button, LoadingSpinner, Modal } from '../ui';
+import { useEffect, useState } from 'react';
+import { Button, Input, LoadingSpinner, Modal, PdfViewer } from '../ui';
 import { sendOfferLetter } from '../../api/candidates';
+import { getAuthHeaders } from '../../api/client';
 import type { Candidate } from '../../types';
-import { Mail, FileText } from 'lucide-react';
+import { Mail, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
-
-import { useAuth } from '../../auth/AuthContext';
+import { useAuth } from '../../auth';
+import { extractError } from '../../lib/utils';
+import {
+  canSendOfferLetter,
+  defaultOfferFields,
+  loadStoredOfferFields,
+  offerFieldErrors,
+  payloadFromOfferFields,
+  storeOfferFields,
+  type OfferLetterFields,
+} from '../../lib/offerLetter';
 
 interface FinalApprovalWidgetProps {
   candidate: Candidate;
-  onUpdate?: () => void; // Keeping as optional since it might be passed by parent
+  onUpdate?: () => void;
 }
+
+const FIELD_LABELS: { key: keyof OfferLetterFields; label: string; type?: string }[] = [
+  { key: 'candidate_name', label: 'Candidate name' },
+  { key: 'designation', label: 'Designation' },
+  { key: 'department', label: 'Department' },
+  { key: 'total_salary', label: 'Total salary' },
+  { key: 'total_allowance', label: 'Total allowance' },
+  { key: 'others', label: 'Others' },
+  { key: 'gross_salary', label: 'Total package' },
+  { key: 'joining_date', label: 'Join on or before', type: 'date' },
+];
 
 export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidgetProps) {
   const { user } = useAuth();
   const [sendingOffer, setSendingOffer] = useState(false);
-  const [isPdfOpen, setIsPdfOpen] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [showSendConfirm, setShowSendConfirm] = useState(false);
 
-  const handlePreviewOffer = async () => {
-    try {
-      setGeneratingPdf(true);
-      const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
-      const response = await fetch(`${baseURL}/pdf/offer-letter`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          candidate: {
-            full_name: candidate.full_name,
-            experience: candidate.experience || 'Unknown Position',
-            branch_location: candidate.branch_location,
-            department: candidate.department,
-          }
-        })
-      });
-      if (!response.ok) throw new Error('Failed to generate preview');
-      
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      setPdfUrl(url);
-      setIsPdfOpen(true);
-    } catch (err) {
-      toast.error('Could not load offer letter preview.');
-    } finally {
-      setGeneratingPdf(false);
-    }
-  };
+  const [fields, setFields] = useState<OfferLetterFields>(() => {
+    const defaults = defaultOfferFields(candidate);
+    return { ...defaults, ...loadStoredOfferFields(candidate.id) };
+  });
+  const [draft, setDraft] = useState(fields);
+
+  const draftErrors = offerFieldErrors(draft);
+  const ready = canSendOfferLetter(fields);
+  const salarySet = !!(candidate.salary_data && Object.keys(candidate.salary_data).length);
+  const blockers = candidate.offer_blockers ?? [];
+  const alreadyOffered = blockers.includes('already offered') || candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED';
+  const pipelineReady = blockers.length === 0;
+
+  useEffect(() => {
+    const defaults = defaultOfferFields(candidate);
+    if (!defaults.gross_salary) return;
+    setFields((prev) => ({
+      ...prev,
+      total_salary: defaults.total_salary,
+      total_allowance: defaults.total_allowance,
+      others: defaults.others,
+      gross_salary: defaults.gross_salary,
+      designation: defaults.designation || prev.designation,
+      department: defaults.department || prev.department,
+      joining_date: prev.joining_date || defaults.joining_date,
+    }));
+  }, [candidate]);
+
+  useEffect(() => {
+    storeOfferFields(candidate.id, fields);
+  }, [candidate.id, fields]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    setGeneratingPdf(true);
+    const body = JSON.stringify({
+      candidate: {
+        full_name: candidate.full_name,
+        position_applied_for: candidate.position_applied_for,
+        department: candidate.department,
+        salary_data: candidate.salary_data,
+      },
+      ...payloadFromOfferFields(fields),
+    });
+
+    (async () => {
+      try {
+        const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+        const response = await fetch(`${baseURL}/pdf/offer-letter`, {
+          method: 'POST',
+          headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body,
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error('Failed to generate preview');
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        setPdfUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (!cancelled) toast.error('Could not load offer letter preview.');
+      } finally {
+        if (!cancelled) setGeneratingPdf(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [candidate.full_name, candidate.position_applied_for, candidate.department, candidate.salary_data, fields]);
+
+  useEffect(() => {
+    return () => {
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    };
+  }, [pdfUrl]);
 
   const handleSendOffer = async () => {
     if (!candidate.email) {
       toast.error('Candidate does not have an email address on file.');
       return;
     }
+    if (!pipelineReady) {
+      toast.error(`Offer cannot be sent yet. Missing: ${blockers.join(', ')}`);
+      return;
+    }
+    if (!ready) {
+      toast.error('Fill name, designation, package, and joining date first.');
+      return;
+    }
     try {
       setSendingOffer(true);
-      await sendOfferLetter(candidate.id);
-      toast.success('Offer letter sent successfully!');
-      if (onUpdate) onUpdate();
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to send offer letter.');
+      await sendOfferLetter(candidate.id, payloadFromOfferFields(fields));
+      toast.success('Offer letter emailed as PDF.');
+      onUpdate?.();
+    } catch (error: unknown) {
+      toast.error(extractError(error, 'Failed to send offer letter.'));
     } finally {
       setSendingOffer(false);
     }
   };
 
   return (
-    <div className="space-y-6 w-full">
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 pb-2">
-        <Button 
-          variant="secondary"
-          onClick={handlePreviewOffer} 
-          disabled={generatingPdf}
-          className="!bg-white !rounded-md shadow-sm !font-medium w-full sm:w-auto sm:min-w-[180px] h-10 border border-border"
-        >
-          {generatingPdf ? <LoadingSpinner className="h-4 w-4 mr-2" /> : <FileText className="h-4 w-4 mr-2" />}
-          {generatingPdf ? 'Generating...' : 'View Offer Letter'}
+    <div className="space-y-4 w-full">
+      {!salarySet && (
+        <p className="text-center text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          {user?.role === 'HO_HR'
+            ? 'Upload the salary setting sheet above to fill this offer letter.'
+            : 'Waiting for Head Office HR to upload the salary setting sheet.'}
+        </p>
+      )}
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+        <Button variant="secondary" onClick={() => { setDraft(fields); setEditing(true); }} className="w-full sm:w-auto">
+          <Pencil className="h-4 w-4 mr-2" />
+          Edit letter
         </Button>
         {user?.role !== 'LOCAL_HR' && (
-          <Button 
-            onClick={handleSendOffer} 
-            disabled={sendingOffer}
-            className="!bg-green-600 hover:!bg-green-700 !text-white !border-none !rounded-md shadow-sm !font-bold w-full sm:w-auto sm:min-w-[180px] h-10"
-          >
+          <Button onClick={() => setShowSendConfirm(true)} disabled={sendingOffer || !ready || !pipelineReady} className="w-full sm:w-auto">
             {sendingOffer ? <LoadingSpinner className="h-4 w-4 mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
-            {sendingOffer ? 'Sending...' : 'Send Offer Letter via Email'}
+            {sendingOffer ? 'Sending…' : 'Send PDF by email'}
           </Button>
         )}
       </div>
-
-      <div className="bg-white border border-border shadow-sm rounded-lg p-10 max-w-3xl mx-auto mt-4">
-        <div className="mb-10 border-b border-border/60 pb-6 text-center">
-           <h3 className="text-2xl font-serif font-bold text-foreground tracking-wide">OFFER OF EMPLOYMENT</h3>
-           <p className="text-muted-foreground mt-2 text-sm max-w-md mx-auto italic">
-             An official offer letter document will be generated and emailed to the candidate containing the following details.
-           </p>
+      {user?.role !== 'LOCAL_HR' && alreadyOffered && (
+        <p className="text-sm font-semibold text-blue-800 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+          Offer already sent.
+        </p>
+      )}
+      {user?.role !== 'LOCAL_HR' && !alreadyOffered && blockers.length > 0 && (
+        <div className="text-sm text-amber-950 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          <p className="font-semibold">Offer cannot be sent yet</p>
+          <p>Missing: {blockers.join(', ')}</p>
         </div>
+      )}
 
-        <div className="space-y-8 px-4">
-          <div>
-            <h4 className="text-sm font-bold text-foreground uppercase tracking-widest mb-1">1. Position & Reporting</h4>
-            <p className="text-muted-foreground text-base leading-relaxed">
-              The candidate will be offered the position of <strong className="text-foreground font-semibold">{candidate.experience || 'TBD'}</strong> operating out of the <strong className="text-foreground font-semibold">{candidate.branch_location || '[Branch]'}</strong> branch.
-            </p>
+      <div className="relative min-h-[85vh]">
+        {generatingPdf && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
+            <LoadingSpinner className="h-8 w-8" />
           </div>
-          <div>
-            <h4 className="text-sm font-bold text-foreground uppercase tracking-widest mb-1">2. Remuneration & Benefits</h4>
-            <p className="text-muted-foreground text-base leading-relaxed">
-              Subject to standard company Annexure A structure. Includes standard health insurance, PF, and Gratuity as per company policy.
-            </p>
-          </div>
-          <div>
-            <h4 className="text-sm font-bold text-foreground uppercase tracking-widest mb-1">3. Probation & Hours</h4>
-            <p className="text-muted-foreground text-base leading-relaxed">
-              Standard 6-month probation period applies before permanent confirmation. Working hours are from 9:30 AM to 6:00 PM, Monday through Saturday.
-            </p>
-          </div>
-        </div>
+        )}
+        {pdfUrl ? <PdfViewer url={pdfUrl} /> : <div className="min-h-[85vh] border border-border rounded-lg bg-surface" />}
       </div>
 
-      <Modal isOpen={isPdfOpen} onClose={() => setIsPdfOpen(false)} title="Offer Letter Preview" size="lg">
-        <div className="w-full h-full min-h-[70vh] bg-muted/20">
-          {pdfUrl ? (
-            <iframe src={pdfUrl} className="w-full h-[70vh] border-none" title="Offer Letter Preview" />
-          ) : (
-            <div className="flex items-center justify-center h-[70vh]">
-              <LoadingSpinner size="lg" />
-            </div>
-          )}
+      <Modal isOpen={showSendConfirm} onClose={() => setShowSendConfirm(false)} title="Send offer letter" description="Confirm the external communication before sending." size="sm">
+        <div className="space-y-4 p-6">
+          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
+            Send the offer letter for <strong className="text-foreground">{candidate.full_name}</strong> to <strong className="text-foreground">{candidate.email}</strong>.
+            The candidate will receive the PDF by email. If the address or package is wrong, edit the letter or correct the record before sending; an already sent offer is not withdrawn by this screen.
+          </div>
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button variant="secondary" onClick={() => setShowSendConfirm(false)}>Review again</Button>
+            <Button onClick={() => { setShowSendConfirm(false); void handleSendOffer(); }} isLoading={sendingOffer}><Mail className="mr-2 h-4 w-4" /> Send offer letter</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={editing} onClose={() => setEditing(false)} title="Edit offer letter" size="md">
+        <div className="p-4 space-y-3">
+          {FIELD_LABELS.map(({ key, label, type }) => (
+            <label key={key} className="block">
+              <span className="text-xs font-medium text-muted-foreground">{label}</span>
+              <Input
+                type={type || 'text'}
+                value={draft[key]}
+                onChange={(e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }))}
+                error={Boolean(draftErrors[key])}
+                className="mt-1"
+              />
+              {draftErrors[key] && <p className="text-xs text-danger mt-1">{draftErrors[key]}</p>}
+            </label>
+          ))}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" onClick={() => setEditing(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                setFields(draft);
+                setEditing(false);
+              }}
+            >
+              Save
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>

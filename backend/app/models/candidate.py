@@ -36,6 +36,9 @@ class Candidate(Base):
     source: Mapped[str] = mapped_column(String(100), nullable=False, server_default="Unknown")
     source_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
     position_applied_for: Mapped[str] = mapped_column(String(255), nullable=False, server_default="Unknown")
+    experience: Mapped[str] = mapped_column(
+        String(50), nullable=False, server_default="Fresher", default="Fresher"
+    )
     current_stage: Mapped[PipelineStage] = mapped_column(
         Enum(PipelineStage, name="pipeline_stage", schema=SCHEMA, create_type=False),
         nullable=False,
@@ -71,12 +74,15 @@ class Candidate(Base):
     
     # Pre-Form Tracking
     pre_form_token: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
+    pre_form_token_purpose: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    pre_form_token_revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
     pre_form_status: Mapped[FormStatus] = mapped_column(
         Enum(FormStatus, name="form_status", schema=SCHEMA, create_type=False),
         nullable=False,
         default=FormStatus.NOT_SENT
     )
     pre_form_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    pre_form_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     pre_form_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

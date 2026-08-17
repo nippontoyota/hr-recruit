@@ -39,11 +39,6 @@ export function alphanumericOnly(value: string, maxLen?: number): string {
   return maxLen !== undefined ? cleaned.slice(0, maxLen) : cleaned;
 }
 
-export function requireNonEmpty(value: string, label: string): ValidationResult {
-  if (!value.trim()) return { ok: false, message: `${label} is required.` };
-  return { ok: true };
-}
-
 export function validateFullName(value: string, label = 'Full name'): ValidationResult {
   const trimmed = value.trim();
   if (!trimmed) return { ok: false, message: `${label} is required.` };
@@ -183,15 +178,6 @@ export function validatePercentage(value: string, label: string, required = true
     return { ok: false, message: `${label} must be between 0 and 100.` };
   }
   return { ok: true };
-}
-
-export function formatAadhaar(value: string): string {
-  const digits = value.replace(/\D/g, '').slice(0, 12);
-  const parts = [];
-  for (let i = 0; i < digits.length; i += 4) {
-    parts.push(digits.slice(i, i + 4));
-  }
-  return parts.join(' ');
 }
 
 export function validatePassingYear(value: string, label: string, required = true, maxYear?: number): ValidationResult {

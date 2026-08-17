@@ -5,6 +5,7 @@ from sqlalchemy import select
 from pydantic import BaseModel
 from datetime import datetime
 
+from app.core.access import get_candidate_for_user
 from app.core.database import get_db
 from app.core.deps import get_current_active_user
 from app.models.branch_interview import BranchInterview
@@ -59,9 +60,7 @@ def submit_branch_interview(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_active_user),
 ):
-    candidate = db.scalars(select(Candidate).where(Candidate.id == candidate_id)).first()
-    if not candidate:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
+    get_candidate_for_user(db, candidate_id, current_user, write=True)
         
     interview = db.scalars(select(BranchInterview).where(BranchInterview.candidate_id == candidate_id)).first()
     if not interview:
@@ -89,9 +88,7 @@ def send_branch_interview_invite(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_active_user),
 ):
-    candidate = db.scalars(select(Candidate).where(Candidate.id == candidate_id)).first()
-    if not candidate:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
+    candidate = get_candidate_for_user(db, candidate_id, current_user, write=True)
         
     interview = db.scalars(select(BranchInterview).where(BranchInterview.candidate_id == candidate_id)).first()
     if not interview or interview.status == InterviewStatus.PENDING_SCHEDULE:

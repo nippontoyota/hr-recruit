@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useReactToPrint } from 'react-to-print';
+import { usePrint } from '../../hooks/usePrint';
 import { Button, Input, Modal } from '../ui';
 import { CheckCircle2, Pencil, Printer, Save, X, RefreshCw, Link } from 'lucide-react';
 import type { Candidate } from '../../types';
@@ -8,10 +8,12 @@ import { updateCandidateRawData, sendPreForm } from '../../api/candidates';
 import { WhatsAppPreviewPanel } from './WhatsAppPreviewPanel';
 import { InterviewApplicationFormDocument } from './InterviewApplicationFormDocument';
 import { cn } from '../../lib/utils';
+import { formatDate, formatDateTime } from '../../lib/dateTime';
 
 interface PreFormStatusProps {
   candidate: Candidate;
   onUpdate?: () => void;
+  isReadOnly?: boolean;
 }
 
 const HIDDEN_RAW_KEYS = new Set(['whatsapp_invite', 'resumeFileObject', 'resume_file', 'resume']);
@@ -86,11 +88,12 @@ function formatFieldValue(value: unknown): string {
   return String(value);
 }
 
-export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
+export function PreFormStatus({ candidate, onUpdate, isReadOnly = false }: PreFormStatusProps) {
   const componentRef = useRef<HTMLDivElement>(null);
-  const handlePrint = useReactToPrint({
+  const handlePrint = usePrint({
     contentRef: componentRef,
     documentTitle: `ApplicationForm_${candidate.full_name}`,
+    pageStyle: `@page { size: A4 portrait; margin: 8mm; } html, body { margin: 0; padding: 0; }`,
   });
 
   const [copied, setCopied] = useState(false);
@@ -111,13 +114,9 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
     ...candidate,
     profile: {
       ...(candidate.profile || {}),
-      raw_data: localRawData,
+      raw_data: isEditing ? editData : localRawData,
     } as any,
   };
-
-  const formEntries = Object.entries(localRawData).filter(
-    ([key, value]) => !HIDDEN_RAW_KEYS.has(key) && value !== null && value !== undefined && typeof value !== 'object'
-  );
 
   const handleEditToggle = () => {
     if (!isEditing) {
@@ -213,51 +212,49 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
     );
 
     return (
-      <div className="py-8 w-full max-w-4xl mx-auto print-container">
-        <div className="flex flex-col items-center mb-8 no-print">
-          <CheckCircle2 className="w-10 h-10 text-success mb-3" />
-          <h3 className="text-2xl font-bold text-foreground">Form Submitted</h3>
-          <p className="text-text-secondary mt-1">Pre-interview responses from the candidate</p>
-        </div>
-
-        {/* Off-screen print target (`hidden`/`opacity-0` can break react-to-print clones) */}
-        <div className="fixed top-0 left-[-9999px] pointer-events-none w-[210mm]">
-          <div ref={componentRef}>
-            <InterviewApplicationFormDocument candidate={printCandidate} />
+      <div className="py-6 w-full print-container">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 no-print">
+          <div className="flex items-center gap-3 min-w-0">
+            <CheckCircle2 className="w-7 h-7 text-success shrink-0" />
+            <div className="min-w-0">
+              <h3 className="text-lg font-bold text-foreground">Interview Application Form</h3>
+              <p className="text-sm text-text-secondary">Filled by the candidate</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {!isEditing ? (
+              <>
+                <Button variant="ghost" size="sm" onClick={handlePrint} className="h-8 bg-muted text-text-secondary hover:bg-muted/80 hover:text-text-primary font-semibold">
+                  <Printer className="w-4 h-4 mr-1.5" />
+                  Print
+                </Button>
+                {!isReadOnly && (
+                <Button variant="ghost" size="sm" onClick={handleEditToggle} className="h-8 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-semibold">
+                  <Pencil className="w-4 h-4 mr-1.5" />
+                  Edit
+                </Button>
+                )}
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" onClick={handleEditToggle} disabled={isSaving} className="h-8">
+                  <X className="w-4 h-4 mr-1.5" />
+                  Cancel
+                </Button>
+                <Button variant="primary" size="sm" onClick={handleSave} disabled={isSaving} className="h-8">
+                  <Save className="w-4 h-4 mr-1.5" />
+                  {isSaving ? 'Saving...' : 'Save'}
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
-        {formEntries.length > 0 ? (
-          <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden print-no-border">
-            <div className="px-6 py-4 bg-muted/30 border-b border-border flex items-center justify-between no-print">
-              <h4 className="text-sm font-bold text-foreground uppercase tracking-wider">Application details</h4>
-              <div className="flex items-center gap-2">
-                {!isEditing ? (
-                  <>
-                    <Button variant="ghost" size="sm" onClick={handlePrint} className="h-8 bg-muted text-text-secondary hover:bg-muted/80 hover:text-text-primary font-semibold">
-                      <Printer className="w-4 h-4 mr-1.5" />
-                      Print
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={handleEditToggle} className="h-8 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-semibold">
-                      <Pencil className="w-4 h-4 mr-1.5" />
-                      Edit
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button variant="ghost" size="sm" onClick={handleEditToggle} disabled={isSaving} className="h-8">
-                      <X className="w-4 h-4 mr-1.5" />
-                      Cancel
-                    </Button>
-                    <Button variant="primary" size="sm" onClick={handleSave} disabled={isSaving} className="h-8">
-                      <Save className="w-4 h-4 mr-1.5" />
-                      {isSaving ? 'Saving...' : 'Save'}
-                    </Button>
-                  </>
-                )}
-              </div>
+        {isEditing && (
+          <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden mb-6 no-print">
+            <div className="px-6 py-3 bg-muted/30 border-b border-border">
+              <h4 className="text-sm font-bold text-foreground uppercase tracking-wider">Edit application details</h4>
             </div>
-            
             <div className="divide-y divide-border/60">
               {renderCategorySection("Personal Details", PERSONAL_FIELDS)}
               {renderCategorySection("Address & Contact Details", ADDRESS_FIELDS)}
@@ -270,30 +267,19 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
               {otherKeys.length > 0 && renderCategorySection("Other Details", otherKeys)}
             </div>
           </div>
-        ) : candidate.profile ? (
-          <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-muted/30 border-b border-border">
-              <h4 className="text-sm font-bold text-foreground uppercase tracking-wider">Profile summary</h4>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 p-6">
-              {[
-                ['Current location', candidate.profile.current_location],
-                ['Experience level', candidate.profile.experience_level],
-                ['Total experience', candidate.profile.total_experience],
-                ['Current company', candidate.profile.current_company],
-                ['Expected salary', candidate.profile.expected_salary],
-                ['Joining date', candidate.profile.joining_date],
-              ].map(([label, value]) => (
-                <div key={label}>
-                  <p className="text-[11px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">{label}</p>
-                  <p className="text-sm text-foreground font-medium">{formatFieldValue(value)}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <p className="text-text-secondary text-center">Form responses are not available yet.</p>
         )}
+
+        <div
+          className={cn(
+            isEditing
+              ? 'fixed top-0 left-[-9999px] pointer-events-none w-[210mm]'
+              : 'iaf-screen-wrap'
+          )}
+        >
+          <div ref={componentRef} className="w-[210mm] mx-auto">
+            <InterviewApplicationFormDocument candidate={printCandidate} />
+          </div>
+        </div>
       </div>
     );
   }
@@ -305,7 +291,9 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
           <div>
             <h3 className="text-lg font-bold text-foreground">Pre-interview form</h3>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {status === 'SENT'
+              {status === 'EXPIRED'
+                ? 'This form link has expired. Generate a new link and send it to the candidate.'
+                : status === 'SENT' || status === 'VIEWED'
                 ? 'Link generated. Share via WhatsApp using the preview on the right.'
                 : 'Form link is ready to be sent.'}
             </p>
@@ -316,7 +304,7 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
           <div className="space-y-3">
             <label className="form-label flex items-center gap-1.5">
               <Link className="w-4 h-4" />
-              CALL LETTER link
+              INITIAL REVIEW link
             </label>
             <div className="flex items-center gap-2 w-full bg-background border border-border p-1.5 rounded-xl">
               <input
@@ -343,23 +331,33 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
             </div>
             {candidate.pre_form_sent_at && (
               <p className="text-xs text-muted-foreground">
-                Sent {new Date(candidate.pre_form_sent_at).toLocaleString('en-IN')}
+                Sent {formatDateTime(candidate.pre_form_sent_at)}
+                {candidate.pre_form_expires_at && status !== 'EXPIRED' && (
+                  <> · Expires {formatDate(candidate.pre_form_expires_at)}</>
+                )}
               </p>
             )}
-            {(status === 'SENT' || status === 'VIEWED') && (
+            {status === 'EXPIRED' && candidate.pre_form_expires_at && (
+              <p className="text-sm text-danger">
+                Expired on {formatDate(candidate.pre_form_expires_at)}.
+                Resend to issue a new 3-day link.
+              </p>
+            )}
+            {!isReadOnly && (status === 'SENT' || status === 'VIEWED' || status === 'EXPIRED') && (
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => setShowResendModal(true)}
                 className="w-fit gap-2"
               >
-                <RefreshCw className="w-3.5 h-3.5" /> Resend Link
+                <RefreshCw className="w-3.5 h-3.5" /> {status === 'EXPIRED' ? 'Resend form' : 'Resend Link'}
               </Button>
             )}
           </div>
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">Form link will appear here.</p>
+            {!isReadOnly && (
             <Button
               variant="secondary"
               size="sm"
@@ -380,6 +378,7 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
             >
               <Link className="w-3.5 h-3.5" /> Generate Link
             </Button>
+            )}
           </div>
         )}
       </div>
@@ -396,7 +395,8 @@ export function PreFormStatus({ candidate, onUpdate }: PreFormStatusProps) {
       >
         <div className="flex justify-center p-6 bg-background h-[75vh] overflow-y-auto">
           <WhatsAppPreviewPanel 
-            candidate={candidate} 
+            candidate={candidate}
+            onUpdate={onUpdate}
             className="!w-full border-none bg-transparent" 
           />
         </div>

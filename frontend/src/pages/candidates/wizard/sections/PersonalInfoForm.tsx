@@ -1,20 +1,19 @@
-import type { CandidateFormData } from '../wizardTypes';
 import { Input, Select } from '../../../../components/ui';
 import { UploadCloud } from 'lucide-react';
+import { FormField, type FormSectionProps } from '../FormField';
 
-interface PersonalInfoFormProps {
-  data: CandidateFormData;
-  update: (field: keyof CandidateFormData, value: any) => void;
-  errors?: Partial<Record<keyof CandidateFormData, string>>;
-  onBlurField?: (field: keyof CandidateFormData) => void;
-}
-
-export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () => {} }: PersonalInfoFormProps) => {
+export const PersonalInfoForm = ({
+  data,
+  update,
+  patch,
+  errors = {},
+  onBlurField = () => {},
+}: FormSectionProps) => {
   return (
     <div className="space-y-6 pb-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="min-w-0">
+          <FormField field="photoFileObject" error={errors.photoFileObject}>
             <label className="block text-sm font-medium text-text-primary mb-1">
               Candidate Photo (PNG/JPEG) <span className="text-danger">*</span>
             </label>
@@ -24,9 +23,10 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 accept="image/png, image/jpeg"
                 onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    update('photoFileObject', e.target.files[0]);
-                  }
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  update('photoFileObject', file);
+                  onBlurField('photoFileObject');
                 }}
               />
               <div className="flex flex-col items-center justify-center pointer-events-none min-w-0 w-full">
@@ -36,10 +36,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
                 </span>
               </div>
             </div>
-            {errors.photoFileObject && <p className="text-xs text-danger mt-1">{errors.photoFileObject}</p>}
-          </div>
+          </FormField>
 
-          <div className="min-w-0">
+          <FormField field="resumeFileObject" error={errors.resumeFileObject}>
             <label className="block text-sm font-medium text-text-primary mb-1">
               Resume (PDF or Word) <span className="text-danger">*</span>
             </label>
@@ -49,9 +48,10 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 accept=".pdf,.doc,.docx"
                 onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    update('resumeFileObject', e.target.files[0]);
-                  }
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  update('resumeFileObject', file);
+                  onBlurField('resumeFileObject');
                 }}
               />
               <div className="flex flex-col items-center justify-center pointer-events-none min-w-0 w-full">
@@ -61,10 +61,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
                 </span>
               </div>
             </div>
-            {errors.resumeFileObject && <p className="text-xs text-danger mt-1">{errors.resumeFileObject}</p>}
-          </div>
+          </FormField>
         </div>
-        <div>
+        <FormField field="nameAadhaar" error={errors.nameAadhaar}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Name (As per Aadhaar) <span className="text-danger">*</span>
           </label>
@@ -75,10 +74,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             error={!!errors.nameAadhaar}
             maxLength={100}
           />
-          {errors.nameAadhaar && <p className="text-xs text-danger mt-1">{errors.nameAadhaar}</p>}
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="gender" error={errors.gender}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Gender <span className="text-danger">*</span>
           </label>
@@ -86,7 +84,6 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             value={data.gender}
             onChange={(e) => {
               update('gender', e.target.value);
-              // Select component wraps standard select, trigger validation on change too since blur might not trigger standard on native wrapper
               setTimeout(() => onBlurField('gender'), 0);
             }}
             error={!!errors.gender}
@@ -96,10 +93,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             <option value="Female">Female</option>
             <option value="Other">Other</option>
           </Select>
-          {errors.gender && <p className="text-xs text-danger mt-1">{errors.gender}</p>}
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="dateOfBirth" error={errors.dateOfBirth}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Date of Birth <span className="text-danger">*</span>
           </label>
@@ -108,7 +104,7 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             value={data.dateOfBirth}
             onChange={(e) => {
               const newDob = e.target.value;
-              update('dateOfBirth', newDob);
+              let age = '';
               if (newDob) {
                 const dobDate = new Date(newDob);
                 const today = new Date();
@@ -117,9 +113,12 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
                 if (m < 0 || (m === 0 && today.getDate() < dobDate.getDate())) {
                   calculatedAge--;
                 }
-                update('age', calculatedAge.toString());
-              } else {
-                update('age', '');
+                age = calculatedAge.toString();
+              }
+              if (patch) patch({ dateOfBirth: newDob, age });
+              else {
+                update('dateOfBirth', newDob);
+                update('age', age);
               }
             }}
             onBlur={() => onBlurField('dateOfBirth')}
@@ -127,10 +126,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split('T')[0]}
             min={new Date(new Date().setFullYear(new Date().getFullYear() - 65)).toISOString().split('T')[0]}
           />
-          {errors.dateOfBirth && <p className="text-xs text-danger mt-1">{errors.dateOfBirth}</p>}
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="age" error={errors.age}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Age <span className="text-danger">*</span>
           </label>
@@ -143,10 +141,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             min={18}
             max={65}
           />
-          {errors.age && <p className="text-xs text-danger mt-1">{errors.age}</p>}
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="maritalStatus" error={errors.maritalStatus}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Marital Status <span className="text-danger">*</span>
           </label>
@@ -164,10 +161,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             <option value="Divorced">Divorced</option>
             <option value="Widowed">Widowed</option>
           </Select>
-          {errors.maritalStatus && <p className="text-xs text-danger mt-1">{errors.maritalStatus}</p>}
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="bloodGroup" error={errors.bloodGroup}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Blood Group <span className="text-danger">*</span>
           </label>
@@ -189,10 +185,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             <option value="O+">O+</option>
             <option value="O-">O-</option>
           </Select>
-          {errors.bloodGroup && <p className="text-xs text-danger mt-1">{errors.bloodGroup}</p>}
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="height" error={errors.height}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Height (cm) <span className="text-danger">*</span>
           </label>
@@ -205,10 +200,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             min={100}
             max={250}
           />
-          {errors.height && <p className="text-xs text-danger mt-1">{errors.height}</p>}
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="weight" error={errors.weight}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Weight (kg) <span className="text-danger">*</span>
           </label>
@@ -221,10 +215,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             min={30}
             max={200}
           />
-          {errors.weight && <p className="text-xs text-danger mt-1">{errors.weight}</p>}
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="religionCaste" error={errors.religionCaste}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Religion & Caste <span className="text-danger">*</span>
           </label>
@@ -235,10 +228,9 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             error={!!errors.religionCaste}
             placeholder="e.g. Hindu / General"
           />
-          {errors.religionCaste && <p className="text-xs text-danger mt-1">{errors.religionCaste}</p>}
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="positionSuitable" error={errors.positionSuitable}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Position Suitable
           </label>
@@ -250,8 +242,7 @@ export const PersonalInfoForm = ({ data, update, errors = {}, onBlurField = () =
             placeholder="Optional — other role you may suit"
             maxLength={100}
           />
-          {errors.positionSuitable && <p className="text-xs text-danger mt-1">{errors.positionSuitable}</p>}
-        </div>
+        </FormField>
       </div>
     </div>
   );
