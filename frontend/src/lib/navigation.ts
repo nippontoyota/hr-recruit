@@ -12,6 +12,12 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   {
+    name: 'Dashboard',
+    href: '/admin/dashboard',
+    icon: Activity,
+    roles: ['ADMIN'],
+  },
+  {
     name: 'Candidates',
     href: '/candidates',
     icon: UsersRound,

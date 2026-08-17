@@ -161,8 +161,8 @@ export default function AdminUsers() {
   if (loading) return <div className="flex justify-center p-12"><LoadingSpinner size="lg" /></div>;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      <div className="flex justify-between items-end">
+    <div className="w-full space-y-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground tracking-tight">User Management</h1>
           <p className="text-muted-foreground mt-1">Manage access and roles for all platform users</p>

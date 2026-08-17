@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Outlet, useLocation, Link } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../../auth';
 import { ResumeViewerProvider } from '../candidates/ResumeViewer';
 import { NAV_ITEMS } from '../../lib/navigation';
@@ -50,54 +50,25 @@ export const AppShell = () => {
           <header className="sticky top-0 z-[var(--z-sticky)] flex items-center justify-between h-14 bg-surface px-4 lg:px-6 shrink-0">
             {/* Logo / Mobile Menu */}
             <div className="flex items-center gap-4 flex-1">
-              {role === 'ADMIN' && (
-                <button
-                  type="button"
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                  className="p-1 -ml-1 text-text-secondary hover:text-text-primary rounded-lg hover:bg-muted transition-colors md:hidden"
-                  aria-label="Toggle menu"
-                >
-                  {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                </button>
+              {/* Mobile menu toggle removed for Admin */}
+              {role === 'ADMIN' ? (
+                location.pathname !== '/admin/dashboard' && (
+                  <Link 
+                    to="/admin/dashboard"
+                    className="flex items-center text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
+                  >
+                    <ChevronLeft size={16} className="mr-1" /> Back to Workspace
+                  </Link>
+                )
+              ) : (
+                <span className="text-base font-accent font-extrabold text-text-primary tracking-tight hidden md:block">
+                  Nippon Recruitment CRM
+                </span>
               )}
-              <span className="text-base font-accent font-extrabold text-text-primary tracking-tight hidden md:block">
-                Nippon Recruitment CRM
-              </span>
             </div>
 
             {/* Desktop Navigation Links */}
-            {role === 'ADMIN' && (
-              <nav className="hidden md:flex flex-1 justify-center items-center gap-2">
-                <div className="flex items-center gap-1 bg-muted/60 p-1.5 rounded-full border border-border shadow-inner">
-                  {allowedNavItems.map((item) => {
-                    const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
-                    const Icon = item.icon;
-                    return (
-                      <Link
-                        key={item.name}
-                        to={item.href}
-                        className={cn(
-                          'relative flex items-center gap-2 px-4 py-1.5 text-sm font-accent font-bold rounded-full transition-colors duration-200 z-10',
-                          isActive
-                            ? 'text-white drop-shadow-sm'
-                            : 'text-text-secondary hover:text-text-primary hover:bg-white/50'
-                        )}
-                      >
-                        {isActive && (
-                          <motion.div
-                            layoutId="active-nav-pill"
-                            className="absolute inset-0 bg-gradient-to-b from-primary to-[#b9181f] rounded-full shadow-[0_4px_10px_-2px_rgba(214,28,36,0.5),inset_0_2px_4px_rgba(255,255,255,0.3)] border border-primary -z-10"
-                            transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                          />
-                        )}
-                        <Icon strokeWidth={isActive ? 2.5 : 2} className="h-4 w-4 relative z-10" />
-                        <span className="relative z-10">{item.name}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </nav>
-            )}
+            {/* Navbar removed for Admin as requested */}
 
             {/* Profile & Actions */}
             <div className="flex items-center justify-end gap-3 w-1/4">
@@ -122,39 +93,7 @@ export const AppShell = () => {
         )}
 
         {/* Mobile Navigation Menu Dropdown */}
-        <AnimatePresence>
-          {!isCandidateProfile && mobileMenuOpen && role === 'ADMIN' && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="md:hidden border-b border-border bg-surface overflow-hidden z-[var(--z-sticky)] shadow-md"
-            >
-              <nav className="flex flex-col p-2 space-y-1">
-                {allowedNavItems.map((item) => {
-                  const isActive = location.pathname === item.href || (item.href !== '/' && location.pathname.startsWith(item.href));
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.name}
-                      to={item.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={cn(
-                        'flex items-center gap-3 px-4 py-3 text-sm font-accent font-semibold rounded-xl transition-colors',
-                        isActive
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-text-secondary hover:bg-muted hover:text-text-primary'
-                      )}
-                    >
-                      <Icon strokeWidth={2} className="h-5 w-5" />
-                      <span>{item.name}</span>
-                    </Link>
-                  );
-                })}
-              </nav>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Mobile menu removed for Admin as requested */}
 
         <main className="flex-1 relative overflow-y-auto focus:outline-none bg-background">
           <div
@@ -167,10 +106,6 @@ export const AppShell = () => {
             <AnimatePresence mode="wait">
               <motion.div
                 key={location.pathname}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
                 className="w-full h-full flex flex-col"
               >
                 <Outlet />

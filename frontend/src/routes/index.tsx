@@ -21,6 +21,10 @@ const PublicTestPage = lazy(() => import('../pages/candidates/PublicTestPage'));
 const PrintTechnicalTestPage = lazy(() => import('../pages/candidates/PrintTechnicalTestPage'));
 const CandidatePortalPage = lazy(() => import('../pages/candidates/CandidatePortalPage'));
 const AdminUsers = lazy(() => import('../pages/AdminUsers'));
+const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard'));
+const AdminCandidatesList = lazy(() => import('../pages/admin/AdminCandidatesList'));
+const AdminBottlenecksList = lazy(() => import('../pages/admin/AdminBottlenecksList'));
+const AdminOutcomesList = lazy(() => import('../pages/admin/AdminOutcomesList'));
 
 const SuspenseFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -31,6 +35,16 @@ const SuspenseFallback = () => (
 const PageSuspense = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<SuspenseFallback />}>{children}</Suspense>
 );
+
+import { useAuth } from '../auth';
+
+const RootRedirect = () => {
+  const { role } = useAuth();
+  if (role === 'ADMIN') {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+  return <Navigate to="/candidates" replace />;
+};
 
 export const router = createHashRouter([
   {
@@ -120,7 +134,7 @@ export const router = createHashRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/candidates" replace />,
+        element: <RootRedirect />,
       },
       {
         path: 'candidates',
@@ -139,6 +153,46 @@ export const router = createHashRouter([
           <RoleRoute allowed={ALL_ROLES}>
             <PageSuspense>
               <CandidateProfile />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'admin/dashboard',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <AdminDashboard />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'admin/pipeline',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <AdminCandidatesList />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'admin/bottlenecks',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <AdminBottlenecksList />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'admin/outcomes',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <AdminOutcomesList />
             </PageSuspense>
           </RoleRoute>
         ),

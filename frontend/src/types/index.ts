@@ -24,6 +24,25 @@ export type PipelineStage =
   | 'SALARY_DETAILS'
   | 'CSS';
 
+export const ALL_PIPELINE_STAGES: PipelineStage[] = [
+  'SCREENING',
+  'CANDIDATE_FORM',
+  'BRANCH_INTERVIEW',
+  'TEST',
+  'FINAL_APPROVAL',
+  'HIRED',
+  'REJECTED',
+  'ON_HOLD',
+  'CALL_LETTER',
+  'INTERVIEWS',
+  'BACKGROUND_VERIFICATION',
+  'APPLICATION',
+  'SENT_TO_HO',
+  'HO_INTERVIEWS',
+  'SALARY_DETAILS',
+  'CSS'
+];
+
 export const HO_LINEAR_STAGES: PipelineStage[] = [
   'SENT_TO_HO',
   'HO_INTERVIEWS',
