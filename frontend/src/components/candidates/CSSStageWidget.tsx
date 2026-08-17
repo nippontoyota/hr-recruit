@@ -1,52 +1,30 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Printer } from 'lucide-react';
-import { useReactToPrint } from 'react-to-print';
-import { toast } from 'sonner';
+import { useRef } from 'react';
+import { Printer } from 'lucide-react';
+import { usePrint } from '../../hooks/usePrint';
 import { Button } from '../ui';
-import { updateCandidateStage } from '../../api/candidates';
-import { getCandidateEvaluations } from '../../api/evaluations';
 import type { Candidate, Evaluation } from '../../types';
-import { extractError } from '../../lib/utils';
-import { CandidateSummaryDocument } from './CandidateSummaryDocument';
+import { CandidateSummarySheet } from './CandidateSummarySheet';
 
 interface CSSStageWidgetProps {
   candidate: Candidate;
+  evaluations: Evaluation[];
   onUpdate: () => void;
 }
 
-export function CSSStageWidget({ candidate, onUpdate }: CSSStageWidgetProps) {
-  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  useEffect(() => {
-    let isMounted = true;
-    getCandidateEvaluations(candidate.id).then(data => {
-      if (isMounted) {
-        setEvaluations(data);
-        setIsLoading(false);
-      }
-    }).catch(err => {
-      console.error(err);
-      if (isMounted) setIsLoading(false);
-    });
-    return () => { isMounted = false; };
-  }, [candidate.id]);
+export function CSSStageWidget({ candidate, evaluations }: CSSStageWidgetProps) {
 
   const printRef = useRef<HTMLDivElement>(null);
-  const handlePrint = useReactToPrint({
+  const handlePrint = usePrint({
     contentRef: printRef,
     documentTitle: `CSS_${candidate.full_name.replace(/\s+/g, '_')}`,
+    pageStyle: `@page { size: A4 portrait; margin: 0; } html, body { margin: 0; padding: 0; } .css-sheet { width: 210mm !important; }`,
   });
-
-  if (isLoading) {
-    return <div className="p-12 text-center text-muted-foreground animate-pulse">Generating Candidate Summary Sheet...</div>;
-  }
 
   return (
     <div className="space-y-8 mt-2">
       
       {/* Top Action Bar */}
-      <div className="flex justify-center items-center gap-4 mb-8">
+      <div className="flex justify-center items-center gap-4 mb-4">
         <Button 
           variant="outline" 
           onClick={() => handlePrint()} 
@@ -56,9 +34,10 @@ export function CSSStageWidget({ candidate, onUpdate }: CSSStageWidgetProps) {
         </Button>
       </div>
 
-      {/* Read-Only Generated A4 Document */}
-      <div ref={printRef} className="flex flex-col items-center gap-12 overflow-x-auto pb-12 print:p-0 print:m-0">
-        <CandidateSummaryDocument candidate={candidate} evaluations={evaluations} />
+      <div className="iaf-screen-wrap">
+        <div ref={printRef} className="w-[210mm] mx-auto shadow-md">
+          <CandidateSummarySheet candidate={candidate} evaluations={evaluations} />
+        </div>
       </div>
     </div>
   );

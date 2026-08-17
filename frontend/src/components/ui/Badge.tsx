@@ -1,30 +1,25 @@
 import * as React from "react"
 import { cn } from "../../lib/utils"
 
-export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info" | "teal" | "indigo" | "sky" | "purple" | "pink"
+export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
+  variant?: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info"
 }
 
 export function Badge({ className, variant = "default", ...props }: BadgeProps) {
   const variants = {
-    default: "border-transparent bg-primary text-white shadow hover:bg-primary/80",
-    secondary: "border-transparent bg-gray-100 text-gray-900 hover:bg-gray-100/80",
-    destructive: "border-transparent bg-danger text-white shadow hover:bg-danger/80",
-    outline: "text-text-primary",
-    success: "border-transparent bg-success/10 text-success hover:bg-success/20",
-    warning: "border-transparent bg-amber-100 text-amber-700 hover:bg-amber-200",
-    info: "border-transparent bg-blue-100 text-blue-700 hover:bg-blue-200",
-    teal: "border-transparent bg-teal-100 text-teal-700 hover:bg-teal-200",
-    indigo: "border-transparent bg-indigo-100 text-indigo-700 hover:bg-indigo-200",
-    sky: "border-transparent bg-sky-100 text-sky-700 hover:bg-sky-200",
-    purple: "border-transparent bg-purple-100 text-purple-700 hover:bg-purple-200",
-    pink: "border-transparent bg-pink-100 text-pink-700 hover:bg-pink-200",
+    default: "border-transparent bg-primary text-white",
+    secondary: "border-border bg-muted text-text-secondary",
+    destructive: "border-transparent bg-danger/10 text-danger",
+    outline: "border-border text-text-primary",
+    success: "border-transparent bg-success/10 text-success",
+    warning: "border-transparent bg-warning/10 text-warning",
+    info: "border-transparent bg-info/10 text-info",
   }
 
   return (
-    <div
+    <span
       className={cn(
-        "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+        "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
         variants[variant],
         className
       )}

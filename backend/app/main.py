@@ -1,11 +1,19 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.database import engine
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    yield
+    engine.dispose()
 
 
 app = FastAPI(
@@ -13,6 +21,7 @@ app = FastAPI(
     docs_url=None if settings.is_production else "/docs",
     redoc_url=None if settings.is_production else "/redoc",
     openapi_url=None if settings.is_production else "/openapi.json",
+    lifespan=lifespan,
 )
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(

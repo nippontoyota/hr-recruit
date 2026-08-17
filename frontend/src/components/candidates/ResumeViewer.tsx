@@ -1,12 +1,19 @@
-import { createContext, useCallback, useContext, useEffect, useState, useMemo, type ReactNode } from 'react';
-import { FileText, ExternalLink, Download } from 'lucide-react';
-import { getCandidateResume } from '../../api/candidates';
-import type { ResumeDocument } from '../../types';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
+import { Download } from 'lucide-react';
+import { fetchCandidateResumeBlob } from '../../api/candidates';
+import { resumeEmbedUrl } from '../../lib/utils';
 import { Modal, LoadingSpinner, Button, PdfViewer } from '../ui';
 
 interface ResumeTarget {
   candidateId: string;
   candidateName: string;
+}
+
+interface LoadedResume {
+  blobUrl: string;
+  sourceUrl: string;
+  fileName: string;
+  contentType: string;
 }
 
 interface ResumeViewerContextValue {
@@ -15,10 +22,10 @@ interface ResumeViewerContextValue {
 
 const ResumeViewerContext = createContext<ResumeViewerContextValue | null>(null);
 
-function isPdfDocument(doc: ResumeDocument): boolean {
+function isPdfContent(contentType: string, fileName: string): boolean {
   return (
-    doc.content_type === 'application/pdf' ||
-    doc.file_name.toLowerCase().endsWith('.pdf')
+    contentType === 'application/pdf' ||
+    fileName.toLowerCase().endsWith('.pdf')
   );
 }
 
@@ -29,39 +36,61 @@ function ResumeViewerModal({
   target: ResumeTarget | null;
   onClose: () => void;
 }) {
-  const [doc, setDoc] = useState<ResumeDocument | null>(null);
+  const [resume, setResume] = useState<LoadedResume | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
+
+  const revokeBlobUrl = useCallback(() => {
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!target) {
-      setDoc(null);
+      revokeBlobUrl();
+      setResume(null);
       setError(null);
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
+    revokeBlobUrl();
     setLoading(true);
     setError(null);
-    setDoc(null);
+    setResume(null);
 
-    getCandidateResume(target.candidateId)
-      .then((resume) => {
-        if (!cancelled) setDoc(resume);
+    fetchCandidateResumeBlob(target.candidateId, controller.signal)
+      .then(({ blob, fileName, contentType, sourceUrl }) => {
+        if (controller.signal.aborted) return;
+        const blobUrl = URL.createObjectURL(blob);
+        blobUrlRef.current = blobUrl;
+        setResume({ blobUrl, sourceUrl, fileName, contentType });
       })
-      .catch((err: any) => {
-        if (!cancelled) {
-          setError(err?.response?.data?.detail || 'Failed to load resume.');
-        }
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        const message = err instanceof Error ? err.message : 'Failed to load resume.';
+        setError(message);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       });
 
     return () => {
-      cancelled = true;
+      controller.abort();
+      revokeBlobUrl();
     };
-  }, [target]);
+  }, [target, revokeBlobUrl]);
+
+  const handleDownload = () => {
+    if (!resume) return;
+    const link = document.createElement('a');
+    link.href = resume.blobUrl;
+    link.download = resume.fileName;
+    link.click();
+  };
 
   return (
     <Modal
@@ -72,8 +101,9 @@ function ResumeViewerModal({
     >
       <div className="h-full min-h-[70vh] flex flex-col">
         {loading && (
-          <div className="flex flex-1 items-center justify-center">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3">
             <LoadingSpinner size="lg" />
+            <p className="text-sm text-text-secondary">Loading resume…</p>
           </div>
         )}
 
@@ -83,43 +113,41 @@ function ResumeViewerModal({
           </div>
         )}
 
-        {!loading && !error && doc && isPdfDocument(doc) && (
+        {!loading && !error && resume && isPdfContent(resume.contentType, resume.fileName) && (
           <div className="flex-1 flex flex-col overflow-hidden bg-muted/30">
             <div className="flex items-center justify-between px-4 py-3 bg-surface border-b border-border shrink-0">
-              <span className="text-sm font-medium text-text-primary">
-                Resume Document
+              <span className="text-sm font-medium text-text-primary truncate pr-4">
+                {resume.fileName}
               </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => window.open(doc.download_url, '_blank')}
-              >
+              <Button variant="secondary" size="sm" onClick={handleDownload}>
                 <Download className="w-4 h-4 mr-2" />
                 Download PDF
               </Button>
             </div>
             <div className="flex-1 overflow-hidden relative">
-              <PdfViewer url={doc.download_url} />
+              <PdfViewer url={resume.blobUrl} />
             </div>
           </div>
         )}
 
-        {!loading && !error && doc && !isPdfDocument(doc) && (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-            <FileText className="w-12 h-12 text-primary" />
-            <div>
-              <p className="text-lg font-semibold text-text-primary">{doc.file_name}</p>
-              <p className="text-sm text-text-secondary mt-1">
-                Word documents open in a new tab for preview.
-              </p>
+        {!loading && !error && resume && !isPdfContent(resume.contentType, resume.fileName) && (
+          <div className="flex-1 flex flex-col overflow-hidden bg-muted/30">
+            <div className="flex items-center justify-between px-4 py-3 bg-surface border-b border-border shrink-0">
+              <span className="text-sm font-medium text-text-primary truncate pr-4">
+                {resume.fileName}
+              </span>
+              <Button variant="secondary" size="sm" onClick={handleDownload}>
+                <Download className="w-4 h-4 mr-2" />
+                Download
+              </Button>
             </div>
-            <Button
-              variant="primary"
-              onClick={() => window.open(doc.download_url, '_blank', 'noopener,noreferrer')}
-            >
-              <ExternalLink className="w-4 h-4 mr-2" />
-              Open Resume
-            </Button>
+            <div className="flex-1 overflow-hidden relative">
+              <iframe
+                src={resumeEmbedUrl(resume.sourceUrl)}
+                title="Resume"
+                className="w-full h-full min-h-[70vh]"
+              />
+            </div>
           </div>
         )}
       </div>
@@ -152,7 +180,7 @@ export function useResumeViewer() {
     return {
       openResume: () => {
         console.error('Resume viewer context not found. Please refresh the page.');
-      }
+      },
     };
   }
   return context;

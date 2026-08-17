@@ -1,3 +1,5 @@
+import { formatDate, formatTime } from './dateTime';
+
 export interface WhatsAppTemplateVars {
   candidateName: string;
   position: string;
@@ -10,40 +12,46 @@ export interface WhatsAppTemplateVars {
   extraInstructions: string;
 }
 
-/** DoubleTick template name for the interview call letter */
-export const DOUBLETICK_TEMPLATE_NAME = 'nippon_interview_call_letter';
-
-/**
- * Placeholder order for DoubleTick {{1}}…{{9}}.
- * Keep in sync with backend candidates_actions.send_whatsapp_invite.
- */
-export const DOUBLETICK_VARIABLE_KEYS: (keyof WhatsAppTemplateVars)[] = [
-  'candidateName',
-  'position',
-  'visitDate',
-  'branchName',
-  'formLink',
-  'arrivalTime',
-  'extraInstructions',
-  'mapsLink',
-  'recruiterName',
-];
-
 const DEFAULT_EXTRA =
   'Meeting Point – Floor 3rd – Sales Training Room / HR Department\nTouch Point 1 – Sreehari (HRD) 8606986060\nTouch Point 2 – Mathew (HRD) 9544286099';
+
+const UNSET_POSITIONS = new Set(['', 'unknown', 'unknown position', 'the applied']);
+
+export function sanitizeWhatsAppPosition(value?: string | null): string {
+  const text = (value || '').trim();
+  if (!text || UNSET_POSITIONS.has(text.toLowerCase())) return '';
+  return text;
+}
+
+export function consideringForLabel(department?: string | null, experience?: string | null): string {
+  return [department?.trim(), experience?.trim()].filter(Boolean).join(' - ');
+}
+
+/** Real role, else considering-for. Never "Unknown". */
+export function positionForWhatsApp(input: {
+  positionAppliedFor?: string | null;
+  department?: string | null;
+  experience?: string | null;
+}): string {
+  const role = sanitizeWhatsAppPosition(input.positionAppliedFor);
+  if (role) return role;
+  if (input.department?.trim()) return consideringForLabel(input.department, input.experience);
+  return '';
+}
 
 export function buildWhatsAppMessage(vars: WhatsAppTemplateVars): string {
   const dateLabel = vars.visitDate.trim() || '(select visit date)';
   const branchLabel = vars.branchName.trim() || '(select location)';
   const maps = vars.mapsLink.trim() || '(select location link)';
   const extra = vars.extraInstructions.trim() || DEFAULT_EXTRA;
+  const positionLabel = sanitizeWhatsAppPosition(vars.position) || '(select position)';
 
   return [
     `Dear ${vars.candidateName},`,
     '',
     `"Greetings from Nippon HRD"`,
     '',
-    `This is to inform you that, pertaining to your application for *${vars.position}*, we have scheduled a direct interview on *${dateLabel}* at Nippon Toyota, *${branchLabel}*. Please bring an updated bio-data and a passport size photo.`,
+    `This is to inform you that, pertaining to your application for *${positionLabel}*, we have scheduled a direct interview on *${dateLabel}* at Nippon Toyota, *${branchLabel}*. Please bring an updated bio-data and a passport size photo.`,
     '',
     'Also complete the Job Application Form using the link below without fail:',
     vars.formLink,
@@ -65,12 +73,7 @@ export function buildWhatsAppMessage(vars: WhatsAppTemplateVars): string {
 export function formatVisitDate(input: Date | string): string {
   const d = typeof input === 'string' ? new Date(input) : input;
   if (Number.isNaN(d.getTime())) return typeof input === 'string' ? input : '';
-  return new Intl.DateTimeFormat('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(d);
+  return formatDate(d);
 }
 
 /** ISO date (yyyy-mm-dd) for <input type="date"> from display string or ISO. */
@@ -85,8 +88,24 @@ export function toDateInputValue(visitDate: string): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+export function whatsappInviteFieldErrors(
+  vars: WhatsAppTemplateVars
+): Partial<Record<keyof WhatsAppTemplateVars, string>> {
+  const errors: Partial<Record<keyof WhatsAppTemplateVars, string>> = {};
+  if (!sanitizeWhatsAppPosition(vars.position)) {
+    errors.position = 'Position is required.';
+  }
+  if (!vars.visitDate.trim()) {
+    errors.visitDate = 'Visit date is required.';
+  }
+  if (!vars.branchName.trim() || !vars.mapsLink.trim()) {
+    errors.branchName = 'Location is required.';
+  }
+  return errors;
+}
+
 export function canSendWhatsAppInvite(vars: WhatsAppTemplateVars): boolean {
-  return Boolean(vars.visitDate.trim() && vars.branchName.trim() && vars.mapsLink.trim());
+  return Object.keys(whatsappInviteFieldErrors(vars)).length === 0;
 }
 
 export function defaultTemplateVars(input: {
@@ -107,7 +126,7 @@ export function defaultTemplateVars(input: {
 
   return {
     candidateName: input.candidateName,
-    position: input.position?.trim() || 'the applied',
+    position: sanitizeWhatsAppPosition(input.position),
     formLink: input.formLink || '(form link will appear after save)',
     // Location + maps chosen explicitly via place picker
     branchName: '',
@@ -135,12 +154,6 @@ export function storeTemplateVars(candidateId: string, vars: WhatsAppTemplateVar
   localStorage.setItem(`whatsapp-template:${candidateId}`, JSON.stringify(vars));
 }
 
-export function whatsappSendUrl(phone: string, message: string): string {
-  const normalized = phone.replace(/\D/g, '').replace(/^0/, '');
-  const withCountry = normalized.startsWith('91') ? normalized : `91${normalized}`;
-  return `https://wa.me/${withCountry}?text=${encodeURIComponent(message)}`;
-}
-
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
 export function isWhatsAppUrl(text: string): boolean {
@@ -150,4 +163,64 @@ export function isWhatsAppUrl(text: string): boolean {
 /** Split message into text and URL segments for preview rendering */
 export function splitMessageLinks(text: string): string[] {
   return text.split(URL_REGEX).filter((part) => part.length > 0);
+}
+
+export function indianWhatsAppNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('91') && digits.length >= 12) return digits;
+  if (digits.length === 10) return `91${digits}`;
+  return digits;
+}
+
+export function openWhatsAppChat(phone: string, message: string) {
+  const to = indianWhatsAppNumber(phone);
+  if (!to) return;
+  window.open(`https://wa.me/${to}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+}
+
+export function buildInterviewerWhatsAppMessage(input: {
+  interviewerName: string;
+  candidateName: string;
+  interviewTitle: string;
+  link: string;
+}): string {
+  return [
+    `Hi ${input.interviewerName},`,
+    '',
+    `Please complete the evaluation form for *${input.candidateName}* (${input.interviewTitle}):`,
+    input.link,
+    '',
+    'Nippon Toyota HR',
+  ].join('\n');
+}
+
+export function evalScheduleLabels(scheduledTime?: string | null): { dateStr: string; timeStr: string } {
+  let dateStr = 'TBD';
+  let timeStr = 'TBD';
+  const targetTime = scheduledTime || new Date().toISOString();
+  const parsedDate = new Date(targetTime);
+  if (!Number.isNaN(parsedDate.getTime())) {
+    dateStr = formatDate(parsedDate);
+    timeStr = formatTime(parsedDate);
+  }
+  return { dateStr, timeStr };
+}
+
+export function buildTechnicalTestWhatsAppMessage(input: {
+  candidateName: string;
+  position: string;
+  link: string;
+  date?: string;
+  time?: string;
+}): string {
+  const lines = [
+    `Dear ${input.candidateName},`,
+    '',
+    `Please complete your technical test for *${input.position}*:`,
+    input.link,
+  ];
+  if (input.date && input.date !== 'TBD') lines.push('', `Date: ${input.date}`);
+  if (input.time && input.time !== 'TBD') lines.push(`Time: ${input.time}`);
+  lines.push('', 'Nippon Toyota HR');
+  return lines.join('\n');
 }

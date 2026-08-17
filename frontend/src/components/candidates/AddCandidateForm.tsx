@@ -4,8 +4,11 @@ import { Button, Input, Select, Modal } from '../ui';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { createCandidate } from '../../api/candidates';
 import { NIPPON_BRANCHES, CANDIDATE_DEPARTMENTS } from '../../types';
-import { useAuth } from '../../auth/AuthContext';
+import { useAuth } from '../../auth';
 import { validateBasicCandidateForm } from '../../lib/validatePreForm';
+import { SHOW_DEV_DUMMY, nextDummyCandidate } from '../../lib/devDummyData';
+import { SOURCE_OPTIONS, SOURCE_REFERENCE_LABELS, sourceNeedsReference } from '../../lib/candidateSources';
+
 
 interface AddCandidateFormProps {
   isOpen: boolean;
@@ -19,6 +22,8 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [experience, setExperience] = useState('Fresher');
+  const [source, setSource] = useState('');
+  const [sourceReference, setSourceReference] = useState('');
   const [department, setDepartment] = useState('');
   const [branchLocation, setBranchLocation] = useState('');
   
@@ -26,18 +31,24 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
   const [formError, setFormError] = useState('');
   const [duplicateWarning, setDuplicateWarning] = useState<{ id: string, originalId: string | null } | null>(null);
 
-  const handleAutofill = () => {
-    setFullName('Amit Patel');
-    setPhone('9876543211');
-    setExperience('Experienced');
-    setDepartment('Sales');
-    setBranchLocation('Kalamassery');
+  const handleFillDummy = () => {
+    const dummy = nextDummyCandidate();
+    setFullName(dummy.fullName);
+    setPhone(dummy.phone);
+    setExperience(dummy.experience);
+    setSource('OTHER');
+    setSourceReference('');
+    setDepartment(dummy.department);
+    setBranchLocation(user?.branch_location || dummy.branch);
+    setFormError('');
   };
 
   const resetForm = () => {
     setFullName('');
     setPhone('');
     setExperience('Fresher');
+    setSource('');
+    setSourceReference('');
     setDepartment('');
     setBranchLocation('');
     setFormError('');
@@ -58,8 +69,8 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
       email: '',
       emailRequired: false,
       experience,
-      source: 'OTHER',
-      sourceRequired: false,
+      source,
+      sourceRequired: true,
     });
     if (validationError) {
       setFormError(validationError);
@@ -79,11 +90,12 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
         full_name: fullName.trim(),
         phone: normalizedPhone,
         email: undefined,
-        source: 'OTHER',
-        source_reference: undefined,
+        source,
+        source_reference: sourceNeedsReference(source)
+          ? sourceReference.trim() || undefined
+          : undefined,
         experience: experience,
         department: department.trim() || undefined,
-        position_applied_for: department.trim() || undefined,
         branch_location: branchLocation || undefined,
       } as any);
 
@@ -155,10 +167,11 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
 
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2 sm:col-span-1">
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
+            <label htmlFor="candidate-full-name" className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
               Full Name <span className="text-text-primary">*</span>
             </label>
             <Input
+              id="candidate-full-name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               required
@@ -166,10 +179,11 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
             />
           </div>
           <div className="col-span-2 sm:col-span-1">
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
+            <label htmlFor="candidate-phone" className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
               Phone Number <span className="text-text-primary">*</span>
             </label>
             <Input
+              id="candidate-phone"
               value={phone}
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
               required
@@ -179,10 +193,11 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
           </div>
           
           <div className="col-span-2 sm:col-span-1">
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
+            <label htmlFor="candidate-experience" className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
               Experience <span className="text-text-primary">*</span>
             </label>
             <Select
+              id="candidate-experience"
               value={experience}
               onChange={(e) => setExperience(e.target.value)}
               required
@@ -193,10 +208,33 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
           </div>
 
           <div className="col-span-2 sm:col-span-1">
-            <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
+            <label htmlFor="candidate-source" className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
+              Source <span className="text-text-primary">*</span>
+            </label>
+            <Select
+              id="candidate-source"
+              value={source}
+              onChange={(e) => {
+                setSource(e.target.value);
+                if (!sourceNeedsReference(e.target.value)) {
+                  setSourceReference('');
+                }
+              }}
+              required
+            >
+              <option value="">Select Source</option>
+              {SOURCE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </Select>
+          </div>
+
+          <div className="col-span-2 sm:col-span-1">
+            <label htmlFor="candidate-department" className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
               Department <span className="text-text-primary">*</span>
             </label>
             <Select
+              id="candidate-department"
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
               required
@@ -208,12 +246,28 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
             </Select>
           </div>
 
+          {sourceNeedsReference(source) && (
+            <div className="col-span-2 sm:col-span-1">
+              <label htmlFor="candidate-source-reference" className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
+                {SOURCE_REFERENCE_LABELS[source]}
+              </label>
+              <Input
+                id="candidate-source-reference"
+                value={sourceReference}
+                onChange={(e) => setSourceReference(e.target.value)}
+                maxLength={100}
+                placeholder={source === 'REFERRAL' ? 'Employee or contact name' : 'LinkedIn, website, etc.'}
+              />
+            </div>
+          )}
+
           {user?.role !== 'LOCAL_HR' && (
             <div className="col-span-2 sm:col-span-1">
-              <label className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
+              <label htmlFor="candidate-branch" className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
                 Branch Location
               </label>
               <Select
+                id="candidate-branch"
                 value={branchLocation}
                 onChange={(e) => setBranchLocation(e.target.value)}
               >
@@ -232,6 +286,18 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
         )}
 
         <div className="flex justify-end gap-3 pt-4 border-t border-dashed border-border/40">
+          {SHOW_DEV_DUMMY && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleFillDummy}
+              disabled={isSubmitting}
+              title="TEMPORARY — development only. Remove before production."
+              className="mr-auto border border-dashed border-amber-500/60 text-amber-800"
+            >
+              Fill Dummy Data
+            </Button>
+          )}
           <Button type="button" variant="ghost" onClick={handleClose} disabled={isSubmitting}>
             Cancel
           </Button>

@@ -1,10 +1,11 @@
-import type { PipelineStage } from '../types';
+import type { Candidate, PipelineStage } from '../types';
+import { getCandidateWorkState } from './candidateWork';
 import type { BadgeProps } from '../components/ui/Badge';
 
 export function stageLabel(stage: PipelineStage | string): string {
-  if (stage === 'CANDIDATE_FORM' || stage === 'CALL_LETTER') return 'CALL LETTER';
+  if (stage === 'CANDIDATE_FORM' || stage === 'CALL_LETTER') return 'INITIAL REVIEW';
   if (stage === 'BRANCH_INTERVIEW' || stage === 'INTERVIEWS') return 'INTERVIEWS';
-  if (stage === 'HO_INTERVIEWS') return 'INTERVIEWS';
+  if (stage === 'HO_HR_INTERVIEW' || stage === 'HO_DEPT_INTERVIEW' || stage === 'HO_INTERVIEWS') return 'INTERVIEWS';
   if (stage === 'CSS') return 'CSS';
   if (stage === 'TEST') return 'TECHNICAL TEST';
   if (stage === 'SENT_TO_HO') return 'SENT TO HEAD OFFICE';
@@ -13,58 +14,27 @@ export function stageLabel(stage: PipelineStage | string): string {
     .toUpperCase();
 }
 
-export function stageColor(stage: PipelineStage): string {
-  switch (stage) {
-    case 'HIRED':
-      return 'bg-emerald-100 text-emerald-700 border-emerald-300 border-dashed';
-    case 'SCREENING':
-      return 'bg-sky-100 text-sky-700 border-sky-300 border-dashed';
-    case 'CANDIDATE_FORM':
-      return 'bg-purple-100 text-purple-700 border-purple-300 border-dashed';
-    case 'BRANCH_INTERVIEW':
-      return 'bg-indigo-100 text-indigo-700 border-indigo-300 border-dashed';
-    case 'HO_INTERVIEWS':
-      return 'bg-blue-100 text-blue-700 border-blue-300 border-dashed';
-    case 'CSS':
-      return 'bg-teal-100 text-teal-700 border-teal-300 border-dashed';
-    case 'FINAL_APPROVAL':
-      return 'bg-teal-100 text-teal-700 border-teal-300 border-dashed';
-    case 'REJECTED':
-      return 'bg-red-100 text-red-700 border-red-300 border-dashed';
-    case 'ON_HOLD':
-      return 'bg-amber-100 text-amber-700 border-amber-300 border-dashed';
-    case 'CALL_LETTER':
-      return 'bg-purple-100 text-purple-700 border-purple-300 border-dashed';
-    case 'INTERVIEWS':
-      return 'bg-indigo-100 text-indigo-700 border-indigo-300 border-dashed';
-    case 'TEST':
-      return 'bg-blue-100 text-blue-700 border-blue-300 border-dashed';
-    case 'BACKGROUND_VERIFICATION':
-      return 'bg-teal-100 text-teal-700 border-teal-300 border-dashed';
-    case 'APPLICATION':
-      return 'bg-sky-100 text-sky-700 border-sky-300 border-dashed';
-    case 'SENT_TO_HO':
-      return 'bg-pink-100 text-pink-700 border-pink-300 border-dashed';
-    default:
-      return 'bg-background text-text-secondary border border-border';
-  }
-}
-
 export function getStageBadgeVariant(stage: PipelineStage | string): BadgeProps['variant'] {
   if (stage === 'REJECTED') return 'destructive';
   if (stage === 'HIRED') return 'success';
   if (stage === 'ON_HOLD') return 'warning';
-  if (stage === 'SCREENING') return 'sky';
-  if (stage === 'CANDIDATE_FORM' || stage === 'CALL_LETTER') return 'purple';
-  if (stage === 'BRANCH_INTERVIEW' || stage === 'INTERVIEWS') return 'indigo';
-  if (stage === 'HO_INTERVIEWS') return 'blue';
-  if (stage === 'CSS') return 'teal';
-  if (stage === 'FINAL_APPROVAL') return 'teal';
-  if (stage === 'TEST') return 'info';
-  if (stage === 'BACKGROUND_VERIFICATION') return 'teal';
-  if (stage === 'APPLICATION') return 'sky';
-  if (stage === 'SENT_TO_HO') return 'pink';
+  if (stage === 'SENT_TO_HO') return 'info';
   return 'secondary';
+}
+
+export function stageColor(stage: PipelineStage): string {
+  switch (stage) {
+    case 'HIRED':
+      return 'bg-success/10 text-success border-success/20';
+    case 'REJECTED':
+      return 'bg-danger/10 text-danger border-danger/20';
+    case 'ON_HOLD':
+      return 'bg-warning/10 text-warning border-warning/20';
+    case 'SENT_TO_HO':
+      return 'bg-info/10 text-info border-info/20';
+    default:
+      return 'bg-muted text-text-secondary border-border';
+  }
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -80,5 +50,32 @@ const SOURCE_LABELS: Record<string, string> = {
 export function formatSource(source: string | undefined | null): string {
   if (!source) return 'Direct';
   return SOURCE_LABELS[source.toUpperCase()] ?? source.replace(/_/g, ' ');
+}
+
+export type CandidateQueue =
+  | 'NEEDS_ACTION'
+  | 'DUE_TODAY'
+  | 'WAITING_FOR_CANDIDATE'
+  | 'WAITING_FOR_HO'
+  | 'READY_FOR_OFFER'
+  | 'ON_HOLD'
+  | 'STALLED';
+
+export const QUEUE_DEFINITIONS: Array<{ key: CandidateQueue; label: string }> = [
+  { key: 'NEEDS_ACTION', label: 'Needs my action' },
+  { key: 'DUE_TODAY', label: 'Due today' },
+  { key: 'WAITING_FOR_CANDIDATE', label: 'Waiting for candidate' },
+  { key: 'WAITING_FOR_HO', label: 'Waiting for Head Office' },
+  { key: 'READY_FOR_OFFER', label: 'Ready for offer' },
+  { key: 'ON_HOLD', label: 'On hold' },
+  { key: 'STALLED', label: 'Stalled' },
+];
+
+export function isCandidateQueue(value: string | null): value is CandidateQueue {
+  return QUEUE_DEFINITIONS.some(({ key }) => key === value);
+}
+
+export function matchesQueue(candidate: Candidate, queue: CandidateQueue): boolean {
+  return getCandidateWorkState(candidate).queue_keys.includes(queue);
 }
 

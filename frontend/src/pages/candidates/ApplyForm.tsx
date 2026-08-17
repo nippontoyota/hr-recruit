@@ -1,18 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getRecruiterPublic, publicApplyCandidate, publicGetBasicCandidate, publicUpdateBasicCandidate, uploadResume } from '../../api/candidates';
-import { LoadingSpinner, Button, Input, Select } from '../../components/ui';
+import { Button, Input, Select } from '../../components/ui';
 import { UploadCloud } from 'lucide-react';
-import { validateResumeFile } from '../../lib/validation';
-import { CheckCircle2 } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { validateBasicCandidateForm } from '../../lib/validatePreForm';
+import { validateEmail, validateFullName, validatePhone, validateResumeFile, validateSelect, validateTextField, SOURCES } from '../../lib/validation';
 import { PublicShell } from '../../components/layout/PublicShell';
+import { clearJsonDraft, getStoredFile, loadJsonDraft, putStoredFile, saveJsonDraft } from '../../lib/preFormDraft';
+import { FieldRequirement, FormField } from './wizard/FormField';
+import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
 
 export default function ApplyForm() {
   const [searchParams] = useSearchParams();
   const hrId = searchParams.get('hr');
-  const candidateId = searchParams.get('candidate');
+  const formToken = searchParams.get('token');
 
   const [recruiterName, setRecruiterName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,43 +23,62 @@ export default function ApplyForm() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [source, setSource] = useState('');
+  const [position, setPosition] = useState('');
   const [experience, setExperience] = useState('Fresher');
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [existingResumeName, setExistingResumeName] = useState<string | null>(null);
+  const resumeRef = useRef<File | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState<{ candidateId: string; name: string } | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<{ name: string } | null>(null);
   const [formError, setFormError] = useState('');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [errors, setErrors] = useState<Partial<Record<'fullName' | 'phone' | 'email' | 'source' | 'position' | 'resumeFile', string>>>({});
+  const draftKey = `apply-draft:${formToken || hrId || 'new'}`;
+  const resumeKey = `${draftKey}:resume`;
 
-  const handleAutofill = () => {
-    setFullName('Rahul Sharma');
-    setPhone('9876543210');
-    setEmail('rahul.sharma@example.test');
-    setSource('WALK_IN');
-    setPosition('Sales Executive');
-    const blob = new Blob(['%PDF-1.4 ... dummy pdf content ...'], { type: 'application/pdf' });
-    const dummyFile = new File([blob], 'dummy_resume.pdf', { type: 'application/pdf' });
-    setResumeFile(dummyFile);
-  };
 
   useEffect(() => {
     const initPage = async () => {
       try {
-        if (candidateId) {
-          // Update Mode: Fetch candidate basic details publicly
-          const candidate = await publicGetBasicCandidate(candidateId);
-          setFullName(candidate.full_name);
-          setPhone(candidate.phone);
-          setEmail(candidate.email || '');
-          setSource(candidate.source || '');
-          setExperience(candidate.experience || 'Fresher');
+        const storedDraftKey = `apply-draft:${formToken || hrId || 'new'}`;
+        const storedResumeKey = `${storedDraftKey}:resume`;
+        const draft = loadJsonDraft<{
+          fullName?: string;
+          phone?: string;
+          email?: string;
+          source?: string;
+          position?: string;
+          experience?: string;
+        }>(storedDraftKey);
+        const storedResume = await getStoredFile(storedResumeKey);
+        if (storedResume) {
+          resumeRef.current = storedResume;
+          setResumeFile(storedResume);
+        }
+        if (formToken) {
+          const candidate = await publicGetBasicCandidate(formToken);
+          setFullName(draft?.fullName || candidate.full_name);
+          setPhone(draft?.phone || candidate.phone);
+          setEmail(draft?.email || candidate.email || '');
+          setSource(draft?.source || candidate.source || '');
+          setPosition(draft?.position || candidate.position_applied_for || '');
+          setExperience(draft?.experience || 'Fresher');
           if (candidate.has_resume) {
             setExistingResumeName('Existing Resume Document');
           }
         } else if (hrId) {
-          // Referral Mode: Verify recruiter exists
           const recruiter = await getRecruiterPublic(hrId);
           setRecruiterName(recruiter.full_name);
+          if (draft) {
+            setFullName(draft.fullName || '');
+            setPhone(draft.phone || '');
+            setEmail(draft.email || '');
+            setSource(draft.source || '');
+            setPosition(draft.position || '');
+            setExperience(draft.experience || 'Fresher');
+          }
         } else {
           setErrorText('Missing reference parameters. Please use the link provided by your HR recruiter.');
         }
@@ -70,66 +89,91 @@ export default function ApplyForm() {
       }
     };
     initPage();
-  }, [hrId, candidateId]);
+  }, [hrId, formToken]);
+
+  useEffect(() => {
+    if (loading || errorText) return;
+    saveJsonDraft(draftKey, { fullName, phone, email, source, position, experience });
+    void putStoredFile(resumeKey, resumeRef.current);
+    setLastSavedAt(new Date());
+  }, [fullName, phone, email, source, position, experience, resumeFile, loading, errorText, draftKey, resumeKey]);
+
+  const validateApplyFields = () => {
+    const next: typeof errors = {};
+    const nameErr = validateFullName(fullName);
+    if (nameErr.ok === false) next.fullName = nameErr.message;
+    const phoneErr = validatePhone(phone);
+    if (phoneErr.ok === false) next.phone = phoneErr.message;
+    const emailErr = validateEmail(email, true);
+    if (emailErr.ok === false) next.email = emailErr.message;
+    const positionErr = validateTextField(position, 'Position applied for', 2, 100);
+    if (positionErr.ok === false) next.position = positionErr.message;
+    const sourceErr = validateSelect(source, SOURCES, 'Source');
+    if (sourceErr.ok === false) next.source = sourceErr.message;
+    const file = resumeRef.current || resumeFile;
+    const resumeErr = validateResumeFile(file, !existingResumeName);
+    if (resumeErr.ok === false) next.resumeFile = resumeErr.message;
+    return next;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const validationError = validateBasicCandidateForm({
-      fullName,
-      phone,
-      email,
-      emailRequired: true,
-      experience,
-      source,
-      sourceRequired: true,
-    });
-    if (validationError) {
-      setFormError(validationError);
-      return;
-    }
-
-    const resumeError = validateResumeFile(resumeFile);
-    if (resumeError.ok === false) {
-      setFormError(resumeError.message);
+    const fieldErrors = validateApplyFields();
+    setErrors(fieldErrors);
+    const firstKey = Object.keys(fieldErrors)[0] as keyof typeof fieldErrors | undefined;
+    if (firstKey) {
+      setFormError(fieldErrors[firstKey] || 'Please fix the highlighted fields.');
+      requestAnimationFrame(() => {
+        document.querySelector(`[data-field="${firstKey}"]`)?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      });
       return;
     }
 
     setIsSubmitting(true);
     setFormError('');
+    setUploadError(null);
 
     try {
       let candidateObj;
-      const normalizedPhone = phone;
-      if (candidateId) {
-        // Update basic info
-        candidateObj = await publicUpdateBasicCandidate(candidateId, {
-          full_name: fullName.trim(),
-          phone: normalizedPhone,
-          email: email.trim(),
-          source: source,
-          experience: experience,
-        });
-        if (resumeFile) {
-          await uploadResume(candidateId, resumeFile, { public: true });
+      const payload = {
+        full_name: fullName.trim(),
+        phone,
+        email: email.trim(),
+        source,
+        experience,
+        position_applied_for: position.trim(),
+      };
+      const file = resumeRef.current || resumeFile;
+      if (formToken) {
+        candidateObj = await publicUpdateBasicCandidate(formToken, payload);
+        if (file) {
+          try {
+            await uploadResume(formToken, file, { public: true });
+          } catch (uploadErr) {
+            setUploadError('Your details were saved, but the resume upload failed. Check the file and retry submission.');
+            throw uploadErr;
+          }
         }
       } else if (hrId) {
-        // Create new candidate
-        candidateObj = await publicApplyCandidate({
-          full_name: fullName.trim(),
-          phone: normalizedPhone,
-          email: email.trim(),
-          source: source,
-          experience: experience,
-        }, hrId);
-        if (resumeFile) {
-          await uploadResume(candidateObj.id, resumeFile, { public: true });
+        candidateObj = await publicApplyCandidate(payload, hrId);
+        if (file) {
+          try {
+            await uploadResume(candidateObj.token || '', file, { public: true });
+          } catch (uploadErr) {
+            setUploadError('Your details were saved, but the resume upload failed. Check the file and retry submission.');
+            throw uploadErr;
+          }
         }
       }
 
       if (candidateObj) {
+        clearJsonDraft(draftKey);
+        void putStoredFile(resumeKey, null);
         setSubmitSuccess({
-          candidateId: candidateObj.candidate_id,
           name: candidateObj.full_name,
         });
       }
@@ -141,85 +185,27 @@ export default function ApplyForm() {
   };
 
   if (loading) {
-    return (
-      <PublicShell>
-        <div className="flex justify-center py-16">
-          <LoadingSpinner size="lg" />
-        </div>
-      </PublicShell>
-    );
+    return <PublicShell title="Candidate registration"><PublicStatusPanel kind="loading" message="Checking your candidate link…" /></PublicShell>;
   }
 
   if (errorText) {
-    return (
-      <PublicShell>
-        <div className="text-center py-8">
-          <div className="status-icon-error">
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-semibold text-text-primary mb-2">Invalid link</h2>
-          <p className="text-text-secondary max-w-md mx-auto">{errorText}</p>
-        </div>
-      </PublicShell>
-    );
+    return <PublicShell title="Candidate registration"><PublicStatusPanel kind="expired" title="Link unavailable" message={`${errorText} Please request a fresh link from your HR recruiter if the problem continues.`} /></PublicShell>;
   }
 
   if (submitSuccess) {
     return (
-      <PublicShell>
-        <motion.div 
-          className="text-center py-16 sm:py-24 max-w-lg mx-auto px-6"
-          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <div className="relative inline-flex items-center justify-center mb-6">
-            <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full w-24 h-24 mx-auto animate-pulse"></div>
-            <motion.div
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 300, damping: 20 }}
-              className="relative z-10 w-20 h-20 bg-background rounded-full p-1.5 shadow-lg flex items-center justify-center"
-            >
-              <CheckCircle2 className="w-10 h-10 text-primary" strokeWidth={2.5} />
-            </motion.div>
-          </div>
-          
-          <motion.h2 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.4 }}
-            className="text-3xl font-bold tracking-tight text-text-primary mb-3"
-          >
-            Details submitted
-          </motion.h2>
-          
-          <motion.p 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.4 }}
-            className="text-text-secondary text-lg leading-relaxed mb-8"
-          >
-            Thank you, <span className="font-semibold text-text-primary">{submitSuccess.name}</span>. Your information has been securely saved.
-          </motion.p>
-          
-          <motion.p 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6, duration: 0.4 }}
-            className="text-sm font-medium text-text-secondary px-4 py-3 bg-muted/50 rounded-xl"
-          >
-            Your recruiter will review your details and contact you for next steps.
-          </motion.p>
-        </motion.div>
+      <PublicShell title="Candidate registration">
+        <PublicStatusPanel
+          kind="submitted"
+          title="Details submitted"
+          message={`Thank you, ${submitSuccess.name}. Your information has been saved. Your recruiter will review it and contact you about next steps.`}
+        />
       </PublicShell>
     );
   }
 
   return (
-    <PublicShell>
+    <PublicShell title="Candidate registration">
       <div className="page-card p-6 sm:p-8">
         <div className="mb-8 pb-6 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -232,64 +218,81 @@ export default function ApplyForm() {
               <p className="mt-2 text-sm text-text-secondary">Update your application details below.</p>
             )}
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={handleAutofill}
-            className="self-start sm:self-center"
-          >
-            Autofill Dummy Data
-          </Button>
+
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="form-label form-label-required">Full name</label>
+          <FormField field="fullName" error={errors.fullName}>
+            <label className="form-label form-label-required">Full name <FieldRequirement required /></label>
             <Input
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
+              onBlur={() => {
+                const result = validateFullName(fullName);
+                setErrors((prev) => ({ ...prev, fullName: result.ok === false ? result.message : undefined }));
+              }}
+              error={!!errors.fullName}
               placeholder="Enter your full name"
               maxLength={100}
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="form-label form-label-required">Phone number</label>
+          <FormField field="phone" error={errors.phone}>
+            <label className="form-label form-label-required">Phone number <FieldRequirement required /></label>
             <Input
               value={phone}
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+              onBlur={() => {
+                const result = validatePhone(phone);
+                setErrors((prev) => ({ ...prev, phone: result.ok === false ? result.message : undefined }));
+              }}
+              error={!!errors.phone}
               placeholder="e.g. 9876543210"
               inputMode="numeric"
               maxLength={10}
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="form-label form-label-required">Email address</label>
+          <FormField field="email" error={errors.email}>
+            <label className="form-label form-label-required">Email address <FieldRequirement required /></label>
             <Input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onBlur={() => {
+                const result = validateEmail(email, true);
+                setErrors((prev) => ({ ...prev, email: result.ok === false ? result.message : undefined }));
+              }}
+              error={!!errors.email}
               placeholder="e.g. email@example.com"
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="form-label form-label-required">Position applied for</label>
+          <FormField field="position" error={errors.position}>
+            <label className="form-label form-label-required">Position applied for <FieldRequirement required /></label>
             <Input
               value={position}
               onChange={(e) => setPosition(e.target.value)}
+              onBlur={() => {
+                const result = validateTextField(position, 'Position applied for', 2, 100);
+                setErrors((prev) => ({ ...prev, position: result.ok === false ? result.message : undefined }));
+              }}
+              error={!!errors.position}
               placeholder="e.g. Sales Executive"
               maxLength={100}
             />
-          </div>
+          </FormField>
 
-          <div>
-            <label className="form-label form-label-required">How did you hear about this role?</label>
+          <FormField field="source" error={errors.source}>
+            <label className="form-label form-label-required">How did you hear about this role? <FieldRequirement required /></label>
             <Select
               value={source}
-              onChange={(e) => setSource(e.target.value)}
+              onChange={(e) => {
+                setSource(e.target.value);
+                const result = validateSelect(e.target.value, SOURCES, 'Source');
+                setErrors((prev) => ({ ...prev, source: result.ok === false ? result.message : undefined }));
+              }}
+              error={!!errors.source}
             >
               <option value="">Select how you found this opening</option>
               <option value="WALK_IN">Walk-In</option>
@@ -298,35 +301,39 @@ export default function ApplyForm() {
               <option value="CAMPUS">Campus</option>
               <option value="OTHER">Other / LinkedIn</option>
             </Select>
-          </div>
+          </FormField>
 
-          <div>
-            <label className="form-label">Resume (PDF format)</label>
-            <div className="border border-dashed border-border rounded-lg p-5 bg-content text-center relative hover:border-primary/40 transition-colors">
+          <FormField field="resumeFile" error={errors.resumeFile}>
+            <label className="form-label">Resume (PDF or Word) <FieldRequirement /></label>
+            <div className={`border border-dashed ${errors.resumeFile ? 'border-danger' : 'border-border'} rounded-lg p-5 bg-content text-center relative hover:border-primary/40 transition-colors min-w-0 overflow-hidden`}>
               <input
                 type="file"
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                accept=".pdf"
+                accept=".pdf,.doc,.docx"
                 onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setResumeFile(e.target.files[0]);
-                  }
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  resumeRef.current = file;
+                  setResumeFile(file);
+                  const result = validateResumeFile(file, true);
+                  setErrors((prev) => ({ ...prev, resumeFile: result.ok === false ? result.message : undefined }));
                 }}
               />
-              <div className="flex flex-col items-center justify-center pointer-events-none">
-                <UploadCloud className="w-8 h-8 text-text-secondary mb-2" />
-                <span className="text-xs text-text-secondary">
-                  {resumeFile ? resumeFile.name : (existingResumeName || 'Select your PDF resume')}
+              <div className="flex flex-col items-center justify-center pointer-events-none min-w-0 w-full">
+                <UploadCloud className="w-8 h-8 text-text-secondary mb-2 shrink-0" />
+                <span className="text-xs text-text-secondary w-full min-w-0 break-all">
+                  {resumeFile ? resumeFile.name : (existingResumeName || 'Select your PDF or Word resume')}
                 </span>
               </div>
             </div>
-          </div>
+          </FormField>
 
-          {formError && (
-            <p role="alert" className="text-sm text-danger bg-danger/5 p-3 rounded-lg border border-danger/20">{formError}</p>
-          )}
+          <p className="text-xs text-text-secondary">Your entries are saved locally in this browser. Local save is not submission.</p>
+          {lastSavedAt && <p className="text-xs text-primary">Saved locally at {lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
+          {uploadError && <p role="alert" className="text-sm text-warning bg-warning/5 p-3 rounded-lg border border-warning/20">{uploadError}</p>}
+          {formError && <p role="alert" className="text-sm text-danger bg-danger/5 p-3 rounded-lg border border-danger/20">{formError}</p>}
 
-          <Button type="submit" className="w-full h-10" isLoading={isSubmitting}>
+          <Button type="submit" className="w-full" isLoading={isSubmitting}>
             Submit details
           </Button>
         </form>

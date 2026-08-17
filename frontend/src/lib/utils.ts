@@ -5,6 +5,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Browsers cannot render Word in an iframe; Microsoft fetches the signed URL. */
+export function resumeEmbedUrl(url: string): string {
+  if (/\.docx?(\?|$)/i.test(url)) {
+    return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+  }
+  return url;
+}
+
 export function extractError(err: any, defaultMsg = 'An error occurred'): string {
   const detail = err?.response?.data?.detail;
   if (typeof detail === 'string') {

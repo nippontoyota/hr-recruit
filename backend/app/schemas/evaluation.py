@@ -29,6 +29,14 @@ class EvaluationSubmitScorecard(BaseModel):
     scores: dict | None = None
 
 
+class EvaluationTitleUpdate(BaseModel):
+    title: str = ""
+
+
+class EvaluationInterviewerUpdate(BaseModel):
+    interviewer_name: str
+
+
 class EvaluationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -53,24 +61,31 @@ class EvaluationTokenOut(BaseModel):
     expires_at: datetime
 
 
+class PreviousInterviewOut(BaseModel):
+    type: str
+    verdict: str | None = None
+    remarks: str = ""
+    interviewer_name: str | None = None
+    scores: dict | None = None
+
+
 class EvaluationPublicOut(BaseModel):
     id: UUID
     type: EvaluationType
     candidate_name: str
     candidate_position: str
     candidate_resume_url: str | None = None
+    candidate_photo_url: str | None = None
     candidate_education: str | None = None
     candidate_experience: str | None = None
-    candidate_email: str | None = None
-    candidate_phone: str | None = None
     candidate_location: str | None = None
-    candidate_source: str | None = None
     candidate_skills: str | None = None
     candidate_current_salary: str | None = None
     candidate_expected_salary: str | None = None
     candidate_notice_period: str | None = None
+    interviewer_name: str | None = None
     candidate_raw_data: dict | None = None
-    previous_remarks: list[dict] = []
+    previous_remarks: list[PreviousInterviewOut] = []
     is_already_submitted: bool = False
 
 

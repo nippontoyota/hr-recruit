@@ -1,38 +1,45 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from datetime import datetime, timezone
+from io import BytesIO
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import require_roles
 from app.core.access import get_candidate_for_user
+from app.core.offer_gate import offer_blockers
+from app.core.positions import positions_for
+from app.core.config import settings
 from app.models.candidate import Candidate
+from app.models.candidate_screening import CandidateScreening
 from app.models.activity_log import ActivityLog
-from app.models.enums import PipelineStage, UserRole, ActivityType
+from app.models.evaluation import Evaluation
+from app.models.enums import PipelineStage, UserRole, ActivityType, ScreeningStatus
 from app.models.stage_history import StageHistory
 from app.models.user import User
 from app.models.communication import Communication
-from app.models.enums import CommunicationType, CommunicationDirection, CommunicationStatus
+from app.models.enums import (
+    CommunicationType,
+    CommunicationDirection,
+    CommunicationStatus,
+    EvaluationType,
+    EvaluationVerdict,
+    InterviewStatus,
+)
 from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, VisitScheduleUpdate, WhatsAppInviteCreate, CandidateDepartmentUpdate
-from app.services.workflow import transition
+from app.services.workflow import transition, transition_prerequisites
 from app.services.doubletick import send_template, DoubleTickError, friendly_doubletick_error
-
-from app.services.candidate_service import (
-    to_candidate_out,
-)
-from app.api.v1.candidates_core import (
-    _issue_pre_form as issue_pre_form,
-    _store_whatsapp_invite as store_whatsapp_invite,
-)
-from app.services.document_service import (
-    get_resume_document,
-    document_out,
-    save_resume_for_candidate,
-    save_photo_for_candidate,
-    resume_candidate_ids,
-)
+from app.services import storage
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
+
+from .candidates_core import *
+from .candidates_core import (
+    _get_resume_document,
+    _document_out, _save_resume_for_candidate, _save_photo_for_candidate, _issue_pre_form, _store_whatsapp_invite
+)
 
 @router.post("/{id}/resume", response_model=DocumentOut, status_code=201)
 async def upload_resume(
@@ -41,8 +48,8 @@ async def upload_resume(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    row = get_candidate_for_user(db, id, user)
-    return await save_resume_for_candidate(db, row, file, uploaded_by_user_id=user.id)
+    row = get_candidate_for_user(db, id, user, write=True)
+    return await _save_resume_for_candidate(db, row, file, uploaded_by_user_id=user.id)
 
 
 @router.post("/{id}/photo", response_model=dict, status_code=201)
@@ -50,12 +57,10 @@ async def upload_photo(
     id: UUID,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    row = db.get(Candidate, id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-        
-    return await save_photo_for_candidate(db, row, file)
+    row = get_candidate_for_user(db, id, user, write=True)
+    return await _save_photo_for_candidate(db, row, file)
 
 
 @router.get("/{id}/resume", response_model=DocumentOut)
@@ -65,10 +70,33 @@ def get_resume(
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     get_candidate_for_user(db, id, user)
-    doc = get_resume_document(db, id)
+    doc = _get_resume_document(db, id)
     if not doc:
         raise HTTPException(status_code=404, detail="Resume not found.")
-    return document_out(doc)
+    return _document_out(doc)
+
+
+@router.get("/{id}/resume/file")
+def get_resume_file(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    """Stream resume bytes through the API (faster than client-side signed URL fetch)."""
+    get_candidate_for_user(db, id, user)
+    doc = _get_resume_document(db, id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Resume not found.")
+    data, remote_type = storage.download_object(doc.storage_path)
+    media_type = doc.content_type or remote_type or "application/octet-stream"
+    return StreamingResponse(
+        BytesIO(data),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{doc.file_name}"',
+            "Cache-Control": "private, max-age=300",
+        },
+    )
 
 
 @router.post("/{id}/transition", response_model=CandidateOut)
@@ -78,7 +106,7 @@ def transition_stage(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    row = get_candidate_for_user(db, id, user)
+    row = get_candidate_for_user(db, id, user, write=True)
     updated = transition(
         db=db,
         candidate=row,
@@ -88,7 +116,7 @@ def transition_stage(
     )
     db.commit()
     db.refresh(updated)
-    return to_candidate_out(updated, id in resume_candidate_ids(db, [id]))
+    return to_candidate_out(updated, id in resume_candidate_ids(db, [id]), db, viewer=user)
 
 
 class UnholdRequest(BaseModel):
@@ -102,7 +130,14 @@ def unhold_candidate(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    candidate = get_candidate_for_user(db, id, user)
+    """Resume a candidate from ON_HOLD back to the previous stage recorded in stage history.
+
+    This convenience endpoint finds the most recent StageHistory entry that moved the
+    candidate to ON_HOLD and attempts to transition them back to the stage they were
+    in previously. Requires ADMIN or LOCAL_HR role.
+    """
+    candidate = get_candidate_for_user(db, id, user, write=True)
+    # Find most recent history where to_stage == ON_HOLD
     last_hold = db.scalars(
         select(StageHistory)
         .where(StageHistory.candidate_id == id, StageHistory.to_stage == PipelineStage.ON_HOLD)
@@ -121,7 +156,7 @@ def unhold_candidate(
     updated = transition(db=db, candidate=candidate, target_stage=target_stage, user=user, remarks=remarks)
     db.commit()
     db.refresh(updated)
-    return to_candidate_out(updated, id in resume_candidate_ids(db, [id]))
+    return to_candidate_out(updated, id in resume_candidate_ids(db, [id]), db, viewer=user)
 
 
 @router.get("/{id}/stage-history", response_model=list[StageHistoryOut])
@@ -149,7 +184,7 @@ def update_visit_schedule(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    candidate = get_candidate_for_user(db, id, user)
+    candidate = get_candidate_for_user(db, id, user, write=True)
     
     if body.visit_branch is not None:
         candidate.visit_branch = body.visit_branch
@@ -172,17 +207,7 @@ def update_visit_schedule(
     db.add(log)
     db.commit()
     db.refresh(candidate)
-    return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]))
-
-
-ALLOWED_DEPARTMENTS = {
-    "Sales",
-    "Service",
-    "Customer Service",
-    "Insurance",
-    "Call Center",
-    "HR",
-}
+    return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]), viewer=user)
 
 
 @router.patch("/{id}/department", response_model=CandidateOut)
@@ -193,38 +218,59 @@ def update_candidate_department(
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     """Change the department and/or role the candidate is being considered for."""
-    candidate = get_candidate_for_user(db, id, user)
+    candidate = get_candidate_for_user(db, id, user, write=True)
     department = body.department.strip()
-    if department not in ALLOWED_DEPARTMENTS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Department must be one of: {', '.join(sorted(ALLOWED_DEPARTMENTS))}",
-        )
-
-    role = (body.position_applied_for or "").strip() or department
     previous_dept = candidate.department
     previous_role = candidate.position_applied_for
+    previous_exp = candidate.experience
+    previous_source = candidate.source
+    previous_source_reference = candidate.source_reference
+    experience = body.experience or previous_exp
+    source = body.source or previous_source
+    source_reference = body.source_reference if source in {"REFERRAL", "OTHER"} else None
+    allowed = positions_for(department)
+    if body.position_applied_for is not None:
+        role = body.position_applied_for.strip() or "Unknown"
+    else:
+        role = previous_role if previous_role in allowed else "Unknown"
 
-    if previous_dept == department and previous_role == role:
-        return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]))
+    if (
+        previous_dept == department
+        and previous_role == role
+        and previous_exp == experience
+        and previous_source == source
+        and previous_source_reference == source_reference
+    ):
+        return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]), viewer=user)
 
     candidate.department = department
     candidate.position_applied_for = role
+    candidate.experience = experience
+    candidate.source = source
+    candidate.source_reference = source_reference
+    changes: list[str] = []
+    if previous_dept != department or previous_role != role or previous_exp != experience:
+        changes.append(
+            f"Considering for changed from {previous_dept or '—'} / {previous_role or '—'} "
+            f"({previous_exp}) to {department} / {role} ({experience})."
+        )
+    if previous_source != source or previous_source_reference != source_reference:
+        changes.append(
+            f"Source changed from {previous_source or '—'}"
+            f" ({previous_source_reference or '—'}) to {source or '—'} ({source_reference or '—'})."
+        )
     db.add(
         ActivityLog(
             candidate_id=id,
             activity_type=ActivityType.SYSTEM,
-            title="Consideration Updated",
-            description=(
-                f"Considering for changed from {previous_dept or '—'} / {previous_role or '—'} "
-                f"to {department} / {role}."
-            ),
+            title="Candidate Details Updated",
+            description=" ".join(changes),
             created_by_user_id=user.id,
         )
     )
     db.commit()
     db.refresh(candidate)
-    return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]))
+    return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]), viewer=user)
 
 @router.post("/{id}/pre-form/send", response_model=CandidateOut)
 def send_pre_form(
@@ -232,11 +278,11 @@ def send_pre_form(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    row = get_candidate_for_user(db, id, user)
-    issue_pre_form(db, row, user)
+    row = get_candidate_for_user(db, id, user, write=True)
+    _issue_pre_form(db, row, user)
     db.commit()
     db.refresh(row)
-    return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
 
 @router.post("/{id}/whatsapp-invite")
 def send_whatsapp_invite(
@@ -245,12 +291,15 @@ def send_whatsapp_invite(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    candidate = get_candidate_for_user(db, id, user)
+    candidate = get_candidate_for_user(db, id, user, write=True)
     vars_map = body.variables or {}
     if not (vars_map.get("visitDate") or "").strip():
         raise HTTPException(status_code=400, detail="Visit date is required before sending.")
     if not (vars_map.get("branchName") or "").strip() or not (vars_map.get("mapsLink") or "").strip():
         raise HTTPException(status_code=400, detail="Location and maps link are required before sending.")
+    position = (vars_map.get("position") or "").strip()
+    if not position or position.lower() in {"unknown", "unknown position", "the applied"}:
+        raise HTTPException(status_code=400, detail="Position is required before sending.")
 
     # Order must match DoubleTick template nippon_interview_call_letter {{1}}…{{9}}
     DOUBLETICK_VARIABLE_KEYS = [
@@ -351,46 +400,83 @@ def send_whatsapp_invite(
     if status == CommunicationStatus.FAILED:
         raise HTTPException(status_code=400, detail=err_msg)
         
-    store_whatsapp_invite(db, candidate, user)
+    _store_whatsapp_invite(db, candidate, user)
     db.commit()
     return {"status": "success", "message_id": external_message_id}
 
 
-from app.api.v1.pdf import generate_offer_letter_pdf
+from app.api.v1.pdf import generate_offer_letter_pdf, resolve_offer_fields
 from app.services.email import send_email_with_pdf
 
 class SendOfferLetterRequest(BaseModel):
-    pass
+    candidate_name: str | None = None
+    designation: str | None = None
+    department: str | None = None
+    total_salary: str | None = None
+    total_allowance: str | None = None
+    others: str | None = None
+    gross_salary: str | None = None
+    joining_date: str | None = None
 
 @router.post("/{id}/offer-letter/send", response_model=CandidateOut)
 def send_offer_letter(
     id: UUID,
+    body: SendOfferLetterRequest = SendOfferLetterRequest(),
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
-    
-    if row.current_stage not in (PipelineStage.FINAL_APPROVAL, PipelineStage.HIRED):
-        raise HTTPException(status_code=400, detail="Offer letter can only be sent in Final Approval or Hired stage.")
+    missing = offer_blockers(
+        row,
+        has_resume=id in resume_candidate_ids(db, [id]),
+        db=db,
+    )
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Offer cannot be sent yet. Missing: {', '.join(missing)}",
+        )
         
-    if not row.email:
-        raise HTTPException(status_code=400, detail="Candidate does not have an email address.")
-        
+    fields = body.model_dump(exclude_none=True)
     payload = {
         "candidate": {
             "full_name": row.full_name,
-            "position_applied_for": row.department,
-            "salary_data": row.salary_data
-        }
+            "position_applied_for": row.position_applied_for,
+            "branch_location": row.branch_location,
+            "department": row.department,
+            "salary_data": row.salary_data,
+        },
+        **fields,
     }
     pdf_bytes = generate_offer_letter_pdf(payload)
-    
-    subject = f"Offer of Employment - {row.department} at Nippon Toyota"
+    offer = resolve_offer_fields(payload)
+    position_label = offer["designation"] or row.position_applied_for or "the offered role"
+        
+    # Email CC: branch admin + Jerry + Naveen
+    cc_emails: list[str] = []
+    if row.branch_location:
+        branch_admin = db.scalar(
+            select(User).where(
+                User.role == UserRole.LOCAL_HR,
+                User.branch_location == row.branch_location,
+            )
+        )
+        if branch_admin and branch_admin.email:
+            cc_emails.append(branch_admin.email)
+    if settings.jerry_email:
+        cc_emails.append(settings.jerry_email)
+    if settings.naveen_email:
+        cc_emails.append(settings.naveen_email)
+    # Deduplicate / remove blank
+    cc_emails = list(dict.fromkeys([e for e in cc_emails if e and e.strip()]))
+        
+    # Send Email
+    subject = f"Offer of Employment - {position_label} at Nippon Toyota"
     body_html = f"""
     <html>
         <body>
-            <p>Dear {row.full_name},</p>
-            <p>We are delighted to offer you the position of <strong>{row.department}</strong> at Nippon Toyota.</p>
+            <p>Dear {offer['candidate_name'] or row.full_name},</p>
+            <p>We are delighted to offer you the position of <strong>{position_label}</strong> at Nippon Toyota.</p>
             <p>Please find your official offer letter attached as a PDF.</p>
             <p>We look forward to welcoming you to the team!</p>
             <br/>
@@ -404,9 +490,11 @@ def send_offer_letter(
         subject=subject,
         body_html=body_html,
         pdf_bytes=bytes(pdf_bytes),
-        pdf_filename="OfferLetter_NipponToyota.pdf"
+        pdf_filename="OfferLetter_NipponToyota.pdf",
+        cc_emails=cc_emails,
     )
     
+    # Log communication
     comm = Communication(
         candidate_id=id,
         type=CommunicationType.EMAIL,
@@ -418,6 +506,7 @@ def send_offer_letter(
     )
     db.add(comm)
     
+    # Log Activity
     log = ActivityLog(
         candidate_id=id,
         activity_type=ActivityType.EMAIL,
@@ -427,69 +516,181 @@ def send_offer_letter(
     )
     db.add(log)
     
+    # WhatsApp intimation (required)
+    template_name = settings.offer_whatsapp_intimation_template_name
+    if template_name:
+        try:
+            placeholders = [
+                row.full_name or "",
+                row.position_applied_for or "",
+                row.branch_location or "",
+            ]
+
+            res = send_template(
+                to_phone=row.phone,
+                template_name=template_name,
+                placeholders=placeholders,
+            )
+
+            messages = res.get("messages", [])
+            external_message_id = messages[0].get("id") if messages else None
+
+            comm = Communication(
+                candidate_id=id,
+                type=CommunicationType.WHATSAPP,
+                direction=CommunicationDirection.OUTGOING,
+                status=CommunicationStatus.SENT,
+                content_preview=f"Offer letter intimation sent. Position: {row.position_applied_for}",
+                external_message_id=external_message_id,
+                created_by=user.id,
+            )
+            db.add(comm)
+
+            db.add(
+                ActivityLog(
+                    candidate_id=id,
+                    activity_type=ActivityType.WHATSAPP,
+                    title="Offer Letter WhatsApp Sent",
+                    description=f"Template: {template_name}. Offer letter email attached.",
+                    created_by_user_id=user.id,
+                )
+            )
+        except DoubleTickError as e:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=e.user_message)
+    else:
+        raise HTTPException(status_code=400, detail="WhatsApp offer intimation template is not configured.")
+
+    # Update candidate offer_status only after both email + WhatsApp succeed
     row.offer_status = "SENT"
-    
+
     db.commit()
     db.refresh(row)
-    
-    return to_candidate_out(row, id in resume_candidate_ids(db, [id]))
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
+
+from collections import defaultdict
+
+from app.core.salary_sheet import review_salary_records, parse_salary_bytes
+
+_MAX_SALARY_XLSX = 5 * 1024 * 1024
+
+
+def _selected_after_ho_interviews(db: Session) -> set[UUID]:
+    rows = db.execute(
+        select(Evaluation.candidate_id, Evaluation.type).where(
+            Evaluation.type.in_([EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2]),
+            Evaluation.verdict == EvaluationVerdict.SELECTED,
+        )
+    ).all()
+    by_id: dict[UUID, set] = defaultdict(set)
+    for candidate_id, eval_type in rows:
+        by_id[candidate_id].add(eval_type)
+    return {
+        cid
+        for cid, types in by_id.items()
+        if EvaluationType.HQ_INTERVIEW_1 in types and EvaluationType.HQ_INTERVIEW_2 in types
+    }
+
+
+def _apply_salary(db: Session, candidate: Candidate, record: dict, user: User) -> None:
+    uploaded_at = datetime.now(timezone.utc).isoformat()
+    candidate.salary_data = {
+        **record,
+        "_uploaded_by": user.full_name,
+        "_uploaded_at": uploaded_at,
+    }
+    if candidate.current_stage == PipelineStage.SALARY_DETAILS:
+        transition(
+            db,
+            candidate,
+            PipelineStage.FINAL_APPROVAL,
+            user,
+            remarks="Salary sheet uploaded",
+        )
+    db.add(
+        ActivityLog(
+            candidate_id=candidate.id,
+            activity_type=ActivityType.SYSTEM,
+            title="Salary sheet uploaded",
+            description=(
+                f"Salary matched from sheet for {candidate.full_name}. "
+                f"Uploaded by {user.full_name} at {uploaded_at}."
+            ),
+            created_by_user_id=user.id,
+        )
+    )
+
+
+def _public_proposed(row: dict) -> dict:
+    return {k: v for k, v in row.items() if k not in {"record", "_candidate"}}
+
 
 @router.post("/bulk-salary", status_code=200)
 async def upload_bulk_salary(
     file: UploadFile = File(...),
+    candidate_id: UUID | None = Query(None),
+    preview: bool = Query(True),
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
+    user: User = Depends(require_roles(UserRole.HO_HR)),
 ):
-    import openpyxl
-    import io
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported.")
-    
+    filename = (file.filename or "").lower()
+    if not filename.endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Upload Salary Setting Sheet 2024 MASTER.xlsx")
+
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+    if len(contents) > _MAX_SALARY_XLSX:
+        raise HTTPException(status_code=400, detail="Salary sheet is larger than 5MB.")
+
     try:
-        contents = await file.read()
-        wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
-        sheet = wb.active
-        
-        headers = []
-        updated_count = 0
-        not_found_count = 0
-        
-        for i, row in enumerate(sheet.iter_rows(values_only=True)):
-            if i == 0:
-                headers = [str(cell).strip() if cell else f"col_{j}" for j, cell in enumerate(row)]
-                continue
-                
-            if not any(row):
-                continue
-                
-            row_data = dict(zip(headers, row))
-            candidate_id = row_data.get("Candidate ID") or row_data.get("candidate_id")
-            email = row_data.get("Email") or row_data.get("email")
-            
-            query = select(Candidate)
-            if candidate_id:
-                query = query.where(Candidate.candidate_id == str(candidate_id))
-            elif email:
-                query = query.where(Candidate.email == str(email))
-            else:
-                continue
-                
-            candidate = db.scalar(query)
-            if candidate:
-                candidate.salary_data = row_data
-                updated_count += 1
-            else:
-                not_found_count += 1
-                
-        db.commit()
-        return {
-            "message": f"Successfully updated {updated_count} candidates.",
-            "updated_count": updated_count,
-            "not_found_count": not_found_count
-        }
+        fmt, records = parse_salary_bytes(contents)
     except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to process excel file: {str(e)}")
+        raise HTTPException(
+            status_code=400,
+            detail=str(e) if isinstance(e, ValueError) else "Could not read the file. Upload Salary Setting Sheet 2024 MASTER.xlsx",
+        ) from e
+
+    selected_ids = _selected_after_ho_interviews(db)
+    pool = list(db.scalars(select(Candidate).where(Candidate.current_stage != PipelineStage.REJECTED)))
+    pin = None
+    if candidate_id is not None:
+        pin = db.get(Candidate, candidate_id)
+        if pin is None:
+            raise HTTPException(status_code=404, detail="Candidate not found.")
+
+    proposed, skipped = review_salary_records(records, pool, selected_ids, pin=pin)
+
+    if preview:
+        return {
+            "message": f"{len(proposed)} match(es) to confirm, {len(skipped)} skipped.",
+            "format": fmt,
+            "preview": True,
+            "updated_count": 0,
+            "not_found_count": len(skipped),
+            "proposed": [_public_proposed(row) for row in proposed],
+            "updated": [],
+            "skipped": skipped,
+        }
+
+    updated = []
+    for row in proposed:
+        candidate = row["_candidate"]
+        _apply_salary(db, candidate, row["record"], user)
+        updated.append(
+            {"id": str(candidate.id), "full_name": candidate.full_name, "candidate_id": candidate.candidate_id}
+        )
+    db.commit()
+    return {
+        "message": f"Updated {len(updated)} candidate(s).",
+        "format": fmt,
+        "preview": False,
+        "updated_count": len(updated),
+        "not_found_count": len(skipped),
+        "proposed": [],
+        "updated": updated,
+        "skipped": skipped,
+    }
 
 @router.post("/{id}/send-to-ho", response_model=CandidateOut)
 def send_to_ho(
@@ -499,9 +700,13 @@ def send_to_ho(
 ):
     row = get_candidate_for_user(db, id, user)
     
-    if row.current_stage != PipelineStage.APPLICATION:
-        raise HTTPException(status_code=400, detail="Candidate must be in APPLICATION stage to be sent to Head Office.")
-        
+    missing = transition_prerequisites(row, PipelineStage.SENT_TO_HO)
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot send candidate to Head Office: missing {', '.join(missing)}.",
+        )
+
     updated = transition(
         db=db,
         candidate=row,
@@ -511,4 +716,4 @@ def send_to_ho(
     )
     db.commit()
     db.refresh(updated)
-    return to_candidate_out(updated, id in resume_candidate_ids(db, [id]))
+    return to_candidate_out(updated, id in resume_candidate_ids(db, [id]), db, viewer=user)

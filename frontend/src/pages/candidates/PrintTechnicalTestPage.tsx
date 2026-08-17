@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useReactToPrint } from 'react-to-print';
+import { usePrint } from '../../hooks/usePrint';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getCandidateById } from '../../api/candidates';
 import { getDepartmentQuestions } from '../../api/evaluations';
@@ -10,7 +10,7 @@ export default function PrintTechnicalTestPage() {
   const { id } = useParams();
   const componentRef = useRef<HTMLDivElement>(null);
   
-  const handlePrint = useReactToPrint({
+  const handlePrint = usePrint({
     contentRef: componentRef,
     documentTitle: `TechnicalTest`,
   });
@@ -28,8 +28,7 @@ export default function PrintTechnicalTestPage() {
         const data = await getCandidateById(id);
         if (data) {
           setCandidate(data as Candidate);
-          const dept = data.department || 'Call Centre';
-          const qs = await getDepartmentQuestions(dept);
+          const qs = await getDepartmentQuestions({ candidateId: data.id });
           setQuestions(qs);
         }
       } catch {
@@ -121,7 +120,7 @@ export default function PrintTechnicalTestPage() {
           <div className="flex text-[11px] px-1">
             <span className="font-semibold mr-2 whitespace-nowrap">Position Applied For:</span>
             <span className="flex-1 font-medium font-sans uppercase border-b border-gray-400 leading-tight flex items-end">
-              {candidate.department}
+              {candidate.position_applied_for}
             </span>
           </div>
         </div>

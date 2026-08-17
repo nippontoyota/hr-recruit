@@ -12,7 +12,6 @@ export interface CandidatePortalEvaluationOut {
 }
 
 export interface CandidatePortalOut {
-  id: string;
   full_name: string;
   experience: string;
   phone: string;

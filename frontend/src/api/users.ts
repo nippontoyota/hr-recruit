@@ -6,11 +6,6 @@ export const getUsers = async (): Promise<User[]> => {
   return response.data.data;
 };
 
-export const getInterviewers = async (): Promise<User[]> => {
-  const response = await request('GET', '/users/interviewers');
-  return response.data.data;
-};
-
 export const createUser = async (data: any): Promise<User> => {
   const response = await request('POST', '/users', data);
   return response.data;

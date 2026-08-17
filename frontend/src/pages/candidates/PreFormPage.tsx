@@ -1,13 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { initialCandidateData } from './wizard/wizardTypes';
 import type { CandidateFormData } from './wizard/wizardTypes';
 import { uploadResume, uploadPublicCandidatePhoto, publicGetFullStatus, publicApplyFullCandidate } from '../../api/candidates';
-import { LoadingSpinner, Button } from '../../components/ui';
-import { CheckCircle2 } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { validatePreForm } from '../../lib/validatePreForm';
+import { Button } from '../../components/ui';
+import { extractError } from '../../lib/utils';
+import {
+  validatePreFormFields,
+  validateOnePreFormField,
+  type PreFormFieldErrors,
+} from '../../lib/validatePreForm';
+import { clearPreFormDraft, loadDraftFiles, loadPreFormDraft, savePreFormDraft } from '../../lib/preFormDraft';
 import { PublicShell } from '../../components/layout/PublicShell';
+import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
+import { formatDateTime } from '../../lib/dateTime';
 
 import { PersonalInfoForm } from './wizard/sections/PersonalInfoForm';
 import { AddressForm } from './wizard/sections/AddressForm';
@@ -30,6 +36,14 @@ export default function PreFormPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [errorText, setErrorText] = useState('');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [errors, setErrors] = useState<PreFormFieldErrors>({});
+  const photoRef = useRef<File | null>(null);
+  const resumeRef = useRef<File | null>(null);
+  const formDataRef = useRef(formData);
+  formDataRef.current = formData;
 
   useEffect(() => {
     if (!token) {
@@ -38,180 +52,132 @@ export default function PreFormPage() {
       return;
     }
 
+    const draft = loadPreFormDraft(token);
     publicGetFullStatus(token)
-      .then(res => {
+      .then(async (res) => {
         if (!res.is_awaiting_full_fill) {
           setStatusError('This candidate application form has already been submitted or is not yet open.');
         } else {
           setCandidateName(res.full_name);
-          setFormData(prev => ({ ...prev, fullName: res.full_name }));
+          setExpiresAt(res.pre_form_expires_at || null);
+          const files = await loadDraftFiles(token);
+          photoRef.current = files.photoFileObject;
+          resumeRef.current = files.resumeFileObject;
+          setFormData((prev) => ({
+            ...prev,
+            ...(draft || {}),
+            fullName: res.full_name || draft?.fullName || prev.fullName,
+            photoFileObject: files.photoFileObject || prev.photoFileObject,
+            resumeFileObject: files.resumeFileObject || prev.resumeFileObject,
+          }));
         }
         setLoading(false);
       })
-      .catch(() => {
-        setStatusError('Invalid candidate reference URL.');
+      .catch((err) => {
+        setStatusError(extractError(err, 'Invalid candidate reference URL.'));
         setLoading(false);
       });
   }, [token]);
 
-  const handleUpdateField = (field: keyof CandidateFormData, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
+  useEffect(() => {
+    if (!token || loading || statusError) return;
+    savePreFormDraft(token, formData);
+    setLastSavedAt(new Date());
+  }, [token, formData, loading, statusError]);
 
-  const handleAutofill = () => {
-    const birthYear = 2000;
-    const today = new Date();
-    const dob = `${birthYear}-05-15`;
-    let age = today.getFullYear() - birthYear;
-    const monthDiff = today.getMonth() - 4; // May
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < 15)) {
-      age -= 1;
-    }
-
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const expectedJoining = tomorrow.toISOString().split('T')[0];
-
-    const todayIso = today.toISOString().split('T')[0];
-
-    setFormData(prev => {
-      const displayName = prev.fullName || 'Rahul Sharma';
-      return {
+  const handleUpdateField = useCallback((field: keyof CandidateFormData, value: any) => {
+    if (field === 'photoFileObject') photoRef.current = value || null;
+    if (field === 'resumeFileObject') resumeRef.current = value || null;
+    setFormData((prev) => ({
       ...prev,
-      nameAadhaar: displayName,
-      gender: 'Male',
-      dateOfBirth: dob,
-      age: age.toString(),
-      maritalStatus: 'Single',
-      height: '175',
-      weight: '70',
-      bloodGroup: 'O+',
-      religionCaste: 'Hindu / General',
+      [field]: value,
+      photoFileObject: field === 'photoFileObject' ? value : photoRef.current || prev.photoFileObject,
+      resumeFileObject: field === 'resumeFileObject' ? value : resumeRef.current || prev.resumeFileObject,
+    }));
+  }, []);
 
-      permHouseName: 'Villa 10',
-      permPostOffice: 'Kochi H.O.',
-      permLandmark: 'Near Metro Pillar 340',
-      permDistrict: 'Ernakulam',
-      permPinCode: '682024',
+  const handlePatch = useCallback((next: Partial<CandidateFormData>) => {
+    if ('photoFileObject' in next) photoRef.current = (next.photoFileObject as File | null) || null;
+    if ('resumeFileObject' in next) resumeRef.current = (next.resumeFileObject as File | null) || null;
+    setFormData((prev) => ({
+      ...prev,
+      ...next,
+      photoFileObject: photoRef.current || next.photoFileObject || prev.photoFileObject,
+      resumeFileObject: resumeRef.current || next.resumeFileObject || prev.resumeFileObject,
+    }));
+  }, []);
 
-      sameAsPermanent: true,
-      presHouseName: '',
-      presPostOffice: '',
-      presLandmark: '',
-      presDistrict: '',
-      presPinCode: '',
-
-      aadhaarNumber: '999988887777',
-      panNumber: 'ABCDE1234F',
-      drivingLicenseNumber: 'KL0720230001234',
-      passportNumber: 'Z1234567',
-
-      confidentToDrive: true,
-      drive2Wheeler: true,
-      drive4Wheeler: true,
-
-      class10School: 'St. Marys High School',
-      class10Board: 'CBSE',
-      class10Percentage: '85',
-      class10PassingYear: '2016',
-      class10Mode: 'Regular',
-
-      class12School: 'St. Marys HSS',
-      class12Stream: 'Science',
-      class12Percentage: '82',
-      class12PassingYear: '2018',
-      class12Mode: 'Regular',
-
-      gradCourse: 'B.Sc. Computer Science',
-      gradCollege: 'Sacred Heart College',
-      gradPercentage: '78',
-      gradPassingYear: '2021',
-      gradMode: 'Regular',
-
-      postGradCourse: '',
-      postGradCollege: '',
-      postGradPercentage: '',
-      postGradPassingYear: '',
-      postGradMode: '',
-
-      languagesRead: 'English, Malayalam',
-      languagesWrite: 'English, Malayalam',
-      languagesSpeak: 'English, Hindi, Malayalam',
-
-      fatherName: 'Ravi Sharma',
-      motherName: 'Meera Sharma',
-
-      previousExperience: true,
-      prevCompanyName: 'Tata Consultancy Services',
-      prevPosition: 'Junior Associate',
-      prev1Reporting: 'Suresh Menon',
-      prev1From: '2022-06',
-      prev1To: '2024-05',
-      prev1Salary: '22000',
-      prev1Reason: 'Career growth',
-      totalExperience: '2 Years',
-      expectedSalary: '25000',
-
-      hasReference: true,
-      refRole: 'Colleague',
-      refName: 'Amit Patel',
-      refPanchayat: 'Kochi',
-      refContactNumber: '9876543211',
-
-      sourceOfOpening: 'Walk-in',
-      referredBy: '',
-      preferredRegion: 'Ernakulam',
-      expectedJoiningDate: expectedJoining,
-
-      achievements: '',
-      hobbies: '',
-      prevTerminated: false,
-      nervousDisorder: false,
-      physicalDisability: false,
-      eyeVision: false,
-      criminalConviction: false,
-      medicalRemarks: 'None',
-
-      emergency1Relation: 'Uncle',
-      emergency1Name: 'Suresh Nair',
-      emergency1Address: 'Kalamassery, Ernakulam',
-      emergency1Contact: '9876501234',
-
-      emailId: 'rahul.sharma@example.com',
-      declarationPlace: 'Kochi',
-      declarationDate: todayIso,
-      declarationName: displayName,
+  const handleBlurField = useCallback((field: keyof CandidateFormData) => {
+    const current = {
+      ...formDataRef.current,
+      photoFileObject: photoRef.current || formDataRef.current.photoFileObject,
+      resumeFileObject: resumeRef.current || formDataRef.current.resumeFileObject,
     };
+    const message = validateOnePreFormField(field, current);
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (message) next[field] = message;
+      else delete next[field];
+      return next;
     });
-  };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
 
-    const validationError = validatePreForm(formData);
-    if (validationError) {
-      setErrorText(validationError);
+    const merged: CandidateFormData = {
+      ...formData,
+      photoFileObject: photoRef.current || formData.photoFileObject,
+      resumeFileObject: resumeRef.current || formData.resumeFileObject,
+    };
+    if (merged.sameAsPermanent) {
+      merged.presHouseName = merged.permHouseName;
+      merged.presPostOffice = merged.permPostOffice;
+      merged.presLandmark = merged.permLandmark;
+      merged.presDistrict = merged.permDistrict;
+      merged.presPinCode = merged.permPinCode;
+    }
+    const fieldErrors = validatePreFormFields(merged);
+    setErrors(fieldErrors);
+    const firstKey = (Object.keys(fieldErrors)[0] || '') as keyof CandidateFormData;
+    if (firstKey) {
+      setErrorText(fieldErrors[firstKey] || 'Please fix the highlighted fields.');
+      requestAnimationFrame(() => {
+        document.querySelector(`[data-field="${firstKey}"]`)?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      });
       return;
     }
 
     setIsSubmitting(true);
     setErrorText('');
+    setUploadError(null);
 
     try {
-      const { resumeFile: _resumeFile, resumeUrl: _resumeUrl, resumeFileObject: _resumeFileObject, photoFileObject: _photoFileObject, profilePicture: _profilePicture, ...applicationData } = formData;
-      // We know from validation that resumeFileObject and photoFileObject exist
+      const { resumeFile: _resumeFile, resumeUrl: _resumeUrl, resumeFileObject: _resumeFileObject, photoFileObject: _photoFileObject, profilePicture: _profilePicture, ...applicationData } = merged;
       const candidateObj = await publicApplyFullCandidate(token, applicationData);
-      
-      // Upload the mandatory files
-      if (formData.resumeFileObject) {
-        await uploadResume(candidateObj.id, formData.resumeFileObject, { public: true });
+
+      const uploads: Promise<unknown>[] = [];
+      if (merged.resumeFileObject) {
+        uploads.push(uploadResume(token, merged.resumeFileObject, { public: true }));
       }
-      if (formData.photoFileObject) {
-        await uploadPublicCandidatePhoto(candidateObj.id, formData.photoFileObject);
+      if (merged.photoFileObject) {
+        uploads.push(uploadPublicCandidatePhoto(token, merged.photoFileObject));
       }
-      
-      setSubmitSuccess(candidateObj.id);
+      if (uploads.length) {
+        try {
+          await Promise.all(uploads);
+        } catch (uploadErr) {
+          setUploadError('Your form data is still here, but one document upload failed. Check the file and retry submission.');
+          throw uploadErr;
+        }
+      }
+
+      clearPreFormDraft(token);
+      setSubmitSuccess(candidateObj.full_name);
     } catch (err: any) {
       setErrorText(err?.response?.data?.detail || err.message || 'Failed to submit application details.');
     } finally {
@@ -220,85 +186,27 @@ export default function PreFormPage() {
   };
 
   if (loading) {
-    return (
-      <PublicShell maxWidth="2xl">
-        <div className="flex justify-center py-16">
-          <LoadingSpinner size="lg" />
-        </div>
-      </PublicShell>
-    );
+    return <PublicShell maxWidth="2xl" title="Pre-interview form" step="Checking link"><PublicStatusPanel kind="loading" message="Checking your form link…" /></PublicShell>;
   }
 
   if (statusError) {
-    return (
-      <PublicShell maxWidth="2xl">
-        <div className="text-center py-8">
-          <div className="status-icon-error">
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-semibold text-text-primary mb-2">Link unavailable</h2>
-          <p className="text-text-secondary max-w-lg mx-auto">{statusError}</p>
-        </div>
-      </PublicShell>
-    );
+    return <PublicShell maxWidth="2xl" title="Pre-interview form"><PublicStatusPanel kind="expired" message={`${statusError} Please ask your HR recruiter for a new link or clarification.`} /></PublicShell>;
   }
 
   if (submitSuccess) {
     return (
-      <PublicShell maxWidth="2xl">
-        <motion.div 
-          className="text-center py-16 sm:py-24 max-w-lg mx-auto px-6"
-          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <div className="relative inline-flex items-center justify-center mb-6">
-            <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full w-24 h-24 mx-auto animate-pulse"></div>
-            <motion.div
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 300, damping: 20 }}
-              className="relative z-10 w-20 h-20 bg-background rounded-full p-1.5 shadow-lg flex items-center justify-center"
-            >
-              <CheckCircle2 className="w-10 h-10 text-primary" strokeWidth={2.5} />
-            </motion.div>
-          </div>
-          
-          <motion.h2 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.4 }}
-            className="text-3xl font-bold tracking-tight text-text-primary mb-3"
-          >
-            Application submitted
-          </motion.h2>
-          
-          <motion.p 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.4 }}
-            className="text-text-secondary text-lg leading-relaxed mb-8"
-          >
-            Thank you, <span className="font-semibold text-text-primary">{candidateName}</span>. Your pre-interview form is complete.
-          </motion.p>
-          
-          <motion.p 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6, duration: 0.4 }}
-            className="text-sm font-medium text-text-secondary px-4 py-3 bg-muted/50 rounded-xl"
-          >
-            Your recruiter will review your details and contact you about next steps.
-          </motion.p>
-        </motion.div>
+      <PublicShell maxWidth="2xl" title="Pre-interview form">
+        <PublicStatusPanel
+          kind="submitted"
+          title="Application submitted"
+          message={`Thank you, ${candidateName || submitSuccess}. Your pre-interview form is complete. Your recruiter will review it and contact you about next steps.`}
+        />
       </PublicShell>
     );
   }
 
   return (
-    <PublicShell maxWidth="2xl">
+    <PublicShell maxWidth="2xl" title="Pre-interview form">
       <div className="page-card p-6 sm:p-8">
         <div className="mb-8 pb-6 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -306,69 +214,67 @@ export default function PreFormPage() {
             <p className="mt-2 text-sm text-text-secondary">
               Welcome, <span className="font-medium text-text-primary">{candidateName}</span>. Complete every section before submitting.
             </p>
+            <p className="mt-2 text-xs text-text-secondary">Required fields are marked in each section. Your progress is saved locally in this browser; local save is not submission.</p>
+            {expiresAt && <p className="mt-1 text-xs text-warning">This link is available until {formatDateTime(expiresAt)}.</p>}
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={handleAutofill}
-            className="self-start sm:self-center"
-          >
-            Autofill Dummy Data
-          </Button>
+
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-10">
           <section className="pb-8 border-b border-border">
             <h2 className="section-heading mb-6">Personal details</h2>
-            <PersonalInfoForm data={formData} update={handleUpdateField} />
+            <PersonalInfoForm data={formData} update={handleUpdateField} patch={handlePatch} errors={errors} onBlurField={handleBlurField} />
           </section>
 
           <section className="pb-8 border-b border-border">
             <h2 className="section-heading mb-6">Address details</h2>
-            <AddressForm data={formData} update={handleUpdateField} />
+            <AddressForm data={formData} update={handleUpdateField} errors={errors} onBlurField={handleBlurField} />
           </section>
 
           <section className="pb-8 border-b border-border">
             <h2 className="section-heading mb-6">Identity documents</h2>
-            <IdentityForm data={formData} update={handleUpdateField} />
+            <IdentityForm data={formData} update={handleUpdateField} errors={errors} onBlurField={handleBlurField} />
           </section>
 
           <section className="pb-8 border-b border-border">
             <h2 className="section-heading mb-6">Education</h2>
-            <EducationForm data={formData} update={handleUpdateField} />
+            <EducationForm data={formData} update={handleUpdateField} errors={errors} onBlurField={handleBlurField} />
           </section>
 
           <section className="pb-8 border-b border-border">
             <h2 className="section-heading mb-6">Family details</h2>
-            <FamilyForm data={formData} update={handleUpdateField} />
+            <FamilyForm data={formData} update={handleUpdateField} errors={errors} onBlurField={handleBlurField} />
           </section>
 
           <section className="pb-8 border-b border-border">
             <h2 className="section-heading mb-6">Employment history</h2>
-            <EmploymentForm data={formData} update={handleUpdateField} />
+            <EmploymentForm data={formData} update={handleUpdateField} patch={handlePatch} errors={errors} onBlurField={handleBlurField} />
           </section>
 
           <section className="pb-8 border-b border-border">
             <h2 className="section-heading mb-6">Recruitment details</h2>
-            <RecruitmentForm data={formData} update={handleUpdateField} />
+            <RecruitmentForm data={formData} update={handleUpdateField} errors={errors} onBlurField={handleBlurField} />
           </section>
 
           <section className="pb-8 border-b border-border">
             <h2 className="section-heading mb-6">General information</h2>
-            <MedicalForm data={formData} update={handleUpdateField} />
+            <MedicalForm data={formData} update={handleUpdateField} errors={errors} onBlurField={handleBlurField} />
           </section>
 
           <section className="pb-8 border-b border-border">
             <h2 className="section-heading mb-6">Emergency, social &amp; declaration</h2>
-            <EmergencySocialForm data={formData} update={handleUpdateField} />
+            <EmergencySocialForm data={formData} update={handleUpdateField} errors={errors} onBlurField={handleBlurField} />
           </section>
 
           <div className="pt-2 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
-            {errorText && (
+            <div className="flex-1 space-y-1">
+              <p className="text-xs text-primary">{lastSavedAt ? `Saved locally at ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Changes save locally as you work.'}</p>
+              {uploadError && <p role="alert" className="text-sm text-warning bg-warning/5 p-3 rounded-lg border border-warning/20">{uploadError}</p>}
+              {errorText && (
               <p role="alert" className="text-sm text-danger bg-danger/5 p-3 rounded-lg border border-danger/20 flex-1">{errorText}</p>
-            )}
-            <Button type="submit" className="w-full sm:w-auto sm:ml-auto h-10 px-8" isLoading={isSubmitting}>
+              )}
+            </div>
+            <Button type="submit" className="w-full sm:ml-auto sm:w-auto px-8" isLoading={isSubmitting}>
               Submit application
             </Button>
           </div>

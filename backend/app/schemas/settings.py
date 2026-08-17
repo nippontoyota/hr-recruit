@@ -70,14 +70,20 @@ class MessageTemplateResponse(MessageTemplateBase):
 
 class InterviewerNameCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
+    phone: str | None = Field(None, max_length=20)
     branch_location: str | None = Field(
         None, max_length=255, description="Required for ADMIN/HO_HR; LOCAL_HR uses their account branch"
     )
 
 
+class InterviewerNameUpdate(BaseModel):
+    phone: str = Field(..., min_length=10, max_length=20)
+
+
 class InterviewerNameResponse(BaseModel):
     id: uuid.UUID
     name: str
+    phone: str | None = None
     branch_location: str
     created_at: datetime
 

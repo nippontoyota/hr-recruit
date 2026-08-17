@@ -8,8 +8,10 @@ from app.core.deps import require_roles
 from app.models.enums import InterviewMode, UserRole
 from app.models.settings import HR_BRANCHES, InterviewerName, LocationTemplate, MessageTemplate
 from app.models.user import User
+from app.utils.validators import validate_phone
 from app.schemas.settings import (
     InterviewerNameCreate,
+    InterviewerNameUpdate,
     InterviewerNameResponse,
     LocationTemplateCreate,
     LocationTemplateResponse,
@@ -248,6 +250,12 @@ def create_interviewer(
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Interviewer name is required.")
+    phone = None
+    if body.phone and body.phone.strip():
+        try:
+            phone = validate_phone(body.phone, "Interviewer phone")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     existing = db.scalar(
         select(InterviewerName).where(
             InterviewerName.branch_location == branch_loc,
@@ -255,9 +263,34 @@ def create_interviewer(
         )
     )
     if existing:
+        if phone:
+            existing.phone = phone
+            db.commit()
+            db.refresh(existing)
         return existing
-    row = InterviewerName(branch_location=branch_loc, name=name)
+    row = InterviewerName(branch_location=branch_loc, name=name, phone=phone)
     db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.patch("/interviewers/{interviewer_id}", response_model=InterviewerNameResponse)
+def update_interviewer(
+    interviewer_id: uuid.UUID,
+    body: InterviewerNameUpdate,
+    branch: str | None = Query(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(_HR),
+):
+    branch_loc = _resolve_branch(user, branch)
+    row = db.get(InterviewerName, interviewer_id)
+    if not row or row.branch_location != branch_loc:
+        raise HTTPException(status_code=404, detail="Interviewer name not found")
+    try:
+        row.phone = validate_phone(body.phone, "Interviewer phone")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()
     db.refresh(row)
     return row

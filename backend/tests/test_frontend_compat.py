@@ -69,7 +69,7 @@ def test_candidate_out_includes_is_rejoining():
     now = datetime.now(timezone.utc)
     out = CandidateOut(
         id=uuid4(),
-        candidate_id="NT-2026-00001",
+        candidate_id="NT-1",
         full_name="Rahul",
         phone="9876543210",
         email=None,
@@ -165,7 +165,7 @@ def test_create_candidate_accepts_linkedin_source():
     now = datetime.now(timezone.utc)
     created = Candidate(
         id=uuid4(),
-        candidate_id="NT-2026-00099",
+        candidate_id="NT-99",
         full_name="Rahul",
         phone="9876543210",
         email="r@example.com",
@@ -226,7 +226,7 @@ def test_public_apply():
     now = datetime.now(timezone.utc)
     created = Candidate(
         id=uuid4(),
-        candidate_id="NT-2026-00001",
+        candidate_id="NT-1",
         full_name="Public Candidate",
         phone="9999999999",
         email="candidate@example.com",
@@ -246,6 +246,9 @@ def test_public_apply():
         applied_at=now,
         created_at=now,
         updated_at=now,
+        pre_form_token="apply-token",
+        pre_form_token_purpose="APPLY",
+        pre_form_token_revoked=False,
     )
 
     db = MagicMock()
@@ -254,6 +257,7 @@ def test_public_apply():
             return hr_user
         return None
     db.get.side_effect = mock_get
+    db.scalars.return_value.all.return_value = []
 
     app.dependency_overrides[get_db] = lambda: db
     try:
@@ -271,18 +275,19 @@ def test_public_apply():
             )
             assert response.status_code == 201, response.text
             body = response.json()
-            assert body["candidate_id"] == "NT-2026-00001"
+            assert "id" not in body
+            assert "candidate_id" not in body
             assert body["full_name"] == "Public Candidate"
+            assert body["token"] == created.pre_form_token
     finally:
         app.dependency_overrides.clear()
 
 
 def test_public_basic_endpoints():
-    candidate_id = uuid4()
     now = datetime.now(timezone.utc)
     candidate = Candidate(
-        id=candidate_id,
-        candidate_id="NT-2026-00002",
+        id=uuid4(),
+        candidate_id="NT-2",
         full_name="John Basic",
         phone="1234567890",
         email="john@example.com",
@@ -302,21 +307,23 @@ def test_public_basic_endpoints():
         applied_at=now,
         created_at=now,
         updated_at=now,
+        pre_form_token="basic-token",
+        pre_form_token_purpose="APPLY",
+        pre_form_token_revoked=False,
     )
 
     db = MagicMock()
-    def mock_get(model, id):
-        if model == Candidate:
-            return candidate
-        return None
-    db.get.side_effect = mock_get
+    db.scalar.return_value = candidate
+    db.scalars.return_value.all.return_value = []
 
     app.dependency_overrides[get_db] = lambda: db
     try:
-        res = client.get(f"/api/v1/candidates/public-basic/{candidate_id}")
+        res = client.get("/api/v1/candidates/public-basic/basic-token")
         assert res.status_code == 200
         data = res.json()
         assert data["full_name"] == "John Basic"
         assert data["source"] == "Walk In"
+        assert "id" not in data
+        assert "candidate_id" not in data
     finally:
         app.dependency_overrides.clear()

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, Plus, Edit, Trash2, Search, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, Search, Eye, EyeOff } from 'lucide-react';
 import { getUsers, createUser, updateUser, deleteUser } from '../api/users';
 import type { User } from '../types';
 import { toast } from 'sonner';
@@ -287,36 +287,10 @@ export default function AdminUsers() {
               </div>
             ) : (
               localHRUsers.map(u => {
-                const getBranchColor = (branch: string | null) => {
-                  if (!branch) return 'bg-gray-100 text-gray-700 border-gray-200';
-                  const colorList = [
-                    'bg-blue-50 text-blue-700 border-blue-200',
-                    'bg-cyan-50 text-cyan-700 border-cyan-200',
-                    'bg-sky-50 text-sky-700 border-sky-200',
-                    'bg-indigo-50 text-indigo-700 border-indigo-200',
-                    'bg-violet-50 text-violet-700 border-violet-200',
-                    'bg-purple-50 text-purple-700 border-purple-200',
-                    'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
-                    'bg-pink-50 text-pink-700 border-pink-200',
-                    'bg-rose-50 text-rose-700 border-rose-200',
-                    'bg-red-50 text-red-700 border-red-200',
-                    'bg-orange-50 text-orange-700 border-orange-200',
-                    'bg-amber-50 text-amber-700 border-amber-200',
-                    'bg-lime-50 text-lime-700 border-lime-200',
-                    'bg-green-50 text-green-700 border-green-200',
-                    'bg-emerald-50 text-emerald-700 border-emerald-200',
-                  ];
-                  let hash = 0;
-                  for (let i = 0; i < branch.length; i++) {
-                    hash = branch.charCodeAt(i) + ((hash << 5) - hash);
-                  }
-                  return colorList[Math.abs(hash) % colorList.length];
-                };
-                
                 return (
                   <div key={u.id} onClick={() => openEdit(u)} className="flex items-center justify-between p-3 border-b border-border last:border-0 hover:bg-muted/50 cursor-pointer transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold shrink-0 bg-amber-100 text-amber-700">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-text-secondary">
                         {u.full_name.charAt(0).toUpperCase()}
                       </div>
                       <div>
@@ -327,8 +301,8 @@ export default function AdminUsers() {
 
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getBranchColor(u.branch_location)}`}>
-                          {u.branch_location}
+                        <span className="rounded border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-text-secondary">
+                          {u.branch_location || 'No branch'}
                         </span>
                       </div>
                       <div className="flex items-center gap-1 border-l border-border pl-3">

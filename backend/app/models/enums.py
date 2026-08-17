@@ -25,7 +25,9 @@ class PipelineStage(str, enum.Enum):
     SENT_TO_HO = "SENT_TO_HO"
     
     # New HO HR Flow Stages
-    HO_INTERVIEWS = "HO_INTERVIEWS"
+    HO_INTERVIEWS = "HO_INTERVIEWS"  # legacy — use HO_HR_INTERVIEW + HO_DEPT_INTERVIEW
+    HO_HR_INTERVIEW = "HO_HR_INTERVIEW"
+    HO_DEPT_INTERVIEW = "HO_DEPT_INTERVIEW"
     SALARY_DETAILS = "SALARY_DETAILS"
     CSS = "CSS"
     
@@ -102,12 +104,6 @@ class FollowUpStatus(str, enum.Enum):
     PENDING = "PENDING"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
-
-
-class InterviewVerdict(str, enum.Enum):
-    SELECTED = "SELECTED"
-    REJECTED = "REJECTED"
-    ON_HOLD = "ON_HOLD"
 
 
 class InterviewMode(str, enum.Enum):

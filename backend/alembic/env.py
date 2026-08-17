@@ -31,9 +31,10 @@ SCHEMA = settings.db_schema
 
 
 def _connect_args() -> dict:
+    args: dict = {"connect_timeout": 10}
     if "supabase" in settings.database_url.lower():
-        return {"sslmode": "require"}
-    return {}
+        args["sslmode"] = "require"
+    return args
 
 
 def run_migrations_offline() -> None:

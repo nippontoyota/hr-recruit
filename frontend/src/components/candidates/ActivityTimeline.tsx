@@ -4,6 +4,7 @@ import { getActivityLogs } from '../../api/candidates';
 import type { ActivityLog, ActivityType } from '../../types';
 import { LoadingSpinner } from '../ui';
 import { cn } from '../../lib/utils';
+import { formatDate } from '../../lib/dateTime';
 
 interface ActivityTimelineProps {
   candidateId: string;
@@ -24,12 +25,12 @@ function activityIcon(type: ActivityType) {
 
 function activityColor(type: ActivityType): string {
   switch (type) {
-    case 'CALL':          return 'bg-sky-100 text-sky-600 border-sky-200';
-    case 'WHATSAPP':      return 'bg-emerald-100 text-emerald-600 border-emerald-200';
-    case 'EMAIL':         return 'bg-violet-100 text-violet-600 border-violet-200';
+    case 'CALL':          return 'bg-info/10 text-info border-info/20';
+    case 'WHATSAPP':      return 'bg-success/10 text-success border-success/20';
+    case 'EMAIL':         return 'bg-muted text-text-secondary border-border';
     case 'STAGE_CHANGE':  return 'bg-primary/10 text-primary border-primary/20';
-    case 'FORM':          return 'bg-purple-100 text-purple-600 border-purple-200';
-    case 'NOTE':          return 'bg-amber-100 text-amber-600 border-amber-200';
+    case 'FORM':          return 'bg-muted text-text-secondary border-border';
+    case 'NOTE':          return 'bg-warning/10 text-warning border-warning/20';
     case 'SYSTEM':
     default:              return 'bg-muted text-muted-foreground border-border';
   }
@@ -42,8 +43,7 @@ function formatRelativeTime(dateStr: string): string {
   if (diff < 60) return 'just now';
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  return formatDate(dateStr);
 }
 
 export function ActivityTimeline({ candidateId }: ActivityTimelineProps) {
@@ -66,16 +66,14 @@ export function ActivityTimeline({ candidateId }: ActivityTimelineProps) {
 
     fetch();
 
-    const intervalId = setInterval(fetch, 15000);
     return () => {
       active = false;
-      clearInterval(intervalId);
     };
   }, [candidateId]);
 
   if (loading) {
     return (
-      <div className="flex justify-center py-8">
+      <div className="flex justify-center py-8" role="status" aria-label="Loading activity history">
         <LoadingSpinner size="sm" />
       </div>
     );
@@ -83,7 +81,7 @@ export function ActivityTimeline({ candidateId }: ActivityTimelineProps) {
 
   if (logs.length === 0) {
     return (
-      <div className="flex items-center gap-2 py-6 px-4 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2 py-6 px-4 text-sm text-muted-foreground" role="status">
         <Clock className="w-4 h-4 shrink-0" />
         No activity recorded yet.
       </div>
@@ -95,7 +93,7 @@ export function ActivityTimeline({ candidateId }: ActivityTimelineProps) {
       {/* Vertical line */}
       <div className="absolute left-6 top-4 bottom-4 w-px bg-border z-0" aria-hidden="true" />
 
-      <ol className="space-y-6 relative z-10">
+      <ol className="space-y-6 relative z-10" aria-label="Candidate activity history">
         {logs.map((log) => (
           <li
             key={log.id}

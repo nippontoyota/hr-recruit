@@ -1,69 +1,73 @@
 import type { CandidateFormData } from '../wizardTypes';
 import { Input } from '../../../../components/ui';
 import { alphanumericOnly, digitsOnly } from '../../../../lib/validation';
+import { FormField, type FormSectionProps } from '../FormField';
 
-interface IdentityFormProps {
-  data: CandidateFormData;
-  update: (field: keyof CandidateFormData, value: any) => void;
-}
-
-export const IdentityForm = ({ data, update }: IdentityFormProps) => {
+export const IdentityForm = ({ data, update, patch, errors = {}, onBlurField = () => {} }: FormSectionProps) => {
   return (
     <div className="space-y-6 pb-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
+        <FormField field="aadhaarNumber" error={errors.aadhaarNumber}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Aadhaar Number <span className="text-danger">*</span>
           </label>
           <Input
             value={data.aadhaarNumber}
             onChange={(e) => update('aadhaarNumber', digitsOnly(e.target.value, 12))}
+            onBlur={() => onBlurField('aadhaarNumber')}
+            error={!!errors.aadhaarNumber}
             placeholder="0000 0000 0000"
             inputMode="numeric"
             maxLength={12}
           />
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="panNumber" error={errors.panNumber}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             PAN Number <span className="text-danger">*</span>
           </label>
           <Input
             value={data.panNumber}
             onChange={(e) => update('panNumber', alphanumericOnly(e.target.value, 10))}
+            onBlur={() => onBlurField('panNumber')}
+            error={!!errors.panNumber}
             placeholder="ABCDE1234F"
             className="uppercase"
             maxLength={10}
           />
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="drivingLicenseNumber" error={errors.drivingLicenseNumber}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Driving License Number <span className="text-danger">*</span>
           </label>
           <Input
             value={data.drivingLicenseNumber}
             onChange={(e) => update('drivingLicenseNumber', alphanumericOnly(e.target.value, 20))}
+            onBlur={() => onBlurField('drivingLicenseNumber')}
+            error={!!errors.drivingLicenseNumber}
             className="uppercase"
             maxLength={20}
           />
-        </div>
+        </FormField>
 
-        <div>
+        <FormField field="passportNumber" error={errors.passportNumber}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Passport Number
           </label>
           <Input
             value={data.passportNumber}
             onChange={(e) => update('passportNumber', alphanumericOnly(e.target.value, 8))}
+            onBlur={() => onBlurField('passportNumber')}
+            error={!!errors.passportNumber}
             className="uppercase"
             maxLength={8}
           />
-        </div>
+        </FormField>
       </div>
 
       <div className="space-y-4 pt-2 border-t border-border/40">
-        <div>
+        <FormField field="confidentToDrive" error={errors.confidentToDrive}>
           <label className="block text-sm font-medium text-text-primary mb-2">
             Confident to Drive <span className="text-danger">*</span>
           </label>
@@ -73,7 +77,10 @@ export const IdentityForm = ({ data, update }: IdentityFormProps) => {
                 type="radio"
                 name="confidentToDrive"
                 checked={data.confidentToDrive === true}
-                onChange={() => update('confidentToDrive', true)}
+                onChange={() => {
+                  update('confidentToDrive', true);
+                  onBlurField('confidentToDrive');
+                }}
                 className="text-primary focus:ring-primary"
               />
               Yes
@@ -84,18 +91,23 @@ export const IdentityForm = ({ data, update }: IdentityFormProps) => {
                 name="confidentToDrive"
                 checked={data.confidentToDrive === false}
                 onChange={() => {
-                  update('confidentToDrive', false);
-                  update('drive2Wheeler', false);
-                  update('drive3Wheeler', false);
-                  update('drive4Wheeler', false);
-                  update('driveHeavy', false);
+                  const next = {
+                    confidentToDrive: false,
+                    drive2Wheeler: false,
+                    drive3Wheeler: false,
+                    drive4Wheeler: false,
+                    driveHeavy: false,
+                  };
+                  if (patch) patch(next);
+                  else Object.entries(next).forEach(([field, value]) => update(field as keyof CandidateFormData, value));
+                  onBlurField('confidentToDrive');
                 }}
                 className="text-primary focus:ring-primary"
               />
               No
             </label>
           </div>
-        </div>
+        </FormField>
 
         {data.confidentToDrive && (
           <div className="animate-in fade-in duration-300">

@@ -23,7 +23,41 @@ _RESUME_CONTENT_TYPES = {
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
+_RESUME_EXTENSIONS = {".pdf", ".doc", ".docx"}
+_EXTENSION_TO_CONTENT_TYPE = {
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
 _PHOTO_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+
+def resume_extension(filename: str) -> str:
+    extension = Path(filename or "resume").suffix.lower()
+    if extension not in _RESUME_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Resume must be PDF, DOC, or DOCX.",
+        )
+    return extension
+
+
+def safe_filename(filename: str, extension: str) -> str:
+    return Path(filename or f"resume{extension}").name
+
+
+def resolve_resume_content_type(content_type: str | None, extension: str) -> str:
+    normalized = (content_type or "").lower()
+    if normalized in _RESUME_CONTENT_TYPES:
+        return normalized
+    if normalized in {"", "application/octet-stream"}:
+        mapped = _EXTENSION_TO_CONTENT_TYPE.get(extension)
+        if mapped:
+            return mapped
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Unsupported resume file type.",
+    )
 
 
 def resume_candidate_ids(db: Session, candidate_ids: list[UUID]) -> set[UUID]:
@@ -65,7 +99,10 @@ def document_out(document: Document) -> DocumentOut:
 def process_photo_url(photo_url: str | None) -> str | None:
     if not photo_url or photo_url.startswith(("http://", "https://", "data:")):
         return photo_url
-    return storage.create_signed_url(photo_url)
+    try:
+        return storage.create_signed_url(photo_url)
+    except Exception:
+        return None
 
 
 async def _read_upload(
@@ -73,8 +110,9 @@ async def _read_upload(
     *,
     allowed_content_types: set[str],
     label: str,
+    resolved_content_type: str | None = None,
 ) -> bytes:
-    content_type = (file.content_type or "").lower()
+    content_type = resolved_content_type or (file.content_type or "").lower()
     if content_type not in allowed_content_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -100,15 +138,17 @@ async def save_resume_for_candidate(
     file: UploadFile,
     uploaded_by_user_id: UUID | None,
 ) -> DocumentOut:
+    extension = resume_extension(file.filename or "resume")
+    filename = safe_filename(file.filename or "resume", extension)
+    content_type = resolve_resume_content_type(file.content_type, extension)
     data = await _read_upload(
         file,
         allowed_content_types=_RESUME_CONTENT_TYPES,
         label="resume",
+        resolved_content_type=content_type,
     )
-    filename = Path(file.filename or "resume").name
-    suffix = Path(filename).suffix.lower()
-    storage_path = f"candidates/{candidate.id}/resume-{uuid4().hex}{suffix}"
-    storage.upload_object(storage_path, data, file.content_type or "application/octet-stream")
+    storage_path = f"candidates/{candidate.id}/resume-{uuid4().hex}{extension}"
+    storage.upload_object(storage_path, data, content_type)
 
     document = get_resume_document(db, candidate.id)
     old_storage_path = document.storage_path if document else None
@@ -117,7 +157,7 @@ async def save_resume_for_candidate(
             candidate_id=candidate.id,
             doc_type=DocumentType.RESUME,
             file_name=filename,
-            content_type=file.content_type or "application/octet-stream",
+            content_type=content_type,
             storage_path=storage_path,
             file_size_bytes=len(data),
             uploaded_by_user_id=uploaded_by_user_id,
@@ -125,7 +165,7 @@ async def save_resume_for_candidate(
         db.add(document)
     else:
         document.file_name = filename
-        document.content_type = file.content_type or "application/octet-stream"
+        document.content_type = content_type
         document.storage_path = storage_path
         document.file_size_bytes = len(data)
         document.uploaded_by_user_id = uploaded_by_user_id

@@ -1,659 +1,511 @@
 import type { ReactNode } from 'react';
 import type { Candidate } from '../../types';
+import { formatDate } from '../../lib/dateTime';
 
 interface InterviewApplicationFormDocumentProps {
   candidate: Candidate;
 }
 
-function blank(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '—';
+function val(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (Array.isArray(value)) return value.filter(Boolean).join(', ') || '—';
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ');
   return String(value);
 }
 
-function yn(value: unknown): string {
-  if (value === true) return 'Yes';
-  if (value === false) return 'No';
-  return '—';
+function asBool(value: unknown): boolean | undefined {
+  if (value === true || value === 'true' || value === 'Yes' || value === 'yes') return true;
+  if (value === false || value === 'false' || value === 'No' || value === 'no') return false;
+  return undefined;
 }
 
-function formatDate(dateString?: string): string {
-  if (!dateString) return '—';
-  try {
-    const d = new Date(dateString);
-    if (Number.isNaN(d.getTime())) return dateString;
-    return new Intl.DateTimeFormat('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }).format(d);
-  } catch {
-    return dateString;
-  }
+function fmtDate(value: unknown): string {
+  const s = val(value);
+  if (!s) return '';
+  return formatDate(s);
 }
 
-function joinParts(...parts: unknown[]): string {
-  const filled = parts.map((p) => (p == null || p === '' ? '' : String(p).trim())).filter(Boolean);
-  return filled.length ? filled.join(', ') : '—';
+function Tick({ on }: { on: boolean | undefined }) {
+  return (
+    <span className="whitespace-nowrap">
+      Yes <span className="iaf-tick inline-block w-3 h-3 border text-[10px] leading-[10px] text-center align-middle mx-0.5">{on === true ? '✓' : ''}</span>
+      {' '}No <span className="iaf-tick inline-block w-3 h-3 border text-[10px] leading-[10px] text-center align-middle mx-0.5">{on === false ? '✓' : ''}</span>
+    </span>
+  );
 }
 
-function cell(children: ReactNode, className = '') {
-  return <td className={`border border-black p-0.5 align-top ${className}`}>{children}</td>;
+function Line({ children, className = '' }: { children?: string; className?: string }) {
+  return (
+    <span className={`iaf-line inline-block min-w-[2.5rem] px-0.5 font-semibold leading-tight ${className}`}>
+      {children || '\u00a0'}
+    </span>
+  );
+}
+
+function Th({ children, className = '', colSpan }: { children: ReactNode; className?: string; colSpan?: number }) {
+  return (
+    <td colSpan={colSpan} className={`iaf-th border font-bold text-center uppercase tracking-wide py-1 px-1.5 text-[11px] ${className}`}>
+      {children}
+    </td>
+  );
+}
+
+function Td({ children, className = '', colSpan }: { children?: ReactNode; className?: string; colSpan?: number }) {
+  return (
+    <td colSpan={colSpan} className={`border px-1.5 py-1 align-middle ${className}`}>
+      {children}
+    </td>
+  );
 }
 
 export function InterviewApplicationFormDocument({ candidate }: InterviewApplicationFormDocumentProps) {
-  const d = candidate.profile?.raw_data ?? {};
-  const v = (key: string) => blank(d[key]);
+  const d = (candidate.profile?.raw_data ?? {}) as Record<string, unknown>;
   const photoUrl = candidate.profile?.photo_url;
-
-  const appliedDate =
-    d.appliedDate ||
-    candidate.pre_form_submitted_at ||
-    candidate.applied_at ||
-    candidate.created_at;
-
+  const applied = d.appliedDate || candidate.pre_form_submitted_at || candidate.applied_at || candidate.created_at;
   const mobile = d.mobileNumber || candidate.phone;
   const position = d.positionAppliedFor || candidate.position_applied_for;
   const email = d.emailId || candidate.email || candidate.profile?.email;
 
-  const permAddress = joinParts(
-    d.permHouseName,
-    d.permPostOffice,
-    d.permLandmark,
-    d.permDistrict,
-    d.permPinCode
-  );
-  const sameAsPerm = d.sameAsPermanent === true;
-  const presentAddress = sameAsPerm
-    ? permAddress
-    : joinParts(
-        d.presHouseName,
-        d.presPostOffice,
-        d.presLandmark,
-        d.presDistrict,
-        d.presPinCode
-      );
+  const family = [
+    { rel: 'Father', name: d.fatherName, age: d.fatherAge, occ: d.fatherOccupation, co: d.fatherCompany, ph: d.fatherPhone },
+    { rel: 'Mother', name: d.motherName, age: d.motherAge, occ: d.motherOccupation, co: d.motherCompany, ph: d.motherPhone },
+    { rel: 'Spouse', name: d.spouseName, age: d.spouseAge, occ: d.spouseOccupation, co: d.spouseCompany, ph: d.spousePhone },
+    { rel: val(d.child1Relation) || 'Son / Daughter', name: d.child1Name, age: d.child1Age, occ: d.child1Occupation, co: d.child1Company, ph: d.child1Phone },
+    { rel: val(d.child2Relation) || 'Son / Daughter', name: d.child2Name, age: d.child2Age, occ: d.child2Occupation, co: d.child2Company, ph: d.child2Phone },
+    { rel: val(d.child3Relation) || 'Son / Daughter', name: d.child3Name, age: d.child3Age, occ: d.child3Occupation, co: d.child3Company, ph: d.child3Phone },
+    { rel: val(d.sibling1Relation) || 'Brother / Sister', name: d.sibling1Name, age: d.sibling1Age, occ: d.sibling1Occupation, co: d.sibling1Company, ph: d.sibling1Phone },
+    { rel: val(d.sibling2Relation) || 'Brother / Sister', name: d.sibling2Name, age: d.sibling2Age, occ: d.sibling2Occupation, co: d.sibling2Company, ph: d.sibling2Phone },
+    { rel: val(d.sibling3Relation) || 'Brother / Sister', name: d.sibling3Name, age: d.sibling3Age, occ: d.sibling3Occupation, co: d.sibling3Company, ph: d.sibling3Phone },
+  ].filter((row) => val(row.name));
 
-  const driveDetail = [
-    d.drive2Wheeler && '2W',
-    d.drive3Wheeler && '3W',
-    d.drive4Wheeler && '4W',
-    d.driveHeavy && 'Heavy',
-  ]
-    .filter(Boolean)
-    .join(', ');
+  const listedJobs = Array.isArray(d.previousJobs)
+    ? d.previousJobs
+        .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
+        .map((row) => ({
+          co: row.company,
+          pos: row.position,
+          rep: row.reporting,
+          from: row.fromDate ?? row.from,
+          to: row.toDate ?? row.to,
+          sal: row.salary,
+          reason: row.reason,
+        }))
+    : [];
+  const jobs = (listedJobs.length
+    ? listedJobs
+    : [
+        { co: d.prevCompanyName, pos: d.prevPosition, rep: d.prev1Reporting, from: d.prev1From, to: d.prev1To, sal: d.prev1Salary, reason: d.prev1Reason },
+        { co: d.prev2Name, pos: d.prev2Position, rep: d.prev2Reporting, from: d.prev2From, to: d.prev2To, sal: d.prev2Salary, reason: d.prev2Reason },
+        { co: d.prev3Name, pos: d.prev3Position, rep: d.prev3Reporting, from: d.prev3From, to: d.prev3To, sal: d.prev3Salary, reason: d.prev3Reason },
+        { co: d.prev4Name, pos: d.prev4Position, rep: d.prev4Reporting, from: d.prev4From, to: d.prev4To, sal: d.prev4Salary, reason: d.prev4Reason },
+      ]
+  ).filter((job) => val(job.co) || val(job.pos));
 
-  const computerKnowledge = [
+  const computer = [
     d.compWord && 'MS Word',
     d.compExcel && 'MS Excel',
     d.compPowerPoint && 'PowerPoint',
     d.compTally && 'Tally',
     d.compOther && 'Other',
-  ]
+  ].filter(Boolean).join(', ');
+  const driveTypes = [d.drive2Wheeler && '2W', d.drive3Wheeler && '3W', d.drive4Wheeler && '4W', d.driveHeavy && 'Heavy']
     .filter(Boolean)
     .join(', ');
 
-  const familyRows: { relation: string; name: unknown; age: unknown; occupation: unknown; company: unknown; phone: unknown }[] = [
-    { relation: 'Father', name: d.fatherName, age: d.fatherAge, occupation: d.fatherOccupation, company: d.fatherCompany, phone: d.fatherPhone },
-    { relation: 'Mother', name: d.motherName, age: d.motherAge, occupation: d.motherOccupation, company: d.motherCompany, phone: d.motherPhone },
-    { relation: 'Spouse', name: d.spouseName, age: d.spouseAge, occupation: d.spouseOccupation, company: d.spouseCompany, phone: d.spousePhone },
-    { relation: blank(d.child1Relation) !== '—' ? String(d.child1Relation) : 'Child 1', name: d.child1Name, age: d.child1Age, occupation: d.child1Occupation, company: d.child1Company, phone: d.child1Phone },
-    { relation: blank(d.child2Relation) !== '—' ? String(d.child2Relation) : 'Child 2', name: d.child2Name, age: d.child2Age, occupation: d.child2Occupation, company: d.child2Company, phone: d.child2Phone },
-    { relation: blank(d.sibling1Relation) !== '—' ? String(d.sibling1Relation) : 'Sibling 1', name: d.sibling1Name, age: d.sibling1Age, occupation: d.sibling1Occupation, company: d.sibling1Company, phone: d.sibling1Phone },
-    { relation: blank(d.sibling2Relation) !== '—' ? String(d.sibling2Relation) : 'Sibling 2', name: d.sibling2Name, age: d.sibling2Age, occupation: d.sibling2Occupation, company: d.sibling2Company, phone: d.sibling2Phone },
-  ];
+  const general = [
+    ['a', 'Terminated / asked to resign?', d.prevTerminated],
+    ['b', 'Nervous disorder?', d.nervousDisorder],
+    ['c', 'Physical disabilities?', d.physicalDisability],
+    ['d', 'Eye / colour / night blindness?', d.eyeVision],
+    ['e', 'Convicted of crime other than minor offence?', d.criminalConviction],
+  ] as const;
 
-  const jobs = [
-    {
-      company: d.prevCompanyName,
-      position: d.prevPosition,
-      reporting: d.prev1Reporting,
-      from: d.prev1From,
-      to: d.prev1To,
-      salary: d.prev1Salary,
-      reason: d.prev1Reason,
-    },
-    {
-      company: d.prev2Name,
-      position: d.prev2Position,
-      reporting: d.prev2Reporting,
-      from: d.prev2From,
-      to: d.prev2To,
-      salary: d.prev2Salary,
-      reason: d.prev2Reason,
-    },
-    {
-      company: d.prev3Name,
-      position: d.prev3Position,
-      reporting: d.prev3Reporting,
-      from: d.prev3From,
-      to: d.prev3To,
-      salary: d.prev3Salary,
-      reason: d.prev3Reason,
-    },
-    {
-      company: d.prev4Name,
-      position: d.prev4Position,
-      reporting: d.prev4Reporting,
-      from: d.prev4From,
-      to: d.prev4To,
-      salary: d.prev4Salary,
-      reason: d.prev4Reason,
-    },
-  ];
-
-  const generalQs: { letter: string; label: string; key: string }[] = [
-    { letter: 'a', label: 'Have you ever been terminated from any previous employment?', key: 'prevTerminated' },
-    { letter: 'b', label: 'Have you ever suffered from any nervous disorder?', key: 'nervousDisorder' },
-    { letter: 'c', label: 'Do you have any physical disability?', key: 'physicalDisability' },
-    { letter: 'd', label: 'Do you have any eye / colour / night blindness?', key: 'eyeVision' },
-    { letter: 'e', label: 'Have you ever been convicted of any criminal offence?', key: 'criminalConviction' },
-  ];
+  const hasGrad = !!(val(d.gradCollege) || val(d.gradCourse) || val(d.gradPercentage));
+  const hasPg = !!(val(d.postGradCollege) || val(d.postGradCourse) || val(d.postGradPercentage));
+  const hasEmergency2 = !!(val(d.emergency2Name) || val(d.emergency2Contact));
+  const hasExtra = !!(val(d.achievements) || val(d.hobbies));
 
   return (
-    <div className="w-[210mm] mx-auto bg-white text-black font-sans text-[9px] leading-tight box-border p-[6mm] print:p-[5mm]">
-      {/* Company header */}
-      <div className="text-center border border-black p-1.5 mb-1">
-        <div className="font-bold text-[11px] tracking-wide uppercase">
-          NIPPON MOTOR CORPORATION PVT LTD
-        </div>
-        <div className="text-[8px] mt-0.5">
-          XIX/9C NIPPON TOWERS NH-47 HMT JUNCTION KALAMASSERY P.O. KOCHI-683104
-        </div>
-        <div className="text-[8px]">
-          Ph 0484-2860331 / 8606986060 &nbsp;|&nbsp; recruitment@nippontoyota.com
+    <section className="iaf-sheet iaf-form font-sans text-[11px] leading-[1.35] antialiased">
+      <div className="flex items-start gap-3 mb-2">
+        <img
+          src="/nippon-toyota-logo.png"
+          alt="Nippon Toyota"
+          className="h-[14mm] w-auto object-contain shrink-0 bg-transparent"
+        />
+        <div className="flex-1 text-center min-w-0 pt-0.5">
+          <div className="font-bold text-[15px] tracking-[0.04em] uppercase leading-tight">
+            Nippon Motor Corporation Pvt Ltd
+          </div>
+          <div className="text-[10px] leading-tight mt-0.5">
+            XIX/9C, Nippon Towers, NH-47, HMT Junction, Kalamassery P.O., Kochi – 683104
+          </div>
+          <div className="text-[10px] leading-tight">
+            Ph: 0484-2860331 / 8606986060 &nbsp;|&nbsp; E-Mail: recruitment@nippontoyota.com
+          </div>
         </div>
       </div>
-
-      <div className="text-center font-bold text-[12px] uppercase tracking-wider border border-black border-t-0 py-1 mb-1">
+      <div className="iaf-rule border-t-2 mb-0" />
+      <div className="iaf-title font-bold text-[13px] uppercase tracking-[0.12em] text-center py-1.5 mb-2 border-x border-b">
         Interview Application Form
       </div>
 
-      {/* Mobile / Date / Position */}
-      <table className="w-full border-collapse border border-black mb-1 table-fixed">
+      <table className="w-full border-collapse border border-black mb-1.5">
         <tbody>
           <tr>
-            {cell(
-              <>
-                <span className="font-semibold">Mobile: </span>
-                {blank(mobile)}
-              </>,
-              'w-[34%]'
-            )}
-            {cell(
-              <>
-                <span className="font-semibold">Date: </span>
-                {formatDate(typeof appliedDate === 'string' ? appliedDate : undefined)}
-              </>,
-              'w-[22%]'
-            )}
-            {cell(
-              <>
-                <span className="font-semibold">Position Applied For: </span>
-                {blank(position)}
-              </>,
-              'w-[24%]'
-            )}
-            {cell(
-              <>
-                <span className="font-semibold">Position Suitable: </span>
-                {v('positionSuitable')}
-              </>,
-              'w-[20%]'
-            )}
+            <Td className="w-[38%]">Mobile Number <Line className="min-w-[9rem]">{val(mobile)}</Line></Td>
+            <Td>Date <Line className="min-w-[6rem]">{fmtDate(applied)}</Line></Td>
+          </tr>
+          <tr>
+            <Td>
+              Position Applied For <Line className="min-w-[8rem]">{val(position)}</Line>
+              {val(d.branchName) ? (
+                <span> · Branch <Line>{val(d.branchName)}</Line></span>
+              ) : null}
+            </Td>
+            <Td>Position Suitable <Line className="min-w-[8rem]">{val(d.positionSuitable)}</Line></Td>
           </tr>
         </tbody>
       </table>
 
-      {/* 1. PERSONAL DATA */}
-      <table className="w-full border-collapse border border-black mb-1 table-fixed">
+      <table className="w-full border-collapse border border-black mb-1.5">
         <tbody>
           <tr>
-            <td colSpan={4} className="border border-black bg-gray-200 text-center font-bold py-0.5 uppercase text-[10px]">
-              1. Personal Data
+            <Th colSpan={2}>1. Personal Data</Th>
+          </tr>
+          <tr>
+            <td className="border p-1.5 align-top w-[78%]">
+              <div className="mb-1">
+                Full Name <Line className="min-w-[70%]">{candidate.full_name}</Line>
+                {val(d.nameAadhaar) && val(d.nameAadhaar) !== candidate.full_name ? (
+                  <div className="mt-0.5">Name as per Aadhaar <Line className="min-w-[60%]">{val(d.nameAadhaar)}</Line></div>
+                ) : null}
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                <div>
+                  <div className="font-bold mb-0.5">Permanent Address</div>
+                  <div>House Name: <Line className="min-w-[70%]">{val(d.permHouseName)}</Line></div>
+                  <div>Post Office: <Line className="min-w-[70%]">{val(d.permPostOffice)}</Line></div>
+                  <div>Landmark: <Line className="min-w-[70%]">{val(d.permLandmark)}</Line></div>
+                  <div>District: <Line className="min-w-[70%]">{val(d.permDistrict)}</Line></div>
+                  <div>Pincode: <Line className="min-w-[70%]">{val(d.permPinCode)}</Line></div>
+                </div>
+                <div>
+                  <div className="font-bold mb-0.5">Present Address</div>
+                  <div>House Name: <Line className="min-w-[70%]">{val(d.sameAsPermanent ? d.permHouseName : d.presHouseName)}</Line></div>
+                  <div>Post Office: <Line className="min-w-[70%]">{val(d.sameAsPermanent ? d.permPostOffice : d.presPostOffice)}</Line></div>
+                  <div>Landmark: <Line className="min-w-[70%]">{val(d.sameAsPermanent ? d.permLandmark : d.presLandmark)}</Line></div>
+                  <div>District: <Line className="min-w-[70%]">{val(d.sameAsPermanent ? d.permDistrict : d.presDistrict)}</Line></div>
+                  <div>Pincode: <Line className="min-w-[70%]">{val(d.sameAsPermanent ? d.permPinCode : d.presPinCode)}</Line></div>
+                </div>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                <span>Age <Line className="min-w-[2rem]">{val(d.age)}</Line></span>
+                <span>DOB <Line className="min-w-[5rem]">{fmtDate(d.dateOfBirth)}</Line></span>
+                <span>Height <Line className="min-w-[2.5rem]">{val(d.height)}</Line></span>
+                <span>Weight <Line className="min-w-[2.5rem]">{val(d.weight)}</Line></span>
+                <span>Blood Group <Line className="min-w-[2.5rem]">{val(d.bloodGroup)}</Line></span>
+                <span>Gender <Line className="min-w-[3rem]">{val(d.gender)}</Line></span>
+              </div>
+              <div className="mt-0.5 flex flex-wrap gap-x-3">
+                <span>Marital Status <Line className="min-w-[5rem]">{val(d.maritalStatus)}</Line></span>
+                <span>Religion &amp; Caste <Line className="min-w-[8rem]">{val(d.religionCaste)}</Line></span>
+              </div>
+              <div className="mt-0.5 grid grid-cols-2 gap-x-2">
+                <span>Languages Known – Read <Line className="min-w-[55%]">{val(d.languagesRead)}</Line></span>
+                <span>Write <Line className="min-w-[55%]">{val(d.languagesWrite)}</Line></span>
+                <span>Speak <Line className="min-w-[55%]">{val(d.languagesSpeak)}</Line></span>
+                <span>Other <Line className="min-w-[55%]">{val(d.languagesOther)}</Line></span>
+              </div>
+              <div className="mt-0.5 grid grid-cols-2 gap-x-2">
+                <span>Aadhaar <Line className="min-w-[60%]">{val(d.aadhaarNumber)}</Line></span>
+                <span>Driving License <Line className="min-w-[55%]">{val(d.drivingLicenseNumber)}</Line></span>
+                <span>PAN <Line className="min-w-[60%]">{val(d.panNumber)}</Line></span>
+                <span>Passport <Line className="min-w-[55%]">{val(d.passportNumber)}</Line></span>
+              </div>
+              <div className="mt-0.5">
+                Confident to Drive <Tick on={asBool(d.confidentToDrive)} />
+                {driveTypes ? <span> ({driveTypes})</span> : null}
+              </div>
             </td>
-            <td rowSpan={8} className="border border-black w-[28mm] p-0.5 align-top">
-              <div className="w-[26mm] h-[32mm] border border-dashed border-gray-500 mx-auto overflow-hidden flex items-center justify-center text-gray-400 text-[8px]">
+            <td className="border w-[22%] p-1.5 align-top text-center">
+              <div className="text-[9px] font-bold uppercase mb-0.5">Photo</div>
+              <div className="w-full aspect-[3/4] max-h-[48mm] mx-auto overflow-hidden border bg-white">
                 {photoUrl ? (
-                  <img
-                    src={photoUrl}
-                    alt="Candidate"
-                    className="h-full w-full object-cover object-left-top"
-                  />
+                  <img src={photoUrl} alt="" className="h-full w-full object-cover object-left-top" />
                 ) : (
-                  'Photo'
+                  <div className="h-full flex items-center justify-center text-neutral-400 text-[11px]">Photo</div>
                 )}
               </div>
             </td>
           </tr>
-          <tr>
-            {cell(<span className="font-semibold">Name</span>, 'w-[14%]')}
-            {cell(blank(candidate.full_name), 'w-[58%]')}
-            {cell(<span className="font-semibold">Gender</span>, 'w-[12%]')}
-            {cell(v('gender'), 'w-[16%]')}
-          </tr>
-          <tr>
-            {cell(<span className="font-semibold">Permanent Address</span>)}
-            {cell(permAddress, 'col-span')}
-            {cell(<span className="font-semibold">Present Address</span>)}
-            {cell(presentAddress)}
-          </tr>
-          <tr>
-            {cell(<span className="font-semibold">Age</span>)}
-            {cell(v('age'))}
-            {cell(<span className="font-semibold">DOB</span>)}
-            {cell(formatDate(d.dateOfBirth))}
-          </tr>
-          <tr>
-            {cell(<span className="font-semibold">Height</span>)}
-            {cell(v('height'))}
-            {cell(<span className="font-semibold">Weight</span>)}
-            {cell(v('weight'))}
-          </tr>
-          <tr>
-            {cell(<span className="font-semibold">Blood Group</span>)}
-            {cell(v('bloodGroup'))}
-            {cell(<span className="font-semibold">Marital Status</span>)}
-            {cell(v('maritalStatus'))}
-          </tr>
-          <tr>
-            {cell(<span className="font-semibold">Religion &amp; Caste</span>)}
-            {cell(v('religionCaste'), '')}
-            {cell(<span className="font-semibold">Confident to Drive</span>)}
-            {cell(
-              <>
-                {yn(d.confidentToDrive)}
-                {driveDetail ? ` (${driveDetail})` : ''}
-              </>
-            )}
-          </tr>
-          <tr>
-            {cell(<span className="font-semibold">Languages</span>)}
-            {cell(
-              <>
-                <span className="font-semibold">R:</span> {v('languagesRead')}{' '}
-                <span className="font-semibold">W:</span> {v('languagesWrite')}{' '}
-                <span className="font-semibold">S:</span> {v('languagesSpeak')}
-                {d.languagesOther ? (
-                  <>
-                    {' '}
-                    <span className="font-semibold">Other:</span> {v('languagesOther')}
-                  </>
-                ) : null}
-              </>,
-              ''
-            )}
-            {cell(<span className="font-semibold">IDs</span>)}
-            {cell(
-              <>
-                <div>
-                  <span className="font-semibold">Aadhaar:</span> {v('aadhaarNumber')}
-                </div>
-                <div>
-                  <span className="font-semibold">PAN:</span> {v('panNumber')}
-                </div>
-                <div>
-                  <span className="font-semibold">DL:</span> {v('drivingLicenseNumber')}
-                </div>
-                <div>
-                  <span className="font-semibold">Passport:</span> {v('passportNumber')}
-                </div>
-              </>
-            )}
-          </tr>
         </tbody>
       </table>
 
-      {/* EDUCATIONAL QUALIFICATION */}
-      <table className="w-full border-collapse border border-black mb-1 table-fixed text-[8px]">
+      <table className="w-full border-collapse border border-black mb-1.5">
         <thead>
+          <tr><Th colSpan={6}>Educational Qualification</Th></tr>
           <tr>
-            <td colSpan={6} className="border border-black bg-gray-200 text-center font-bold py-0.5 uppercase text-[10px]">
-              Educational Qualification
-            </td>
-          </tr>
-          <tr className="font-semibold text-center">
-            {cell('Course / Level')}
-            {cell('School / College')}
-            {cell('Board / Stream / Course')}
-            {cell('% / Marks')}
-            {cell('Year')}
-            {cell('Mode')}
+            <Td className="font-semibold text-center w-[18%]">Qualification</Td>
+            <Td className="font-semibold text-center">School / College</Td>
+            <Td className="font-semibold text-center w-[16%]">Course</Td>
+            <Td className="font-semibold text-center w-[10%]">Marks</Td>
+            <Td className="font-semibold text-center w-[12%]">Passing Year</Td>
+            <Td className="font-semibold text-center w-[12%]">Mode of Study</Td>
           </tr>
         </thead>
         <tbody>
           <tr>
-            {cell('10th')}
-            {cell(v('class10School'))}
-            {cell(v('class10Board'))}
-            {cell(v('class10Percentage'))}
-            {cell(v('class10PassingYear'))}
-            {cell(v('class10Mode'))}
+            <Td>10th</Td>
+            <Td>{val(d.class10School)}</Td>
+            <Td>{val(d.class10Board)}</Td>
+            <Td className="text-center">{val(d.class10Percentage)}</Td>
+            <Td className="text-center">{val(d.class10PassingYear)}</Td>
+            <Td className="text-center">{val(d.class10Mode)}</Td>
           </tr>
           <tr>
-            {cell('12th')}
-            {cell(v('class12School'))}
-            {cell(v('class12Stream'))}
-            {cell(v('class12Percentage'))}
-            {cell(v('class12PassingYear'))}
-            {cell(v('class12Mode'))}
+            <Td>12th</Td>
+            <Td>{val(d.class12School)}</Td>
+            <Td>{val(d.class12Stream)}</Td>
+            <Td className="text-center">{val(d.class12Percentage)}</Td>
+            <Td className="text-center">{val(d.class12PassingYear)}</Td>
+            <Td className="text-center">{val(d.class12Mode)}</Td>
           </tr>
-          <tr>
-            {cell('Graduation / Diploma')}
-            {cell(v('gradCollege'))}
-            {cell(v('gradCourse'))}
-            {cell(v('gradPercentage'))}
-            {cell(v('gradPassingYear'))}
-            {cell(v('gradMode'))}
-          </tr>
-          <tr>
-            {cell('Post Graduation / Diploma')}
-            {cell(v('postGradCollege'))}
-            {cell(v('postGradCourse'))}
-            {cell(v('postGradPercentage'))}
-            {cell(v('postGradPassingYear'))}
-            {cell(v('postGradMode'))}
-          </tr>
-        </tbody>
-      </table>
-
-      <table className="w-full border-collapse border border-black mb-1 table-fixed">
-        <tbody>
-          <tr>
-            {cell(<span className="font-semibold">Computer Knowledge</span>, 'w-[22%]')}
-            {cell(computerKnowledge || '—', 'w-[38%]')}
-            {cell(<span className="font-semibold">Software / Certs</span>, 'w-[18%]')}
-            {cell(v('softwareCerts'), 'w-[22%]')}
-          </tr>
-        </tbody>
-      </table>
-
-      {/* FAMILY DETAILS */}
-      <table className="w-full border-collapse border border-black mb-1 table-fixed text-[8px]">
-        <thead>
-          <tr>
-            <td colSpan={6} className="border border-black bg-gray-200 text-center font-bold py-0.5 uppercase text-[10px]">
-              Family Details
-            </td>
-          </tr>
-          <tr className="font-semibold text-center">
-            {cell('Relation')}
-            {cell('Name')}
-            {cell('Age')}
-            {cell('Occupation')}
-            {cell('Company')}
-            {cell('Phone')}
-          </tr>
-        </thead>
-        <tbody>
-          {familyRows.map((row) => (
-            <tr key={row.relation}>
-              {cell(row.relation)}
-              {cell(blank(row.name))}
-              {cell(blank(row.age))}
-              {cell(blank(row.occupation))}
-              {cell(blank(row.company))}
-              {cell(blank(row.phone))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* EMPLOYMENT RECORD */}
-      <table className="w-full border-collapse border border-black mb-1 table-fixed text-[8px]">
-        <thead>
-          <tr>
-            <td colSpan={7} className="border border-black bg-gray-200 text-center font-bold py-0.5 uppercase text-[10px]">
-              Employment Record
-            </td>
-          </tr>
-          <tr>
-            <td className="border border-black p-0.5 align-top" colSpan={2}>
-              <span className="font-semibold">Previous Experience: </span>
-              {yn(d.previousExperience)}
-            </td>
-            <td className="border border-black p-0.5 align-top" colSpan={3}>
-              <span className="font-semibold">Total Experience: </span>
-              {v('totalExperience')}
-            </td>
-            <td className="border border-black p-0.5 align-top" colSpan={2}>
-              <span className="font-semibold">Expected Salary: </span>
-              {v('expectedSalary')}
-            </td>
-          </tr>
-          <tr className="font-semibold text-center">
-            {cell('#')}
-            {cell('Company & Address')}
-            {cell('Position')}
-            {cell('Reporting To')}
-            {cell('From – To')}
-            {cell('Last Salary')}
-            {cell('Reason for Leaving')}
-          </tr>
-        </thead>
-        <tbody>
-          {jobs.map((job, idx) => (
-            <tr key={idx} className="h-5">
-              {cell(String(idx + 1), 'text-center w-[4%]')}
-              {cell(blank(job.company), 'w-[22%]')}
-              {cell(blank(job.position), 'w-[14%]')}
-              {cell(blank(job.reporting), 'w-[14%]')}
-              {cell(
-                blank(job.from) === '—' && blank(job.to) === '—'
-                  ? '—'
-                  : `${blank(job.from)} – ${blank(job.to)}`,
-                'w-[16%]'
-              )}
-              {cell(blank(job.salary), 'w-[12%]')}
-              {cell(blank(job.reason), 'w-[18%]')}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* Recruitment / additional */}
-      <table className="w-full border-collapse border border-black mb-1 table-fixed">
-        <tbody>
-          <tr>
-            {cell(
-              <>
-                <span className="font-semibold">How did you learn of this opening? </span>
-                {v('sourceOfOpening')}
-              </>,
-              'w-[50%]'
-            )}
-            {cell(
-              <>
-                <span className="font-semibold">Referred by: </span>
-                {v('referredBy')}
-              </>,
-              'w-[50%]'
-            )}
-          </tr>
-          <tr>
-            {cell(
-              <>
-                <span className="font-semibold">Ready to work in branches / preferred region: </span>
-                {v('preferredRegion')}
-              </>
-            )}
-            {cell(
-              <>
-                <span className="font-semibold">If selected, when can you join? </span>
-                {formatDate(d.expectedJoiningDate) === '—'
-                  ? v('expectedJoiningDate')
-                  : formatDate(d.expectedJoiningDate)}
-              </>
-            )}
-          </tr>
-          <tr>
-            {cell(
-              <>
-                <span className="font-semibold">Achievements: </span>
-                {v('achievements')}
-              </>
-            )}
-            {cell(
-              <>
-                <span className="font-semibold">Hobbies: </span>
-                {v('hobbies')}
-              </>
-            )}
-          </tr>
-        </tbody>
-      </table>
-
-      {/* GENERAL INFORMATION */}
-      <table className="w-full border-collapse border border-black mb-1 table-fixed">
-        <thead>
-          <tr>
-            <td colSpan={2} className="border border-black bg-gray-200 text-center font-bold py-0.5 uppercase text-[10px]">
-              General Information
-            </td>
-          </tr>
-        </thead>
-        <tbody>
-          {generalQs.map((q) => (
-            <tr key={q.key}>
-              {cell(
-                <>
-                  <span className="font-semibold">({q.letter})</span> {q.label}
-                </>,
-                'w-[88%]'
-              )}
-              {cell(yn(d[q.key]), 'w-[12%] text-center font-semibold')}
-            </tr>
-          ))}
-          {d.medicalRemarks ? (
+          {hasGrad && (
             <tr>
-              {cell(
-                <>
-                  <span className="font-semibold">Remarks: </span>
-                  {v('medicalRemarks')}
-                </>,
-                ''
-              )}
-              {cell('')}
+              <Td>Graduation / Diploma</Td>
+              <Td>{val(d.gradCollege)}</Td>
+              <Td>{val(d.gradCourse)}</Td>
+              <Td className="text-center">{val(d.gradPercentage)}</Td>
+              <Td className="text-center">{val(d.gradPassingYear)}</Td>
+              <Td className="text-center">{val(d.gradMode)}</Td>
+            </tr>
+          )}
+          {hasPg && (
+            <tr>
+              <Td>Post-Graduation / Diploma</Td>
+              <Td>{val(d.postGradCollege)}</Td>
+              <Td>{val(d.postGradCourse)}</Td>
+              <Td className="text-center">{val(d.postGradPercentage)}</Td>
+              <Td className="text-center">{val(d.postGradPassingYear)}</Td>
+              <Td className="text-center">{val(d.postGradMode)}</Td>
+            </tr>
+          )}
+          <tr>
+            <Td colSpan={6}>Computer Knowledge <Line className="min-w-[70%]">{computer}</Line></Td>
+          </tr>
+          {val(d.softwareCerts) ? (
+            <tr>
+              <Td colSpan={6}>Other Software / Certifications <Line className="min-w-[55%]">{val(d.softwareCerts)}</Line></Td>
             </tr>
           ) : null}
         </tbody>
       </table>
 
-      {/* EMERGENCY CONTACT */}
-      <table className="w-full border-collapse border border-black mb-1 table-fixed text-[8px]">
+      {family.length > 0 && (
+        <table className="w-full border-collapse border border-black mb-1.5">
+          <thead>
+            <tr><Th colSpan={6}>Family Details</Th></tr>
+            <tr>
+              <Td className="font-semibold text-center w-[16%]">Relationship</Td>
+              <Td className="font-semibold text-center">Name</Td>
+              <Td className="font-semibold text-center w-[8%]">Age</Td>
+              <Td className="font-semibold text-center w-[16%]">Occupation</Td>
+              <Td className="font-semibold text-center">Company / School Name</Td>
+              <Td className="font-semibold text-center w-[16%]">Mobile Number</Td>
+            </tr>
+          </thead>
+          <tbody>
+            {family.map((row) => (
+              <tr key={row.rel + val(row.name)}>
+                <Td>{row.rel}</Td>
+                <Td>{val(row.name)}</Td>
+                <Td className="text-center">{val(row.age)}</Td>
+                <Td>{val(row.occ)}</Td>
+                <Td>{val(row.co)}</Td>
+                <Td>{val(row.ph)}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <table className="w-full border-collapse border border-black mb-1.5">
         <thead>
+          <tr><Th colSpan={7}>2. Employment Record</Th></tr>
           <tr>
-            <td colSpan={4} className="border border-black bg-gray-200 text-center font-bold py-0.5 uppercase text-[10px]">
-              Emergency Contact
-            </td>
+            <Td colSpan={3}>
+              Do you have any experience before? <Tick on={asBool(d.previousExperience)} />
+            </Td>
+            <Td colSpan={2}>Total Experience <Line>{val(d.totalExperience)}</Line></Td>
+            <Td colSpan={2}>Expected Salary <Line>{val(d.expectedSalary)}</Line></Td>
           </tr>
-          <tr className="font-semibold text-center">
-            {cell('Relation')}
-            {cell('Name')}
-            {cell('Address')}
-            {cell('Contact')}
+          {jobs.length > 0 && (
+            <tr>
+              <Td className="font-semibold text-center w-[22%]">Previous Company Name &amp; Address</Td>
+              <Td className="font-semibold text-center w-[12%]">Position Held</Td>
+              <Td className="font-semibold text-center w-[18%]">Reporting Person</Td>
+              <Td className="font-semibold text-center w-[10%]">From</Td>
+              <Td className="font-semibold text-center w-[10%]">To</Td>
+              <Td className="font-semibold text-center w-[14%]">Last Drawn Salary</Td>
+              <Td className="font-semibold text-center">Reason for Leaving</Td>
+            </tr>
+          )}
+        </thead>
+        <tbody>
+          {jobs.map((job, i) => (
+            <tr key={i}>
+              <Td>{val(job.co)}</Td>
+              <Td>{val(job.pos)}</Td>
+              <Td>{val(job.rep)}</Td>
+              <Td className="text-center">{val(job.from)}</Td>
+              <Td className="text-center">{val(job.to)}</Td>
+              <Td className="text-center">{val(job.sal)}</Td>
+              <Td>{val(job.reason)}</Td>
+            </tr>
+          ))}
+          <tr>
+            <Td colSpan={7}>
+              How did you learn about the opening? <Line className="min-w-[70%]">{val(d.sourceOfOpening) || val(d.source)}</Line>
+            </Td>
+          </tr>
+          {val(d.referredBy) ? (
+            <tr>
+              <Td colSpan={7}>Referred by / Friend / Relative working at Nippon Toyota <Line className="min-w-[50%]">{val(d.referredBy)}</Line></Td>
+            </tr>
+          ) : null}
+          <tr>
+            <Td colSpan={7}>Ready to work in below-mentioned branches <Line className="min-w-[55%]">{val(d.preferredRegion)}</Line></Td>
+          </tr>
+          <tr>
+            <Td colSpan={7}>If selected, when can you join? <Line className="min-w-[60%]">{fmtDate(d.expectedJoiningDate) || val(d.expectedJoiningDate)}</Line></Td>
+          </tr>
+        </tbody>
+      </table>
+
+      {hasExtra && (
+        <table className="w-full border-collapse border border-black mb-1.5">
+          <thead>
+            <tr><Th colSpan={2}>Additional Information</Th></tr>
+          </thead>
+          <tbody>
+            {val(d.achievements) ? (
+              <tr>
+                <Td className="w-[18%] font-semibold">Achievements</Td>
+                <Td>{val(d.achievements)}</Td>
+              </tr>
+            ) : null}
+            {val(d.hobbies) ? (
+              <tr>
+                <Td className="font-semibold">Hobbies</Td>
+                <Td>{val(d.hobbies)}</Td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      )}
+
+      <table className="w-full border-collapse border border-black mb-1.5">
+        <thead>
+          <tr><Th colSpan={2}>3. General Information</Th></tr>
+        </thead>
+        <tbody>
+          {general.map(([letter, label, value]) => (
+            <tr key={letter}>
+              <Td>{letter}. {label}</Td>
+              <Td className="w-[28%] text-center">
+                <Tick on={asBool(value)} />
+              </Td>
+            </tr>
+          ))}
+          {val(d.medicalRemarks) ? (
+            <tr>
+              <Td colSpan={2}>Medical remarks <Line className="min-w-[70%]">{val(d.medicalRemarks)}</Line></Td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+
+      {(val(d.refName) || val(d.refContactNumber) || d.hasReference) ? (
+        <table className="w-full border-collapse border border-black mb-1.5">
+          <thead>
+            <tr><Th colSpan={4}>Reference</Th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <Td>Name <Line>{val(d.refName)}</Line></Td>
+              <Td>Role <Line>{val(d.refRole)}</Line></Td>
+              <Td>Panchayat <Line>{val(d.refPanchayat)}</Line></Td>
+              <Td>Contact <Line>{val(d.refContactNumber)}</Line></Td>
+            </tr>
+          </tbody>
+        </table>
+      ) : null}
+
+      <table className="w-full border-collapse border border-black mb-1.5">
+        <thead>
+          <tr><Th colSpan={5}>4. Emergency Contact Details</Th></tr>
+          <tr>
+            <Td className="font-semibold text-center w-[8%]">Sl. No.</Td>
+            <Td className="font-semibold text-center w-[16%]">Relation</Td>
+            <Td className="font-semibold text-center w-[22%]">Name</Td>
+            <Td className="font-semibold text-center">Address</Td>
+            <Td className="font-semibold text-center w-[18%]">Contact Details</Td>
           </tr>
         </thead>
         <tbody>
           <tr>
-            {cell(v('emergency1Relation'))}
-            {cell(v('emergency1Name'))}
-            {cell(v('emergency1Address'))}
-            {cell(v('emergency1Contact'))}
+            <Td className="text-center">1</Td>
+            <Td>{val(d.emergency1Relation)}</Td>
+            <Td>{val(d.emergency1Name)}</Td>
+            <Td>{val(d.emergency1Address)}</Td>
+            <Td>{val(d.emergency1Contact)}</Td>
           </tr>
+          {hasEmergency2 && (
+            <tr>
+              <Td className="text-center">2</Td>
+              <Td>{val(d.emergency2Relation)}</Td>
+              <Td>{val(d.emergency2Name)}</Td>
+              <Td>{val(d.emergency2Address)}</Td>
+              <Td>{val(d.emergency2Contact)}</Td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      <table className="w-full border-collapse border border-black mb-1.5">
+        <thead>
+          <tr><Th colSpan={4}>5. Social Media Details &nbsp;|&nbsp; 6. E-Mail ID</Th></tr>
+        </thead>
+        <tbody>
           <tr>
-            {cell(v('emergency2Relation'))}
-            {cell(v('emergency2Name'))}
-            {cell(v('emergency2Address'))}
-            {cell(v('emergency2Contact'))}
+            <Td>Facebook <Line className="min-w-[55%]">{val(d.facebookUrl)}</Line></Td>
+            <Td>Instagram <Line className="min-w-[55%]">{val(d.instagramUrl)}</Line></Td>
+            <Td>Twitter <Line className="min-w-[55%]">{val(d.twitterUrl)}</Line></Td>
+            <Td>E-Mail ID <Line className="min-w-[55%]">{val(email)}</Line></Td>
           </tr>
         </tbody>
       </table>
 
-      {/* SOCIAL + EMAIL */}
-      <table className="w-full border-collapse border border-black mb-1 table-fixed">
+      <table className="w-full border-collapse border border-black">
+        <thead>
+          <tr><Th colSpan={3}>Declaration</Th></tr>
+        </thead>
         <tbody>
           <tr>
-            <td colSpan={4} className="border border-black bg-gray-200 text-center font-bold py-0.5 uppercase text-[10px]">
-              Social Media &amp; E-Mail ID
-            </td>
+            <Td colSpan={3} className="text-[10px] leading-snug py-1.5">
+              I hereby declare that the particulars given above are, to the best of my knowledge and belief,
+              correct and true. I understand that if appointed, any incorrect information given in this
+              application may be sufficient cause for termination of my services.
+            </Td>
           </tr>
           <tr>
-            {cell(
-              <>
-                <span className="font-semibold">Facebook: </span>
-                {v('facebookUrl')}
-              </>,
-              'w-[25%]'
-            )}
-            {cell(
-              <>
-                <span className="font-semibold">Instagram: </span>
-                {v('instagramUrl')}
-              </>,
-              'w-[25%]'
-            )}
-            {cell(
-              <>
-                <span className="font-semibold">Twitter / X: </span>
-                {v('twitterUrl')}
-              </>,
-              'w-[25%]'
-            )}
-            {cell(
-              <>
-                <span className="font-semibold">E-Mail ID: </span>
-                {blank(email)}
-              </>,
-              'w-[25%]'
-            )}
+            <Td>Place <Line className="min-w-[6rem]">{val(d.declarationPlace)}</Line></Td>
+            <Td>Date <Line className="min-w-[6rem]">{fmtDate(d.declarationDate) || val(d.declarationDate)}</Line></Td>
+            <Td>Signature of Applicant <Line className="min-w-[8rem]">{val(d.declarationName)}</Line></Td>
           </tr>
         </tbody>
       </table>
-
-      {/* DECLARATION */}
-      <table className="w-full border-collapse border border-black table-fixed">
-        <tbody>
-          <tr>
-            <td colSpan={3} className="border border-black bg-gray-200 text-center font-bold py-0.5 uppercase text-[10px]">
-              Declaration
-            </td>
-          </tr>
-          <tr>
-            <td colSpan={3} className="border border-black p-1 text-[8px] leading-snug">
-              I hereby declare that the particulars furnished above are true and correct to the best of
-              my knowledge and belief. I understand that any false information or suppression of facts
-              may lead to rejection of my candidature or termination of employment if already engaged.
-            </td>
-          </tr>
-          <tr>
-            {cell(
-              <>
-                <span className="font-semibold">Place: </span>
-                {v('declarationPlace')}
-              </>,
-              'w-[33%]'
-            )}
-            {cell(
-              <>
-                <span className="font-semibold">Date: </span>
-                {formatDate(d.declarationDate) === '—'
-                  ? v('declarationDate')
-                  : formatDate(d.declarationDate)}
-              </>,
-              'w-[33%]'
-            )}
-            {cell(
-              <>
-                <span className="font-semibold">Signature / Name: </span>
-                {v('declarationName')}
-              </>,
-              'w-[34%]'
-            )}
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    </section>
   );
 }

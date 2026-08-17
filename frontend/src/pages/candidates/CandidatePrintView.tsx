@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { publicGetBasicCandidate } from '../../api/candidates';
+import { getCandidateById } from '../../api/candidates';
 import { getCandidateEvaluations } from '../../api/evaluations';
 import type { Candidate, Evaluation } from '../../types';
 import { LoadingSpinner, EmptyState } from '../../components/ui';
 import { FileX } from 'lucide-react';
-import { CandidateSummaryDocument } from '../../components/candidates/CandidateSummaryDocument';
+import { HoReviewPacket } from '../../components/candidates/HoReviewPacket';
 
 export default function CandidatePrintView() {
   const { id } = useParams<{ id: string }>();
@@ -18,10 +18,10 @@ export default function CandidatePrintView() {
     const fetchData = async () => {
       try {
         const [cand, evals] = await Promise.all([
-          publicGetBasicCandidate(id),
+          getCandidateById(id),
           getCandidateEvaluations(id)
         ]);
-        setCandidate(cand);
+        setCandidate(cand ?? null);
         setEvaluations(evals);
       } catch (error) {
         console.error('Error fetching data for print:', error);
@@ -48,5 +48,5 @@ export default function CandidatePrintView() {
     );
   }
 
-  return <CandidateSummaryDocument candidate={candidate} evaluations={evaluations} />;
+  return <HoReviewPacket candidate={candidate} evaluations={evaluations} />;
 }

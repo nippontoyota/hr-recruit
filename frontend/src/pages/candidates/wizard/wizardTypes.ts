@@ -1,3 +1,25 @@
+export interface PreviousJob {
+  company: string;
+  position: string;
+  reporting: string;
+  fromDate: string;
+  toDate: string;
+  salary: string;
+  reason: string;
+}
+
+export const EMPTY_PREVIOUS_JOB: PreviousJob = {
+  company: '',
+  position: '',
+  reporting: '',
+  fromDate: '',
+  toDate: '',
+  salary: '',
+  reason: '',
+};
+
+export const MAX_PREVIOUS_JOBS = 10;
+
 export interface CandidateFormData {
   candidateId: string;
   fullName: string;
@@ -145,6 +167,7 @@ export interface CandidateFormData {
   sibling3Phone: string;
 
   previousExperience: boolean;
+  previousJobs: PreviousJob[];
   prevCompanyName: string;
   prevPosition: string;
   prev1Reporting: string;
@@ -218,6 +241,97 @@ export interface CandidateFormData {
   declarationPlace: string;
   declarationDate: string;
   declarationName: string;
+}
+
+function jobHasContent(job: PreviousJob): boolean {
+  return [
+    job.company,
+    job.position,
+    job.reporting,
+    job.fromDate,
+    job.toDate,
+    job.salary,
+    job.reason,
+  ].some((value) => (value || '').trim().length > 0);
+}
+
+export function previousJobsFromForm(data: CandidateFormData): PreviousJob[] {
+  if (Array.isArray(data.previousJobs) && data.previousJobs.length > 0) {
+    return data.previousJobs;
+  }
+  return [
+    {
+      company: data.prevCompanyName,
+      position: data.prevPosition,
+      reporting: data.prev1Reporting,
+      fromDate: data.prev1From,
+      toDate: data.prev1To,
+      salary: data.prev1Salary,
+      reason: data.prev1Reason,
+    },
+    {
+      company: data.prev2Name,
+      position: data.prev2Position,
+      reporting: data.prev2Reporting,
+      fromDate: data.prev2From,
+      toDate: data.prev2To,
+      salary: data.prev2Salary,
+      reason: data.prev2Reason,
+    },
+    {
+      company: data.prev3Name,
+      position: data.prev3Position,
+      reporting: data.prev3Reporting,
+      fromDate: data.prev3From,
+      toDate: data.prev3To,
+      salary: data.prev3Salary,
+      reason: data.prev3Reason,
+    },
+    {
+      company: data.prev4Name,
+      position: data.prev4Position,
+      reporting: data.prev4Reporting,
+      fromDate: data.prev4From,
+      toDate: data.prev4To,
+      salary: data.prev4Salary,
+      reason: data.prev4Reason,
+    },
+  ].filter(jobHasContent);
+}
+
+export function previousJobsPatch(jobs: PreviousJob[]): Partial<CandidateFormData> {
+  const slot = (index: number): PreviousJob => jobs[index] ?? EMPTY_PREVIOUS_JOB;
+  return {
+    previousJobs: jobs,
+    prevCompanyName: slot(0).company,
+    prevPosition: slot(0).position,
+    prev1Reporting: slot(0).reporting,
+    prev1From: slot(0).fromDate,
+    prev1To: slot(0).toDate,
+    prev1Salary: slot(0).salary,
+    prev1Reason: slot(0).reason,
+    prev2Name: slot(1).company,
+    prev2Position: slot(1).position,
+    prev2Reporting: slot(1).reporting,
+    prev2From: slot(1).fromDate,
+    prev2To: slot(1).toDate,
+    prev2Salary: slot(1).salary,
+    prev2Reason: slot(1).reason,
+    prev3Name: slot(2).company,
+    prev3Position: slot(2).position,
+    prev3Reporting: slot(2).reporting,
+    prev3From: slot(2).fromDate,
+    prev3To: slot(2).toDate,
+    prev3Salary: slot(2).salary,
+    prev3Reason: slot(2).reason,
+    prev4Name: slot(3).company,
+    prev4Position: slot(3).position,
+    prev4Reporting: slot(3).reporting,
+    prev4From: slot(3).fromDate,
+    prev4To: slot(3).toDate,
+    prev4Salary: slot(3).salary,
+    prev4Reason: slot(3).reason,
+  };
 }
 
 export const initialCandidateData: CandidateFormData = {
@@ -346,6 +460,7 @@ export const initialCandidateData: CandidateFormData = {
   sibling3Company: '',
   sibling3Phone: '',
   previousExperience: false,
+  previousJobs: [],
   prevCompanyName: '',
   prevPosition: '',
   prev1Reporting: '',

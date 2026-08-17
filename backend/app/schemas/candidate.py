@@ -5,6 +5,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import DocumentType, PipelineStage, FormStatus, ScreeningStatus, ActivityType
 from app.core.compat import parse_source_channel
+from app.core.positions import DEPARTMENTS, EXPERIENCE_LEVELS
 from app.utils import validators as v
 
 
@@ -18,6 +19,7 @@ class CandidateCreate(BaseModel):
     email: str | None = None
     source: str = "Unknown"
     source_reference: str | None = None
+    position_applied_for: str = "Unknown"
     experience: str = "Fresher"
     department: str | None = None
     branch_location: str | None = Field(
@@ -41,12 +43,25 @@ class CandidateCreate(BaseModel):
     def check_email(cls, value: str | None) -> str | None:
         return v.validate_email(value, required=False)
 
-    @field_validator("experience")
+    @field_validator("position_applied_for")
     @classmethod
     def check_position(cls, value: str) -> str:
         if value == "Unknown":
             return value
         return v.validate_text_field(value, "Position applied for", 2, 100)
+
+    @field_validator("experience")
+    @classmethod
+    def check_experience(cls, value: str) -> str:
+        if value not in EXPERIENCE_LEVELS:
+            raise ValueError("Experience must be Fresher or Experienced.")
+        return value
+
+    @model_validator(mode="after")
+    def check_department(self) -> "CandidateCreate":
+        if self.department and self.department not in DEPARTMENTS:
+            raise ValueError(f"Department must be one of: {', '.join(DEPARTMENTS)}")
+        return self
 
     @field_validator("source")
     @classmethod
@@ -70,6 +85,18 @@ class CandidateCreate(BaseModel):
 
 class CandidateResolveDuplicate(BaseModel):
     action: str = Field(..., description="Either 'MERGE' or 'NOT_DUPLICATE'")
+
+
+class PreviousJobEntry(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    company: str = ""
+    position: str = ""
+    reporting: str = ""
+    fromDate: str = ""
+    toDate: str = ""
+    salary: str = ""
+    reason: str = ""
 
 
 class PreFormApplicationData(BaseModel):
@@ -209,6 +236,7 @@ class PreFormApplicationData(BaseModel):
     sibling3Phone: str = ""
 
     previousExperience: bool = False
+    previousJobs: list[PreviousJobEntry] = Field(default_factory=list)
     prevCompanyName: str = ""
     prevPosition: str = ""
     prev1Reporting: str = ""
@@ -396,35 +424,118 @@ class PreFormApplicationData(BaseModel):
 
         v.validate_salary(self.expectedSalary)
 
+        jobs = list(self.previousJobs)
+        if not jobs:
+            jobs = [
+                PreviousJobEntry(
+                    company=self.prevCompanyName,
+                    position=self.prevPosition,
+                    reporting=self.prev1Reporting,
+                    fromDate=self.prev1From,
+                    toDate=self.prev1To,
+                    salary=self.prev1Salary,
+                    reason=self.prev1Reason,
+                ),
+                PreviousJobEntry(
+                    company=self.prev2Name,
+                    position=self.prev2Position,
+                    reporting=self.prev2Reporting,
+                    fromDate=self.prev2From,
+                    toDate=self.prev2To,
+                    salary=self.prev2Salary,
+                    reason=self.prev2Reason,
+                ),
+                PreviousJobEntry(
+                    company=self.prev3Name,
+                    position=self.prev3Position,
+                    reporting=self.prev3Reporting,
+                    fromDate=self.prev3From,
+                    toDate=self.prev3To,
+                    salary=self.prev3Salary,
+                    reason=self.prev3Reason,
+                ),
+                PreviousJobEntry(
+                    company=self.prev4Name,
+                    position=self.prev4Position,
+                    reporting=self.prev4Reporting,
+                    fromDate=self.prev4From,
+                    toDate=self.prev4To,
+                    salary=self.prev4Salary,
+                    reason=self.prev4Reason,
+                ),
+            ]
+            if not self.previousExperience:
+                jobs = []
+            else:
+                while jobs and not self._any_filled(
+                    jobs[-1].company,
+                    jobs[-1].position,
+                    jobs[-1].reporting,
+                    jobs[-1].fromDate,
+                    jobs[-1].toDate,
+                    jobs[-1].salary,
+                    jobs[-1].reason,
+                ):
+                    jobs.pop()
+
         if self.previousExperience:
             v.validate_experience_text(self.totalExperience)
-            self._validate_job_row(
-                label="Previous job 1",
-                name=self.prevCompanyName,
-                position=self.prevPosition,
-                reporting=self.prev1Reporting,
-                from_date=self.prev1From,
-                to_date=self.prev1To,
-                salary=self.prev1Salary,
-                reason=self.prev1Reason,
-                required=True,
-            )
+            if not jobs:
+                jobs = [PreviousJobEntry()]
+            for idx, job in enumerate(jobs):
+                self._validate_job_row(
+                    label=f"Previous job {idx + 1}",
+                    name=job.company,
+                    position=job.position,
+                    reporting=job.reporting,
+                    from_date=job.fromDate,
+                    to_date=job.toDate,
+                    salary=job.salary,
+                    reason=job.reason,
+                    required=idx == 0,
+                )
         else:
             if not self.totalExperience.strip():
                 self.totalExperience = "Fresher"
+            jobs = []
 
-        for idx, prefix in ((2, "prev2"), (3, "prev3"), (4, "prev4")):
-            self._validate_job_row(
-                label=f"Previous job {idx}",
-                name=getattr(self, f"{prefix}Name"),
-                position=getattr(self, f"{prefix}Position"),
-                reporting=getattr(self, f"{prefix}Reporting"),
-                from_date=getattr(self, f"{prefix}From"),
-                to_date=getattr(self, f"{prefix}To"),
-                salary=getattr(self, f"{prefix}Salary"),
-                reason=getattr(self, f"{prefix}Reason"),
-                required=False,
-            )
+        if len(jobs) > 10:
+            raise ValueError("At most 10 previous employers can be added.")
+
+        self.previousJobs = jobs
+        empty = PreviousJobEntry()
+        first = jobs[0] if len(jobs) > 0 else empty
+        second = jobs[1] if len(jobs) > 1 else empty
+        third = jobs[2] if len(jobs) > 2 else empty
+        fourth = jobs[3] if len(jobs) > 3 else empty
+        self.prevCompanyName = first.company
+        self.prevPosition = first.position
+        self.prev1Reporting = first.reporting
+        self.prev1From = first.fromDate
+        self.prev1To = first.toDate
+        self.prev1Salary = first.salary
+        self.prev1Reason = first.reason
+        self.prev2Name = second.company
+        self.prev2Position = second.position
+        self.prev2Reporting = second.reporting
+        self.prev2From = second.fromDate
+        self.prev2To = second.toDate
+        self.prev2Salary = second.salary
+        self.prev2Reason = second.reason
+        self.prev3Name = third.company
+        self.prev3Position = third.position
+        self.prev3Reporting = third.reporting
+        self.prev3From = third.fromDate
+        self.prev3To = third.toDate
+        self.prev3Salary = third.salary
+        self.prev3Reason = third.reason
+        self.prev4Name = fourth.company
+        self.prev4Position = fourth.position
+        self.prev4Reporting = fourth.reporting
+        self.prev4From = fourth.fromDate
+        self.prev4To = fourth.toDate
+        self.prev4Salary = fourth.salary
+        self.prev4Reason = fourth.reason
 
         v.validate_select(self.sourceOfOpening, v.OPENING_SOURCES, "Source of opening")
         if self.sourceOfOpening == "Employee Referral" or self.referredBy.strip():
@@ -461,10 +572,6 @@ class PreFormApplicationData(BaseModel):
         v.validate_text_field(self.declarationName, "Declaration name", 2, 100)
 
         return self
-
-
-# Kept for import compatibility; post-form fields are merged into PreFormApplicationData.
-PostFormApplicationData = PreFormApplicationData
 
 
 class CandidateProfileRawDataUpdate(BaseModel):
@@ -532,6 +639,16 @@ class CandidateScreeningOut(CandidateScreeningCreate):
         return self
 
 
+class CandidateWorkState(BaseModel):
+    next_action: str
+    action_key: str = "NONE"
+    responsible_team: str
+    blockers: list[str] = Field(default_factory=list)
+    days_in_stage: int
+    days_since_activity: int | None = None
+    queue_keys: list[str] = Field(default_factory=list)
+
+
 class CandidateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -542,11 +659,13 @@ class CandidateOut(BaseModel):
     email: str | None
     source: str
     source_reference: str | None
-    experience: str
+    position_applied_for: str
+    experience: str = "Fresher"
     department: str | None = None
     share_url: str | None = None
     pre_form_status: FormStatus
     pre_form_sent_at: datetime | None
+    pre_form_expires_at: datetime | None = None
     pre_form_submitted_at: datetime | None
     pre_form_token: str | None = None
     current_stage: PipelineStage
@@ -569,7 +688,11 @@ class CandidateOut(BaseModel):
     updated_at: datetime
     has_resume: bool = False
     is_rejoining: bool = False
+    handed_over_to_ho: bool = False
+    offer_blockers: list[str] = []
     screening: "CandidateScreeningOut | None" = None
+    work_state: CandidateWorkState | None = None
+
 
 class CandidateListOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -581,11 +704,13 @@ class CandidateListOut(BaseModel):
     email: str | None
     source: str
     source_reference: str | None
-    experience: str
+    position_applied_for: str
+    experience: str = "Fresher"
     department: str | None = None
     share_url: str | None = None
     pre_form_status: FormStatus
     pre_form_sent_at: datetime | None
+    pre_form_expires_at: datetime | None = None
     pre_form_submitted_at: datetime | None
     pre_form_token: str | None = None
     current_stage: PipelineStage
@@ -606,6 +731,8 @@ class CandidateListOut(BaseModel):
     updated_at: datetime
     has_resume: bool = False
     is_rejoining: bool = False
+    handed_over_to_ho: bool = False
+    work_state: CandidateWorkState | None = None
 
 
 class StageChange(BaseModel):
@@ -631,11 +758,39 @@ class CandidateDepartmentUpdate(BaseModel):
     """Mid-process change of what the candidate is being considered for."""
 
     department: str = Field(..., min_length=1, max_length=255)
-    position_applied_for: str | None = Field(
-        None,
-        max_length=255,
-        description="Role being considered for (e.g. Sales Consultant → Customer Support Executive)",
-    )
+    position_applied_for: str | None = Field(None, max_length=255)
+    experience: str | None = None
+    source: str | None = None
+    source_reference: str | None = None
+
+    @field_validator("source")
+    @classmethod
+    def check_source(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value in ("Unknown", ""):
+            return "Unknown"
+        try:
+            return parse_source_channel(value).value
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @field_validator("source_reference")
+    @classmethod
+    def check_source_reference(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        if len(value.strip()) > 255:
+            raise ValueError("Source reference must be at most 255 characters.")
+        return value.strip()
+
+    @model_validator(mode="after")
+    def check_assignment(self) -> "CandidateDepartmentUpdate":
+        if self.department not in DEPARTMENTS:
+            raise ValueError(f"Department must be one of: {', '.join(DEPARTMENTS)}")
+        if self.experience is not None and self.experience not in EXPERIENCE_LEVELS:
+            raise ValueError("Experience must be Fresher or Experienced.")
+        return self
 
 
 class StageHistoryOut(BaseModel):
@@ -664,12 +819,6 @@ class DocumentOut(BaseModel):
     download_url: str
 
 
-
-
-class ScreeningSubmitResponse(BaseModel):
-    screening: CandidateScreeningOut
-    candidate: CandidateOut | None = None
-
 class ActivityLogOut(BaseModel):
     id: UUID
     candidate_id: UUID
@@ -690,10 +839,32 @@ class CandidatePortalEvaluationOut(BaseModel):
     candidate_response: str | None
     interview_mode: str | None
 
-class CandidatePortalOut(BaseModel):
-    id: UUID
+class PublicCandidateOut(BaseModel):
     full_name: str
-    experience: str
+    phone: str
+    email: str | None = None
+    source: str
+    position_applied_for: str
+    experience: str = "Fresher"
+    has_resume: bool = False
+    token: str | None = None
+
+
+class PublicFullStatusOut(BaseModel):
+    full_name: str
+    is_awaiting_full_fill: bool
+    pre_form_expires_at: datetime | None = None
+
+
+class PublicUploadOut(BaseModel):
+    status: str = "ok"
+    file_name: str | None = None
+    photo_url: str | None = None
+
+
+class CandidatePortalOut(BaseModel):
+    full_name: str
+    position_applied_for: str
     phone: str
     email: str | None = None
     branch_location: str | None = None
@@ -705,11 +876,6 @@ class CandidatePortalOut(BaseModel):
 class CandidatePortalResponseIn(BaseModel):
     action_type: str # "INTERVIEW_CONFIRM", "INTERVIEW_DECLINE", "OFFER_ACCEPT", "OFFER_DECLINE"
     evaluation_id: UUID | None = None
-
-class ActivityLogCreate(BaseModel):
-    activity_type: ActivityType
-    title: str
-    description: str
 
 
 class WhatsAppInviteCreate(BaseModel):

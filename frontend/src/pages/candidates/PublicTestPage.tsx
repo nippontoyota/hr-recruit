@@ -1,16 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle, ShieldAlert, ChevronRight, ChevronLeft } from 'lucide-react';
-import { Button, LoadingSpinner } from '../../components/ui';
-import { PublicShell } from '../../components/layout/PublicShell';
+import { ChevronRight, ChevronLeft, Clock } from 'lucide-react';
+import { Button } from '../../components/ui';
 import { getPublicTestQuestions, submitPublicTest } from '../../api/evaluations';
 import { cn, extractError } from '../../lib/utils';
 import { toast } from 'sonner';
+import { PublicShell } from '../../components/layout/PublicShell';
+import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
 
 interface Question {
   id: string;
   text: string;
   options: Record<string, string>;
+}
+
+function formatTimer(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 export default function PublicTestPage() {
@@ -22,10 +29,13 @@ export default function PublicTestPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [result, setResult] = useState<{ verdict: string; score: string } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Test state
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [deadline, setDeadline] = useState<Date | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const autoSubmittedRef = useRef(false);
 
   useEffect(() => {
     fetchQuestions();
@@ -39,6 +49,11 @@ export default function PublicTestPage() {
       const res = await getPublicTestQuestions(token);
       setDepartment(res.department);
       setQuestions(res.questions);
+      if (res.expires_at) {
+        setDeadline(new Date(res.expires_at));
+      } else if (res.duration_seconds) {
+        setDeadline(new Date(Date.now() + res.duration_seconds * 1000));
+      }
     } catch (err: any) {
       setError(extractError(err, 'This technical test link is invalid, expired, or has already been used.'));
     } finally {
@@ -46,71 +61,65 @@ export default function PublicTestPage() {
     }
   };
 
-  const handleSelectOption = (qid: string, optKey: string) => {
-    setAnswers(prev => ({ ...prev, [qid]: optKey }));
-  };
-
-  const handleSubmit = async () => {
-    if (!token) return;
+  const handleSubmit = useCallback(async (allowPartial = false) => {
+    if (!token || submitting || submitted) return;
     const answeredCount = Object.keys(answers).length;
-    if (answeredCount < questions.length) {
+    if (!allowPartial && answeredCount < questions.length) {
       toast.warning(`You have answered ${answeredCount} of ${questions.length} questions. Please answer all questions before submitting.`);
       return;
     }
 
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const res = await submitPublicTest(token, answers);
       setResult(res);
       setSubmitted(true);
       toast.success('Technical test submitted successfully!');
     } catch (err) {
-      toast.error(extractError(err, 'Failed to submit test'));
+      const message = extractError(err, 'Failed to submit test. Your answers are still on this page; please retry.');
+      setSubmitError(message);
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }
+  }, [token, submitting, submitted, answers, questions.length]);
+
+  useEffect(() => {
+    if (!deadline || submitted) return;
+
+    const tick = () => {
+      const left = Math.max(0, Math.floor((deadline.getTime() - Date.now()) / 1000));
+      setSecondsLeft(left);
+      if (left === 0 && !autoSubmittedRef.current) {
+        autoSubmittedRef.current = true;
+        toast.warning('Time is up. Submitting your test…');
+        handleSubmit(true);
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [deadline, submitted, handleSubmit]);
+
+  const handleSelectOption = (qid: string, optKey: string) => {
+    setAnswers(prev => ({ ...prev, [qid]: optKey }));
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
+  /*  */if (loading) {
+    return <PublicShell title="Technical test"><PublicStatusPanel kind="loading" message="Loading your technical test…" /></PublicShell>;
   }
 
   if (error || questions.length === 0) {
-    return (
-      <div className="min-h-screen bg-muted/5 flex flex-col">
-        <div className="flex-1 flex flex-col items-center">
-          <div className="w-full max-w-3xl bg-surface sm:border-l-[3px] sm:border-r-[3px] border-dashed border-primary/40 min-h-screen flex flex-col items-center justify-center p-6 text-center">
-            <div className="w-16 h-16 bg-danger/10 text-danger rounded-full flex items-center justify-center mb-5">
-              <ShieldAlert className="w-8 h-8" />
-            </div>
-            <h3 className="text-2xl font-bold text-foreground tracking-tight">Test Link Invalid</h3>
-            <p className="text-base text-muted-foreground mt-3 max-w-md">
-              {error || 'This technical test is no longer available, or has already been submitted.'}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
+    return <PublicShell title="Technical test"><PublicStatusPanel kind="expired" title="Technical test unavailable" message={`${error || 'This test is no longer available, or has already been submitted.'} Ask your HR recruiter for a fresh link if needed.`} actionLabel="Try again" onAction={() => { setError(null); void fetchQuestions(); }} /></PublicShell>;
   }
 
   if (submitted && result) {
     return (
-      <div className="min-h-screen bg-muted/5 flex flex-col">
-        <div className="flex-1 flex flex-col items-center">
-          <div className="w-full max-w-3xl bg-surface sm:border-l-[3px] sm:border-r-[3px] border-dashed border-primary/40 min-h-screen flex flex-col items-center justify-center p-6 text-center">
-            <div className="w-20 h-20 bg-success/10 text-success rounded-full flex items-center justify-center mb-6 shadow-sm border border-success/20">
-              <CheckCircle className="w-10 h-10" />
-            </div>
-            <h3 className="text-3xl font-bold text-foreground tracking-tight mb-3">Test Submitted</h3>
-            <p className="text-base text-muted-foreground max-w-md mb-10 leading-relaxed">
-              Your responses have been securely logged in the system. You may now close this page.
-            </p>
-            
-            <div className="bg-muted/30 border border-border/50 p-6 rounded-2xl w-full max-w-sm space-y-4">
+      <PublicShell title="Technical test" step="Submitted">
+        <PublicStatusPanel kind="submitted" title="Technical test submitted" message="Your responses have been securely logged. You may now close this page." />
+        <div className="page-card mx-auto mt-4 w-full max-w-sm space-y-4 p-6">
               <div className="flex justify-between items-center border-b border-border/40 pb-3">
                 <span className="text-sm font-medium text-muted-foreground">Department</span>
                 <strong className="text-sm font-bold text-foreground uppercase">{department}</strong>
@@ -124,35 +133,54 @@ export default function PublicTestPage() {
                   </strong>
                 </div>
               )}
-            </div>
-          </div>
         </div>
-      </div>
+      </PublicShell>
     );
   }
 
   const q = questions[currentIdx];
   const selectedOpt = answers[q.id];
+  const timerDisplay = secondsLeft !== null ? formatTimer(secondsLeft) : '08:00';
+  const timerUrgent = secondsLeft !== null && secondsLeft <= 60;
 
   return (
-    <div className="min-h-screen bg-muted/5 flex flex-col">
-      {/* Main Container */}
-      <div className="flex-1 flex flex-col items-center">
+    <PublicShell title="Technical test" step={`Question ${currentIdx + 1} of ${questions.length}`} maxWidth="2xl">
+      <div className="flex flex-col items-center">
         <div className="w-full max-w-3xl bg-surface sm:border-l-[3px] sm:border-r-[3px] border-dashed border-primary/40 min-h-screen flex flex-col">
           
-          {/* Progress Header */}
-          <div className="bg-surface px-6 py-5 flex justify-between items-center text-xs font-bold text-muted-foreground border-b border-border/40">
-            <span className="tracking-widest">QUESTION {currentIdx + 1} OF {questions.length}</span>
-            <div className="flex gap-1 w-32 sm:w-48 bg-muted/60 h-2 rounded-full overflow-hidden border border-border/50">
-              <div 
-                className="bg-primary h-full transition-all duration-300"
-                style={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }}
-              />
+          <div className="bg-surface px-4 sm:px-6 py-4 flex justify-between items-center gap-3 text-xs font-bold text-muted-foreground border-b border-border/40">
+            <span className="tracking-widest shrink-0">QUESTION {currentIdx + 1} OF {questions.length}</span>
+            <div className="flex items-center gap-3 sm:gap-4">
+              <span className="hidden text-xs font-semibold text-text-secondary sm:inline">{questions.length - Object.keys(answers).length} unanswered</span>
+              <div
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-mono text-sm tabular-nums shrink-0',
+                  timerUrgent
+                    ? 'border-danger/40 bg-danger/10 text-danger'
+                    : 'border-border/60 bg-muted/30 text-foreground'
+                )}
+                aria-label="Time remaining"
+              >
+                <Clock className="w-4 h-4 shrink-0" />
+                <span>{timerDisplay}</span>
+              </div>
+              <div className="flex gap-1 w-24 sm:w-48 bg-muted/60 h-2 rounded-full overflow-hidden border border-border/50 shrink-0">
+                <div 
+                  className="bg-primary h-full transition-all duration-300"
+                  style={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }}
+                />
+              </div>
             </div>
           </div>
 
-          {/* Question Block */}
           <div className="p-6 sm:p-10 flex-1 space-y-8">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/20 p-3 text-xs text-text-secondary">
+              <span>Answered {Object.keys(answers).length} of {questions.length}</span>
+              {secondsLeft !== null && secondsLeft <= 120 && <strong className="text-warning">Less than two minutes remain. Submit when ready.</strong>}
+            </div>
+            <nav aria-label="Question navigator" className="flex flex-wrap gap-2">
+              {questions.map((question, index) => <button key={question.id} type="button" aria-label={`Go to question ${index + 1}`} aria-current={index === currentIdx ? 'step' : undefined} onClick={() => setCurrentIdx(index)} className={cn('h-8 w-8 rounded-md border text-xs font-semibold', index === currentIdx ? 'border-primary bg-primary text-primary-foreground' : answers[question.id] ? 'border-success/50 bg-success/10 text-success' : 'border-border text-text-secondary')}>{index + 1}</button>)}
+            </nav>
             <h3 className="text-xl sm:text-2xl font-bold text-foreground leading-snug flex gap-3">
               <span className="text-primary">{currentIdx + 1}.</span>
               {q.text}
@@ -195,8 +223,9 @@ export default function PublicTestPage() {
             </div>
           </div>
 
-          {/* Actions Footer */}
-          <div className="bg-surface px-6 sm:px-10 py-5 border-t border-border/40 flex justify-between items-center">
+          <div className="bg-surface px-6 sm:px-10 py-5 border-t border-border/40 flex flex-col gap-3">
+            {submitError && <PublicStatusPanel kind="retry" message={`${submitError} Your answers have not been cleared.`} actionLabel="Retry submit" onAction={() => void handleSubmit(true)} />}
+            <div className="flex justify-between items-center">
             <Button
               variant="ghost"
               size="sm"
@@ -220,16 +249,17 @@ export default function PublicTestPage() {
               <Button
                 variant="primary"
                 size="sm"
-                onClick={handleSubmit}
+                onClick={() => handleSubmit(false)}
                 isLoading={submitting}
                 className="text-sm font-bold h-11 px-7 rounded-xl shadow-md"
               >
                 Submit Test
               </Button>
             )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </PublicShell>
   );
 }
