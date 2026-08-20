@@ -1,65 +1,200 @@
+import type { ComponentProps } from 'react';
 import type { CandidateFormData } from '../wizardTypes';
 import { Input, Select } from '../../../../components/ui';
+import { STUDY_MODES } from '../../../../lib/validation';
+import { GRADUATION_COURSES, POST_GRADUATION_COURSES } from '../../../../lib/educationDegrees';
+import { FormField, type FormSectionProps } from '../FormField';
 
-interface EducationFormProps {
+function EduInput({
+  field,
+  data,
+  update,
+  errors,
+  onBlurField,
+  ...rest
+}: {
+  field: keyof CandidateFormData;
   data: CandidateFormData;
-  update: (field: keyof CandidateFormData, value: any) => void;
+  update: FormSectionProps['update'];
+  errors: NonNullable<FormSectionProps['errors']>;
+  onBlurField: NonNullable<FormSectionProps['onBlurField']>;
+} & Omit<ComponentProps<typeof Input>, 'value' | 'onChange' | 'onBlur' | 'error'>) {
+  return (
+    <FormField field={field} error={errors[field]}>
+      <Input
+        value={String(data[field] ?? '')}
+        onChange={(e) => update(field, e.target.value)}
+        onBlur={() => onBlurField(field)}
+        error={!!errors[field]}
+        {...rest}
+      />
+    </FormField>
+  );
 }
 
-export const EducationForm = ({ data, update }: EducationFormProps) => {
+function EduSelect({
+  field,
+  data,
+  update,
+  errors,
+  onBlurField,
+  placeholder,
+  options,
+}: {
+  field: keyof CandidateFormData;
+  data: CandidateFormData;
+  update: FormSectionProps['update'];
+  errors: NonNullable<FormSectionProps['errors']>;
+  onBlurField: NonNullable<FormSectionProps['onBlurField']>;
+  placeholder: string;
+  options: readonly string[];
+}) {
+  return (
+    <FormField field={field} error={errors[field]}>
+      <Select
+        value={String(data[field] ?? '')}
+        onChange={(e) => {
+          update(field, e.target.value);
+          setTimeout(() => onBlurField(field), 0);
+        }}
+        error={!!errors[field]}
+      >
+        <option value="" disabled>{placeholder}</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </Select>
+    </FormField>
+  );
+}
+
+function EduMode({
+  field,
+  data,
+  update,
+  errors,
+  onBlurField,
+}: {
+  field: keyof CandidateFormData;
+  data: CandidateFormData;
+  update: FormSectionProps['update'];
+  errors: NonNullable<FormSectionProps['errors']>;
+  onBlurField: NonNullable<FormSectionProps['onBlurField']>;
+}) {
+  return (
+    <FormField field={field} error={errors[field]}>
+      <Select
+        value={String(data[field] ?? '')}
+        onChange={(e) => {
+          update(field, e.target.value);
+          setTimeout(() => onBlurField(field), 0);
+        }}
+        error={!!errors[field]}
+      >
+        <option value="" disabled>Mode of Study</option>
+        {STUDY_MODES.map((mode) => (
+          <option key={mode} value={mode}>{mode}</option>
+        ))}
+      </Select>
+    </FormField>
+  );
+}
+
+export const EducationForm = ({ data, update, errors = {}, onBlurField = () => {} }: FormSectionProps) => {
+  const bind = { data, update, errors, onBlurField };
   return (
     <div className="space-y-8 pb-6">
-      {/* 10th Standard */}
       <div className="space-y-4">
         <h4 className="text-md font-medium text-text-primary border-b border-border pb-2">10th Standard</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input placeholder="School Name" value={data.class10School} onChange={(e) => update('class10School', e.target.value)} />
-          <Input placeholder="Board (e.g. CBSE)" value={data.class10Board} onChange={(e) => update('class10Board', e.target.value)} />
-          <Input type="number" placeholder="Percentage/CGPA" value={data.class10Percentage} onChange={(e) => update('class10Percentage', e.target.value)} />
-          <Input type="number" placeholder="Passing Year" value={data.class10PassingYear} onChange={(e) => update('class10PassingYear', e.target.value)} />
-          <Select value={data.class10Mode} onChange={(e) => update('class10Mode', e.target.value)}>
-            <option value="">Mode of Study</option>
-            <option value="Regular">Regular</option>
-            <option value="Distance">Distance</option>
-          </Select>
+          <EduInput field="class10School" placeholder="School Name (e.g. St. Albert's High School)" {...bind} />
+          <EduInput field="class10Board" placeholder="Board (e.g. State Board / CBSE / ICSE)" {...bind} />
+          <EduInput field="class10Percentage" type="number" placeholder="Percentage / CGPA (e.g. 85.5)" min={0} max={100} step="0.01" {...bind} />
+          <EduInput field="class10PassingYear" type="number" placeholder="Passing Year (e.g. 2018)" min={1970} max={new Date().getFullYear()} {...bind} />
+          <EduMode field="class10Mode" {...bind} />
         </div>
       </div>
 
-      {/* 12th Standard */}
       <div className="space-y-4">
         <h4 className="text-md font-medium text-text-primary border-b border-border pb-2">12th Standard</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input placeholder="School/College Name" value={data.class12School} onChange={(e) => update('class12School', e.target.value)} />
-          <Input placeholder="Stream (Science, Arts...)" value={data.class12Stream} onChange={(e) => update('class12Stream', e.target.value)} />
-          <Input type="number" placeholder="Percentage/CGPA" value={data.class12Percentage} onChange={(e) => update('class12Percentage', e.target.value)} />
-          <Input type="number" placeholder="Passing Year" value={data.class12PassingYear} onChange={(e) => update('class12PassingYear', e.target.value)} />
-          <Select value={data.class12Mode} onChange={(e) => update('class12Mode', e.target.value)}>
-            <option value="">Mode of Study</option>
-            <option value="Regular">Regular</option>
-            <option value="Distance">Distance</option>
-          </Select>
+          <EduInput field="class12School" placeholder="School / College Name (e.g. Model HSS)" {...bind} />
+          <EduInput field="class12Stream" placeholder="Stream (e.g. Science / Commerce / Humanities)" {...bind} />
+          <EduInput field="class12Percentage" type="number" placeholder="Percentage / CGPA (e.g. 82.0)" min={0} max={100} step="0.01" {...bind} />
+          <EduInput field="class12PassingYear" type="number" placeholder="Passing Year (e.g. 2020)" min={1970} max={new Date().getFullYear()} {...bind} />
+          <EduMode field="class12Mode" {...bind} />
         </div>
       </div>
 
-      {/* Graduation */}
       <div className="space-y-4">
-        <h4 className="text-md font-medium text-text-primary border-b border-border pb-2">Graduation</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Input placeholder="Course Name" value={data.gradCourse} onChange={(e) => update('gradCourse', e.target.value)} />
-          <Input placeholder="College/University" value={data.gradCollege} onChange={(e) => update('gradCollege', e.target.value)} />
-          <Input type="number" placeholder="Percentage/CGPA" value={data.gradPercentage} onChange={(e) => update('gradPercentage', e.target.value)} />
-          <Input type="number" placeholder="Passing Year" value={data.gradPassingYear} onChange={(e) => update('gradPassingYear', e.target.value)} />
+        <h4 className="text-md font-medium text-text-primary border-b border-border pb-2">Graduation (Optional)</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <EduSelect
+            field="gradCourse"
+            placeholder="Select Degree / Diploma"
+            options={GRADUATION_COURSES}
+            {...bind}
+          />
+          <EduInput field="gradStream" placeholder="Specialization (e.g. Automobile / Mechanical / CSE / B.Com)" {...bind} />
+          <EduInput field="gradCollege" placeholder="College / University (e.g. CUSAT / MG University)" {...bind} />
+          <EduInput field="gradPercentage" type="number" placeholder="Percentage / CGPA (e.g. 78.5)" min={0} max={100} step="0.01" {...bind} />
+          <EduInput field="gradPassingYear" type="number" placeholder="Passing Year (e.g. 2023)" min={1970} max={new Date().getFullYear() + 4} {...bind} />
+          <EduMode field="gradMode" {...bind} />
         </div>
       </div>
 
-      {/* Post Graduation */}
       <div className="space-y-4">
         <h4 className="text-md font-medium text-text-primary border-b border-border pb-2">Post Graduation (Optional)</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Input placeholder="Course Name" value={data.postGradCourse} onChange={(e) => update('postGradCourse', e.target.value)} />
-          <Input placeholder="College/University" value={data.postGradCollege} onChange={(e) => update('postGradCollege', e.target.value)} />
-          <Input type="number" placeholder="Percentage/CGPA" value={data.postGradPercentage} onChange={(e) => update('postGradPercentage', e.target.value)} />
-          <Input type="number" placeholder="Passing Year" value={data.postGradPassingYear} onChange={(e) => update('postGradPassingYear', e.target.value)} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <EduSelect
+            field="postGradCourse"
+            placeholder="Select Master's / PG Degree"
+            options={POST_GRADUATION_COURSES}
+            {...bind}
+          />
+          <EduInput field="postGradStream" placeholder="Specialization (e.g. Marketing / Finance / HR)" {...bind} />
+          <EduInput field="postGradCollege" placeholder="College / University (e.g. Rajagiri / CUSAT)" {...bind} />
+          <EduInput field="postGradPercentage" type="number" placeholder="Percentage / CGPA (e.g. 80.0)" min={0} max={100} step="0.01" {...bind} />
+          <EduInput field="postGradPassingYear" type="number" placeholder="Passing Year (e.g. 2025)" min={1970} max={new Date().getFullYear() + 4} {...bind} />
+          <EduMode field="postGradMode" {...bind} />
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <h4 className="text-md font-medium text-text-primary border-b border-border pb-2">Computer Knowledge</h4>
+        <div className="flex flex-wrap gap-4">
+          {(
+            [
+              ['compWord', 'MS Word'],
+              ['compExcel', 'MS Excel'],
+              ['compPowerPoint', 'PowerPoint'],
+              ['compTally', 'Tally'],
+              ['compOther', 'Other'],
+            ] as const
+          ).map(([field, label]) => (
+            <label
+              key={field}
+              className="flex items-center gap-2 text-sm text-text-primary cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={data[field]}
+                onChange={(e) => update(field, e.target.checked)}
+                className="rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-text-primary mb-1">
+            Other Software / Certifications
+          </label>
+          <Input
+            value={data.softwareCerts}
+            onChange={(e) => update('softwareCerts', e.target.value)}
+            placeholder="e.g. SAP, AutoX, Photoshop, Dealer Management Software"
+          />
         </div>
       </div>
     </div>

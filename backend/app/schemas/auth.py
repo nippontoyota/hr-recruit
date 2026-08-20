@@ -1,8 +1,9 @@
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from email_validator import EmailNotValidError, validate_email
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+import pydantic
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, EmailStr
 
 from app.core.compat import role_for_frontend
 from app.models.enums import UserRole
@@ -10,6 +11,8 @@ from app.models.user import User
 
 
 def _normalize_email(value: str) -> str:
+    if value.lower().strip().endswith(".local"):
+        return value.strip().lower()
     try:
         result = validate_email(value, check_deliverability=False, test_environment=True)
     except EmailNotValidError as exc:
@@ -29,10 +32,12 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    email: EmailAddress
+    email: str
     full_name: str
     role: str
     branch_location: str | None = None
+
+    department: str | None = None
 
     @classmethod
     def from_user(cls, user: User) -> "UserOut":
@@ -42,19 +47,41 @@ class UserOut(BaseModel):
             full_name=user.full_name,
             role=role_for_frontend(user.role),
             branch_location=user.branch_location,
+            department=user.department,
         )
 
     @field_validator("role", mode="before")
     @classmethod
     def _map_role(cls, value: object) -> str:
         if isinstance(value, UserRole):
-            return role_for_frontend(value)
+            try:
+                return role_for_frontend(value)
+            except KeyError:
+                return value.value
         if isinstance(value, str):
             try:
                 return role_for_frontend(UserRole(value))
-            except ValueError:
+            except (ValueError, KeyError):
                 return value
         raise ValueError("Invalid role")
+
+
+class UserCreate(BaseModel):
+    email: EmailAddress
+    full_name: str
+    password: str = Field(min_length=1)
+    role: UserRole
+    branch_location: str | None = None
+    department: str | None = None
+
+
+class UserUpdate(BaseModel):
+    email: EmailAddress | None = None
+    full_name: str | None = None
+    role: UserRole | None = None
+    branch_location: str | None = None
+    department: str | None = None
+    password: str | None = None
 
 
 class TokenResponse(BaseModel):

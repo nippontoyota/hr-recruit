@@ -1,0 +1,12 @@
+                          <div>
+                            <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Date</span>
+                            <span className="text-sm font-semibold text-foreground">
+                              {shareEval?.scheduled_time ? format(new Date(shareEval.scheduled_time), 'MMM dd, yyyy') : 'TBD'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Time</span>
+                            <span className="text-sm font-semibold text-foreground">
+                              {shareEval?.scheduled_time ? format(new Date(shareEval.scheduled_time), 'hh:mm a') : 'TBD'}
+                            </span>
+                          </div>

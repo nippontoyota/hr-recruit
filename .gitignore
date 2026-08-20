@@ -32,3 +32,20 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Documentation
+docs/
+
+# AI Agents & IDE
+.agents/
+.gemini/
+.codex/
+.qodo/
+skills-lock.json
+*.scratch.*
+
+# Local Scripts & Hooks
+.githooks/
+PRODUCT.md
+run.bat
+patch.py

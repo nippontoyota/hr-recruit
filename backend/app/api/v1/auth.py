@@ -41,6 +41,19 @@ def me(user: User = Depends(get_current_active_user)) -> UserOut:
     return UserOut.from_user(user)
 
 
+from uuid import UUID
+from app.models.enums import UserRole
+
+
 @router.post("/logout", status_code=status.HTTP_200_OK)
 def logout() -> dict[str, str]:
     return {"detail": "Logged out"}
+
+
+@router.get("/users/{id}/public", response_model=dict)
+def get_user_public(id: UUID, db: Session = Depends(get_db)):
+    user = db.get(User, id)
+    if not user or not user.is_active or user.role != UserRole.LOCAL_HR:
+        raise HTTPException(status_code=404, detail="HR recruiter not found")
+    return {"full_name": user.full_name, "branch_location": user.branch_location}
+

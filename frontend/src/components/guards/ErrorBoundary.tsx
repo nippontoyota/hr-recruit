@@ -2,10 +2,10 @@ import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Button, EmptyState } from '../ui';
 import { AlertTriangle } from 'lucide-react';
+import { isStaleChunkError, reloadOnceForStaleChunk } from '../../lib/lazyRetry';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
-  fallback?: ReactNode;
 }
 
 interface ErrorBoundaryState {
@@ -13,10 +13,6 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-/**
- * Catches render-time errors and displays a recovery UI instead of white-screening.
- * Wrap around top-level routes or critical component subtrees.
- */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -28,8 +24,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log to an error reporting service in production
-    console.error('[ErrorBoundary] Uncaught error:', error, errorInfo);
+    console.error('[ErrorBoundary]', error, errorInfo);
+    if (reloadOnceForStaleChunk(error)) return;
   }
 
   private handleReset = () => {
@@ -38,10 +34,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   render() {
     if (this.state.hasError) {
-      if (this.props.fallback) {
-        return this.props.fallback;
-      }
-
       return (
         <div className="min-h-[400px] flex items-center justify-center p-6">
           <EmptyState
@@ -52,8 +44,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               'An unexpected error occurred. Please try again.'
             }
             action={
-              <Button variant="secondary" onClick={this.handleReset}>
-                Try Again
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (isStaleChunkError(this.state.error)) {
+                    window.location.reload();
+                    return;
+                  }
+                  this.handleReset();
+                }}
+              >
+                {isStaleChunkError(this.state.error) ? 'Reload application' : 'Try again'}
               </Button>
             }
             className="max-w-md w-full"

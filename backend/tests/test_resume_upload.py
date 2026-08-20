@@ -8,7 +8,11 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.api.v1.candidates import _resume_extension, _safe_filename, _validate_resume_content_type
+from app.services.document_service import (
+    resume_extension,
+    safe_filename,
+    resolve_resume_content_type,
+)
 from app.core.database import get_db
 from app.core.deps import get_current_active_user
 from app.main import app
@@ -25,27 +29,37 @@ def _hr_user() -> User:
         email="hq@nippon.test",
         hashed_password="x",
         full_name="HQ",
-        role=UserRole.HEAD_OFFICE_HR,
+        role=UserRole.LOCAL_HR,
         is_active=True,
     )
 
 
 def test_resume_extension_accepts_pdf():
-    assert _resume_extension("cv.PDF") == ".pdf"
+    assert resume_extension("cv.PDF") == ".pdf"
+
+
+def test_resume_extension_accepts_docx():
+    assert resume_extension("cv.docx") == ".docx"
 
 
 def test_resume_extension_rejects_exe():
     with pytest.raises(HTTPException) as exc:
-        _resume_extension("malware.exe")
+        resume_extension("malware.exe")
     assert exc.value.status_code == 400
 
 
 def test_safe_filename_strips_path():
-    assert _safe_filename("../../etc/passwd.pdf", ".pdf") == "passwd.pdf"
+    assert safe_filename("../../etc/passwd.pdf", ".pdf") == "passwd.pdf"
 
 
 def test_content_type_maps_octet_stream():
-    assert _validate_resume_content_type("application/octet-stream", ".pdf") == "application/pdf"
+    assert resolve_resume_content_type("application/octet-stream", ".pdf") == "application/pdf"
+
+
+def test_content_type_maps_octet_stream_docx():
+    assert resolve_resume_content_type("application/octet-stream", ".docx") == (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
 
 
 def test_upload_requires_auth():
@@ -65,6 +79,7 @@ def test_upload_rejects_bad_extension_when_authenticated():
     user = _hr_user()
     candidate = MagicMock()
     candidate.id = uuid4()
+    candidate.assigned_hr_user_id = user.id
     db = MagicMock()
     db.get.return_value = candidate
 
@@ -76,7 +91,7 @@ def test_upload_rejects_bad_extension_when_authenticated():
             files={"file": ("notes.txt", b"hello", "text/plain")},
         )
         assert response.status_code == 400
-        assert "PDF" in response.json()["detail"]
+        assert "PDF" in response.json()["detail"] or "DOC" in response.json()["detail"]
     finally:
         app.dependency_overrides.clear()
 
@@ -86,13 +101,14 @@ def test_upload_rejects_oversized_file():
     candidate_id = uuid4()
     candidate = MagicMock()
     candidate.id = candidate_id
+    candidate.assigned_hr_user_id = user.id
     db = MagicMock()
     db.get.return_value = candidate
 
     app.dependency_overrides[get_current_active_user] = lambda: user
     app.dependency_overrides[get_db] = lambda: db
     try:
-        with patch("app.api.v1.candidates.settings.resume_max_bytes", 10):
+        with patch("app.api.v1.candidates_actions.settings.resume_max_bytes", 10):
             response = client.post(
                 f"/api/v1/candidates/{candidate_id}/resume",
                 files={"file": ("resume.pdf", b"0123456789ABCDEF", "application/pdf")},
@@ -108,7 +124,7 @@ def test_upload_success_mocked_storage():
     candidate_id = uuid4()
     candidate = MagicMock()
     candidate.id = candidate_id
-
+    candidate.assigned_hr_user_id = user.id
     db = MagicMock()
     db.get.return_value = candidate
     db.scalar.return_value = None
@@ -125,7 +141,7 @@ def test_upload_success_mocked_storage():
     app.dependency_overrides[get_db] = lambda: db
     try:
         with (
-            patch("app.api.v1.candidates.storage.upload_object") as upload,
+            patch("app.api.v1.candidates_actions.storage.upload_object") as upload,
             patch(
                 "app.api.v1.candidates.storage.create_signed_url",
                 return_value="https://signed.example/r.pdf",
@@ -152,7 +168,7 @@ def test_upload_rolls_back_storage_when_db_commit_fails():
     candidate_id = uuid4()
     candidate = MagicMock()
     candidate.id = candidate_id
-
+    candidate.assigned_hr_user_id = user.id
     db = MagicMock()
     db.get.return_value = candidate
     db.scalar.return_value = None
@@ -162,8 +178,8 @@ def test_upload_rolls_back_storage_when_db_commit_fails():
     app.dependency_overrides[get_db] = lambda: db
     try:
         with (
-            patch("app.api.v1.candidates.storage.upload_object"),
-            patch("app.api.v1.candidates.storage.delete_object") as delete,
+            patch("app.api.v1.candidates_actions.storage.upload_object"),
+            patch("app.api.v1.candidates_actions.storage.delete_object") as delete,
         ):
             response = client.post(
                 f"/api/v1/candidates/{candidate_id}/resume",
@@ -196,3 +212,18 @@ def test_cors_allows_vite_origin():
     )
     assert response.status_code in (200, 204)
     assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+
+def test_cors_allows_vercel_preview_origin():
+    origin = (
+        "https://hr-recruit-git-feature-hr-ops-cal-3ff3db-nippontoyotas-projects.vercel.app"
+    )
+    response = client.options(
+        "/api/v1/auth/login",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert response.status_code in (200, 204)
+    assert response.headers.get("access-control-allow-origin") == origin

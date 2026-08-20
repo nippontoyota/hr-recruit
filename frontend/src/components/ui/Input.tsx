@@ -1,48 +1,45 @@
-import { forwardRef } from "react";
-import type { InputHTMLAttributes, ReactNode } from "react";
-import { cn } from "../../lib/utils";
+import { forwardRef } from 'react';
+import type { InputHTMLAttributes, ReactNode } from 'react';
+import { cn } from '../../lib/utils';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: boolean;
-  icon?: ReactNode;
+  errorMessage?: string;
   rightElement?: ReactNode;
-  rounded?: "md" | "lg" | "xl" | "full";
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, error, icon, rightElement, rounded = "md", ...props }, ref) => {
+  ({ className, error, errorMessage, rightElement, id, 'aria-describedby': ariaDescribedBy, ...props }, ref) => {
+    const errorId = id && errorMessage ? `${id}-error` : undefined;
+    const describedBy = [ariaDescribedBy, errorId].filter(Boolean).join(' ') || undefined;
+
     return (
       <div className="relative w-full">
-        {icon && (
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-text-secondary">
-            {icon}
-          </div>
-        )}
         <input
           ref={ref}
+          id={id}
+          aria-invalid={error || undefined}
+          aria-describedby={describedBy}
           className={cn(
-            "flex h-12 w-full border border-border bg-surface px-4 py-2 text-base font-semibold text-text-primary placeholder:text-sm placeholder:font-normal placeholder:text-text-secondary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50 transition-colors tracking-wide",
-            rounded === "full"
-              ? "rounded-full"
-              : rounded === "xl"
-                ? "rounded-xl"
-                : rounded === "lg"
-                  ? "rounded-lg"
-                  : "rounded-md",
-            icon ? "pl-11" : "",
-            rightElement ? "pr-11" : "",
-            error && "border-danger focus:ring-danger",
-            className,
+            'flex min-h-11 w-full rounded-lg border border-border bg-surface px-3 py-1 text-sm transition-[border-color,box-shadow] file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50',
+            rightElement && 'pr-10',
+            error && 'border-danger text-danger',
+            className
           )}
           {...props}
         />
+        {errorMessage && errorId && (
+          <p id={errorId} className="mt-1 text-xs text-danger" role="alert">
+            {errorMessage}
+          </p>
+        )}
         {rightElement && (
-          <div className="absolute inset-y-0 right-0 flex items-center pr-3.5">
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3">
             {rightElement}
           </div>
         )}
       </div>
     );
-  },
+  }
 );
-Input.displayName = "Input";
+Input.displayName = 'Input';

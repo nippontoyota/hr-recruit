@@ -1,7 +1,17 @@
 from fastapi import APIRouter
 
-from app.api.v1 import auth, candidates
+from app.api.v1 import auth, candidates_core, candidates_public, candidates_actions, communications, followups, branch_interview, evaluations, users, settings, pdf, openings
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
-api_router.include_router(candidates.router)
+api_router.include_router(users.router)
+api_router.include_router(candidates_core.router)
+api_router.include_router(candidates_public.router)
+api_router.include_router(candidates_actions.router)
+api_router.include_router(communications.router)
+api_router.include_router(followups.router)
+api_router.include_router(branch_interview.router)
+api_router.include_router(evaluations.router)
+api_router.include_router(settings.router, prefix="/settings", tags=["Settings"])
+api_router.include_router(openings.router)
+api_router.include_router(pdf.router, prefix="/pdf", tags=["PDF Generation"])

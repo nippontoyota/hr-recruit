@@ -82,6 +82,14 @@ This API uses its **own Supabase project** (same org as other Nippon apps; not t
 5. Open **Project Settings** → **API** and set `SUPABASE_URL` plus `SUPABASE_SERVICE_ROLE_KEY` (server only).
 6. In **Storage**, create a private bucket named `candidate-documents` (or match `SUPABASE_STORAGE_BUCKET`).
 
+### Quick Start (Windows)
+Double-click the root [run.bat](file:///e:/Projects/NipponToyota/RecruitmentPortal/run.bat) script. It automatically:
+1. Runs backend database migrations.
+2. Seeds default users.
+3. Installs frontend npm packages.
+4. Starts both servers in separate windows.
+
+### Manual Backend Setup
 ```bash
 cd backend
 cp .env.example .env   # then paste this project's Supabase URI (not payslip's)
