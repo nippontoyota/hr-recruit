@@ -95,13 +95,14 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
     return (
       <div className="w-full">
         <select
+          {...props}
+          id={props.id ? `${props.id}-native` : undefined}
           value={value}
           onChange={onChange}
           disabled={disabled}
           className="hidden"
           tabIndex={-1}
-          aria-hidden
-          {...props}
+          aria-hidden="true"
         >
           {children}
         </select>
@@ -122,9 +123,12 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
               id={props.id}
               aria-expanded={isOpen}
               aria-haspopup="listbox"
+              aria-invalid={error || undefined}
+              aria-disabled={disabled || undefined}
               aria-label={props['aria-label']}
               aria-labelledby={props['aria-labelledby']}
               aria-describedby={props['aria-describedby']}
+              aria-controls={isOpen ? `${props.id || 'select'}-listbox` : undefined}
               className={cn(
                 'flex min-h-11 w-full items-center justify-between rounded-lg border border-border bg-surface px-3 py-1 text-sm transition-[border-color,box-shadow] duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary',
                 error && 'border-danger text-danger focus:ring-danger',
@@ -174,7 +178,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
                 </div>
               </div>
             )}
-            <div className="custom-scrollbar min-h-0 flex-1 overflow-auto overscroll-contain">
+            <div id={`${props.id || 'select'}-listbox`} role="listbox" aria-label={props['aria-label']} className="custom-scrollbar min-h-0 flex-1 overflow-auto overscroll-contain">
               {filtered.length === 0 ? (
                 <div className="px-3 py-4 text-center text-xs text-muted-foreground">No matches found</div>
               ) : (

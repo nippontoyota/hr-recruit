@@ -499,7 +499,7 @@ export default function CandidatesList() {
       >
         <div className="p-6 space-y-4">
           <p className="text-sm text-text-secondary">
-            Are you sure you want to permanently delete <strong>{candidateToDelete?.full_name}</strong>? This action cannot be undone.
+            This permanently deletes <strong>{candidateToDelete?.full_name}</strong>, their resume, activity history, and stage history. This cannot be undone. Use this only when the record must be removed rather than archived.
           </p>
           <div className="flex justify-end gap-3 pt-4 border-t border-border/40">
             <Button variant="ghost" onClick={() => setCandidateToDelete(null)} disabled={isDeleting}>
@@ -521,7 +521,7 @@ export default function CandidatesList() {
       >
         <div className="p-6 space-y-4">
           <p className="text-sm text-text-secondary">
-            This will permanently delete <strong>{selectedIds.size}</strong> candidate record{selectedIds.size > 1 ? 's' : ''} and all associated data. This action cannot be undone.
+            This permanently deletes <strong>{selectedIds.size}</strong> candidate record{selectedIds.size > 1 ? 's' : ''}, resumes, activity history, and stage history. This cannot be undone. Use this only when the record must be removed rather than archived.
           </p>
           <div className="flex justify-end gap-3 pt-4 border-t border-border/40">
             <Button variant="ghost" onClick={() => setShowBulkDeleteConfirm(false)} disabled={isBulkDeleting}>

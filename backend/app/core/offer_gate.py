@@ -42,8 +42,8 @@ def offer_blockers(candidate, *, has_resume: bool, evaluations=None, db=None) ->
     missing: list[str] = []
     if verdicts.get(EvaluationType.HQ_INTERVIEW_1) != EvaluationVerdict.SELECTED:
         missing.append("HR interview verdict")
-    if verdicts.get(EvaluationType.HQ_INTERVIEW_2) == EvaluationVerdict.REJECTED:
-        missing.append("department interview verdict is rejected")
+    if verdicts.get(EvaluationType.HQ_INTERVIEW_2) != EvaluationVerdict.SELECTED:
+        missing.append("department interview verdict")
 
     salary = getattr(candidate, "salary_data", None)
     if not salary:

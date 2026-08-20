@@ -145,8 +145,9 @@ function ConsiderationEditor({
       >
         <div className="p-6 space-y-4">
           <div>
-            <label className="form-label">Department</label>
+            <label htmlFor="consideration-department" className="form-label">Department</label>
             <Select
+              id="consideration-department"
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
             >
@@ -164,8 +165,9 @@ function ConsiderationEditor({
             </Select>
           </div>
           <div>
-            <label className="form-label">Experience</label>
+            <label htmlFor="consideration-experience" className="form-label">Experience</label>
             <Select
+              id="consideration-experience"
               value={experience}
               onChange={(e) => setExperience(e.target.value)}
             >
@@ -177,8 +179,9 @@ function ConsiderationEditor({
             </Select>
           </div>
           <div>
-            <label className="form-label">Source</label>
+            <label htmlFor="consideration-source" className="form-label">Source</label>
             <Select
+              id="consideration-source"
               value={source}
               onChange={(e) => {
                 setSource(e.target.value);
@@ -200,8 +203,9 @@ function ConsiderationEditor({
           </div>
           {sourceNeedsReference(source) && (
             <div>
-              <label className="form-label">{SOURCE_REFERENCE_LABELS[source]}</label>
+              <label htmlFor="consideration-source-reference" className="form-label">{SOURCE_REFERENCE_LABELS[source]}</label>
               <Input
+                id="consideration-source-reference"
                 value={sourceReference}
                 onChange={(e) => setSourceReference(e.target.value)}
                 maxLength={100}
@@ -1077,10 +1081,11 @@ export default function CandidateProfile() {
             </p>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
+            <label htmlFor="hold-reason" className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
               Hold Reason <span className="text-danger">*</span>
             </label>
             <textarea
+              id="hold-reason"
               value={holdRemarks}
               onChange={(e) => setHoldRemarks(e.target.value)}
               placeholder="Explain why work is paused..."
@@ -1122,10 +1127,11 @@ export default function CandidateProfile() {
             <p className="text-sm text-muted-foreground">This will move the candidate to <strong className="text-danger">Rejected</strong> status. This can be reversed later.</p>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
+            <label htmlFor="rejection-reason" className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
               Rejection Reason <span className="text-danger">*</span>
             </label>
             <textarea
+              id="rejection-reason"
               value={rejectRemarks}
               onChange={(e) => setRejectRemarks(e.target.value)}
               className="w-full bg-background border border-border rounded-[10px] p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-danger/40 focus:border-transparent transition-all duration-200 min-h-[100px] resize-y"
@@ -1159,10 +1165,11 @@ export default function CandidateProfile() {
           </div>
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
+              <label htmlFor="new-stage" className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
                 New Stage
               </label>
               <Select
+                id="new-stage"
                 value={editStageSelection}
                 onChange={(e) => setEditStageSelection(e.target.value as PipelineStage)}
               >
@@ -1179,10 +1186,11 @@ export default function CandidateProfile() {
               </Select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
+              <label htmlFor="stage-remarks" className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
                 Remarks (Optional)
               </label>
               <textarea
+                id="stage-remarks"
                 value={editStageRemarks}
                 onChange={(e) => setEditStageRemarks(e.target.value)}
                 placeholder="Reason for editing stage..."

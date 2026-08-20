@@ -1,5 +1,6 @@
 from uuid import UUID
 from datetime import datetime, timezone
+import logging
 from io import BytesIO
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
@@ -40,6 +41,7 @@ from app.services.doubletick import (
 from app.services import storage
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
+logger = logging.getLogger(__name__)
 
 from .candidates_core import *
 from .candidates_core import (
@@ -561,7 +563,8 @@ def send_offer_letter(
     )
     db.add(log)
     
-    # WhatsApp intimation (required)
+    # WhatsApp intimation is tracked independently from the already-sent email.
+    offer_whatsapp_status = "PENDING"
     template_name = settings.offer_whatsapp_intimation_template_name
     if template_name:
         try:
@@ -579,6 +582,7 @@ def send_offer_letter(
 
             messages = res.get("messages", [])
             external_message_id = messages[0].get("id") if messages else None
+            offer_whatsapp_status = "SENT"
 
             comm = Communication(
                 candidate_id=id,
@@ -601,12 +605,63 @@ def send_offer_letter(
                 )
             )
         except DoubleTickError as e:
-            if settings.is_production:
-                db.rollback()
-                raise HTTPException(status_code=400, detail=e.user_message)
-            logger.warning(f"DoubleTick offer intimation error in dev: {e}")
+            offer_whatsapp_status = "FAILED"
+            # Email delivery has already succeeded. Preserve that result and record
+            # WhatsApp as failed instead of rolling back the email audit trail.
+            logger.warning("Offer WhatsApp delivery failed for %s: %s", row.id, e.user_message)
+            db.add(
+                Communication(
+                    candidate_id=id,
+                    type=CommunicationType.WHATSAPP,
+                    direction=CommunicationDirection.OUTGOING,
+                    status=CommunicationStatus.FAILED,
+                    content_preview=f"Offer letter intimation failed: {e.user_message}",
+                    created_by=user.id,
+                )
+            )
+            db.add(
+                ActivityLog(
+                    candidate_id=id,
+                    activity_type=ActivityType.WHATSAPP,
+                    title="Offer Letter WhatsApp Failed",
+                    description=e.user_message,
+                    created_by_user_id=user.id,
+                )
+            )
+        except Exception as e:
+            offer_whatsapp_status = "FAILED"
+            logger.exception("Unexpected offer WhatsApp delivery failure for %s", row.id)
+            db.add(
+                Communication(
+                    candidate_id=id,
+                    type=CommunicationType.WHATSAPP,
+                    direction=CommunicationDirection.OUTGOING,
+                    status=CommunicationStatus.FAILED,
+                    content_preview="Offer letter intimation failed. Manual WhatsApp follow-up required.",
+                    created_by=user.id,
+                )
+            )
+            db.add(
+                ActivityLog(
+                    candidate_id=id,
+                    activity_type=ActivityType.WHATSAPP,
+                    title="Offer Letter WhatsApp Failed",
+                    description="Manual WhatsApp follow-up is required after the email was sent.",
+                    created_by_user_id=user.id,
+                )
+            )
     elif settings.is_production:
-        raise HTTPException(status_code=400, detail="WhatsApp offer intimation template is not configured.")
+        offer_whatsapp_status = "FAILED"
+        db.add(
+            Communication(
+                candidate_id=id,
+                type=CommunicationType.WHATSAPP,
+                direction=CommunicationDirection.OUTGOING,
+                status=CommunicationStatus.FAILED,
+                content_preview="Offer letter WhatsApp template is not configured. Manual WhatsApp follow-up required.",
+                created_by=user.id,
+            )
+        )
 
     # Update candidate offer_status, advance stage if in CSS, and update CSS milestone flags
     row.offer_status = "SENT"
@@ -619,11 +674,55 @@ def send_offer_letter(
     existing_raw = dict(row.profile.raw_data or {})
     existing_raw["offerLetterIssued"] = True
     existing_raw["offerCommMessage"] = True
+    existing_raw["offerWhatsAppStatus"] = offer_whatsapp_status
     existing_raw["offerLetterSentAt"] = datetime.now(timezone.utc).isoformat()
     if offer.get("joining_date"):
         existing_raw["dateOfJoining"] = offer["joining_date"]
     row.profile.raw_data = existing_raw
 
+    db.commit()
+    db.refresh(row)
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
+
+
+@router.post("/{id}/offer-whatsapp/confirm", response_model=CandidateOut)
+def confirm_offer_whatsapp(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
+):
+    """Record that HR manually sent the offer intimation from WhatsApp."""
+    row = get_candidate_for_user(db, id, user, write=True)
+    if row.offer_status not in {"SENT", "ACCEPTED"}:
+        raise HTTPException(status_code=400, detail="Send the offer email before confirming WhatsApp.")
+
+    if row.profile is None:
+        row.profile = CandidateProfile(candidate_id=row.id)
+        db.add(row.profile)
+    raw = dict(row.profile.raw_data or {})
+    raw["offerWhatsAppStatus"] = "SENT"
+    raw["offerWhatsAppSentAt"] = datetime.now(timezone.utc).isoformat()
+    raw["offerWhatsAppSentBy"] = str(user.id)
+    row.profile.raw_data = raw
+    db.add(
+        Communication(
+            candidate_id=id,
+            type=CommunicationType.WHATSAPP,
+            direction=CommunicationDirection.OUTGOING,
+            status=CommunicationStatus.SENT,
+            content_preview="Offer letter intimation sent manually from WhatsApp.",
+            created_by=user.id,
+        )
+    )
+    db.add(
+        ActivityLog(
+            candidate_id=id,
+            activity_type=ActivityType.WHATSAPP,
+            title="Offer Letter WhatsApp Sent Manually",
+            description="HR confirmed that the offer intimation was sent from WhatsApp.",
+            created_by_user_id=user.id,
+        )
+    )
     db.commit()
     db.refresh(row)
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)

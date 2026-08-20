@@ -82,6 +82,24 @@ export function payloadFromOfferFields(fields: OfferLetterFields): Record<string
   };
 }
 
+export function buildOfferWhatsAppMessage(candidate: Candidate, fields: OfferLetterFields): string {
+  const role = fields.designation || candidate.position_applied_for || candidate.department || 'the offered role';
+  const joiningDate = fields.joining_date ? formatOfferJoinDate(fields.joining_date) : 'as discussed';
+  return [
+    `Dear ${candidate.full_name},`,
+    '',
+    'Greetings from Nippon Toyota HR.',
+    '',
+    `We are pleased to inform you that you have been selected for the position of *${role}*.`,
+    `Your offer letter has been sent to ${candidate.email || 'your registered email address'}.`,
+    `Please check your email and confirm receipt. Your expected joining date is *${joiningDate}*.`,
+    '',
+    'Regards,',
+    'Human Resources',
+    'Nippon Toyota',
+  ].join('\\n');
+}
+
 const STORAGE_KEY = (id: string) => `offer-letter:${id}`;
 
 export function loadStoredOfferFields(candidateId: string): Partial<OfferLetterFields> | null {

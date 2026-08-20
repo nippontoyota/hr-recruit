@@ -389,6 +389,11 @@ export const confirmWhatsAppInvite = async (
   return response.data;
 };
 
+export const confirmOfferWhatsApp = async (candidateId: string): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/offer-whatsapp/confirm`);
+  return response.data;
+};
+
 export const getActivityLogs = async (candidateId: string): Promise<ActivityLog[]> => {
   const response = await request('GET', `/candidates/${candidateId}/activity-logs`);
   return response.data;

@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button, Input, LoadingSpinner, Modal, PdfViewer } from '../ui';
-import { sendOfferLetter } from '../../api/candidates';
+import { confirmOfferWhatsApp, sendOfferLetter } from '../../api/candidates';
 import { getAuthHeaders } from '../../api/client';
 import type { Candidate } from '../../types';
 import { Mail, Pencil, MessageSquare } from 'lucide-react';
+import { openWhatsAppChat } from '../../lib/whatsappTemplate';
+import { buildOfferWhatsAppMessage } from '../../lib/offerLetter';
 import { toast } from 'sonner';
 import { useAuth } from '../../auth';
 import { extractError, isAbortError } from '../../lib/utils';
@@ -40,6 +42,10 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
   const [generatingPdf, setGeneratingPdf] = useState(true);
   const [editing, setEditing] = useState(false);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
+  const [showWhatsAppConfirm, setShowWhatsAppConfirm] = useState(false);
+  const [whatsAppOpened, setWhatsAppOpened] = useState(false);
+  const [confirmingWhatsApp, setConfirmingWhatsApp] = useState(false);
+  const awaitingWhatsAppReturn = useRef(false);
 
   const [fields, setFields] = useState<OfferLetterFields>(() => {
     const defaults = defaultOfferFields(candidate);
@@ -52,7 +58,23 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
   const salarySet = !!(candidate.salary_data && Object.keys(candidate.salary_data).length);
   const blockers = candidate.offer_blockers ?? [];
   const alreadyOffered = blockers.includes('already offered') || candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED';
+  const offerWhatsAppSent = candidate.profile?.raw_data?.offerWhatsAppStatus === 'SENT';
   const pipelineReady = blockers.length === 0;
+
+  useEffect(() => {
+    const onReturn = () => {
+      if (!awaitingWhatsAppReturn.current) return;
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+      awaitingWhatsAppReturn.current = false;
+      setShowWhatsAppConfirm(true);
+    };
+    window.addEventListener('focus', onReturn);
+    document.addEventListener('visibilitychange', onReturn);
+    return () => {
+      window.removeEventListener('focus', onReturn);
+      document.removeEventListener('visibilitychange', onReturn);
+    };
+  }, []);
 
   useEffect(() => {
     const defaults = defaultOfferFields(candidate);
@@ -127,6 +149,36 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
     };
   }, [pdfUrl]);
 
+  const openOfferWhatsApp = () => {
+    if (!candidate.phone) {
+      toast.error('Candidate does not have a phone number on file.');
+      return;
+    }
+    const opened = openWhatsAppChat(candidate.phone, buildOfferWhatsAppMessage(candidate, fields));
+    if (!opened) {
+      toast.error('WhatsApp did not open. Allow pop-ups, then try again.');
+      return;
+    }
+    awaitingWhatsAppReturn.current = true;
+    setWhatsAppOpened(true);
+    toast.success('Opened WhatsApp with the offer message ready to send');
+  };
+
+  const confirmOfferWhatsAppSent = async () => {
+    setConfirmingWhatsApp(true);
+    try {
+      await confirmOfferWhatsApp(candidate.id);
+      setShowWhatsAppConfirm(false);
+      setWhatsAppOpened(false);
+      toast.success('Offer WhatsApp message recorded as sent');
+      onUpdate?.();
+    } catch (error) {
+      toast.error(extractError(error, 'Could not record the WhatsApp message'));
+    } finally {
+      setConfirmingWhatsApp(false);
+    }
+  };
+
   const handleSendOffer = async () => {
     if (!candidate.email) {
       toast.error('Candidate does not have an email address on file.');
@@ -154,6 +206,20 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
 
   return (
     <div className="space-y-4 w-full">
+      {alreadyOffered && !offerWhatsAppSent && user?.role !== 'LOCAL_HR' && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 space-y-3">
+          <p className="text-sm font-semibold text-amber-950">Offer email sent. WhatsApp intimation still needs confirmation.</p>
+          <p className="text-xs text-amber-900">Open WhatsApp with the message ready, send it yourself, then confirm when you return here.</p>
+          <Button type="button" variant="secondary" onClick={openOfferWhatsApp} disabled={!candidate.phone}>
+            <MessageSquare className="mr-2 h-4 w-4" /> Open WhatsApp to send
+          </Button>
+          {whatsAppOpened && (
+            <Button type="button" onClick={() => void confirmOfferWhatsAppSent()} isLoading={confirmingWhatsApp}>
+              I sent this on WhatsApp
+            </Button>
+          )}
+        </div>
+      )}
       {!salarySet && (
         <p className="text-center text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           {user?.role === 'HO_HR'
@@ -186,7 +252,7 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-emerald-200 font-semibold text-emerald-900 shadow-2xs">
               <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              WhatsApp Confirmation Sent: <strong className="text-foreground">{candidate.phone}</strong>
+              WhatsApp Confirmation {offerWhatsAppSent ? 'Sent' : 'Pending'}: <strong className="text-foreground">{candidate.phone}</strong>
             </span>
           </div>
         </div>
@@ -206,6 +272,16 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
         )}
         {pdfUrl ? <PdfViewer url={pdfUrl} /> : <div className="min-h-[85vh] border border-border rounded-lg bg-surface" />}
       </div>
+
+      <Modal isOpen={showWhatsAppConfirm && !offerWhatsAppSent} onClose={() => setShowWhatsAppConfirm(false)} title="Did you send the offer WhatsApp message?" size="sm">
+        <div className="space-y-4 p-6">
+          <p className="text-sm text-foreground">WhatsApp opened with the offer intimation ready. Confirm only if you actually sent it to {candidate.full_name}.</p>
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button variant="secondary" onClick={() => setShowWhatsAppConfirm(false)} disabled={confirmingWhatsApp}>Not yet</Button>
+            <Button onClick={() => void confirmOfferWhatsAppSent()} isLoading={confirmingWhatsApp}>Yes, I sent it</Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal isOpen={showSendConfirm} onClose={() => setShowSendConfirm(false)} title="Send offer letter" description="Confirm the external communication before sending." size="sm">
         <div className="space-y-4 p-6">

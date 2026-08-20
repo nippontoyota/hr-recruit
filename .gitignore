@@ -49,3 +49,5 @@ skills-lock.json
 PRODUCT.md
 run.bat
 patch.py
+.vercel
+.env*

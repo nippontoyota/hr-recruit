@@ -103,7 +103,14 @@ const StarInput = ({
     </div>
     <div className="flex gap-1">
       {Array.from({ length: maxStars }, (_, i) => i + 1).map((star) => (
-        <button type="button" key={star} onClick={() => setVal(star)} className="p-0.5">
+        <button
+                    type="button"
+                    key={star}
+                    onClick={() => setVal(star)}
+                    className="rounded p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    aria-label={`Set ${label} to ${star} out of ${maxStars}`}
+                    aria-pressed={star === val}
+                  >
           <Star
             className={cn(
               'w-7 h-7',
@@ -478,8 +485,9 @@ export default function PublicInterviewerPage() {
         <StarInput label="Knowledge" val={knowledgeScore} setVal={setKnowledgeScore} maxStars={3} />
       </div>
       <div>
-        <label className="block text-xs font-semibold text-foreground mb-2">Remarks</label>
+        <label htmlFor="interview-remarks" className="block text-xs font-semibold text-foreground mb-2">Remarks</label>
         <textarea
+          id="interview-remarks"
           value={remarks}
           onChange={(e) => setRemarks(e.target.value)}
           placeholder="Strengths, concerns, recommendation…"

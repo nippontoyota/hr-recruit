@@ -76,7 +76,7 @@ INTERVIEW_LINK_TYPES = frozenset(
         EvaluationType.HQ_INTERVIEW_2,
     }
 )
-INTERVIEW_TOKEN_TTL = timedelta(days=3650)
+INTERVIEW_TOKEN_TTL = timedelta(days=30)
 
 PUBLIC_SCORE_KEYS = (
     "attitude",
@@ -321,12 +321,10 @@ def get_department_questions(
     current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     if candidate_id:
+        candidate = get_candidate_for_user(db, candidate_id, current_user)
         frozen = _frozen_test_questions(db, candidate_id)
         if frozen:
             return frozen
-        candidate = db.get(Candidate, candidate_id)
-        if not candidate:
-            raise HTTPException(status_code=404, detail="Candidate not found")
         department = department or candidate.department
         position = position or candidate.position_applied_for
         if experience is None:
@@ -544,10 +542,8 @@ def generate_evaluation_token(
         raise HTTPException(status_code=404, detail="Evaluation not found")
 
     candidate = None
+    candidate = get_candidate_for_user(db, evaluation.candidate_id, current_user, write=True)
     if evaluation.type == EvaluationType.TECHNICAL_TEST:
-        candidate = db.get(Candidate, evaluation.candidate_id)
-        if not candidate:
-            raise HTTPException(status_code=404, detail="Candidate not found")
         _assign_test_position(candidate, position)
 
     unused = select(EvaluationToken).where(
@@ -655,12 +651,11 @@ def get_public_evaluation_details(
     if not evaluation:
         raise HTTPException(status_code=404, detail="Evaluation scorecard not found")
 
-    if evaluation.type == EvaluationType.TECHNICAL_TEST:
-        expires = token_row.expires_at
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=UTC)
-        if expires <= datetime.now(UTC) and not token_row.is_used:
-            raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
+    expires = token_row.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if expires <= datetime.now(UTC) and not token_row.is_used:
+        raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
 
     candidate = db.get(Candidate, evaluation.candidate_id)
     if not candidate:
@@ -738,9 +733,10 @@ def get_public_evaluation_details(
         candidate_education=(raw or {}).get("highestQual", "") if raw else "",
         candidate_location=candidate.branch_location,
         candidate_skills=(raw or {}).get("skills", "") if raw else "",
-        candidate_current_salary=(raw or {}).get("currentSalary", "") if raw else "",
-        candidate_expected_salary=(raw or {}).get("expectedSalary", "") if raw else "",
-        candidate_notice_period=(raw or {}).get("noticePeriod", "") if raw else "",
+        # Compensation and notice-period data are intentionally withheld from public links.
+        candidate_current_salary=None,
+        candidate_expected_salary=None,
+        candidate_notice_period=None,
         interviewer_name=str((evaluation.scores or {}).get("interviewer_name") or "").strip() or None,
         candidate_raw_data=filter_interviewer_packet(raw),
         previous_remarks=previous_remarks,
@@ -769,12 +765,11 @@ def submit_public_evaluation(
     if evaluation.status == InterviewStatus.EVALUATED:
         raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
 
-    if evaluation.type == EvaluationType.TECHNICAL_TEST:
-        expires = token_row.expires_at
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=UTC)
-        if expires <= datetime.now(UTC):
-            raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
+    expires = token_row.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if expires <= datetime.now(UTC):
+        raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
 
     candidate = db.get(Candidate, evaluation.candidate_id)
 
@@ -909,7 +904,12 @@ def submit_public_test(
     ))
     
     db.commit()
-    return {"status": "success", "message": "Test submitted for manual evaluation."}
+    return {
+        "status": "success",
+        "message": "Technical test submitted and graded.",
+        "verdict": evaluation.verdict.value,
+        "score": f"{percentage}%",
+    }
 
 
 @router.post("/{eval_id}/send-whatsapp-invite")

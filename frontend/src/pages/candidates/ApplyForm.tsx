@@ -223,8 +223,9 @@ export default function ApplyForm() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <FormField field="fullName" error={errors.fullName}>
-            <label className="form-label form-label-required">Full name <FieldRequirement required /></label>
+            <label htmlFor="apply-full-name" className="form-label form-label-required">Full name <FieldRequirement required /></label>
             <Input
+              id="apply-full-name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               onBlur={() => {
@@ -238,8 +239,9 @@ export default function ApplyForm() {
           </FormField>
 
           <FormField field="phone" error={errors.phone}>
-            <label className="form-label form-label-required">Phone number <FieldRequirement required /></label>
+            <label htmlFor="apply-phone" className="form-label form-label-required">Phone number <FieldRequirement required /></label>
             <Input
+              id="apply-phone"
               value={phone}
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
               onBlur={() => {
@@ -254,8 +256,9 @@ export default function ApplyForm() {
           </FormField>
 
           <FormField field="email" error={errors.email}>
-            <label className="form-label form-label-required">Email address <FieldRequirement required /></label>
+            <label htmlFor="apply-email" className="form-label form-label-required">Email address <FieldRequirement required /></label>
             <Input
+              id="apply-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -269,8 +272,9 @@ export default function ApplyForm() {
           </FormField>
 
           <FormField field="position" error={errors.position}>
-            <label className="form-label form-label-required">Position applied for <FieldRequirement required /></label>
+            <label htmlFor="apply-position" className="form-label form-label-required">Position applied for <FieldRequirement required /></label>
             <Input
+              id="apply-position"
               value={position}
               onChange={(e) => setPosition(e.target.value)}
               onBlur={() => {
@@ -284,8 +288,10 @@ export default function ApplyForm() {
           </FormField>
 
           <FormField field="source" error={errors.source}>
-            <label className="form-label form-label-required">How did you hear about this role? <FieldRequirement required /></label>
+            <label id="apply-source-label" htmlFor="apply-source" className="form-label form-label-required">How did you hear about this role? <FieldRequirement required /></label>
             <Select
+              id="apply-source"
+              aria-labelledby="apply-source-label"
               value={source}
               onChange={(e) => {
                 setSource(e.target.value);

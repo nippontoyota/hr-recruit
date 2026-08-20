@@ -51,10 +51,8 @@ def get_branch_interview(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_active_user),
 ):
-    candidate = db.scalars(select(Candidate).where(Candidate.id == candidate_id)).first()
-    if not candidate:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
-        
+    get_candidate_for_user(db, candidate_id, current_user)
+
     interview = db.scalars(select(BranchInterview).where(BranchInterview.candidate_id == candidate_id)).first()
     return interview
 
