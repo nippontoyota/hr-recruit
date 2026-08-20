@@ -328,8 +328,6 @@ export default function ApplyForm() {
             </div>
           </FormField>
 
-          <p className="text-xs text-text-secondary">Your entries are saved locally in this browser. Local save is not submission.</p>
-          {lastSavedAt && <p className="text-xs text-primary">Saved locally at {lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
           {uploadError && <p role="alert" className="text-sm text-warning bg-warning/5 p-3 rounded-lg border border-warning/20">{uploadError}</p>}
           {formError && <p role="alert" className="text-sm text-danger bg-danger/5 p-3 rounded-lg border border-danger/20">{formError}</p>}
 

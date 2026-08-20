@@ -71,21 +71,49 @@ def _parse_master(sheet) -> list[dict[str, Any]]:
     rows = list(sheet.iter_rows(values_only=True))
     if not rows:
         return []
-    headers = [fold_key(h) or f"col_{i}" for i, h in enumerate(rows[0])]
-    if "name" not in headers:
+    raw_headers = [str(h).strip() if h is not None else "" for h in rows[0]]
+    folded_headers = [fold_key(h) or f"col_{i}" for i, h in enumerate(raw_headers)]
+
+    has_ident = any(
+        "name" in h or "job code" in h or "candidate" in h or "id" in h
+        for h in folded_headers
+    )
+    has_salary = any(
+        "gross salary" in h or "total salary" in h or "basic da" in h or "last salary" in h
+        for h in folded_headers
+    )
+    if not has_ident or not has_salary:
         return []
-    if "gross salary" not in headers and "total salary" not in headers:
-        return []
+
     out: list[dict[str, Any]] = []
     for raw in rows[1:]:
         if not raw or not any(raw):
             continue
         rec: dict[str, Any] = {}
-        for key, cell in zip(headers, raw):
+        for folded_k, raw_h, cell in zip(folded_headers, raw_headers, raw):
             value = json_cell(cell)
             if value is not None:
-                rec[key] = value
-        if rec.get("name"):
+                # 1. Folded key (e.g. 'job code', 'gross salary')
+                rec[folded_k] = value
+                # 2. Original raw header (e.g. 'Job Code', 'Gross Salary')
+                if raw_h and raw_h not in rec:
+                    rec[raw_h] = value
+                # 3. Snake case key (e.g. 'job_code', 'gross_salary')
+                snake = re.sub(r"[^a-zA-Z0-9]+", "_", folded_k).strip("_")
+                if snake and snake not in rec:
+                    rec[snake] = value
+
+        # Ensure first column is explicitly captured as job code / candidate ID
+        first_val = json_cell(raw[0])
+        if first_val is not None:
+            if "job code" not in rec:
+                rec["job code"] = first_val
+            if "job_code" not in rec:
+                rec["job_code"] = first_val
+            if "candidate_id" not in rec:
+                rec["candidate_id"] = first_val
+
+        if rec.get("name") or rec.get("job code") or rec.get("candidate_id") or rec.get("gross salary"):
             out.append(rec)
     return out
 
@@ -203,13 +231,90 @@ def is_past_interviews(stage: Any, selected: bool) -> bool:
     return selected or value in PAST_INTERVIEW_STAGES
 
 
+def normalize_id(value: Any) -> str:
+    """Normalize Job Code / Candidate ID for robust equality comparison."""
+    text = str(value or "").strip().upper()
+    return re.sub(r"[\s\-_/]+", "", text)
+
+
 def match_record(
     record: dict[str, Any],
     candidates: list[Any],
     selected_ids: set[Any],
     *,
+    pin: Any | None = None,
     require_branch: bool = True,
 ) -> tuple[Any | None, str | None, list[Any]]:
+    """Match a salary record to a candidate prioritizing Job Code / Candidate ID (first column)."""
+    # 1. Extract Job Code / Candidate ID from record
+    job_code = (
+        record.get("job code")
+        or record.get("job_code")
+        or record.get("candidate id")
+        or record.get("candidate_id")
+        or record.get("Job Code")
+        or record.get("Job Code ")
+    )
+    if not job_code:
+        job_code = record.get("col_0")
+
+    # 2. If pinned to a specific candidate (Candidate Profile view)
+    if pin is not None:
+        if job_code:
+            norm_target = normalize_id(job_code)
+            pin_cid = normalize_id(getattr(pin, "candidate_id", ""))
+            pin_id = normalize_id(getattr(pin, "id", ""))
+            pin_raw_job = normalize_id(
+                (getattr(pin, "profile", None) and getattr(pin.profile, "raw_data", None) or {}).get("jobCode")
+                or (getattr(pin, "salary_data", None) or {}).get("job code")
+                or (getattr(pin, "salary_data", None) or {}).get("job_code")
+            )
+            # If matches pin's ID or single candidate in pool
+            if norm_target in (pin_cid, pin_id, pin_raw_job) or (len(candidates) == 1 and candidates[0].id == pin.id):
+                if not is_past_interviews(pin.current_stage, pin.id in selected_ids):
+                    return None, f"{pin.full_name} ({pin.candidate_id}) has not passed all interviews", []
+                return pin, None, []
+            return (
+                None,
+                f"Sheet Job Code '{job_code}' does not match {pin.candidate_id} ({pin.full_name})",
+                [pin],
+            )
+        else:
+            if not is_past_interviews(pin.current_stage, pin.id in selected_ids):
+                return None, f"{pin.full_name} ({pin.candidate_id}) has not passed all interviews", []
+            return pin, None, []
+
+    # 3. Match across candidates pool by Job Code / Candidate ID
+    if job_code:
+        norm_target = normalize_id(job_code)
+        hits = [
+            c
+            for c in candidates
+            if normalize_id(getattr(c, "candidate_id", "")) == norm_target
+            or normalize_id(getattr(c, "id", "")) == norm_target
+            or normalize_id((getattr(c, "salary_data", None) or {}).get("job code")) == norm_target
+            or normalize_id((getattr(c, "salary_data", None) or {}).get("job_code")) == norm_target
+            or normalize_id(
+                (getattr(c, "profile", None) and getattr(c.profile, "raw_data", None) or {}).get("jobCode")
+            )
+            == norm_target
+        ]
+        if hits:
+            if len(hits) > 1:
+                return None, f"Multiple candidates found with Job Code / Candidate ID '{job_code}'", hits
+            hit = hits[0]
+            sheet_name = record.get("name")
+            if sheet_name and name_key(sheet_name) != name_key(getattr(hit, "full_name", "")):
+                return None, f"Candidate ID {hit.candidate_id} is {hit.full_name}, but the sheet says {sheet_name}", [hit]
+            if not is_past_interviews(hit.current_stage, hit.id in selected_ids):
+                return None, f"{hit.full_name} ({hit.candidate_id}) has not passed all interviews", []
+            return hit, None, []
+
+        # If Job Code was present but did not match any candidate ID:
+        sheet_name = record.get("name") or "Candidate"
+        return None, f"No candidate found with Job Code / Candidate ID '{job_code}' ({sheet_name})", []
+
+    # 4. Fallback if no Job Code in row: check unique ID or Name
     by_id = _match_unique_id(record, candidates)
     if by_id is not None:
         hit, err = by_id
@@ -222,7 +327,7 @@ def match_record(
     sheet_name = record.get("name")
     key = name_key(sheet_name)
     if not key:
-        return None, "Row has no candidate name", []
+        return None, "Row is missing Job Code / Candidate ID in the first column", []
 
     named = [c for c in candidates if name_key(getattr(c, "full_name", "")) == key]
     if not named:
@@ -247,7 +352,7 @@ def match_record(
         )
         return (
             None,
-            f"Multiple people named {sheet_name} ({labels}). Open the right profile and upload there.",
+            f"Multiple people named {sheet_name} ({labels}). Match using Candidate ID.",
             eligible,
         )
     conflict = _branch_conflict(picked, record) if require_branch else None
@@ -276,15 +381,15 @@ def review_salary_records(
             continue
         record = normalize_package(record)
 
-        job = fold_key(record.get("job code"))
+        job = normalize_id(record.get("job code") or record.get("job_code") or record.get("candidate_id"))
         if job:
             if job in seen_jobs:
-                skipped.append(_skip(record, f"Duplicate Job Code {record.get('job code')} in this file"))
+                skipped.append(_skip(record, f"Duplicate Job Code '{record.get('job code')}' in this file"))
                 continue
             seen_jobs.add(job)
 
         hit, reason, collisions = match_record(
-            record, pool, selected_ids, require_branch=pin is None
+            record, pool, selected_ids, pin=pin, require_branch=pin is None
         )
         if hit is None:
             hints = collisions or suggest_names(record.get("name"), candidates)
@@ -325,7 +430,7 @@ def review_salary_records(
                 "total_allowance": allowance,
                 "others": others,
                 "gross_salary": gross,
-                "joining_date": record.get("proposed doj"),
+                "joining_date": record.get("proposed doj") or record.get("proposed_doj"),
                 "warnings": warnings,
                 "record": record,
                 "_candidate": hit,

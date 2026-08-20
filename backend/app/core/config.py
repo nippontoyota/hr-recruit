@@ -20,6 +20,10 @@ class Settings(BaseSettings):
 
     doubletick_api_key: str = ""
     waba_phone_number_id: str = ""
+    whatsapp_call_letter_template_name: str = "nippon_interview_call_letter"
+    whatsapp_hr_interview_template_name: str = "nippon_interview_schedule"
+    whatsapp_interviewer_template_name: str = "nippon_interviewer_invite"
+    whatsapp_technical_test_template_name: str = "nippon_technical_test_invite"
     # Comma-separated origins for the SPA (Vite default included)
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     # Regex for Vercel production + preview deploys (override via env if needed)
@@ -39,11 +43,11 @@ class Settings(BaseSettings):
     naveen_email: str = ""
 
     # SMTP Configuration
-    smtp_host: str = "smtp.sendgrid.net"
+    smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
-    smtp_user: str = "apikey"
+    smtp_user: str = "krishnanandgeeth@gmail.com"
     smtp_password: str = ""
-    smtp_from_email: str = "hr@nippontoyota.com"
+    smtp_from_email: str = "krishnanandgeeth@gmail.com"
 
     @property
     def cors_origin_list(self) -> list[str]:

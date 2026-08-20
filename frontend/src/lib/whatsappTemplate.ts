@@ -35,7 +35,6 @@ export function positionForWhatsApp(input: {
 }): string {
   const role = sanitizeWhatsAppPosition(input.positionAppliedFor);
   if (role) return role;
-  if (input.department?.trim()) return consideringForLabel(input.department, input.experience);
   return '';
 }
 
@@ -154,6 +153,70 @@ export function storeTemplateVars(candidateId: string, vars: WhatsAppTemplateVar
   localStorage.setItem(`whatsapp-template:${candidateId}`, JSON.stringify(vars));
 }
 
+function filled(value?: string | null): string {
+  return (value || '').trim();
+}
+
+function visitDateLabel(value?: string | Date | null): string {
+  if (!value) return '';
+  const label = formatVisitDate(value);
+  return !label || label === '-' ? '' : label;
+}
+
+/** Server visit fields win; this-browser localStorage only fills gaps from older saves. */
+export function mergeWhatsAppVars(input: {
+  candidateId: string;
+  fullName: string;
+  positionAppliedFor?: string | null;
+  department?: string | null;
+  experience?: string | null;
+  shareUrl?: string | null;
+  visitBranch?: string | null;
+  visitDate?: string | Date | null;
+  visitTime?: string | null;
+  visitMapsLink?: string | null;
+  visitInstructions?: string | null;
+  extraInstructions?: string | null;
+  storedTemplate?: Partial<WhatsAppTemplateVars> | null;
+  recruiterName?: string | null;
+}): WhatsAppTemplateVars {
+  const local = loadStoredTemplateVars(input.candidateId) || {};
+  const stored = input.storedTemplate || {};
+  const defaults = defaultTemplateVars({
+    candidateName: input.fullName,
+    position: positionForWhatsApp({
+      positionAppliedFor: input.positionAppliedFor,
+      department: input.department,
+      experience: input.experience,
+    }),
+    formLink: input.shareUrl || '',
+    extraInstructions: input.extraInstructions,
+    recruiterName: input.recruiterName,
+  });
+  return {
+    ...defaults,
+    ...local,
+    ...stored,
+    candidateName: filled(input.fullName) || defaults.candidateName,
+    position:
+      sanitizeWhatsAppPosition(input.positionAppliedFor) ||
+      sanitizeWhatsAppPosition(stored.position) ||
+      sanitizeWhatsAppPosition(local.position) ||
+      defaults.position,
+    formLink: filled(input.shareUrl) || filled(stored.formLink) || filled(local.formLink) || defaults.formLink,
+    branchName: filled(input.visitBranch) || filled(stored.branchName) || filled(local.branchName),
+    mapsLink: filled(input.visitMapsLink) || filled(stored.mapsLink) || filled(local.mapsLink),
+    visitDate: visitDateLabel(input.visitDate) || filled(stored.visitDate) || filled(local.visitDate),
+    arrivalTime: filled(input.visitTime) || filled(stored.arrivalTime) || filled(local.arrivalTime) || defaults.arrivalTime,
+    extraInstructions:
+      filled(input.visitInstructions) ||
+      filled(stored.extraInstructions) ||
+      filled(local.extraInstructions) ||
+      defaults.extraInstructions,
+    recruiterName: filled(stored.recruiterName) || filled(local.recruiterName) || defaults.recruiterName,
+  };
+}
+
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
 export function isWhatsAppUrl(text: string): boolean {
@@ -172,10 +235,10 @@ export function indianWhatsAppNumber(phone: string): string {
   return digits;
 }
 
-export function openWhatsAppChat(phone: string, message: string) {
+export function openWhatsAppChat(phone: string, message: string): Window | null {
   const to = indianWhatsAppNumber(phone);
-  if (!to) return;
-  window.open(`https://wa.me/${to}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+  if (!to) return null;
+  return window.open(`https://wa.me/${to}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
 }
 
 export function buildInterviewerWhatsAppMessage(input: {

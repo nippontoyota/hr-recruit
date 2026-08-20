@@ -8,7 +8,7 @@ from app.core.salary_sheet import validate_package
 from app.models.enums import EvaluationType, EvaluationVerdict, PipelineStage
 from app.utils.validators import validate_email, validate_phone
 
-OFFER_STAGES = frozenset({PipelineStage.FINAL_APPROVAL, PipelineStage.HIRED})
+OFFER_STAGES = frozenset({PipelineStage.CSS, PipelineStage.SALARY_DETAILS, PipelineStage.FINAL_APPROVAL, PipelineStage.HIRED})
 HO_TYPES = (EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2)
 
 
@@ -42,8 +42,8 @@ def offer_blockers(candidate, *, has_resume: bool, evaluations=None, db=None) ->
     missing: list[str] = []
     if verdicts.get(EvaluationType.HQ_INTERVIEW_1) != EvaluationVerdict.SELECTED:
         missing.append("HR interview verdict")
-    if verdicts.get(EvaluationType.HQ_INTERVIEW_2) != EvaluationVerdict.SELECTED:
-        missing.append("department interview verdict")
+    if verdicts.get(EvaluationType.HQ_INTERVIEW_2) == EvaluationVerdict.REJECTED:
+        missing.append("department interview verdict is rejected")
 
     salary = getattr(candidate, "salary_data", None)
     if not salary:
@@ -57,8 +57,12 @@ def offer_blockers(candidate, *, has_resume: bool, evaluations=None, db=None) ->
     if not has_resume:
         missing.append("required documents")
 
+    candidate_email = getattr(candidate, "email", None)
+    if not candidate_email and getattr(candidate, "profile", None):
+        prof = getattr(candidate, "profile")
+        candidate_email = getattr(prof, "email", None) or (getattr(prof, "raw_data", None) or {}).get("emailId")
     try:
-        validate_email(getattr(candidate, "email", None), required=True)
+        validate_email(candidate_email, required=True)
     except ValueError:
         missing.append("valid email")
     try:

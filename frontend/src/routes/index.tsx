@@ -1,26 +1,27 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 import { AppShell } from '../components/layout/AppShell';
 import { ProtectedRoute } from '../components/guards/ProtectedRoute';
 import { RoleRoute } from '../components/guards/RoleRoute';
 import { LoadingSpinner } from '../components/ui';
 import { ALL_ROLES } from '../types';
 import { RouteErrorPage } from '../components/layout/RouteErrorPage';
+import { lazyRetry } from '../lib/lazyRetry';
 
-const Login = lazy(() => import('../pages/Login'));
-const CandidatesList = lazy(() => import('../pages/candidates/CandidatesList'));
-const CandidateProfile = lazy(() => import('../pages/candidates/CandidateProfile'));
-const CandidatePrintView = lazy(() => import('../pages/candidates/CandidatePrintView'));
-const NotFound = lazy(() => import('../pages/NotFound'));
-const ApplyForm = lazy(() => import('../pages/candidates/ApplyForm'));
-const PreFormPage = lazy(() => import('../pages/candidates/PreFormPage'));
+const Login = lazyRetry(() => import('../pages/Login'));
+const CandidatesList = lazyRetry(() => import('../pages/candidates/CandidatesList'));
+const CandidateProfile = lazyRetry(() => import('../pages/candidates/CandidateProfile'));
+const CandidatePrintView = lazyRetry(() => import('../pages/candidates/CandidatePrintView'));
+const NotFound = lazyRetry(() => import('../pages/NotFound'));
+const ApplyForm = lazyRetry(() => import('../pages/candidates/ApplyForm'));
+const PreFormPage = lazyRetry(() => import('../pages/candidates/PreFormPage'));
 
-const PublicInterviewerPage = lazy(() => import('../pages/candidates/PublicInterviewerPage'));
-const PublicTestPage = lazy(() => import('../pages/candidates/PublicTestPage'));
-const PrintTechnicalTestPage = lazy(() => import('../pages/candidates/PrintTechnicalTestPage'));
-const CandidatePortalPage = lazy(() => import('../pages/candidates/CandidatePortalPage'));
-const AdminUsers = lazy(() => import('../pages/AdminUsers'));
+const PublicInterviewerPage = lazyRetry(() => import('../pages/candidates/PublicInterviewerPage'));
+const PublicTestPage = lazyRetry(() => import('../pages/candidates/PublicTestPage'));
+const PrintTechnicalTestPage = lazyRetry(() => import('../pages/candidates/PrintTechnicalTestPage'));
+const CandidatePortalPage = lazyRetry(() => import('../pages/candidates/CandidatePortalPage'));
+const AdminUsers = lazyRetry(() => import('../pages/AdminUsers'));
 
 const SuspenseFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">

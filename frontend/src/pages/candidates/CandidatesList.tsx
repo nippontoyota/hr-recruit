@@ -7,27 +7,17 @@ import { useAuth } from '../../auth';
 import { deleteCandidate, bulkDeleteCandidates, unholdCandidate } from '../../api/candidates';
 import { getStageBadgeVariant, stageLabel, formatSource, isCandidateQueue, matchesQueue, type CandidateQueue } from '../../lib/stages';
 import type { Candidate, PipelineStage } from '../../types';
-import { HO_PIPELINE_STAGES, HO_POST_SEND_STAGES } from '../../types';
+import { PIPELINE_STAGES, HO_PIPELINE_STAGES, HO_POST_SEND_STAGES } from '../../types';
 import { AddCandidateForm } from '../../components/candidates/AddCandidateForm';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { SalarySheetUpload } from '../../components/candidates/SalarySheetUpload';
-import { toast } from 'sonner';
-import { cn, extractError } from '../../lib/utils';
-import { useCandidatesList } from '../../hooks/api/useCandidates';
-import { WorkQueueSummary } from '../../components/candidates/WorkQueueSummary';
+import { RecentOpeningsCard } from '../../components/candidates/RecentOpeningsCard';
 import { CandidateFilters } from '../../components/candidates/CandidateFilters';
+import { WorkQueueSummary } from '../../components/candidates/WorkQueueSummary';
+import { cn, extractError } from '../../lib/utils';
+import { formatDate } from '../../lib/dateTime';
 import { getCandidateWorkState } from '../../lib/candidateWork';
-
-const PIPELINE_STAGES: PipelineStage[] = [
-  'CALL_LETTER', 'INTERVIEWS', 'TEST', 'BACKGROUND_VERIFICATION',
-  'APPLICATION', 'SENT_TO_HO', 'HO_INTERVIEWS', 'CSS',
-  'FINAL_APPROVAL', 'HIRED', 'REJECTED', 'ON_HOLD',
-];
-
-function formatDate(dateStr: string): string {
-  if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-}
+import { useCandidatesList } from '../../hooks/api/useCandidates';
 
 function CandidatesTableSkeleton() {
   return (
@@ -208,21 +198,25 @@ export default function CandidatesList() {
       <PageHeader
         title="Candidates"
         action={
-          <div className="flex gap-3">
-            {user?.role === 'HO_HR' && (
-              <SalarySheetUpload onDone={() => void fetchCandidatesList()} />
-            )}
-            {canRegister && (
+          canRegister ? (
             <Button onClick={() => setIsAddOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add candidate
             </Button>
-            )}
-          </div>
+          ) : undefined
         }
       />
 
-      <div className="space-y-3">
+      <div className="space-y-4">
+          <RecentOpeningsCard />
+
+          {['HO_HR', 'ADMIN'].includes(user?.role || '') && (
+            <SalarySheetUpload
+              variant="banner"
+              onDone={() => void fetchCandidatesList()}
+            />
+          )}
+
           <WorkQueueSummary
             candidates={candidates}
             selectedQueue={selectedQueue}

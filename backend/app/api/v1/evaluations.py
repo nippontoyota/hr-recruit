@@ -54,7 +54,14 @@ from app.core.test_paper import assemble_for_candidate, assemble_test_questions,
 from app.services.workflow import transition
 from app.services import storage
 from app.services.document_service import process_photo_url
-from app.services.doubletick import send_template
+from app.services.doubletick import (
+    send_template,
+    DoubleTickError,
+    friendly_doubletick_error,
+    hr_interview_placeholders,
+    interviewer_placeholders,
+    technical_test_placeholders,
+)
 
 
 router = APIRouter(prefix="/evaluations", tags=["Evaluations"])
@@ -920,31 +927,17 @@ def send_evaluation_whatsapp_invite(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
         
-    DOUBLETICK_VARIABLE_KEYS = [
-        "candidateName",
-        "position",
-        "date",
-        "time",
-        "mode",
-        "locationOrLink",
-        "recruiterName",
-    ]
-    
-    placeholders = []
-    for key in DOUBLETICK_VARIABLE_KEYS:
-        val = body.variables.get(key, "") if body.variables else ""
-        placeholders.append(val)
-        
-    
-
+    vars_map = body.variables or {}
     if body.recipient_type == "INTERVIEWER":
-        template_name = "nippon_interviewer_invite"
+        template_name = settings.whatsapp_interviewer_template_name
+        placeholders = interviewer_placeholders(vars_map)
+    elif evaluation.type == EvaluationType.TECHNICAL_TEST:
+        template_name = settings.whatsapp_technical_test_template_name
+        placeholders = technical_test_placeholders(vars_map)
     else:
-        if evaluation.type == EvaluationType.TECHNICAL_TEST:
-            template_name = "nippon_technical_test_invite"
-        else:
-            template_name = "nippon_hr_interview_invite"
-    
+        template_name = settings.whatsapp_hr_interview_template_name
+        placeholders = hr_interview_placeholders(vars_map)
+
     external_message_id = None
     try:
         res = send_template(
@@ -955,20 +948,21 @@ def send_evaluation_whatsapp_invite(
         messages = res.get("messages", [])
         if messages:
             external_message_id = messages[0].get("id")
-            
+
         status_comm = CommunicationStatus.SENT
         err_msg = None
+    except DoubleTickError as e:
+        status_comm = CommunicationStatus.FAILED
+        err_msg = e.user_message
     except Exception as e:
         status_comm = CommunicationStatus.FAILED
-        err_msg = str(e)
-        
-    # Construct content preview
+        err_msg = friendly_doubletick_error(str(e))
+
     content_lines = [
         f"Template: {template_name}",
         f"To: {body.to_phone}",
     ]
-    for key in DOUBLETICK_VARIABLE_KEYS:
-        val = body.variables.get(key, "")
+    for key, val in vars_map.items():
         content_lines.append(f"{key}: {val}")
         
     # Write to communications table

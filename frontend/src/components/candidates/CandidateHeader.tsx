@@ -1,96 +1,239 @@
-import { Clipboard, Clock3, ShieldAlert, Users } from 'lucide-react';
+import { useState } from 'react';
+import { Clipboard, Phone, Mail, MapPin, Maximize2, Camera, User as UserIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { Candidate } from '../../types';
-import { stageLabel, formatSource } from '../../lib/stages';
+import { stageLabel } from '../../lib/stages';
+import { getCandidateWorkState } from '../../lib/candidateWork';
+import { uploadCandidatePhoto } from '../../api/candidates';
+import { extractError, cn } from '../../lib/utils';
 import { toast } from 'sonner';
+import { Button, Modal } from '../ui';
 
 interface CandidateHeaderProps {
   candidate: Candidate;
+  isReadOnly?: boolean;
+  onUpdate?: () => void;
+  actions?: ReactNode;
 }
 
-export function CandidateHeader({ candidate }: CandidateHeaderProps) {
-  const workState = candidate.work_state;
+export function CandidateHeader({
+  candidate,
+  isReadOnly = false,
+  onUpdate,
+  actions,
+}: CandidateHeaderProps) {
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const workState = getCandidateWorkState(candidate);
+
   const copyId = () => {
     void navigator.clipboard?.writeText(candidate.candidate_id);
     toast.success('Candidate ID copied');
   };
-  const stageAge = workState?.days_in_stage;
-  const stageAgeLabel = stageAge == null ? 'Unknown' : `${stageAge} day${stageAge === 1 ? '' : 's'}`;
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Photo must be under 5MB');
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      await uploadCandidatePhoto(candidate.id, file);
+      toast.success('Photo updated successfully');
+      onUpdate?.();
+    } catch (err: unknown) {
+      toast.error(extractError(err, 'Failed to upload photo'));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   return (
-    <section className="rounded-xl border border-border bg-surface p-5" aria-labelledby="candidate-profile-title">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+    <>
+      <section className="rounded-xl border border-border bg-surface p-4 sm:p-5 shadow-xs" aria-labelledby="candidate-profile-title">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          {/* Left: Avatar + Candidate Details */}
+          <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+            {/* Photo Avatar */}
             <button
               type="button"
-              onClick={copyId}
-              className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-              title="Copy candidate ID"
+              className={cn(
+                "relative group h-20 w-16 sm:h-24 sm:w-20 shrink-0 overflow-hidden rounded-xl border border-border bg-muted/60 flex items-center justify-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary shadow-xs",
+                "cursor-pointer hover:border-primary/60 transition-all hover:shadow-md"
+              )}
+              onClick={() => setShowPhotoModal(true)}
+              title="Click to view or change candidate photo"
+              aria-label={`View photo of ${candidate.full_name}`}
             >
-              <Clipboard className="h-3.5 w-3.5" /> {candidate.candidate_id}
+              {candidate.profile?.photo_url ? (
+                <img
+                  src={candidate.profile.photo_url}
+                  alt={candidate.full_name}
+                  className="h-full w-full object-cover object-top transition-transform duration-200 group-hover:scale-105"
+                />
+              ) : (
+                <span className="text-2xl font-bold text-muted-foreground group-hover:text-primary transition-colors">
+                  {candidate.full_name.charAt(0)}
+                </span>
+              )}
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/50 backdrop-blur-[1px] opacity-0 transition-opacity group-hover:opacity-100 p-1 text-center">
+                <Maximize2 className="w-4 h-4 text-white drop-shadow-sm mb-0.5" />
+                <span className="text-[9px] font-semibold text-white/95 leading-tight">View Photo</span>
+              </div>
+              {uploadingPhoto && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white text-[10px] font-medium">
+                  Uploading...
+                </div>
+              )}
             </button>
-            <span aria-hidden="true">·</span>
-            <span>{stageLabel(candidate.current_stage)}</span>
-          </div>
-          <h1 id="candidate-profile-title" className="mt-1.5 text-2xl font-semibold tracking-tight text-text-primary">
-            {candidate.full_name}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            {candidate.position_applied_for || 'Position not specified'}
-            {candidate.department ? ` · ${candidate.department}` : ''}
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3 lg:min-w-[28rem]">
-          <Meta label="Days in stage" value={stageAgeLabel} icon={<Clock3 className="h-3.5 w-3.5" />} />
-          <Meta label="Team" value={workState?.responsible_team || 'Unknown'} icon={<Users className="h-3.5 w-3.5" />} />
-          <Meta label="Source" value={formatSource(candidate.source)} className="col-span-2 sm:col-span-1" />
-        </div>
-      </div>
-      <div className="mt-4 grid gap-3 border-t border-border pt-4 md:grid-cols-2">
-        <div>
-          <p className="text-xs font-medium text-text-secondary">Next action</p>
-          <p className="mt-1 font-medium text-text-primary">{workState?.next_action || 'Work state unavailable'}</p>
-        </div>
-        <div>
-          <p className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary">
-            <ShieldAlert className="h-3.5 w-3.5" /> Blockers
-          </p>
-          {workState?.blockers?.length ? (
-            <ul className="mt-1 flex flex-wrap gap-2" aria-label="Candidate blockers">
-              {workState.blockers.map((blocker) => (
-                <li key={blocker} className="rounded-md bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
-                  {blocker}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-1 text-sm text-success">No recorded blockers</p>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
 
-function Meta({
-  label,
-  value,
-  icon,
-  className,
-}: {
-  label: string;
-  value: string;
-  icon?: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`min-w-0 rounded-lg bg-muted/50 p-2.5 ${className ?? ''}`}>
-      <p className="text-xs font-medium text-text-secondary">{label}</p>
-      <p className="mt-1 flex items-center gap-1 truncate text-sm font-medium text-text-primary" title={value}>
-        {icon}
-        {value}
-      </p>
-    </div>
+          {/* Core Info */}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+              <button
+                type="button"
+                onClick={copyId}
+                className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                title="Copy candidate ID"
+              >
+                <Clipboard className="h-3 w-3" /> {candidate.candidate_id}
+              </button>
+              <span aria-hidden="true">·</span>
+              <span className="font-semibold text-foreground">{stageLabel(candidate.current_stage)}</span>
+              {candidate.is_duplicate_flagged && (
+                <span className="rounded-md bg-warning/15 px-1.5 py-0.5 text-[10px] font-bold text-warning border border-warning/30">
+                  Duplicate
+                </span>
+              )}
+            </div>
+
+            <h1 id="candidate-profile-title" className="mt-1 text-xl sm:text-2xl font-bold tracking-tight text-text-primary truncate">
+              {candidate.full_name}
+            </h1>
+
+            <p className="mt-0.5 text-xs sm:text-sm text-text-secondary truncate">
+              {candidate.position_applied_for || 'Position not specified'}
+              {candidate.department ? ` · ${candidate.department}` : ''}
+              {candidate.experience ? ` · ${candidate.experience}` : ''}
+            </p>
+
+            {/* Quick Contact & Info Tags */}
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-text-secondary">
+              {candidate.phone && (
+                <span className="inline-flex items-center gap-1">
+                  <Phone className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <span className="font-medium text-foreground">+91 {candidate.phone}</span>
+                </span>
+              )}
+              {candidate.email && (
+                <a
+                  href={`mailto:${candidate.email}`}
+                  className="inline-flex items-center gap-1 font-medium text-foreground hover:text-primary hover:underline truncate"
+                >
+                  <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <span>{candidate.email}</span>
+                </a>
+              )}
+              {candidate.branch_location && (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <span>{candidate.branch_location}</span>
+                </span>
+              )}
+            </div>
+
+            {/* Actions Slot (Resume Button, Email button, Consideration Editor) */}
+            {actions && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
+                {actions}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+        {/* Bottom: Next Action */}
+        {workState.next_action && (
+          <div className="mt-3.5 flex items-center gap-2 border-t border-border pt-3 text-xs min-w-0">
+            <span className="text-text-secondary shrink-0 font-medium">Next action:</span>
+            <span className="font-semibold text-text-primary truncate">{workState.next_action}</span>
+          </div>
+        )}
+      </section>
+
+      {/* Enlarged Candidate Photo Modal */}
+      <Modal
+        isOpen={showPhotoModal}
+        onClose={() => setShowPhotoModal(false)}
+        title="Candidate Photo"
+        description={`${candidate.full_name} · ${candidate.position_applied_for || 'Applicant'}`}
+        size="md"
+      >
+        <div className="flex flex-col">
+          {/* Main Image Preview Area */}
+          <div className="relative flex items-center justify-center min-h-[320px] max-h-[62vh] p-6 bg-slate-950/5 dark:bg-slate-950/40 border-b border-border/70 overflow-hidden">
+            {candidate.profile?.photo_url ? (
+              <img
+                src={candidate.profile.photo_url}
+                alt={candidate.full_name}
+                className="max-h-[52vh] w-auto max-w-full rounded-2xl object-contain shadow-2xl ring-1 ring-slate-900/10 bg-white"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center p-8 text-center">
+                <div className="w-24 h-24 rounded-2xl bg-muted/80 border-2 border-dashed border-border flex items-center justify-center text-muted-foreground mb-3">
+                  <UserIcon className="w-12 h-12 stroke-[1.5]" />
+                </div>
+                <p className="text-sm font-semibold text-foreground">No photo uploaded yet</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                  Upload a formal portrait photo for this candidate's profile.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Modal Action Bar */}
+          <div className="p-4 sm:p-5 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 bg-surface">
+            <div className="text-xs text-muted-foreground">
+              <span>Supported formats: JPG, PNG, WebP (Max 5MB)</span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowPhotoModal(false)}
+              >
+                Close
+              </Button>
+
+              {!isReadOnly && (
+                <>
+                  <input
+                    type="file"
+                    id="candidate-modal-photo-input"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    disabled={uploadingPhoto}
+                    onChange={handlePhotoChange}
+                  />
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={uploadingPhoto}
+                    isLoading={uploadingPhoto}
+                    onClick={() => document.getElementById('candidate-modal-photo-input')?.click()}
+                  >
+                    <Camera className="w-4 h-4 mr-1.5" />
+                    {candidate.profile?.photo_url ? 'Change Photo' : 'Upload Photo'}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }

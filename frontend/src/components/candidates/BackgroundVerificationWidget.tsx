@@ -21,20 +21,23 @@ import { SHOW_DEV_DUMMY, dummyBgVerification } from '../../lib/devDummyData';
 interface BackgroundVerificationWidgetProps {
   candidate: Candidate;
   onUpdate: () => void;
+  navigateToStage?: (stage: PipelineStage) => void;
   isReadOnly?: boolean;
 }
 
-export function BackgroundVerificationWidget({ candidate, onUpdate, isReadOnly = false }: BackgroundVerificationWidgetProps) {
+export function BackgroundVerificationWidget({
+  candidate,
+  onUpdate,
+  navigateToStage,
+  isReadOnly = false,
+}: BackgroundVerificationWidgetProps) {
   const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [data, setData] = useState<BgVerificationData>(() => buildInitialBgData(candidate));
 
   const bgFinished = Boolean(data.meta.completedAt);
-  const stillOnBgPath = ['CALL_LETTER', 'INTERVIEWS', 'TEST', 'BACKGROUND_VERIFICATION', 'ON_HOLD'].includes(
-    candidate.current_stage
-  );
-  const locked = isReadOnly || (bgFinished && !stillOnBgPath);
+  const locked = isReadOnly;
 
   useEffect(() => {
     setData(buildInitialBgData(candidate));
@@ -79,11 +82,20 @@ export function BackgroundVerificationWidget({ candidate, onUpdate, isReadOnly =
   const handleSaveProgress = async () => {
     setIsSaving(true);
     try {
+      const branch = candidate.branch_location;
+      const hrdName = data.signatures.checkedBy1.name.trim();
+      const hrmName = data.signatures.checkedBy2.name.trim();
+      if (hrdName || hrmName) {
+        void Promise.allSettled([
+          hrdName ? createInterviewer(hrdName, branch) : Promise.resolve(),
+          hrmName ? createInterviewer(hrmName, branch) : Promise.resolve(),
+        ]);
+      }
       await persistData(data);
-      toast.success('Background verification progress saved');
+      toast.success(bgFinished ? 'Background verification changes saved' : 'Background verification progress saved');
       onUpdate();
     } catch (err) {
-      toast.error(extractError(err, 'Failed to save progress'));
+      toast.error(extractError(err, 'Failed to save changes'));
     } finally {
       setIsSaving(false);
     }
@@ -101,8 +113,14 @@ export function BackgroundVerificationWidget({ candidate, onUpdate, isReadOnly =
       const branch = candidate.branch_location;
       const hrdName = data.signatures.checkedBy1.name.trim();
       const hrmName = data.signatures.checkedBy2.name.trim();
-      if (hrdName) await createInterviewer(hrdName, branch);
-      if (hrmName) await createInterviewer(hrmName, branch);
+
+      // Fire-and-forget saving names in background without blocking completion
+      if (hrdName || hrmName) {
+        void Promise.allSettled([
+          hrdName ? createInterviewer(hrdName, branch) : Promise.resolve(),
+          hrmName ? createInterviewer(hrmName, branch) : Promise.resolve(),
+        ]);
+      }
 
       const completed: BgVerificationData = {
         ...data,
@@ -121,13 +139,25 @@ export function BackgroundVerificationWidget({ candidate, onUpdate, isReadOnly =
         },
       };
 
-      await persistData(completed);
+      setData(completed);
+
+      const currentRawData = candidate.profile?.raw_data || {};
+      const updatedRawData = {
+        ...currentRawData,
+        bg_verification: completed,
+      };
+
+      // Atomic single request for saving BG verification data and transitioning stage
       await updateCandidateStage(
         candidate.id,
         'APPLICATION' as PipelineStage,
-        'Background Verification completed.'
+        'Background Verification completed.',
+        updatedRawData
       );
       toast.success('Background Verification completed successfully!');
+      if (navigateToStage) {
+        navigateToStage('APPLICATION');
+      }
       onUpdate();
     } catch (err) {
       toast.error(extractError(err, 'Failed to complete verification'));
@@ -145,9 +175,9 @@ export function BackgroundVerificationWidget({ candidate, onUpdate, isReadOnly =
           <h2 className="text-xl font-bold text-foreground font-accent">Background Verification Form</h2>
           <p className="text-sm text-text-secondary mt-1">
             {locked
-              ? isReadOnly
-                ? 'This form is read-only after the candidate was sent to Head Office.'
-                : 'This form is read-only. Verification has been completed and the candidate has moved on.'
+              ? 'This form is read-only after the candidate was sent to Head Office.'
+              : bgFinished
+              ? 'Verification completed. You can edit any details and save changes.'
               : 'Fill out the verification details. This data will be printed on the final application form.'}
           </p>
         </div>
@@ -172,12 +202,20 @@ export function BackgroundVerificationWidget({ candidate, onUpdate, isReadOnly =
                 Fill Dummy Data
               </Button>
             )}
-            <Button variant="outline" onClick={handleSaveProgress} isLoading={isSaving}>
-              <Save className="w-4 h-4 mr-2" /> Save Progress
-            </Button>
-            <Button variant="primary" onClick={handleComplete} isLoading={isCompleting}>
-              <FileCheck className="w-4 h-4 mr-2" /> Complete & Next
-            </Button>
+            {bgFinished ? (
+              <Button variant="primary" onClick={handleSaveProgress} isLoading={isSaving}>
+                <Save className="w-4 h-4 mr-2" /> Save Changes
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={handleSaveProgress} isLoading={isSaving}>
+                  <Save className="w-4 h-4 mr-2" /> Save Progress
+                </Button>
+                <Button variant="primary" onClick={handleComplete} isLoading={isCompleting}>
+                  <FileCheck className="w-4 h-4 mr-2" /> Complete & Next
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>

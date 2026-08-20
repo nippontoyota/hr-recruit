@@ -35,12 +35,12 @@ export function ResumeButton({
         type="button"
         title="View Resume"
         className={cn(
-          'p-1.5 text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors rounded-[10px] focus:outline-none',
+          'flex items-center justify-center p-1.5 bg-blue-50 text-blue-700 border border-blue-200/90 hover:bg-blue-600 hover:text-white transition-all rounded-md shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20',
           className,
         )}
         onClick={handleClick}
       >
-        <FileText className="w-4 h-4" strokeWidth={2} />
+        <FileText className="w-4 h-4" strokeWidth={2.2} />
       </button>
     );
   }
@@ -49,12 +49,12 @@ export function ResumeButton({
     <button
       type="button"
       className={cn(
-        'flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-border hover:bg-muted transition-colors text-foreground cursor-pointer shadow-sm h-9',
+        'inline-flex items-center justify-center gap-1.5 h-8 px-3 text-xs font-bold rounded-md bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-xs transition-all duration-150 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
         className,
       )}
       onClick={handleClick}
     >
-      <FileText className="w-4 h-4" /> Resume
+      <FileText className="w-3.5 h-3.5" strokeWidth={2.2} /> Resume
     </button>
   );
 }

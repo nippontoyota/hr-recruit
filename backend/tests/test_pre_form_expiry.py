@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.core.database import get_db
 from app.core.public_token import (
+    PURPOSE_APPLY,
     PURPOSE_PRE_FORM,
     candidate_by_public_token,
     expire_pre_form_if_needed,
@@ -115,3 +116,23 @@ def test_public_status_expired_returns_410():
         assert "contact your recruiter" in response.json()["detail"].lower()
     finally:
         app.dependency_overrides.clear()
+
+
+def test_expire_marks_generated_unsent_form_past_deadline():
+    row = _candidate(
+        pre_form_status=FormStatus.NOT_SENT,
+        pre_form_sent_at=None,
+        pre_form_expires_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    assert expire_pre_form_if_needed(row) is True
+    assert row.pre_form_status == FormStatus.EXPIRED
+
+
+def test_expire_skips_apply_tokens():
+    row = _candidate(
+        pre_form_status=FormStatus.NOT_SENT,
+        pre_form_token_purpose=PURPOSE_APPLY,
+        pre_form_expires_at=datetime.now(UTC) - timedelta(minutes=1),
+    )
+    assert expire_pre_form_if_needed(row) is False
+    assert row.pre_form_status == FormStatus.NOT_SENT

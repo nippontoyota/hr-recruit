@@ -13,9 +13,10 @@ import { Button, Modal, PdfViewer } from '../../components/ui';
 import { getPublicEvaluation, submitPublicEvaluation } from '../../api/evaluations';
 import { defaultInterviewTitle, interviewTitle } from '../../lib/interviewTitle';
 import type { EvaluationPublicDetails, EvaluationVerdict } from '../../types';
-import { cn, extractError, resumeEmbedUrl } from '../../lib/utils';
+import { cn, extractError, isAbortError, resumeEmbedUrl, formatSalary } from '../../lib/utils';
 import { PublicShell } from '../../components/layout/PublicShell';
 import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
+import { formatDate } from '../../lib/dateTime';
 
 const PERSONAL_KEYS = ['age', 'gender', 'maritalStatus', 'dateOfBirth', 'permDistrict', 'presDistrict'];
 const LANGUAGE_KEYS = ['languagesRead', 'languagesWrite', 'languagesSpeak', 'languagesOther'];
@@ -34,7 +35,7 @@ const EMPLOYMENT_KEYS = [
   'prev4Name', 'prev4Position', 'prev4Reporting', 'prev4From', 'prev4To', 'prev4Salary', 'prev4Reason',
 ];
 const GENERAL_KEYS = [
-  'prevTerminated', 'physicalDisability', 'nervousDisorder', 'eyeVision', 'criminalConviction', 'confidentToDrive',
+  'hasValidDrivingLicense', 'confidentToDrive', 'prevTerminated', 'physicalDisability', 'nervousDisorder', 'eyeVision', 'criminalConviction',
 ];
 
 function formatFieldKey(key: string): string {
@@ -45,15 +46,25 @@ function formatFieldKey(key: string): string {
     .trim();
 }
 
-function formatFieldValue(value: unknown): string {
+function formatFieldValue(value: unknown, key?: string): string {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (key?.toLowerCase().includes('date') || key === 'dateOfBirth' || /^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+      return formatDate(trimmed);
+    }
+  }
   if (Array.isArray(value)) {
     if (value.length === 0) return '—';
     if (typeof value[0] === 'object') {
       return value
         .map((job: Record<string, string>) =>
-          [job.company, job.position, job.fromDate && job.toDate ? `${job.fromDate}–${job.toDate}` : '']
+          [
+            job.company,
+            job.position,
+            job.fromDate && job.toDate ? `${formatDate(job.fromDate)}–${formatDate(job.toDate)}` : (job.fromDate ? formatDate(job.fromDate) : '')
+          ]
             .filter(Boolean)
             .join(' · ')
         )
@@ -138,7 +149,7 @@ function FieldGrid({ entries }: { entries: ReadonlyArray<readonly [string, unkno
   return (
     <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
       {entries.map(([key, val]) => {
-        const text = formatFieldValue(val);
+        const text = formatFieldValue(val, key);
         const wide = text.length > 48 || text.includes('\n');
         return (
           <div key={key} className={cn('min-w-0', wide && 'sm:col-span-2')}>
@@ -215,7 +226,8 @@ export default function PublicInterviewerPage() {
         setDetails(res);
         if (res.is_already_submitted) setSubmitted(true);
       } catch (err) {
-        if (!cancelled && initial) {
+        if (cancelled || isAbortError(err)) return;
+        if (initial) {
           setError(extractError(err, 'This evaluation link is invalid or already used.'));
         }
       } finally {
@@ -342,9 +354,13 @@ export default function PublicInterviewerPage() {
           )}
         </dl>
         {resumeUrl && (
-          <Button variant="secondary" size="sm" className="mt-4" onClick={() => setResumeOpen(true)}>
-            <FileText className="w-4 h-4 mr-1.5" /> View resume
-          </Button>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center gap-1.5 mt-4 px-3 py-1.5 text-xs font-bold rounded-md bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-xs transition-all duration-150 cursor-pointer"
+            onClick={() => setResumeOpen(true)}
+          >
+            <FileText className="w-4 h-4" strokeWidth={2.2} /> View Resume
+          </button>
         )}
       </Section>
 
@@ -512,9 +528,13 @@ export default function PublicInterviewerPage() {
           <p className="text-xs text-muted-foreground truncate">{details.candidate_position}</p>
         </div>
         {resumeUrl && (
-          <Button variant="secondary" size="sm" onClick={() => setResumeOpen(true)}>
-            <ExternalLink className="w-3.5 h-3.5 mr-1" /> Resume
-          </Button>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center gap-1.5 h-8 px-3 text-xs font-bold rounded-md bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-xs transition-all duration-150 cursor-pointer"
+            onClick={() => setResumeOpen(true)}
+          >
+            <FileText className="w-3.5 h-3.5" strokeWidth={2.2} /> Resume
+          </button>
         )}
       </header>
 

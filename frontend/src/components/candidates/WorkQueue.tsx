@@ -50,10 +50,10 @@ export function WorkQueue({ candidate, evaluations, className }: WorkQueueProps)
       hint: hrOnHold ? 'On hold' : hrDone && !hrSelected ? 'Not selected' : !hrDone ? 'Pending evaluation' : undefined,
     },
     {
-      label: 'Dept Interview',
-      done: deptSelected,
+      label: 'Dept Interview (Optional)',
+      done: !hoDeptEval || deptSelected,
       warning: deptOnHold,
-      hint: deptOnHold ? 'On hold' : deptDone && !deptSelected ? 'Not selected' : !deptDone ? 'Pending evaluation' : undefined,
+      hint: deptOnHold ? 'On hold' : !hoDeptEval ? 'Optional / Not scheduled' : deptDone && !deptSelected ? 'Not selected' : !deptDone ? 'Pending evaluation' : undefined,
     },
     {
       label: 'Salary Sheet',

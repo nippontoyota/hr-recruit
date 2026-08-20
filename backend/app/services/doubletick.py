@@ -4,6 +4,12 @@ import re
 from typing import List
 
 from app.core.config import settings
+from app.services.whatsapp_templates import (
+    CALL_LETTER,
+    INTERVIEW_SCHEDULE,
+    INTERVIEWER_INVITE,
+    TECHNICAL_TEST,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +32,37 @@ def _format_phone(phone: str) -> str:
     if phone.startswith("+"):
         return phone
     return f"+{digits}" if digits else ""
+
+
+def sanitize_placeholder(value: str | None) -> str:
+    """Meta rejects newlines, tabs, empty values, and long runs of spaces in template vars."""
+    text = (value or "").replace("\r\n", "\n").replace("\r", "\n").replace("\t", " ")
+    text = " / ".join(part.strip() for part in text.split("\n") if part.strip())
+    text = re.sub(r" {2,}", " ", text).strip()
+    if len(text) > 500:
+        text = text[:497].rstrip() + "..."
+    return text or "-"
+
+
+def placeholders_from_map(vars_map: dict | None, keys: tuple[str, ...] | list[str]) -> list[str]:
+    data = vars_map or {}
+    return [sanitize_placeholder(data.get(key, "")) for key in keys]
+
+
+def call_letter_placeholders(vars_map: dict | None) -> list[str]:
+    return placeholders_from_map(vars_map, CALL_LETTER.keys)
+
+
+def hr_interview_placeholders(vars_map: dict | None) -> list[str]:
+    return placeholders_from_map(vars_map, INTERVIEW_SCHEDULE.keys)
+
+
+def interviewer_placeholders(vars_map: dict | None) -> list[str]:
+    return placeholders_from_map(vars_map, INTERVIEWER_INVITE.keys)
+
+
+def technical_test_placeholders(vars_map: dict | None) -> list[str]:
+    return placeholders_from_map(vars_map, TECHNICAL_TEST.keys)
 
 
 def _extract_api_error_text(response: httpx.Response) -> str:
@@ -149,7 +186,9 @@ def send_template(
                 "content": {
                     "templateName": template_name,
                     "language": language,
-                    "templateData": {"body": {"placeholders": placeholders}},
+                    "templateData": {
+                        "body": {"placeholders": [sanitize_placeholder(p) for p in placeholders]}
+                    },
                 },
                 "from": _format_phone(from_number),
                 "to": _format_phone(to_phone),

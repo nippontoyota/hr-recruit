@@ -1,5 +1,6 @@
+import json
 from datetime import UTC, datetime
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.public_token import (
@@ -7,6 +8,8 @@ from app.core.public_token import (
     PURPOSE_PRE_FORM,
     candidate_by_public_token,
     log_public_change,
+    pre_form_accepts_uploads,
+    pre_form_fillable,
 )
 from app.models.candidate import Candidate
 from app.models.candidate_profile import CandidateProfile
@@ -92,30 +95,75 @@ def public_update_basic(
     return _public_out(row, db)
 
 
+_UNSET_WHATSAPP_POSITIONS = {"", "unknown", "unknown position", "the applied"}
+
+
 @router.get("/public-full-status/{token}", response_model=PublicFullStatusOut)
 def public_full_status(
     token: str,
     db: Session = Depends(get_db),
 ):
     row = candidate_by_public_token(db, token, PURPOSE_PRE_FORM)
+    if row.pre_form_status in (FormStatus.SENT, FormStatus.NOT_SENT):
+        row.pre_form_status = FormStatus.VIEWED
+        db.commit()
+        db.refresh(row)
+    pos = (
+        row.position_applied_for
+        if row.position_applied_for and row.position_applied_for.lower() not in _UNSET_WHATSAPP_POSITIONS
+        else None
+    )
     return PublicFullStatusOut(
         full_name=row.full_name,
-        is_awaiting_full_fill=row.current_stage == PipelineStage.CALL_LETTER and row.pre_form_status in (FormStatus.SENT, FormStatus.VIEWED),
+        is_awaiting_full_fill=pre_form_fillable(row),
+        pre_form_status=row.pre_form_status,
         pre_form_expires_at=row.pre_form_expires_at,
+        position_applied_for=pos,
+        branch_location=row.branch_location,
     )
 
 @router.post("/public-apply-full/{token}", response_model=PublicCandidateOut)
-def public_apply_full(
+async def public_apply_full(
     token: str,
-    body: PreFormApplicationData,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    content_type = request.headers.get("content-type", "")
+    resume_file: UploadFile | None = None
+    photo_file: UploadFile | None = None
+    
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        data_val = form.get("data")
+        if not data_val or not isinstance(data_val, str):
+            raise HTTPException(status_code=422, detail="Missing application data payload.")
+        try:
+            raw_payload = json.loads(data_val)
+        except Exception:
+            raise HTTPException(status_code=422, detail="Invalid JSON in application data.")
+        body = PreFormApplicationData.model_validate(raw_payload)
+        
+        resume_val = form.get("resume")
+        if isinstance(resume_val, UploadFile) and resume_val.filename:
+            resume_file = resume_val
+            
+        photo_val = form.get("photo")
+        if isinstance(photo_val, UploadFile) and photo_val.filename:
+            photo_file = photo_val
+    else:
+        raw_payload = await request.json()
+        body = PreFormApplicationData.model_validate(raw_payload)
+
     application_data = body.model_dump()
     row = candidate_by_public_token(db, token, PURPOSE_PRE_FORM)
-    if row.current_stage != PipelineStage.CALL_LETTER:
-        raise HTTPException(status_code=400, detail="Candidate is not in CALL_LETTER stage.")
-    if row.pre_form_status not in (FormStatus.SENT, FormStatus.VIEWED):
+    if not pre_form_fillable(row):
         raise HTTPException(status_code=400, detail="This form is not open for submission.")
+    
+    if resume_file:
+        await save_resume_for_candidate(db, row, resume_file, uploaded_by_user_id=None)
+    if photo_file:
+        await save_photo_for_candidate(db, row, photo_file)
+        
     profile = db.scalar(select(CandidateProfile).where(CandidateProfile.candidate_id == row.id))
     if not profile:
         profile = CandidateProfile(candidate_id=row.id)
@@ -134,6 +182,20 @@ def public_apply_full(
         profile.expected_salary = application_data["expectedSalary"]
     if application_data.get("expectedJoiningDate"):
         profile.joining_date = application_data["expectedJoiningDate"]
+
+    if application_data.get("positionAppliedFor") and str(application_data["positionAppliedFor"]).lower() not in _UNSET_WHATSAPP_POSITIONS:
+        row.position_applied_for = str(application_data["positionAppliedFor"]).strip()
+    elif row.position_applied_for and row.position_applied_for.lower() not in _UNSET_WHATSAPP_POSITIONS:
+        application_data["positionAppliedFor"] = row.position_applied_for
+
+    email_val = (
+        str(application_data.get("emailId") or application_data.get("email") or "").strip()
+        or None
+    )
+    if email_val:
+        if not row.email:
+            row.email = email_val
+        profile.email = email_val
 
     existing_raw = dict(profile.raw_data or {})
     whatsapp_invite = existing_raw.get("whatsapp_invite")
@@ -156,8 +218,12 @@ async def public_upload_resume(
     db: Session = Depends(get_db),
 ):
     row = candidate_by_public_token(db, token, PURPOSE_APPLY, PURPOSE_PRE_FORM)
-    if row.current_stage not in (PipelineStage.SCREENING, PipelineStage.CALL_LETTER):
-        raise HTTPException(status_code=400, detail="Resume upload is only allowed during screening or call letter stages.")
+    purpose = row.pre_form_token_purpose or PURPOSE_PRE_FORM
+    if purpose == PURPOSE_APPLY:
+        if row.current_stage not in (PipelineStage.SCREENING, PipelineStage.CALL_LETTER):
+            raise HTTPException(status_code=400, detail="Resume upload is only allowed during screening.")
+    elif not pre_form_accepts_uploads(row):
+        raise HTTPException(status_code=400, detail="Resume upload is not available for this form link.")
     saved = await save_resume_for_candidate(db, row, file, uploaded_by_user_id=None)
     log_public_change(db, row, "Public resume uploaded", "Candidate uploaded a resume via public form.")
     db.commit()
@@ -170,8 +236,8 @@ async def public_upload_photo(
     db: Session = Depends(get_db),
 ):
     row = candidate_by_public_token(db, token, PURPOSE_PRE_FORM)
-    if row.current_stage != PipelineStage.CALL_LETTER:
-        raise HTTPException(status_code=400, detail="Photo upload is only allowed during the call letter stage.")
+    if not pre_form_accepts_uploads(row):
+        raise HTTPException(status_code=400, detail="Photo upload is not available for this form link.")
     saved = await save_photo_for_candidate(db, row, file)
     log_public_change(db, row, "Public photo uploaded", "Candidate uploaded a photo via public form.")
     db.commit()

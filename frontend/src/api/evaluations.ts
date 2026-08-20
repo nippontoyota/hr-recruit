@@ -27,6 +27,10 @@ function removeEval(evalId: string) {
 export const peekCandidateEvaluations = (candidateId: string): Evaluation[] | undefined =>
   evalCache.get(candidateId);
 
+export const setCachedCandidateEvaluations = (candidateId: string, evals: Evaluation[]) => {
+  evalCache.set(candidateId, evals);
+};
+
 export const getCandidateEvaluations = async (candidateId: string, force = false): Promise<Evaluation[]> => {
   if (!force) {
     const hit = evalCache.get(candidateId);

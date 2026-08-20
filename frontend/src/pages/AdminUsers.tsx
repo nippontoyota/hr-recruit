@@ -4,6 +4,7 @@ import { getUsers, createUser, updateUser, deleteUser } from '../api/users';
 import type { User } from '../types';
 import { toast } from 'sonner';
 import { Button, Modal, Input, LoadingSpinner, Select } from '../components/ui';
+import { isAbortError } from '../lib/utils';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<User[]>([]);
@@ -35,7 +36,8 @@ export default function AdminUsers() {
       setLoading(true);
       const data = await getUsers();
       setUsers(data);
-    } catch {
+    } catch (err) {
+      if (isAbortError(err)) return;
       toast.error("Failed to load users");
     } finally {
       setLoading(false);

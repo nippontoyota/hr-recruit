@@ -16,6 +16,7 @@ from app.models.communication import Communication  # noqa: F401
 from app.models.evaluation import Evaluation  # noqa: F401
 from app.models.evaluation_token import EvaluationToken  # noqa: F401
 from app.models.followup import FollowUp  # noqa: F401
+from app.models.job_opening import JobOpening  # noqa: F401
 from app.models.branch_interview import BranchInterview  # noqa: F401
 from app.models.technical_question import TechnicalQuestion  # noqa: F401
 

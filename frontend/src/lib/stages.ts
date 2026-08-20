@@ -54,7 +54,6 @@ export function formatSource(source: string | undefined | null): string {
 
 export type CandidateQueue =
   | 'NEEDS_ACTION'
-  | 'DUE_TODAY'
   | 'WAITING_FOR_CANDIDATE'
   | 'WAITING_FOR_HO'
   | 'READY_FOR_OFFER'
@@ -63,8 +62,7 @@ export type CandidateQueue =
 
 export const QUEUE_DEFINITIONS: Array<{ key: CandidateQueue; label: string }> = [
   { key: 'NEEDS_ACTION', label: 'Needs my action' },
-  { key: 'DUE_TODAY', label: 'Due today' },
-  { key: 'WAITING_FOR_CANDIDATE', label: 'Waiting for candidate' },
+  { key: 'WAITING_FOR_CANDIDATE', label: 'Waiting for candidate response' },
   { key: 'WAITING_FOR_HO', label: 'Waiting for Head Office' },
   { key: 'READY_FOR_OFFER', label: 'Ready for offer' },
   { key: 'ON_HOLD', label: 'On hold' },

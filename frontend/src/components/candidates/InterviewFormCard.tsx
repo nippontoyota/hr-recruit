@@ -14,15 +14,13 @@ import {
 import { canRenameInterview, defaultInterviewTitle, interviewTitle } from '../../lib/interviewTitle';
 import {
   createInterviewer,
-  deleteInterviewer,
-  listInterviewers,
   updateInterviewerPhone,
   type InterviewerNameRow,
 } from '../../api/settings';
 import { buildInterviewerWhatsAppMessage, openWhatsAppChat } from '../../lib/whatsappTemplate';
 import { WhatsAppShareModal } from './WhatsAppSendChoices';
-import type { Candidate, Evaluation, EvaluationVerdict } from '../../types';
-import { cn, extractError } from '../../lib/utils';
+import { InterviewerPicker } from './InterviewerPicker';
+import { cn, extractError, isAbortError, copyTextToClipboard } from '../../lib/utils';
 import { useAuth } from '../../auth';
 import { digitsOnly, validatePhone } from '../../lib/validation';
 import { formatDate, formatTime } from '../../lib/dateTime';
@@ -86,7 +84,12 @@ const StarInput = ({
 
 export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }: InterviewFormCardProps) {
   const { user } = useAuth();
-  const branch = user?.branch_location || candidate.branch_location || null;
+  const isHQInterview = ev.type === 'HQ_INTERVIEW_1' || ev.type === 'HQ_INTERVIEW_2' || ev.type === 'HQ_INTERVIEW';
+  const branch = isHQInterview
+    ? 'Head Office'
+    : user?.role === 'LOCAL_HR'
+    ? user.branch_location || candidate.branch_location || null
+    : candidate.branch_location || 'Head Office';
 
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -102,10 +105,6 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
   const [interviewerName, setInterviewerName] = useState(() =>
     String((ev.scores as any)?.interviewer_name || '').trim()
   );
-  const [savedNames, setSavedNames] = useState<InterviewerNameRow[]>([]);
-  const [newNameDraft, setNewNameDraft] = useState('');
-  const [newPhoneDraft, setNewPhoneDraft] = useState('');
-  const [loadingNames, setLoadingNames] = useState(true);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [copied, setCopied] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
@@ -113,7 +112,6 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
   const [pendingLink, setPendingLink] = useState('');
   const [sendPhone, setSendPhone] = useState('');
   const [sendPhoneError, setSendPhoneError] = useState('');
-  const [phoneEdits, setPhoneEdits] = useState<Record<string, string>>({});
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [savingTitle, setSavingTitle] = useState(false);
@@ -126,28 +124,12 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
     ev.type === 'HQ_INTERVIEW_2' ||
     ev.type === 'HQ_INTERVIEW';
 
-  const refreshNames = useCallback(async () => {
-    try {
-      setSavedNames(await listInterviewers(branch));
-    } catch (err) {
-      toast.error(extractError(err, 'Failed to load interviewer names'));
-    } finally {
-      setLoadingNames(false);
-    }
-  }, [branch]);
-
   const showForm = !isCompleted || isEditing;
-
-  useEffect(() => {
-    if (!showForm) return;
-    void refreshNames();
-  }, [refreshNames, showForm]);
 
   const handleEdit = () => {
     setVerdict(ev.verdict as EvaluationVerdict);
     setRemarksText(ev.remarks || '');
     setInterviewerName(String((ev.scores as any)?.interviewer_name || '').trim());
-    void refreshNames();
     if (ev.scores) {
       setAttitudeScore((ev.scores as any).attitude || 0);
       setCommScore((ev.scores as any).communication || 0);
@@ -200,9 +182,7 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
     }
   };
 
-  const selectedInterviewer = savedNames.find(
-    (row) => row.name.toLowerCase() === interviewerName.trim().toLowerCase()
-  );
+  const [selectedInterviewer, setSelectedInterviewer] = useState<InterviewerNameRow | null>(null);
   const selectedPhone = String(selectedInterviewer?.phone || '').trim();
 
   const persistInterviewerName = async (name: string) => {
@@ -224,10 +204,14 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
     setGeneratingLink(true);
     try {
       const url = await buildEvalLink();
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      toast.success('Interviewer link copied');
+      const copiedOk = await copyTextToClipboard(url);
+      if (copiedOk) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        toast.success('Interviewer link copied');
+      } else {
+        toast.error('Failed to copy link');
+      }
     } catch (err) {
       toast.error(extractError(err, 'Failed to copy link'));
     } finally {
@@ -244,9 +228,10 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
     try {
       const url = await buildEvalLink();
       await updateEvaluationInterviewer(ev.id, interviewerName.trim());
+      const phoneToUse = selectedInterviewer?.phone || sendPhone || '';
       setPendingLink(url);
-      setSendPhone(selectedPhone);
-      setSendPhoneError(selectedPhone ? '' : 'Enter the interviewer phone number to send.');
+      setSendPhone(phoneToUse);
+      setSendPhoneError('');
       setWhatsappOpen(true);
     } catch (err) {
       toast.error(extractError(err, 'Failed to generate link'));
@@ -281,12 +266,10 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
       if (selectedInterviewer) {
         if (selectedInterviewer.phone !== phone) {
           await updateInterviewerPhone(selectedInterviewer.id, phone, branch);
-          setSavedNames(await listInterviewers(branch));
         }
         return;
       }
       await createInterviewer(name, branch, phone);
-      setSavedNames(await listInterviewers(branch));
     } catch (err) {
       toast.error(extractError(err, 'Failed to save interviewer phone'));
     }
@@ -305,6 +288,7 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
         to_phone: phone,
         recipient_type: 'INTERVIEWER',
         variables: {
+          interviewerName,
           candidateName: candidate.full_name,
           position: candidate.position_applied_for || candidate.department || 'the role',
           date: dateStr,
@@ -331,69 +315,6 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
     setWhatsappOpen(false);
   };
 
-  const handleAddInterviewerName = async () => {
-    if (!newNameDraft.trim()) {
-      toast.error('Enter an interviewer name');
-      return;
-    }
-    const phoneDraft = newPhoneDraft.trim();
-    if (phoneDraft) {
-      const phoneCheck = validatePhone(phoneDraft, 'Interviewer phone');
-      if (!phoneCheck.ok) {
-        toast.error(phoneCheck.message);
-        return;
-      }
-    }
-    try {
-      const row = await createInterviewer(
-        newNameDraft,
-        branch,
-        phoneDraft ? digitsOnly(phoneDraft) : undefined,
-      );
-      setSavedNames(await listInterviewers(branch));
-      await persistInterviewerName(row.name);
-      setNewNameDraft('');
-      setNewPhoneDraft('');
-      toast.success(phoneDraft ? 'Interviewer saved for this branch' : 'Interviewer name saved');
-    } catch (err) {
-      toast.error(extractError(err, 'Failed to save interviewer'));
-    }
-  };
-
-  const handleSavePhone = async (row: InterviewerNameRow) => {
-    const draft = phoneEdits[row.id] ?? row.phone ?? '';
-    const phoneCheck = validatePhone(draft, 'Interviewer phone');
-    if (!phoneCheck.ok) {
-      toast.error(phoneCheck.message);
-      return;
-    }
-    try {
-      await updateInterviewerPhone(row.id, digitsOnly(draft), branch);
-      setSavedNames(await listInterviewers(branch));
-      setPhoneEdits((prev) => {
-        const next = { ...prev };
-        delete next[row.id];
-        return next;
-      });
-      toast.success('Phone saved');
-    } catch (err) {
-      toast.error(extractError(err, 'Failed to save phone'));
-    }
-  };
-
-  const handleRemoveSavedName = async (row: InterviewerNameRow) => {
-    try {
-      await deleteInterviewer(row.id, branch);
-      setSavedNames(await listInterviewers(branch));
-      if (interviewerName.toLowerCase() === row.name.toLowerCase()) {
-        setInterviewerName('');
-      }
-      toast.success('Interviewer name removed');
-    } catch (err) {
-      toast.error(extractError(err, 'Failed to remove interviewer name'));
-    }
-  };
-
   const handleSubmitScorecard = async () => {
     if (attitudeScore === 0 || commScore === 0 || knowledgeScore === 0 || !verdict) {
       toast.error('Please complete all star ratings and select a verdict');
@@ -409,7 +330,6 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
       const name = interviewerName.trim();
       if (name && !selectedInterviewer) {
         await createInterviewer(name, branch, selectedPhone || undefined);
-        setSavedNames(await listInterviewers(branch));
       }
       await submitScorecardDirect(ev.id, {
         verdict: verdict as EvaluationVerdict,
@@ -521,7 +441,7 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
               <button
                 type="button"
                 onClick={() => void handleOpenWhatsApp()}
-                disabled={generatingLink || loadingNames}
+                disabled={generatingLink}
                 title={!interviewerName.trim() ? 'Select an interviewer first' : 'Send form on WhatsApp'}
                 aria-label="Send interview form on WhatsApp"
                 className="flex min-h-11 items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded-lg shadow-sm transition-colors disabled:opacity-50"
@@ -631,107 +551,22 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
             exit={{ opacity: 0, y: -5 }}
             className="space-y-4 mt-2"
           >
-            <div className="rounded-lg border border-border p-3 space-y-2">
-              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider">
-                Interviewer{requireInterviewer ? ' *' : ''}
-              </label>
-              <Select
+            <div className="rounded-xl border border-border/80 bg-surface/40 p-4 shadow-xs">
+              <InterviewerPicker
+                label="Interviewer"
                 value={interviewerName}
-                onChange={(e) => void persistInterviewerName(e.target.value)}
-                disabled={!!isReadOnly || loadingNames}
-                searchable
-              >
-                <option value="">{loadingNames ? 'Loading…' : 'Select interviewer…'}</option>
-                {savedNames.map((row) => (
-                  <option key={row.id} value={row.name}>
-                    {row.phone ? `${row.name} · ${row.phone}` : row.name}
-                  </option>
-                ))}
-                {interviewerName &&
-                  !savedNames.some((n) => n.name.toLowerCase() === interviewerName.toLowerCase()) && (
-                    <option value={interviewerName}>{interviewerName}</option>
-                  )}
-              </Select>
-
-              {savedNames.length > 0 && (
-                <ul className="space-y-1 max-h-36 overflow-y-auto">
-                  {savedNames.map((row) => (
-                    <li
-                      key={row.id}
-                      className="flex flex-col gap-1 rounded-md bg-muted/40 px-2 py-1.5 text-sm"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          className="truncate text-left font-medium hover:text-primary"
-                          onClick={() => void persistInterviewerName(row.name)}
-                        >
-                          {row.name}
-                          {row.phone ? (
-                            <span className="ml-2 font-normal text-muted-foreground">+91 {row.phone}</span>
-                          ) : (
-                            <span className="ml-2 font-normal text-warning">No phone</span>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => handleRemoveSavedName(row)}
-                          title={`Remove ${row.name}`}
-                          aria-label={`Remove ${row.name}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      {!row.phone && (
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="10-digit phone"
-                            inputMode="numeric"
-                            value={phoneEdits[row.id] ?? ''}
-                            onChange={(e) =>
-                              setPhoneEdits((prev) => ({ ...prev, [row.id]: digitsOnly(e.target.value, 10) }))
-                            }
-                          />
-                          <Button type="button" variant="secondary" size="sm" onClick={() => void handleSavePhone(row)}>
-                            Save phone
-                          </Button>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Input
-                  placeholder="Name"
-                  value={newNameDraft}
-                  onChange={(e) => setNewNameDraft(e.target.value)}
-                  disabled={!!isReadOnly}
-                />
-                <Input
-                  placeholder="Phone (optional)"
-                  inputMode="numeric"
-                  value={newPhoneDraft}
-                  onChange={(e) => setNewPhoneDraft(digitsOnly(e.target.value, 10))}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      void handleAddInterviewerName();
-                    }
-                  }}
-                  disabled={!!isReadOnly}
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => void handleAddInterviewerName()}
-                  disabled={!!isReadOnly}
-                >
-                  Save
-                </Button>
-              </div>
+                onChange={(name) => void persistInterviewerName(name)}
+                branch={branch}
+                disabled={!!isReadOnly}
+                required={requireInterviewer}
+                onInterviewerChange={(int) => {
+                  setSelectedInterviewer(int);
+                  if (int?.phone) {
+                    setSendPhone(int.phone);
+                    setSendPhoneError('');
+                  }
+                }}
+              />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">

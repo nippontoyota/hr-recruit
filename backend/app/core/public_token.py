@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.activity_log import ActivityLog
 from app.models.candidate import Candidate
-from app.models.enums import ActivityType, FormStatus
+from app.models.enums import ActivityType, FormStatus, PipelineStage
 
 PURPOSE_APPLY = "APPLY"
 PURPOSE_PRE_FORM = "PRE_FORM"
@@ -35,9 +35,14 @@ def pre_form_deadline(candidate: Candidate) -> datetime | None:
 
 
 def expire_pre_form_if_needed(candidate: Candidate) -> bool:
-    """Mark SENT/VIEWED forms past the deadline as EXPIRED. True if status changed."""
-    if candidate.pre_form_status not in (FormStatus.SENT, FormStatus.VIEWED):
+    """Mark open pre-forms past the deadline as EXPIRED. True if status changed."""
+    if candidate.pre_form_status not in (FormStatus.NOT_SENT, FormStatus.SENT, FormStatus.VIEWED):
         return False
+    if candidate.pre_form_status == FormStatus.NOT_SENT:
+        if not candidate.pre_form_token:
+            return False
+        if (candidate.pre_form_token_purpose or PURPOSE_PRE_FORM) != PURPOSE_PRE_FORM:
+            return False
     deadline = pre_form_deadline(candidate)
     if deadline is None or deadline > datetime.now(UTC):
         return False
@@ -45,6 +50,32 @@ def expire_pre_form_if_needed(candidate: Candidate) -> bool:
     if candidate.pre_form_expires_at is None:
         candidate.pre_form_expires_at = deadline
     return True
+
+
+_FILLABLE = (FormStatus.NOT_SENT, FormStatus.SENT, FormStatus.VIEWED)
+_CLOSED_STAGES = {PipelineStage.REJECTED, PipelineStage.HIRED}
+
+
+def pre_form_fillable(candidate: Candidate) -> bool:
+    """True when the candidate may still complete the pre-interview form.
+
+    Pipeline stage is not required: HR often advances to interviews before
+    the candidate finishes the form. A minted PRE_FORM token is enough even
+    before HR marks the call letter sent. Expiry is handled by lookup.
+    """
+    if candidate.current_stage in _CLOSED_STAGES:
+        return False
+    if not candidate.pre_form_token:
+        return False
+    if (candidate.pre_form_token_purpose or PURPOSE_PRE_FORM) != PURPOSE_PRE_FORM:
+        return False
+    return candidate.pre_form_status in _FILLABLE
+
+
+def pre_form_accepts_uploads(candidate: Candidate) -> bool:
+    if candidate.current_stage in _CLOSED_STAGES:
+        return False
+    return candidate.pre_form_status in (*_FILLABLE, FormStatus.SUBMITTED)
 
 
 def pre_form_expired_detail(candidate: Candidate) -> str:

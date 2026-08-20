@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ArrowLeft, Pencil, Send, Video, Phone, MoreVertical, Smile, Paperclip, Camera, CheckCheck, Trash2, Link, Loader2 } from 'lucide-react';
 import type { Candidate } from '../../types';
@@ -7,10 +7,9 @@ import { Button, Input, Modal, Select } from '../ui';
 import {
   buildWhatsAppMessage,
   canSendWhatsAppInvite,
-  defaultTemplateVars,
   formatVisitDate,
   isWhatsAppUrl,
-  loadStoredTemplateVars,
+  mergeWhatsAppVars,
   openWhatsAppChat,
   positionForWhatsApp,
   sanitizeWhatsAppPosition,
@@ -23,8 +22,8 @@ import {
 import { WhatsAppSendChoices } from './WhatsAppSendChoices';
 import { useAuth } from '../../auth';
 import { toast } from 'sonner';
-import { cn, extractError } from '../../lib/utils';
-import { sendPreForm, sendWhatsAppInvite } from '../../api/candidates';
+import { cn, extractError, isAbortError, copyTextToClipboard } from '../../lib/utils';
+import { sendPreForm, sendWhatsAppInvite, saveWhatsAppTemplate, confirmWhatsAppInvite } from '../../api/candidates';
 import {
   createLocation,
   deleteLocation,
@@ -100,17 +99,38 @@ function FieldError({ error }: { error?: string }) {
   );
 }
 
+function varsForCandidate(candidate: Candidate, recruiterName?: string | null): WhatsAppTemplateVars {
+  return mergeWhatsAppVars({
+    candidateId: candidate.id,
+    fullName: candidate.full_name,
+    positionAppliedFor: candidate.position_applied_for,
+    department: candidate.department,
+    experience: candidate.experience,
+    shareUrl: candidate.share_url,
+    visitBranch: candidate.visit_branch,
+    visitDate: candidate.visit_date,
+    visitTime: candidate.visit_time,
+    visitMapsLink: candidate.visit_maps_link,
+    visitInstructions: candidate.visit_instructions,
+    extraInstructions: candidate.screening?.extra_instructions,
+    storedTemplate: candidate.profile?.raw_data?.whatsapp_template || null,
+    recruiterName,
+  });
+}
+
 export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnly = false }: WhatsAppPreviewPanelProps) {
   const { user } = useAuth();
   const branch = user?.branch_location || candidate.branch_location || null;
   const [isEditing, setIsEditing] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [places, setPlaces] = useState<LocationTemplateRow[]>([]);
 
   const refreshPlaces = async () => {
     try {
       setPlaces(await listLocations(branch));
     } catch (err) {
+      if (isAbortError(err)) return;
       toast.error(extractError(err, 'Failed to load locations'));
     }
   };
@@ -122,62 +142,63 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
       experience: candidate.experience,
     });
 
-  const [vars, setVars] = useState<WhatsAppTemplateVars>(() => {
-    const screening = candidate.screening;
-    const defaults = defaultTemplateVars({
-      candidateName: candidate.full_name,
-      position: '',
-      formLink: candidate.share_url || '',
-      extraInstructions: screening?.extra_instructions,
-      recruiterName: user?.full_name,
-    });
-
-    const stored = loadStoredTemplateVars(candidate.id);
-    return {
-      ...defaults,
-      ...stored,
-      candidateName: candidate.full_name || defaults.candidateName,
-      position: sanitizeWhatsAppPosition(stored?.position),
-      formLink: candidate.share_url || defaults.formLink,
-      visitDate: stored?.visitDate?.trim() || '',
-      branchName: stored?.branchName?.trim() || '',
-      mapsLink: stored?.mapsLink?.trim() || '',
-      arrivalTime: stored?.arrivalTime?.trim() || '9:15 AM',
-    };
-  });
+  const [vars, setVars] = useState<WhatsAppTemplateVars>(() => varsForCandidate(candidate, user?.full_name));
   const [draft, setDraft] = useState(vars);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [showSendConfirm, setShowSendConfirm] = useState(false);
+  const [confirmingSend, setConfirmingSend] = useState(false);
+  const [whatsAppOpened, setWhatsAppOpened] = useState(false);
+  const awaitingWhatsAppReturn = useRef(false);
 
   useEffect(() => {
-    setVars((current) => ({
-      ...current,
-      candidateName: candidate.full_name || current.candidateName,
-      position: sanitizeWhatsAppPosition(current.position),
-      formLink: candidate.share_url || current.formLink,
-      ...(candidate.screening?.extra_instructions
-        ? { extraInstructions: candidate.screening.extra_instructions }
-        : {}),
-    }));
+    const next = varsForCandidate(candidate, user?.full_name);
+    setVars(next);
+    if (!isEditing) setDraft(next);
   }, [
+    candidate.id,
     candidate.full_name,
     candidate.share_url,
+    candidate.position_applied_for,
+    candidate.department,
+    candidate.experience,
+    candidate.visit_branch,
+    candidate.visit_date,
+    candidate.visit_time,
+    candidate.visit_maps_link,
+    candidate.visit_instructions,
     candidate.screening?.extra_instructions,
+    candidate.profile?.raw_data,
+    user?.full_name,
+    isEditing,
   ]);
 
   const message = useMemo(() => buildWhatsAppMessage(vars), [vars]);
   const inviteErrors = whatsappInviteFieldErrors(vars);
   const draftErrors = whatsappInviteFieldErrors(draft);
   const readyToSend = canSendWhatsAppInvite(vars);
+  const callLetterNotIssued =
+    candidate.pre_form_status !== 'SENT' &&
+    candidate.pre_form_status !== 'VIEWED' &&
+    candidate.pre_form_status !== 'SUBMITTED';
+
+  useEffect(() => {
+    const onReturn = () => {
+      if (!awaitingWhatsAppReturn.current) return;
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+      awaitingWhatsAppReturn.current = false;
+      setShowSendConfirm(true);
+    };
+    window.addEventListener('focus', onReturn);
+    document.addEventListener('visibilitychange', onReturn);
+    return () => {
+      window.removeEventListener('focus', onReturn);
+      document.removeEventListener('visibilitychange', onReturn);
+    };
+  }, []);
 
   const openEditor = () => {
-    const stored = loadStoredTemplateVars(candidate.id);
-    setDraft({
-      ...vars,
-      visitDate: vars.visitDate.trim() || stored?.visitDate?.trim() || '',
-      branchName: vars.branchName.trim() || stored?.branchName?.trim() || '',
-      mapsLink: vars.mapsLink.trim() || stored?.mapsLink?.trim() || '',
-    });
+    setDraft(varsForCandidate(candidate, user?.full_name));
     void refreshPlaces();
     setIsEditing(true);
   };
@@ -273,16 +294,27 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
       toast.error('Generate the form link first');
       return;
     }
-    try {
-      await navigator.clipboard.writeText(url);
+    const copiedOk = await copyTextToClipboard(url);
+    if (copiedOk) {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
-    } catch {
+      toast.success('Form link copied');
+    } else {
       toast.error('Failed to copy link');
     }
   };
 
-  const saveDraft = () => {
+  const persistTemplate = async (next: WhatsAppTemplateVars) => {
+    storeTemplateVars(candidate.id, next);
+    const saved = await saveWhatsAppTemplate(candidate.id, {
+      ...next,
+      visitDate: toDateInputValue(next.visitDate) || next.visitDate,
+    });
+    onUpdate?.();
+    return saved;
+  };
+
+  const saveDraft = async () => {
     const next = {
       ...draft,
       position: sanitizeWhatsAppPosition(draft.position),
@@ -290,10 +322,18 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
       mapsLink: draft.mapsLink.trim(),
       formLink: candidate.share_url || draft.formLink,
     };
-    setVars(next);
-    storeTemplateVars(candidate.id, next);
-    setIsEditing(false);
-    toast.success('Preview updated');
+    setIsSaving(true);
+    try {
+      await persistTemplate(next);
+      setVars(next);
+      setIsEditing(false);
+      toast.success('WhatsApp details saved for this candidate');
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to save WhatsApp details'));
+      return;
+    } finally {
+      setIsSaving(false);
+    }
 
     if (next.branchName && next.mapsLink) {
       const alreadySaved = places.some(
@@ -320,7 +360,9 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
     setIsSending(true);
     try {
       await sendWhatsAppInvite(candidate.id, vars as unknown as Record<string, string>);
-      toast.success('WhatsApp message accepted by DoubleTick');
+      setShowSendConfirm(false);
+      setWhatsAppOpened(false);
+      toast.success('Call letter issued via DoubleTick');
       onUpdate?.();
     } catch (err: any) {
       console.error(err);
@@ -337,15 +379,36 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
     if (!candidate.phone) {
       return;
     }
-    openWhatsAppChat(candidate.phone, message);
+    const opened = openWhatsAppChat(candidate.phone, message);
+    if (!opened) {
+      toast.error('WhatsApp did not open. Allow pop-ups, then try again.');
+      return;
+    }
+    awaitingWhatsAppReturn.current = true;
+    setWhatsAppOpened(true);
     toast.success('Opened WhatsApp with the message ready to send');
+  };
+
+  const confirmWhatsAppSent = async () => {
+    setConfirmingSend(true);
+    try {
+      await confirmWhatsAppInvite(candidate.id, vars as unknown as Record<string, string>);
+      setShowSendConfirm(false);
+      setWhatsAppOpened(false);
+      toast.success('Call letter issued, waiting for candidate response');
+      onUpdate?.();
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to record that the WhatsApp message was sent'));
+    } finally {
+      setConfirmingSend(false);
+    }
   };
 
   return (
     <>
       <aside
         className={cn(
-          'w-full lg:w-[400px] xl:w-[440px] shrink-0 border-l border-border bg-[#f7f8fa] flex flex-col min-h-0 overflow-hidden',
+          'w-full shrink-0 border-l border-border bg-[#f7f8fa] flex flex-col min-h-0 overflow-hidden',
           className
         )}
       >
@@ -445,7 +508,9 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
             </ul>
           )}
           <p className="text-xs text-muted-foreground">
-            Opening WhatsApp prepares the message only; it is not recorded as delivered.
+            {callLetterNotIssued
+              ? 'Opening WhatsApp prepares the message. Confirm after you send it.'
+              : 'Call letter issued, waiting for candidate response.'}
           </p>
           <WhatsAppSendChoices
             stacked
@@ -455,15 +520,48 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
             disabled={!readyToSend}
             openWhatsAppDisabled={!candidate.phone}
           />
+          {callLetterNotIssued && whatsAppOpened && (
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={() => void confirmWhatsAppSent()}
+              isLoading={confirmingSend}
+              disabled={confirmingSend || !readyToSend}
+            >
+              I sent this on WhatsApp
+            </Button>
+          )}
         </div>
         )}
       </aside>
 
       <Modal
+        isOpen={showSendConfirm && callLetterNotIssued}
+        onClose={() => setShowSendConfirm(false)}
+        title="Did you send the WhatsApp message?"
+        size="sm"
+      >
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-foreground">
+            WhatsApp opened with the call letter ready. Confirm only if you actually sent it to {candidate.full_name}.
+          </p>
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 border-t border-border pt-4">
+            <Button variant="ghost" onClick={() => setShowSendConfirm(false)} disabled={confirmingSend}>
+              Not yet
+            </Button>
+            <Button onClick={() => void confirmWhatsAppSent()} isLoading={confirmingSend} disabled={confirmingSend}>
+              Yes, I sent it
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         isOpen={isEditing}
         onClose={() => setIsEditing(false)}
         title="Edit WhatsApp content"
-        description="Changes update this preview only."
+        description="Changes are saved on this candidate so they show up on every computer."
         size="md"
       >
         <div className="max-h-[72vh] overflow-y-auto p-6">
@@ -501,7 +599,7 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
                   <Input
                     value={draft[key]}
                     error={!!fieldError}
-                    placeholder={key === 'position' ? candidatePosition() || 'e.g. Accessories - Fresher' : undefined}
+                    placeholder={key === 'position' ? 'Enter position applied for (e.g. Service Advisor)' : undefined}
                     onChange={(event) => updateDraft(key, event.target.value)}
                   />
                 )}
@@ -568,7 +666,7 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
               </div>
               <FieldError error={draftErrors.branchName} />
               <p className="text-xs text-muted-foreground">
-                Save remembers this location for the branch. Save changes keeps it on this preview.
+                Save remembers this location for the branch. Save changes stores the invite details for this candidate.
               </p>
             </div>
 
@@ -609,14 +707,14 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
                 </div>
               </div>
               <p className="mt-1.5 text-xs text-muted-foreground">
-                Generates this candidate&apos;s pre-interview form link. Regenerating replaces the old one.
+                Generates this candidate&apos;s candidate form link. Regenerating replaces the old one.
               </p>
             </div>
           </div>
 
           <div className="mt-6 flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancel</Button>
-            <Button onClick={saveDraft}>Save changes</Button>
+            <Button onClick={() => void saveDraft()} isLoading={isSaving} disabled={isSaving}>Save changes</Button>
           </div>
         </div>
       </Modal>

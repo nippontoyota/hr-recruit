@@ -43,7 +43,7 @@ def _normalize_branch(raw: str | None) -> str | None:
 
 
 def _resolve_branch(user: User, override: str | None = None) -> str:
-    """LOCAL_HR always uses their account branch; ADMIN/HO_HR may pass override."""
+    """LOCAL_HR always uses their account branch; ADMIN/HO_HR may pass override or default to Head Office."""
     if user.role == UserRole.LOCAL_HR:
         branch = _normalize_branch(user.branch_location)
         if not branch:
@@ -53,12 +53,7 @@ def _resolve_branch(user: User, override: str | None = None) -> str:
             )
         return branch
 
-    branch = _normalize_branch(override) or _normalize_branch(user.branch_location)
-    if not branch:
-        raise HTTPException(
-            status_code=400,
-            detail="branch_location is required (one of the HR branch accounts).",
-        )
+    branch = _normalize_branch(override) or _normalize_branch(user.branch_location) or "Head Office"
     return branch
 
 

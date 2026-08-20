@@ -2,9 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Input, LoadingSpinner, EmptyState, Modal, PipelineStepper, Select } from '../../components/ui';
-import { ArrowLeft, X, XCircle, MapPin, Phone, Mail, Trophy, Pause, Play, History, Edit2, Check } from 'lucide-react';
+import { ArrowLeft, Home, X, XCircle, MapPin, Phone, Mail, Trophy, Pause, Play, History, Edit2, Check } from 'lucide-react';
 import { getCandidateById, updateCandidateStage, unholdCandidate, resolveDuplicateCandidate, updateCandidateDepartment } from '../../api/candidates';
-import { getCandidateEvaluations } from '../../api/evaluations';
 import type { Candidate, PipelineStage } from '../../types';
 import { HO_LINEAR_STAGES, HO_POST_SEND_STAGES } from '../../types';
 import { CANDIDATE_DEPARTMENTS } from '../../types';
@@ -23,12 +22,11 @@ import { FinalApprovalWidget } from '../../components/candidates/FinalApprovalWi
 import { BackgroundVerificationWidget } from '../../components/candidates/BackgroundVerificationWidget';
 import { ActivityTimeline } from '../../components/candidates/ActivityTimeline';
 import { CommunicationTimeline } from '../../components/candidates/CommunicationTimeline';
-import { extractError } from '../../lib/utils';
+import { extractError, isAbortError } from '../../lib/utils';
 import { CSSStageWidget } from '../../components/candidates/CSSStageWidget';
 import { WorkQueue } from '../../components/candidates/WorkQueue';
 import { SalarySheetUpload } from '../../components/candidates/SalarySheetUpload';
 import { CandidateHeader } from '../../components/candidates/CandidateHeader';
-import { CandidateActionPanel } from '../../components/candidates/CandidateActionPanel';
 import { CandidateRecordSections } from '../../components/candidates/CandidateRecordSections';
 import { getCandidateWorkState } from '../../lib/candidateWork';
 
@@ -225,6 +223,61 @@ function ConsiderationEditor({
   );
 }
 
+function CandidateProfileSkeleton() {
+  return (
+    <div className="space-y-6 pb-12 animate-in fade-in duration-150" aria-hidden="true">
+      {/* Header bar skeleton */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="skeleton h-9 w-9 rounded-lg" />
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="skeleton h-6 w-48 rounded-md" />
+              <div className="skeleton h-5 w-20 rounded-full" />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="skeleton h-4 w-32 rounded-md" />
+              <div className="skeleton h-4 w-24 rounded-md" />
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="skeleton h-9 w-28 rounded-lg" />
+          <div className="skeleton h-9 w-28 rounded-lg" />
+        </div>
+      </div>
+
+      {/* Stepper bar skeleton */}
+      <div className="page-card p-4">
+        <div className="flex items-center justify-between gap-2 overflow-hidden">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex-1 flex items-center gap-2">
+              <div className="skeleton h-7 w-7 rounded-full shrink-0" />
+              <div className="skeleton h-4 w-20 hidden md:block rounded-md" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Main stage card skeleton */}
+      <div className="page-card p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="skeleton h-6 w-40 rounded-md" />
+          <div className="skeleton h-8 w-24 rounded-lg" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="skeleton h-24 rounded-xl" />
+          <div className="skeleton h-24 rounded-xl" />
+        </div>
+        <div className="space-y-3 pt-2">
+          <div className="skeleton h-12 w-full rounded-xl" />
+          <div className="skeleton h-12 w-full rounded-xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CandidateProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -246,6 +299,10 @@ export default function CandidateProfile() {
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
 
+  const [showHoldModal, setShowHoldModal] = useState(false);
+  const [holdRemarks, setHoldRemarks] = useState('');
+  const [isHolding, setIsHolding] = useState(false);
+
   const [showEditStageModal, setShowEditStageModal] = useState(false);
   const [editStageSelection, setEditStageSelection] = useState<PipelineStage>('CALL_LETTER');
   const [editStageRemarks, setEditStageRemarks] = useState('');
@@ -261,40 +318,34 @@ export default function CandidateProfile() {
     setSearchParams(prev => { prev.set('stage', stage); return prev; }, { replace: true });
   };
 
-  const cancelledRef = useRef(false);
   const goneRef = useRef(false);
-  const inFlightRef = useRef(false);
   const candidateRef = useRef(candidate);
   candidateRef.current = candidate;
 
-  const fetchCandidate = async (opts?: { candidate?: boolean }) => {
-    if (!id || goneRef.current || cancelledRef.current) return;
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
+  const fetchCandidate = async (opts?: { candidate?: boolean; signal?: AbortSignal }) => {
+    if (!id || goneRef.current) return;
+    const signal = opts?.signal;
     const hasData = !!(profileCache[id] || candidateRef.current);
     const skipCandidate = opts?.candidate === false && hasData;
     try {
       if (!hasData) setInitialLoading(true);
 
-      const [res, evals] = await Promise.all([
-        skipCandidate
-          ? Promise.resolve(candidateRef.current ?? profileCache[id])
-          : getCandidateById(id),
-        getCandidateEvaluations(id).catch(() => []),
-      ]);
+      const res = skipCandidate
+        ? (candidateRef.current ?? profileCache[id])
+        : await getCandidateById(id, signal);
 
-      if (cancelledRef.current || goneRef.current) return;
+      if (signal?.aborted || goneRef.current) return;
 
       if (res) {
         if (!skipCandidate) profileCache[id] = res;
         setCandidate(res);
-        setEvaluations(evals);
+        if (res.evaluations) setEvaluations(res.evaluations);
         setError(null);
       } else if (!hasData) {
         setError('Candidate not found.');
       }
     } catch (err: any) {
-      if (cancelledRef.current || goneRef.current) return;
+      if (signal?.aborted || isAbortError(err) || goneRef.current) return;
       if (err?.response?.status === 404) {
         goneRef.current = true;
         delete profileCache[id];
@@ -303,21 +354,20 @@ export default function CandidateProfile() {
         return;
       }
       const message = extractError(err, 'Failed to fetch candidate details.');
+      if (!message) return;
       if (!hasData) setError(message);
       else toast.error(message);
     } finally {
-      inFlightRef.current = false;
-      setInitialLoading(false);
-
+      if (!signal?.aborted) setInitialLoading(false);
     }
   };
 
   useEffect(() => {
-    cancelledRef.current = false;
     goneRef.current = false;
-    void fetchCandidate();
+    const controller = new AbortController();
+    void fetchCandidate({ signal: controller.signal });
     return () => {
-      cancelledRef.current = true;
+      controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -467,12 +517,7 @@ export default function CandidateProfile() {
   };
 
   if (initialLoading) {
-    return (
-      <div className="flex justify-center items-center h-screen w-full flex-col">
-        <LoadingSpinner size="lg" className="text-primary mb-4" />
-        <p className="text-muted-foreground font-medium animate-pulse">Loading candidate profile...</p>
-      </div>
-    );
+    return <CandidateProfileSkeleton />;
   }
 
   if (error || !candidate) {
@@ -498,7 +543,12 @@ export default function CandidateProfile() {
   const isAdmin = user?.role === 'ADMIN';
   const isHO = user?.role === 'HO_HR';
   const isLocalHR = user?.role === 'LOCAL_HR';
-  const showWhatsAppSidebar = !isAdmin && stageToView === 'CALL_LETTER' && candidate.pre_form_status !== 'SUBMITTED';
+  const showWhatsAppSidebar =
+    !isAdmin &&
+    stageToView === 'CALL_LETTER' &&
+    candidate.pre_form_status !== 'SENT' &&
+    candidate.pre_form_status !== 'VIEWED' &&
+    candidate.pre_form_status !== 'SUBMITTED';
   const hasBeenSentToHO = HO_POST_SEND_STAGES.includes(candidate.current_stage) || !!candidate.handed_over_to_ho;
   const isReadOnly = (isLocalHR && hasBeenSentToHO) || isAdmin;
   const followsHoPipeline = isHO || isAdmin;
@@ -533,12 +583,30 @@ export default function CandidateProfile() {
       else completedStages.push('TEST');
     }
 
-    // HO interview completion markers
+    // 6. BACKGROUND_VERIFICATION
+    const bgData = candidate.profile?.raw_data?.bg_verification as any;
+    const bgCompleted = Boolean(bgData?.meta?.completedAt);
+    const bgPastStage = [
+      'APPLICATION',
+      'SENT_TO_HO',
+      'HO_HR_INTERVIEW',
+      'HO_DEPT_INTERVIEW',
+      'HO_INTERVIEWS',
+      'CSS',
+      'FINAL_APPROVAL',
+      'HIRED',
+    ].includes(candidate.current_stage);
+
+    if (bgCompleted || bgPastStage) {
+      completedStages.push('BACKGROUND_VERIFICATION');
+    }
+
+    // HO interview completion markers (HO HR is mandatory, HO Dept is optional)
     const hoHrEval = evaluations.find(e => e.type === 'HQ_INTERVIEW_1');
     const hoDeptEval = evaluations.find(e => e.type === 'HQ_INTERVIEW_2');
     if (hoHrEval?.verdict === 'ON_HOLD' || hoDeptEval?.verdict === 'ON_HOLD') {
       heldStages.push('HO_INTERVIEWS');
-    } else if (hoHrEval?.verdict && hoDeptEval?.verdict) {
+    } else if (hoHrEval?.verdict && (!hoDeptEval || !!hoDeptEval?.verdict)) {
       completedStages.push('HO_INTERVIEWS');
     }
 
@@ -594,47 +662,113 @@ export default function CandidateProfile() {
     <div className="flex items-start w-full min-h-screen">
 
       {/* ── LEFT: Main Workspace ── */}
-      <div className="flex-1 flex flex-col pl-4 sm:pl-6 lg:pl-8 pt-4 lg:pt-6 pr-0 lg:pr-8 pb-4 min-w-0 transition-all duration-300 ease-in-out">
+      <div className="flex-1 flex flex-col px-4 sm:px-6 lg:px-8 py-4 lg:py-6 min-w-0 transition-all duration-300 ease-in-out w-full max-w-7xl mx-auto">
 
         {/* ── CANDIDATE HEADER ── */}
         <div className="pb-4 mb-4">
           <div className="w-full">
-            <div className="flex items-center gap-2 mb-4">
-              <button
-                type="button"
-                onClick={() => navigate('/candidates')}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                title="Back to Candidates"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-              <span className="text-sm font-medium text-muted-foreground">Candidates</span>
-              <span className="text-sm font-medium text-muted-foreground">/</span>
-              <span className="text-sm font-medium text-foreground">{candidate.full_name}</span>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/candidates')}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 font-bold text-xs shadow-xs transition-all hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer active:scale-95 shrink-0"
+                  title="Return to Candidates Dashboard"
+                >
+                  <Home className="w-3.5 h-3.5" />
+                  <span>Home</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/candidates')}
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors border border-border/70 shrink-0"
+                  title="Back to Candidates"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div className="flex items-center gap-1.5 text-sm">
+                  <span
+                    className="text-muted-foreground hover:text-primary cursor-pointer font-medium transition-colors"
+                    onClick={() => navigate('/candidates')}
+                  >
+                    Candidates
+                  </span>
+                  <span className="text-muted-foreground">/</span>
+                  <span className="text-sm font-semibold text-foreground truncate max-w-[160px] sm:max-w-xs md:max-w-md">
+                    {candidate.full_name}
+                  </span>
+                </div>
+              </div>
+
+              {/* Context Tag / Branch Badge */}
+              <div className="flex items-center gap-2 text-xs">
+                {isLocalHR && user?.branch_location && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-primary font-semibold border border-primary/20">
+                    <MapPin className="w-3 h-3" />
+                    {user.branch_location} Branch
+                  </span>
+                )}
+                {isHO && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 font-semibold border border-purple-200">
+                    Head Office HR
+                  </span>
+                )}
+              </div>
             </div>
 
-            <div className="mb-6 space-y-3">
-              <CandidateHeader candidate={candidate} />
-              <CandidateActionPanel
-                candidate={candidate}
-                readOnly={isReadOnly}
-                loading={isUpdating || isResuming}
-                onSendToHo={isLocalHR ? handleSendToHO : undefined}
-                onAdvance={canAdvanceCurrent ? handleMarkStageComplete : undefined}
-                onResume={handleResume}
-                onReject={() => setShowRejectModal(true)}
-                onHold={handleHold}
+            {/* ── PIPELINE STEPPER ── */}
+            <div className="w-full mb-4 py-2">
+              <PipelineStepper
+                stages={stepperStages}
+                currentStage={mappedView}
+                actualStage={mappedActual}
+                onStageClick={handleStageClick}
+                isLoading={isUpdating}
+                completedStages={completedStages}
+                skippedStages={skippedStages}
+                heldStages={heldStages}
+                customLabels={followsHoPipeline ? {
+                  'SENT_TO_HO': 'CANDIDATE APPLICATION',
+                  'HO_INTERVIEWS': 'INTERVIEWS',
+                  'FINAL_APPROVAL': 'OFFER LETTER',
+                } : isLocalHR && hasBeenSentToHO ? {
+                  'SENT_TO_HO': 'SENT TO HO',
+                  'HO_INTERVIEWS': 'HO INTERVIEWS',
+                  'FINAL_APPROVAL': 'OFFER',
+                } : undefined}
               />
             </div>
 
+            {/* ── HOLD & REJECT ACTIONS ── */}
+            {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && actualStage !== 'ON_HOLD' && actualStage !== 'CSS' && actualStage !== 'FINAL_APPROVAL' && !isReadOnly && (
+              <div className="mb-4 flex items-center justify-end gap-2 w-full">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowHoldModal(true)}
+                  className="h-8 px-3 font-semibold text-xs tracking-wider uppercase border border-border"
+                >
+                  <Pause className="mr-1.5 h-3.5 w-3.5" /> Hold Candidate
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setShowRejectModal(true)}
+                  className="h-8 px-3 text-white bg-[#DC143C] hover:bg-[#B21030] transition-colors shadow-sm font-extrabold uppercase rounded-sm tracking-wider text-xs"
+                >
+                  <XCircle className="mr-1.5 h-3.5 w-3.5" /> Reject Candidate
+                </Button>
+              </div>
+            )}
+
             {isLocalHR && hasBeenSentToHO && (
-              <div className="mb-6 rounded-lg border border-info/20 bg-info/5 px-4 py-3 text-sm font-medium text-info">
+              <div className="mb-4 rounded-lg border border-info/20 bg-info/5 px-4 py-3 text-sm font-medium text-info">
                 Already sent to Head Office. You can follow HO updates on the pipeline below, but you cannot edit this candidate.
               </div>
             )}
 
             {candidate.is_duplicate_flagged && (
-              <div className="mb-6 bg-orange-50 border border-orange-200 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="mb-4 bg-orange-50 border border-orange-200 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3 text-orange-800">
                   <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
                     <XCircle className="w-5 h-5 text-orange-500" />
@@ -653,220 +787,48 @@ export default function CandidateProfile() {
               </div>
             )}
 
-            {(() => {
-              const isCallLetterStage = stageToView === 'CALL_LETTER';
-
-              const stepperBlock = (
-                <div className="w-full">
-                  <PipelineStepper
-                    stages={stepperStages}
-                    currentStage={mappedView}
-                    actualStage={mappedActual}
-                    onStageClick={handleStageClick}
-                    isLoading={isUpdating}
-                    completedStages={completedStages}
-                    skippedStages={skippedStages}
-                    heldStages={heldStages}
-                    customLabels={followsHoPipeline ? {
-                      'SENT_TO_HO': 'CANDIDATE APPLICATION',
-                      'HO_INTERVIEWS': 'INTERVIEWS',
-                      'FINAL_APPROVAL': 'OFFER LETTER',
-                    } : isLocalHR && hasBeenSentToHO ? {
-                      'SENT_TO_HO': 'SENT TO HO',
-                      'HO_INTERVIEWS': 'HO INTERVIEWS',
-                      'FINAL_APPROVAL': 'OFFER',
-                    } : undefined}
-                  />
-                </div>
-              );
-
-              return (
-                <>
-                  {isCallLetterStage && (
-                    <div className="mb-8 pb-2">
-                      {stepperBlock}
+            {/* ── CANDIDATE HEADER ── */}
+            <div className="mb-6">
+              <CandidateHeader
+                candidate={candidate}
+                isReadOnly={isReadOnly}
+                onUpdate={handleUpdate}
+                actions={(
+                  <>
+                    <div className="flex items-center h-8 px-2.5 rounded-md border border-border bg-background shadow-xs">
+                      <ConsiderationEditor
+                        candidate={candidate}
+                        readOnly={isReadOnly}
+                        onSaved={setCandidate}
+                        compact
+                      />
                     </div>
-                  )}
-
-                  <div className={isCallLetterStage ? "flex flex-col items-center justify-center gap-6 mt-4 mb-8" : "flex flex-col md:flex-row md:items-start justify-between gap-6"}>
-                    
-                    {isCallLetterStage && (
-                      <div className="flex flex-col items-center text-center max-w-2xl mx-auto space-y-4">
-                        <div className="flex flex-col items-center gap-2 w-full">
-                          
-                          <div
-                            className={cn(
-                              "relative group mb-2 h-36 w-28 shrink-0 overflow-hidden border border-border bg-muted",
-                              !isReadOnly && "cursor-pointer"
-                            )}
-                            onClick={() => {
-                              if (!isReadOnly) document.getElementById('photo-upload')?.click();
-                            }}
-                          >
-                            <input
-                              type="file"
-                              id="photo-upload"
-                              accept="image/jpeg,image/png,image/webp"
-                              className="hidden"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  if (file.size > 5 * 1024 * 1024) {
-                                    toast.error('Photo must be under 5MB');
-                                    return;
-                                  }
-                                  setIsUpdating(true);
-                                  try {
-                                    const { uploadCandidatePhoto } = await import('../../api/candidates');
-                                    await uploadCandidatePhoto(candidate.id, file);
-                                    toast.success('Photo uploaded successfully');
-                                    handleUpdate();
-                                  } catch (err: any) {
-                                    toast.error(extractError(err, 'Failed to upload photo'));
-                                  } finally {
-                                    setIsUpdating(false);
-                                  }
-                                }
-                              }}
-                            />
-                            {candidate.profile?.photo_url ? (
-                              <img
-                                src={candidate.profile.photo_url}
-                                alt="Profile"
-                                className="h-full w-full object-cover object-left-top"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-4xl font-bold text-muted-foreground">
-                                {candidate.full_name.charAt(0)}
-                              </div>
-                            )}
-                            {!isReadOnly && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                              <Edit2 className="w-6 h-6 text-white" />
-                            </div>
-                            )}
-                          </div>
-
-                          <div className="flex flex-col items-center gap-2">
-                            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{candidate.full_name}</h1>
-                            
-                            <div className="flex items-center gap-2 justify-center flex-wrap">
-                              {candidate.is_duplicate_flagged && (
-                                <span className="font-semibold text-warning bg-warning/10 border border-warning/20 rounded-md text-[10px] px-2 py-1">
-                                  Duplicate
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col items-center gap-1.5 mt-2">
-                          {candidate.experience && (
-                            <div className="text-base">
-                              <span className="text-muted-foreground font-medium">Experience: </span>
-                              <strong className="text-foreground">{candidate.experience}</strong>
-                            </div>
-                          )}
-
-                          <ConsiderationEditor
-                            candidate={candidate}
-                            readOnly={isReadOnly}
-                            onSaved={setCandidate}
-                          />
-
-                          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground mt-2">
-                            <span className="flex items-center gap-1.5">
-                              <Phone className="w-4 h-4 shrink-0" />
-                              <span className="text-foreground font-medium">+91 {candidate.phone}</span>
-                            </span>
-                            {candidate.email && (
-                              <span className="flex items-center gap-1.5">
-                                <Mail className="w-4 h-4 shrink-0" />
-                                <span className="text-foreground font-medium">{candidate.email}</span>
-                              </span>
-                            )}
-                            {candidate.branch_location && (
-                              <span className="flex items-center gap-1.5">
-                                <MapPin className="w-4 h-4 shrink-0" />
-                                <span className="text-foreground font-medium">{candidate.branch_location}</span>
-                              </span>
-                            )}
-                            {candidate.source && (
-                              <span className="flex items-center gap-1.5">
-                                <span className="text-muted-foreground font-medium">Source: </span>
-                                <span className="text-foreground font-medium">
-                                  {candidate.source === 'INDEED' ? 'Indeed' : candidate.source === 'NAUKRI' ? 'Naukri' : candidate.source.replace(/_/g, ' ')}
-                                </span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className={isCallLetterStage ? "flex flex-wrap items-center justify-center gap-2 mt-4" : "flex flex-wrap items-center gap-2 shrink-0"}>
-                      {!isCallLetterStage && (
-                        <div className="flex items-center h-9 px-3 rounded-sm border border-border bg-background shadow-sm">
-                          <ConsiderationEditor
-                            candidate={candidate}
-                            readOnly={isReadOnly}
-                            onSaved={setCandidate}
-                            compact
-                          />
-                        </div>
-                      )}
-
-
-                      
-
-                      {candidate.email && (
-                        <a
-                          href={`mailto:${candidate.email}`}
-                          className="flex items-center justify-center gap-2 h-9 px-4 text-sm font-semibold rounded-sm border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-sm"
-                        >
-                          <img src="/gmail.webp" className="w-4 h-4 object-contain" alt="Email" /> Email
-                        </a>
-                      )}
-                      {candidate.has_resume && (
-                        <ResumeButton
-                          candidateId={candidate.id}
-                          candidateName={candidate.full_name}
-                          hasResume={candidate.has_resume}
-                        />
-                      )}
-                    </div>
-                  </div>
-
-                  {!isCallLetterStage && (
-                    <div className="mt-8 pt-2">
-                      {stepperBlock}
-                    </div>
-                  )}
-
-                  {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && actualStage !== 'CSS' && actualStage !== 'FINAL_APPROVAL' && !isReadOnly && (
-                    <div className="mt-8 flex justify-center w-full">
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => setShowRejectModal(true)}
-                        className="h-9 px-8 text-white bg-[#DC143C] hover:bg-[#B21030] transition-colors shadow-sm font-extrabold uppercase rounded-sm tracking-wider text-xs"
+                    {candidate.email && (
+                      <a
+                        href={`mailto:${candidate.email}`}
+                        className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-md border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-xs"
                       >
-                        Reject Candidate
-                      </Button>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
+                        <img src="/gmail.webp" className="w-3.5 h-3.5 object-contain" alt="Email" /> Email
+                      </a>
+                    )}
+                    {candidate.has_resume && (
+                      <ResumeButton
+                        candidateId={candidate.id}
+                        candidateName={candidate.full_name}
+                        hasResume={candidate.has_resume}
+                      />
+                    )}
+                  </>
+                )}
+              />
+            </div>
           </div>
         </div>
 
         {/* ── WORK QUEUE (HO HR + Admin) ── */}
-        {(isHO || user?.role === 'ADMIN') && hasBeenSentToHO && (
+        {(isHO || user?.role === 'ADMIN') && (
           <div className="mb-6 space-y-3">
-            {isHO && (
-              <SalarySheetUpload candidateId={candidate.id} onDone={handleUpdate} compact />
-            )}
+            <SalarySheetUpload candidateId={candidate.id} onDone={handleUpdate} compact />
             {typeof candidate.salary_data?._uploaded_by === 'string' && (
               <p className="text-xs text-muted-foreground">
                 Salary uploaded by {String(candidate.salary_data._uploaded_by)}
@@ -881,7 +843,7 @@ export default function CandidateProfile() {
                   : ''}
               </p>
             )}
-            <WorkQueue candidate={candidate} evaluations={evaluations} />
+            {hasBeenSentToHO && <WorkQueue candidate={candidate} evaluations={evaluations} />}
           </div>
         )}
 
@@ -920,7 +882,7 @@ export default function CandidateProfile() {
             )}
 
             {showWhatsAppSidebar && (
-              <WhatsAppPreviewPanel candidate={candidate} onUpdate={handleUpdate} isReadOnly={isReadOnly} className="lg:hidden mt-6 rounded-xl border border-border overflow-hidden" />
+              <WhatsAppPreviewPanel candidate={candidate} onUpdate={handleUpdate} isReadOnly={isReadOnly} className="2xl:hidden mt-6 rounded-xl border border-border overflow-hidden max-w-2xl mx-auto" />
             )}
 
             {!isAdmin && stageToView === 'INTERVIEWS' && (
@@ -945,6 +907,7 @@ export default function CandidateProfile() {
               <BackgroundVerificationWidget
                 candidate={candidate}
                 onUpdate={handleUpdate}
+                navigateToStage={navigateToStage}
                 isReadOnly={isReadOnly}
               />
             )}
@@ -1069,7 +1032,7 @@ export default function CandidateProfile() {
       </div>
 
       {showWhatsAppSidebar && (
-        <WhatsAppPreviewPanel candidate={candidate} onUpdate={handleUpdate} isReadOnly={isReadOnly} className="hidden lg:flex sticky top-0 h-screen" />
+        <WhatsAppPreviewPanel candidate={candidate} onUpdate={handleUpdate} isReadOnly={isReadOnly} className="hidden 2xl:flex sticky top-0 h-screen w-[380px] shrink-0" />
       )}
 
       {/* ── ACTIVITY TIMELINE SIDEBAR ── */}
@@ -1103,6 +1066,53 @@ export default function CandidateProfile() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── HOLD MODAL ── */}
+      <Modal isOpen={showHoldModal} onClose={() => setShowHoldModal(false)} title="Place Candidate on Hold" size="sm">
+        <div className="space-y-4 p-6">
+          <div className="p-3 bg-warning/5 border border-warning/20 rounded-[10px] flex items-start gap-3">
+            <Pause className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+            <p className="text-sm text-muted-foreground">
+              This pauses active work for <strong className="text-foreground">{candidate.full_name}</strong>. The candidate can be resumed later.
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
+              Hold Reason <span className="text-danger">*</span>
+            </label>
+            <textarea
+              value={holdRemarks}
+              onChange={(e) => setHoldRemarks(e.target.value)}
+              placeholder="Explain why work is paused..."
+              className="w-full bg-background border border-border rounded-[10px] p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-warning/40 focus:border-transparent transition-all duration-200 min-h-[100px] resize-y"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-4 border-t border-border">
+            <Button variant="ghost" onClick={() => setShowHoldModal(false)}>Cancel</Button>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                if (!holdRemarks.trim()) {
+                  toast.error('Hold reason is required.');
+                  return;
+                }
+                setIsHolding(true);
+                try {
+                  await handleHold(holdRemarks.trim());
+                  setShowHoldModal(false);
+                  setHoldRemarks('');
+                } finally {
+                  setIsHolding(false);
+                }
+              }}
+              isLoading={isHolding}
+              disabled={!holdRemarks.trim()}
+            >
+              Place on Hold
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── REJECT MODAL ── */}
       <Modal isOpen={showRejectModal} onClose={() => setShowRejectModal(false)} title="Reject Candidate" size="sm">

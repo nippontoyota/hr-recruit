@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, Clock } from 'lucide-react';
 import { Button } from '../../components/ui';
 import { getPublicTestQuestions, submitPublicTest } from '../../api/evaluations';
-import { cn, extractError } from '../../lib/utils';
+import { cn, extractError, isAbortError } from '../../lib/utils';
 import { toast } from 'sonner';
 import { PublicShell } from '../../components/layout/PublicShell';
 import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
@@ -55,6 +55,7 @@ export default function PublicTestPage() {
         setDeadline(new Date(Date.now() + res.duration_seconds * 1000));
       }
     } catch (err: any) {
+      if (isAbortError(err)) return;
       setError(extractError(err, 'This technical test link is invalid, expired, or has already been used.'));
     } finally {
       setLoading(false);

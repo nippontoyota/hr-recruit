@@ -73,6 +73,7 @@ PACKET_KEYS: frozenset[str] = frozenset(
         "nervousDisorder",
         "eyeVision",
         "criminalConviction",
+        "hasValidDrivingLicense",
         "confidentToDrive",
         "highestQual",
         "skills",

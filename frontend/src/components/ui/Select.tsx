@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, forwardRef, isValidElement } from 'react';
 import type { SelectHTMLAttributes, KeyboardEvent } from 'react';
 import { cn } from '../../lib/utils';
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown, Search, Plus } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from './Popover';
 
 const SEARCH_MIN_OPTIONS = 6;
@@ -19,10 +19,13 @@ function optionLabelText(label: React.ReactNode): string {
 export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   error?: boolean;
   searchable?: boolean;
+  onAddNew?: (query: string) => void;
+  addNewLabel?: string;
+  footer?: React.ReactNode;
 }
 
 export const Select = forwardRef<HTMLButtonElement, SelectProps>(
-  ({ className, error, children, value, onChange, disabled, searchable, ...props }, ref) => {
+  ({ className, error, children, value, onChange, disabled, searchable, onAddNew, addNewLabel, footer, ...props }, ref) => {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState('');
     const searchRef = useRef<HTMLInputElement>(null);
@@ -52,9 +55,9 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
       !showSearch || !normalizedQuery
         ? listOptions
         : listOptions.filter((opt) => {
-            const text = `${optionLabelText(opt.label)} ${opt.value}`.toLowerCase();
-            return text.includes(normalizedQuery);
-          });
+          const text = `${optionLabelText(opt.label)} ${opt.value}`.toLowerCase();
+          return text.includes(normalizedQuery);
+        });
 
     const handleSelect = (optionValue: string) => {
       setIsOpen(false);
@@ -63,8 +66,8 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
         onChange({
           target: { value: optionValue },
           currentTarget: { value: optionValue },
-          preventDefault: () => {},
-          stopPropagation: () => {},
+          preventDefault: () => { },
+          stopPropagation: () => { },
         } as React.ChangeEvent<HTMLSelectElement>);
       }
     };
@@ -73,7 +76,14 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
       if (e.key === 'Enter') {
         e.preventDefault();
         const first = filtered.find((opt) => !opt.disabled);
-        if (first) handleSelect(first.value);
+        if (first) {
+          handleSelect(first.value);
+        } else if (onAddNew && query.trim()) {
+          setIsOpen(false);
+          const draft = query.trim();
+          setQuery('');
+          onAddNew(draft);
+        }
       }
       if (e.key === 'Escape' && query) {
         e.preventDefault();
@@ -103,7 +113,6 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
             setIsOpen(open);
             if (!open) setQuery('');
           }}
-          modal
         >
           <PopoverTrigger asChild>
             <button
@@ -167,7 +176,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
             )}
             <div className="custom-scrollbar min-h-0 flex-1 overflow-auto overscroll-contain">
               {filtered.length === 0 ? (
-                <div className="px-3 py-6 text-center text-sm text-muted-foreground">No matches</div>
+                <div className="px-3 py-4 text-center text-xs text-muted-foreground">No matches found</div>
               ) : (
                 filtered.map((option, index) => (
                   <div
@@ -195,6 +204,32 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
                 ))
               )}
             </div>
+
+            {onAddNew && (
+              <div className="shrink-0 border-t border-border bg-muted/40 p-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    const draft = query.trim();
+                    setQuery('');
+                    onAddNew(draft);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs font-bold text-primary hover:bg-primary/10 transition-colors cursor-pointer text-left"
+                >
+                  <Plus className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="truncate">
+                    {query.trim() ? `Add "${query.trim()}"` : (addNewLabel || 'Add new...')}
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {footer && (
+              <div className="shrink-0 border-t border-border bg-muted/30 p-2">
+                {footer}
+              </div>
+            )}
           </PopoverContent>
         </Popover>
       </div>

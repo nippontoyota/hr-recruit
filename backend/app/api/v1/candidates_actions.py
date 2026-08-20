@@ -13,6 +13,7 @@ from app.core.offer_gate import offer_blockers
 from app.core.positions import positions_for
 from app.core.config import settings
 from app.models.candidate import Candidate
+from app.models.candidate_profile import CandidateProfile
 from app.models.candidate_screening import CandidateScreening
 from app.models.activity_log import ActivityLog
 from app.models.evaluation import Evaluation
@@ -28,9 +29,14 @@ from app.models.enums import (
     EvaluationVerdict,
     InterviewStatus,
 )
-from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, VisitScheduleUpdate, WhatsAppInviteCreate, CandidateDepartmentUpdate
+from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, VisitScheduleUpdate, WhatsAppInviteCreate, WhatsAppTemplateSave, CandidateDepartmentUpdate
 from app.services.workflow import transition, transition_prerequisites
-from app.services.doubletick import send_template, DoubleTickError, friendly_doubletick_error
+from app.services.doubletick import (
+    send_template,
+    DoubleTickError,
+    friendly_doubletick_error,
+    call_letter_placeholders,
+)
 from app.services import storage
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
@@ -38,7 +44,8 @@ router = APIRouter(prefix="/candidates", tags=["candidates"])
 from .candidates_core import *
 from .candidates_core import (
     _get_resume_document,
-    _document_out, _save_resume_for_candidate, _save_photo_for_candidate, _issue_pre_form, _store_whatsapp_invite
+    _document_out, _save_resume_for_candidate, _save_photo_for_candidate, _issue_pre_form, _mark_call_letter_sent, _store_whatsapp_invite,
+    apply_whatsapp_template,
 )
 
 @router.post("/{id}/resume", response_model=DocumentOut, status_code=201)
@@ -107,6 +114,12 @@ def transition_stage(
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user, write=True)
+    if body.raw_data is not None:
+        if not row.profile:
+            row.profile = CandidateProfile(candidate_id=row.id, raw_data=body.raw_data)
+            db.add(row.profile)
+        else:
+            row.profile.raw_data = body.raw_data
     updated = transition(
         db=db,
         candidate=row,
@@ -248,6 +261,18 @@ def update_candidate_department(
     candidate.experience = experience
     candidate.source = source
     candidate.source_reference = source_reference
+
+    if candidate.profile:
+        raw = dict(candidate.profile.raw_data or {})
+        raw["positionAppliedFor"] = role
+        candidate.profile.raw_data = raw
+    else:
+        candidate.profile = CandidateProfile(
+            candidate_id=candidate.id,
+            raw_data={"positionAppliedFor": role},
+        )
+        db.add(candidate.profile)
+
     changes: list[str] = []
     if previous_dept != department or previous_role != role or previous_exp != experience:
         changes.append(
@@ -301,27 +326,13 @@ def send_whatsapp_invite(
     if not position or position.lower() in {"unknown", "unknown position", "the applied"}:
         raise HTTPException(status_code=400, detail="Position is required before sending.")
 
-    # Order must match DoubleTick template nippon_interview_call_letter {{1}}…{{9}}
-    DOUBLETICK_VARIABLE_KEYS = [
-        "candidateName",
-        "position",
-        "visitDate",
-        "branchName",
-        "formLink",
-        "arrivalTime",
-        "extraInstructions",
-        "mapsLink",
-        "recruiterName",
-    ]
-
-    placeholders = []
-    for key in DOUBLETICK_VARIABLE_KEYS:
-        placeholders.append(vars_map.get(key, ""))
+    template_name = settings.whatsapp_call_letter_template_name
+    placeholders = call_letter_placeholders(vars_map)
 
     try:
         res = send_template(
             to_phone=candidate.phone,
-            template_name="nippon_interview_call_letter",
+            template_name=template_name,
             placeholders=placeholders,
         )
         external_message_id = None
@@ -383,7 +394,7 @@ def send_whatsapp_invite(
     )
     db.add(comm)
 
-    activity_desc = f"Template: nippon_interview_call_letter. Status: {status.value}."
+    activity_desc = f"Template: {template_name}. Status: {status.value}."
     if err_msg:
         activity_desc += f" Error: {err_msg}"
         
@@ -400,13 +411,44 @@ def send_whatsapp_invite(
     if status == CommunicationStatus.FAILED:
         raise HTTPException(status_code=400, detail=err_msg)
         
-    _store_whatsapp_invite(db, candidate, user)
+    _store_whatsapp_invite(db, candidate, user, vars_map)
+    _mark_call_letter_sent(db, candidate, user)
     db.commit()
     return {"status": "success", "message_id": external_message_id}
 
 
+@router.post("/{id}/whatsapp-invite/confirm", response_model=CandidateOut)
+def confirm_whatsapp_invite(
+    id: UUID,
+    body: WhatsAppTemplateSave | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    candidate = get_candidate_for_user(db, id, user, write=True)
+    vars_map = body.model_dump(exclude_none=True) if body is not None else None
+    _store_whatsapp_invite(db, candidate, user, vars_map)
+    _mark_call_letter_sent(db, candidate, user)
+    db.commit()
+    db.refresh(candidate)
+    return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]), viewer=user)
+
+
+@router.patch("/{id}/whatsapp-template", response_model=CandidateOut)
+def save_whatsapp_template(
+    id: UUID,
+    body: WhatsAppTemplateSave,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    candidate = get_candidate_for_user(db, id, user, write=True)
+    apply_whatsapp_template(db, candidate, body.model_dump(exclude_none=True), user, sent=False)
+    db.commit()
+    db.refresh(candidate)
+    return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]), viewer=user)
+
+
 from app.api.v1.pdf import generate_offer_letter_pdf, resolve_offer_fields
-from app.services.email import send_email_with_pdf
+from app.services.email import send_email_with_pdf, EmailSendError
 
 class SendOfferLetterRequest(BaseModel):
     candidate_name: str | None = None
@@ -485,14 +527,17 @@ def send_offer_letter(
     </html>
     """
     
-    send_email_with_pdf(
-        to_email=row.email,
-        subject=subject,
-        body_html=body_html,
-        pdf_bytes=bytes(pdf_bytes),
-        pdf_filename="OfferLetter_NipponToyota.pdf",
-        cc_emails=cc_emails,
-    )
+    try:
+        send_email_with_pdf(
+            to_email=row.email,
+            subject=subject,
+            body_html=body_html,
+            pdf_bytes=bytes(pdf_bytes),
+            pdf_filename="OfferLetter_NipponToyota.pdf",
+            cc_emails=cc_emails,
+        )
+    except EmailSendError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     
     # Log communication
     comm = Communication(
@@ -521,9 +566,9 @@ def send_offer_letter(
     if template_name:
         try:
             placeholders = [
-                row.full_name or "",
-                row.position_applied_for or "",
-                row.branch_location or "",
+                offer["candidate_name"] or row.full_name or "",
+                position_label,
+                row.branch_location or "Nippon Toyota",
             ]
 
             res = send_template(
@@ -556,13 +601,28 @@ def send_offer_letter(
                 )
             )
         except DoubleTickError as e:
-            db.rollback()
-            raise HTTPException(status_code=400, detail=e.user_message)
-    else:
+            if settings.is_production:
+                db.rollback()
+                raise HTTPException(status_code=400, detail=e.user_message)
+            logger.warning(f"DoubleTick offer intimation error in dev: {e}")
+    elif settings.is_production:
         raise HTTPException(status_code=400, detail="WhatsApp offer intimation template is not configured.")
 
-    # Update candidate offer_status only after both email + WhatsApp succeed
+    # Update candidate offer_status, advance stage if in CSS, and update CSS milestone flags
     row.offer_status = "SENT"
+    if row.current_stage in (PipelineStage.CSS, PipelineStage.SALARY_DETAILS):
+        row.current_stage = PipelineStage.FINAL_APPROVAL
+
+    if not row.profile:
+        row.profile = CandidateProfile(candidate_id=row.id)
+        db.add(row.profile)
+    existing_raw = dict(row.profile.raw_data or {})
+    existing_raw["offerLetterIssued"] = True
+    existing_raw["offerCommMessage"] = True
+    existing_raw["offerLetterSentAt"] = datetime.now(timezone.utc).isoformat()
+    if offer.get("joining_date"):
+        existing_raw["dateOfJoining"] = offer["joining_date"]
+    row.profile.raw_data = existing_raw
 
     db.commit()
     db.refresh(row)
@@ -588,7 +648,7 @@ def _selected_after_ho_interviews(db: Session) -> set[UUID]:
     return {
         cid
         for cid, types in by_id.items()
-        if EvaluationType.HQ_INTERVIEW_1 in types and EvaluationType.HQ_INTERVIEW_2 in types
+        if EvaluationType.HQ_INTERVIEW_1 in types
     }
 
 
@@ -599,7 +659,7 @@ def _apply_salary(db: Session, candidate: Candidate, record: dict, user: User) -
         "_uploaded_by": user.full_name,
         "_uploaded_at": uploaded_at,
     }
-    if candidate.current_stage == PipelineStage.SALARY_DETAILS:
+    if candidate.current_stage in (PipelineStage.CSS, PipelineStage.SALARY_DETAILS):
         transition(
             db,
             candidate,

@@ -7,23 +7,12 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
 
-# Windows tries broken AAAA first (~30s) for Supabase DB and Storage.
-_orig_getaddrinfo = socket.getaddrinfo
-
-
-def _ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-    return _orig_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
-
-
-socket.getaddrinfo = _ipv4_getaddrinfo
-
-
 def _ipv4_hostaddr(database_url: str) -> str | None:
     host = urlparse(database_url).hostname
     if not host:
         return None
     try:
-        infos = _orig_getaddrinfo(host, None, socket.AF_INET, socket.SOCK_STREAM)
+        infos = socket.getaddrinfo(host, None, socket.AF_INET, socket.SOCK_STREAM)
     except OSError:
         return None
     if not infos:
@@ -38,14 +27,13 @@ if "supabase" in settings.database_url.lower():
     if hostaddr:
         connect_args["hostaddr"] = hostaddr
 
-# Small pool: sequential form submit (apply + resume + photo) reuses TLS.
-# Keep it tiny so uvicorn --reload cannot exhaust the Supabase pooler.
 _engine_kwargs: dict = {
     "connect_args": connect_args,
     "pool_pre_ping": True,
     "pool_recycle": 300,
-    "pool_size": 3,
-    "max_overflow": 2,
+    "pool_size": 10,
+    "max_overflow": 10,
+    "pool_timeout": 15,
 }
 
 engine = create_engine(settings.database_url, **_engine_kwargs)

@@ -25,6 +25,28 @@ def test_validate_pan():
         v.validate_pan("ABC123")
 
 
+def test_candidate_create_accepts_opening_type():
+    body = CandidateCreate.model_validate(
+        {
+            "full_name": "Rahul Kumar",
+            "phone": "9876543210",
+            "opening_type": "Replacement",
+        }
+    )
+    assert body.opening_type == "Replacement"
+
+
+def test_candidate_create_rejects_invalid_opening_type():
+    with pytest.raises(ValueError, match="New opening or Replacement"):
+        CandidateCreate.model_validate(
+            {
+                "full_name": "Rahul Kumar",
+                "phone": "9876543210",
+                "opening_type": "Transfer",
+            }
+        )
+
+
 def test_candidate_create_normalizes_linkedin_source():
     body = CandidateCreate.model_validate(
         {
@@ -42,9 +64,9 @@ def test_stage_change_requires_reject_remarks():
         StageChange.model_validate({"to_stage": "REJECTED", "remarks": "short"})
 
 
-def test_pre_form_rejects_invalid_aadhaar():
+def test_pre_form_requires_driving_license_validity():
     payload = _valid_pre_form()
-    payload["aadhaarNumber"] = "123"
+    payload["hasValidDrivingLicense"] = "invalid"
     with pytest.raises(ValueError):
         PreFormApplicationData.model_validate(payload)
 
@@ -66,9 +88,7 @@ def _valid_pre_form() -> dict:
         "permDistrict": "Ernakulam",
         "permPinCode": "682001",
         "sameAsPermanent": True,
-        "aadhaarNumber": "123456789012",
-        "panNumber": "ABCDE1234F",
-        "drivingLicenseNumber": "KL0123456789012",
+        "hasValidDrivingLicense": True,
         "confidentToDrive": True,
         "class10School": "Govt HS",
         "class10Board": "Kerala",

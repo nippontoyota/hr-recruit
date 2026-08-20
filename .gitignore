@@ -39,6 +39,8 @@ docs/
 # AI Agents & IDE
 .agents/
 .gemini/
+.codex/
+.qodo/
 skills-lock.json
 *.scratch.*
 
@@ -46,3 +48,4 @@ skills-lock.json
 .githooks/
 PRODUCT.md
 run.bat
+patch.py

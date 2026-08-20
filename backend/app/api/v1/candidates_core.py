@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func, or_, delete
@@ -16,7 +17,12 @@ from app.models.evaluation import Evaluation
 from app.models.stage_history import StageHistory
 from app.models.document import Document
 from app.models.user import User
-from app.core.ho_pipeline import HO_HR_PIPELINE_STAGES
+from app.core.ho_pipeline import (
+    HO_HR_PIPELINE_STAGES,
+    HO_HANDOVER_STAGES,
+    HO_HANDOVER_STAGE_VALUES,
+    stage_value,
+)
 from app.models.enums import PipelineStage, UserRole, ActivityType, EvaluationType, FormStatus
 from app.schemas.candidate import (
     CandidateCreate,
@@ -49,32 +55,127 @@ from app.services import storage
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
 
-def _issue_pre_form(db: Session, candidate: Candidate, user: User) -> None:
-    issue_public_token(candidate, PURPOSE_PRE_FORM)
-    candidate.pre_form_status = FormStatus.SENT
-    candidate.pre_form_sent_at = datetime.now(UTC)
-    candidate.pre_form_submitted_at = None
+def _mark_call_letter_sent(db: Session, candidate: Candidate, user: User) -> None:
+    """Record that HR sent the call letter. Does not mint a new form link."""
+    if not candidate.pre_form_token or candidate.pre_form_token_purpose != PURPOSE_PRE_FORM:
+        issue_public_token(candidate, PURPOSE_PRE_FORM)
+    if candidate.pre_form_status not in (FormStatus.VIEWED, FormStatus.SUBMITTED):
+        candidate.pre_form_status = FormStatus.SENT
+    if candidate.pre_form_sent_at is None:
+        candidate.pre_form_sent_at = datetime.now(UTC)
     db.add(
         ActivityLog(
             candidate_id=candidate.id,
-            activity_type=ActivityType.FORM,
-            title="Pre Form Sent",
-            description="A new candidate pre-form link was issued.",
+            activity_type=ActivityType.WHATSAPP,
+            title="Call letter issued",
+            description="Call letter sent. Waiting for candidate response.",
             created_by_user_id=user.id,
         )
     )
 
 
-def _store_whatsapp_invite(db: Session, candidate: Candidate, user: User) -> None:
+def _issue_pre_form(db: Session, candidate: Candidate, user: User) -> None:
+    """Mint a form link. Status stays NOT_SENT until HR actually sends the call letter."""
+    issue_public_token(candidate, PURPOSE_PRE_FORM)
+    candidate.pre_form_status = FormStatus.NOT_SENT
+    candidate.pre_form_sent_at = None
+    candidate.pre_form_submitted_at = None
+    db.add(
+        ActivityLog(
+            candidate_id=candidate.id,
+            activity_type=ActivityType.FORM,
+            title="Pre Form Link Generated",
+            description="A new candidate pre-form link was generated. Call letter has not been sent yet.",
+            created_by_user_id=user.id,
+        )
+    )
+
+
+_UNSET_WHATSAPP_POSITIONS = {"", "unknown", "unknown position", "the applied"}
+_IST = ZoneInfo("Asia/Kolkata")
+
+
+def parse_visit_date(value: str | None) -> datetime | None:
+    if not value or not str(value).strip():
+        return None
+    text = str(value).strip().replace(",", "")
+    for fmt in ("%Y-%m-%d", "%d %b %Y", "%d %B %Y"):
+        try:
+            return datetime.strptime(text, fmt).replace(tzinfo=_IST)
+        except ValueError:
+            continue
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed
+
+
+def apply_whatsapp_template(
+    db: Session,
+    candidate: Candidate,
+    variables: dict | None,
+    user: User | None = None,
+    *,
+    sent: bool = False,
+) -> None:
+    """Persist call-letter WhatsApp fields on the candidate so every device sees them."""
+    vars_in = {
+        key: (value.strip() if isinstance(value, str) else value)
+        for key, value in (variables or {}).items()
+    }
+    if vars_in.get("branchName"):
+        candidate.visit_branch = str(vars_in["branchName"])
+    if vars_in.get("mapsLink"):
+        candidate.visit_maps_link = str(vars_in["mapsLink"])
+    if vars_in.get("arrivalTime"):
+        candidate.visit_time = str(vars_in["arrivalTime"])
+    if vars_in.get("extraInstructions"):
+        candidate.visit_instructions = str(vars_in["extraInstructions"])
+    visit_at = parse_visit_date(vars_in.get("visitDate") if isinstance(vars_in.get("visitDate"), str) else None)
+    if visit_at:
+        candidate.visit_date = visit_at
+    position = str(vars_in.get("position") or "").strip()
+    if position and position.lower() not in _UNSET_WHATSAPP_POSITIONS:
+        candidate.position_applied_for = position
+
     if candidate.profile is None:
         candidate.profile = CandidateProfile(candidate_id=candidate.id)
         db.add(candidate.profile)
     raw_data = dict(candidate.profile.raw_data or {})
-    raw_data["whatsapp_invite"] = {
-        "sent_at": datetime.now(UTC).isoformat(),
-        "sent_by_user_id": str(user.id),
-    }
+    template = dict(raw_data.get("whatsapp_template") or {})
+    for key in (
+        "candidateName",
+        "position",
+        "formLink",
+        "branchName",
+        "visitDate",
+        "arrivalTime",
+        "mapsLink",
+        "recruiterName",
+        "extraInstructions",
+    ):
+        if vars_in.get(key) not in (None, ""):
+            template[key] = vars_in[key]
+    if template:
+        raw_data["whatsapp_template"] = template
+    if sent:
+        raw_data["whatsapp_invite"] = {
+            "sent_at": datetime.now(UTC).isoformat(),
+            "sent_by_user_id": str(user.id) if user else None,
+        }
     candidate.profile.raw_data = raw_data
+
+
+def _store_whatsapp_invite(
+    db: Session,
+    candidate: Candidate,
+    user: User,
+    variables: dict | None = None,
+) -> None:
+    apply_whatsapp_template(db, candidate, variables, user, sent=True)
 
 
 @router.get("/portal/{token}", response_model=CandidatePortalOut)
@@ -201,10 +302,28 @@ def list_candidates(
 
     q = q.order_by(Candidate.created_at.desc()).offset(skip).limit(limit)
     rows = list(db.scalars(q).all())
-    with_resume = resume_candidate_ids(db, [row.id for row in rows])
+    cand_ids = [row.id for row in rows]
+    with_resume = resume_candidate_ids(db, cand_ids)
     work_states = build_candidate_work_states(db, rows, resume_ids=with_resume)
+
+    ho_history_ids = set(
+        db.scalars(
+            select(StageHistory.candidate_id)
+            .where(
+                StageHistory.candidate_id.in_(cand_ids),
+                StageHistory.to_stage.in_(HO_HANDOVER_STAGES),
+            )
+            .distinct()
+        ).all()
+    ) if cand_ids else set()
+
     data = [
-        to_candidate_list_out(row, row.id in with_resume, db).model_copy(
+        to_candidate_list_out(
+            row,
+            row.id in with_resume,
+            db=None,
+            handed_over=(stage_value(row.current_stage) in HO_HANDOVER_STAGE_VALUES or row.id in ho_history_ids),
+        ).model_copy(
             update={"work_state": work_states[row.id]}
         )
         for row in rows
@@ -248,8 +367,15 @@ def get_candidate(
         db.commit()
         db.refresh(row)
     has_resume = id in resume_candidate_ids(db, [id])
-    return to_candidate_out(row, has_resume, db, viewer=user).model_copy(
-        update={"work_state": build_candidate_work_state(db, row, has_resume=has_resume)}
+    evaluations = list(
+        db.scalars(
+            select(Evaluation)
+            .where(Evaluation.candidate_id == id)
+            .order_by(Evaluation.created_at.asc(), Evaluation.type.asc())
+        ).all()
+    )
+    return to_candidate_out(row, has_resume, db, viewer=user, evaluations=evaluations).model_copy(
+        update={"work_state": build_candidate_work_state(db, row, has_resume=has_resume, evaluations=evaluations)}
     )
 
 
@@ -271,6 +397,24 @@ def update_profile_raw_data(
         db.add(row.profile)
     else:
         row.profile.raw_data = body.raw_data
+
+    if isinstance(body.raw_data, dict):
+        if body.raw_data.get("positionAppliedFor"):
+            pos = str(body.raw_data["positionAppliedFor"]).strip()
+            if pos and pos.lower() != "unknown":
+                row.position_applied_for = pos
+        if body.raw_data.get("fullName"):
+            fn = str(body.raw_data["fullName"]).strip()
+            if fn:
+                row.full_name = fn
+        if body.raw_data.get("mobileNumber"):
+            ph = str(body.raw_data["mobileNumber"]).strip()
+            if ph:
+                row.phone = ph
+        if body.raw_data.get("emailId"):
+            em = str(body.raw_data["emailId"]).strip()
+            if em:
+                row.email = em
 
     log = ActivityLog(
         candidate_id=row.id,

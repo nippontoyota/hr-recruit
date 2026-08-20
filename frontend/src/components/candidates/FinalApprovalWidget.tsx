@@ -3,10 +3,10 @@ import { Button, Input, LoadingSpinner, Modal, PdfViewer } from '../ui';
 import { sendOfferLetter } from '../../api/candidates';
 import { getAuthHeaders } from '../../api/client';
 import type { Candidate } from '../../types';
-import { Mail, Pencil } from 'lucide-react';
+import { Mail, Pencil, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../auth';
-import { extractError } from '../../lib/utils';
+import { extractError, isAbortError } from '../../lib/utils';
 import {
   canSendOfferLetter,
   defaultOfferFields,
@@ -108,7 +108,7 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
           return url;
         });
       } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (isAbortError(error)) return;
         if (!cancelled) toast.error('Could not load offer letter preview.');
       } finally {
         if (!cancelled) setGeneratingPdf(false);
@@ -169,14 +169,27 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
         {user?.role !== 'LOCAL_HR' && (
           <Button onClick={() => setShowSendConfirm(true)} disabled={sendingOffer || !ready || !pipelineReady} className="w-full sm:w-auto">
             {sendingOffer ? <LoadingSpinner className="h-4 w-4 mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
-            {sendingOffer ? 'Sending…' : 'Send PDF by email'}
+            {sendingOffer ? 'Sending…' : 'Send offer letter'}
           </Button>
         )}
       </div>
       {user?.role !== 'LOCAL_HR' && alreadyOffered && (
-        <p className="text-sm font-semibold text-blue-800 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-          Offer already sent.
-        </p>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 space-y-2.5">
+          <div className="flex items-center gap-2 text-emerald-950 font-bold text-sm">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse" />
+            Offer letter dispatched & confirmed
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-emerald-200 font-semibold text-emerald-900 shadow-2xs">
+              <Mail className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              PDF Emailed: <strong className="text-foreground">{candidate.email || 'Candidate Email'}</strong>
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-emerald-200 font-semibold text-emerald-900 shadow-2xs">
+              <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              WhatsApp Confirmation Sent: <strong className="text-foreground">{candidate.phone}</strong>
+            </span>
+          </div>
+        </div>
       )}
       {user?.role !== 'LOCAL_HR' && !alreadyOffered && blockers.length > 0 && (
         <div className="text-sm text-amber-950 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">

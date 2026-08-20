@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import { Download } from 'lucide-react';
 import { fetchCandidateResumeBlob } from '../../api/candidates';
-import { resumeEmbedUrl } from '../../lib/utils';
-import { Modal, LoadingSpinner, Button, PdfViewer } from '../ui';
+import { isAbortError } from '../../lib/utils';
+import { Modal, LoadingSpinner, Button, PdfViewer, DocxViewer } from '../ui';
 
 interface ResumeTarget {
   candidateId: string;
@@ -10,6 +10,7 @@ interface ResumeTarget {
 }
 
 interface LoadedResume {
+  blob: Blob;
   blobUrl: string;
   sourceUrl: string;
   fileName: string;
@@ -22,11 +23,10 @@ interface ResumeViewerContextValue {
 
 const ResumeViewerContext = createContext<ResumeViewerContextValue | null>(null);
 
-function isPdfContent(contentType: string, fileName: string): boolean {
-  return (
-    contentType === 'application/pdf' ||
-    fileName.toLowerCase().endsWith('.pdf')
-  );
+function isPdfContent(contentType?: string, fileName?: string): boolean {
+  const ct = (contentType || '').toLowerCase();
+  const fn = (fileName || '').toLowerCase();
+  return ct.includes('pdf') || fn.endsWith('.pdf') || fn.includes('.pdf?');
 }
 
 function ResumeViewerModal({
@@ -67,11 +67,12 @@ function ResumeViewerModal({
         if (controller.signal.aborted) return;
         const blobUrl = URL.createObjectURL(blob);
         blobUrlRef.current = blobUrl;
-        setResume({ blobUrl, sourceUrl, fileName, contentType });
+        setResume({ blob, blobUrl, sourceUrl, fileName, contentType });
       })
       .catch((err: unknown) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || isAbortError(err)) return;
         const message = err instanceof Error ? err.message : 'Failed to load resume.';
+        if (!message) return;
         setError(message);
       })
       .finally(() => {
@@ -124,8 +125,8 @@ function ResumeViewerModal({
                 Download PDF
               </Button>
             </div>
-            <div className="flex-1 overflow-hidden relative">
-              <PdfViewer url={resume.blobUrl} />
+            <div className="flex-1 overflow-auto relative p-4 flex justify-center bg-slate-200">
+              <PdfViewer blob={resume.blob} url={resume.blobUrl} className="max-w-[210mm]" />
             </div>
           </div>
         )}
@@ -141,12 +142,8 @@ function ResumeViewerModal({
                 Download
               </Button>
             </div>
-            <div className="flex-1 overflow-hidden relative">
-              <iframe
-                src={resumeEmbedUrl(resume.sourceUrl)}
-                title="Resume"
-                className="w-full h-full min-h-[70vh]"
-              />
+            <div className="flex-1 overflow-auto relative p-4 flex justify-center bg-slate-200">
+              <DocxViewer blob={resume.blob} className="max-w-[210mm] shadow-lg rounded" />
             </div>
           </div>
         )}

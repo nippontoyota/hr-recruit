@@ -1,3 +1,5 @@
+import { isAbortError } from '../lib/utils';
+
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 export const AUTH_EXPIRED_EVENT = 'auth:expired';
@@ -30,6 +32,16 @@ class FetchError extends Error {
     super(`Request failed with status ${status}`);
     this.response = { status, data };
   }
+}
+
+function normalizeFetchAbort(err: unknown, callerSignal?: AbortSignal): never {
+  if (callerSignal?.aborted) {
+    throw isAbortError(err) ? err : new DOMException('Aborted', 'AbortError');
+  }
+  if (isAbortError(err)) {
+    throw new FetchError(408, { detail: 'Request timed out. Try again.' });
+  }
+  throw err;
 }
 
 const inflightGets = new Map<string, Promise<{ data: any }>>();
@@ -69,8 +81,8 @@ async function executeRequest(method: string, endpoint: string, body?: any, conf
   const timeoutId = window.setTimeout(() => controller.abort(), 30000);
   const onCallerAbort = () => controller.abort();
   if (config?.signal) {
+    config.signal.addEventListener('abort', onCallerAbort, { once: true });
     if (config.signal.aborted) controller.abort();
-    else config.signal.addEventListener('abort', onCallerAbort, { once: true });
   }
   let response: Response;
   try {
@@ -82,11 +94,7 @@ async function executeRequest(method: string, endpoint: string, body?: any, conf
       signal: controller.signal,
     });
   } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      if (config?.signal?.aborted) throw err;
-      throw new FetchError(408, { detail: 'Request timed out. Try again.' });
-    }
-    throw err;
+    throw normalizeFetchAbort(err, config?.signal);
   } finally {
     window.clearTimeout(timeoutId);
     config?.signal?.removeEventListener('abort', onCallerAbort);
@@ -102,15 +110,16 @@ async function executeRequest(method: string, endpoint: string, body?: any, conf
   if (response.status === 204) {
     data = null;
   } else {
+    let text: string;
     try {
-      const text = await response.text();
-      try {
-        data = text ? JSON.parse(text) : null;
-      } catch {
-        data = text;
-      }
+      text = await response.text();
+    } catch (err) {
+      throw normalizeFetchAbort(err, config?.signal);
+    }
+    try {
+      data = text ? JSON.parse(text) : null;
     } catch {
-      data = null;
+      data = text;
     }
   }
 

@@ -13,7 +13,13 @@ from app.models.candidate import Candidate
 from app.models.activity_log import ActivityLog
 from app.models.enums import PipelineStage, InterviewMode, InterviewStatus, ActivityType
 from app.schemas.candidate import WhatsAppInviteCreate
-from app.services.doubletick import send_template
+from app.core.config import settings
+from app.services.doubletick import (
+    send_template,
+    DoubleTickError,
+    friendly_doubletick_error,
+    hr_interview_placeholders,
+)
 
 router = APIRouter(prefix="/candidates/{candidate_id}/branch-interview", tags=["Branch Interview"])
 
@@ -94,25 +100,12 @@ def send_branch_interview_invite(
     if not interview or interview.status == InterviewStatus.PENDING_SCHEDULE:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Interview is not scheduled yet")
 
-    DOUBLETICK_VARIABLE_KEYS = [
-        "candidateName",
-        "position",
-        "date",
-        "time",
-        "mode",
-        "locationOrLink",
-        "recruiterName",
-    ]
-    
-    placeholders = []
-    for key in DOUBLETICK_VARIABLE_KEYS:
-        val = body.variables.get(key, "") if body.variables else ""
-        placeholders.append(val)
-        
+    placeholders = hr_interview_placeholders(body.variables)
+    template_name = settings.whatsapp_hr_interview_template_name
     try:
         res = send_template(
             to_phone=candidate.phone,
-            template_name="nippon_hr_interview_invite",
+            template_name=template_name,
             placeholders=placeholders,
         )
         external_message_id = None

@@ -41,7 +41,7 @@ function JobFields({
           <Input
             value={job.company}
             onChange={(e) => onChange({ company: e.target.value })}
-            placeholder="Company name and address"
+            placeholder="e.g. Popular Vehicles & Services, Edappally, Kochi"
           />
         </div>
         <div>
@@ -51,6 +51,7 @@ function JobFields({
           <Input
             value={job.position}
             onChange={(e) => onChange({ position: e.target.value })}
+            placeholder="e.g. Service Advisor / Customer Relations Executive"
           />
         </div>
         <div>
@@ -60,7 +61,7 @@ function JobFields({
           <Input
             value={job.reporting}
             onChange={(e) => onChange({ reporting: e.target.value })}
-            placeholder="Manager / supervisor name"
+            placeholder="e.g. Manoj K (Service Manager)"
           />
         </div>
         <div>
@@ -90,7 +91,7 @@ function JobFields({
           <Input
             value={job.salary}
             onChange={(e) => onChange({ salary: digitsOnly(e.target.value, 8) })}
-            placeholder="₹"
+            placeholder="₹ e.g. 25000"
             inputMode="numeric"
             maxLength={8}
           />
@@ -102,6 +103,7 @@ function JobFields({
           <Input
             value={job.reason}
             onChange={(e) => onChange({ reason: e.target.value })}
+            placeholder="e.g. Career Growth / Better Opportunity"
           />
         </div>
       </div>
@@ -129,7 +131,7 @@ export const EmploymentForm = ({ data, update, patch, errors = {}, onBlurField =
   const handleExperienceToggle = (checked: boolean) => {
     if (!checked) {
       update('previousExperience', false);
-      update('totalExperience', 'Fresher');
+      update('totalExperience', '');
       writeJobs([]);
       return;
     }
@@ -138,15 +140,12 @@ export const EmploymentForm = ({ data, update, patch, errors = {}, onBlurField =
     if (patch) {
       patch({
         previousExperience: true,
-        totalExperience: data.totalExperience === 'Fresher' || !data.totalExperience ? '' : data.totalExperience,
+        totalExperience: data.totalExperience,
         ...previousJobsPatch(nextJobs),
       });
       return;
     }
     update('previousExperience', true);
-    if (data.totalExperience === 'Fresher' || !data.totalExperience) {
-      update('totalExperience', '');
-    }
     writeJobs(nextJobs);
   };
 
@@ -204,18 +203,20 @@ export const EmploymentForm = ({ data, update, patch, errors = {}, onBlurField =
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <FormField field="totalExperience" error={errors.totalExperience}>
-          <label className="block text-sm font-medium text-text-primary mb-1">
-            Total Experience (Years/Months) <span className="text-danger">*</span>
-          </label>
-          <Input
-            value={data.totalExperience}
-            onChange={(e) => update('totalExperience', e.target.value)}
-            onBlur={() => onBlurField('totalExperience')}
-            error={!!errors.totalExperience}
-            placeholder={data.previousExperience ? 'e.g. 2 Years 3 Months' : 'Fresher'}
-          />
-        </FormField>
+        {data.previousExperience && (
+          <FormField field="totalExperience" error={errors.totalExperience}>
+            <label className="block text-sm font-medium text-text-primary mb-1">
+              Total Experience (Years/Months) <span className="text-danger">*</span>
+            </label>
+            <Input
+              value={data.totalExperience}
+              onChange={(e) => update('totalExperience', e.target.value)}
+              onBlur={() => onBlurField('totalExperience')}
+              error={!!errors.totalExperience}
+              placeholder="e.g. 2 Years 3 Months"
+            />
+          </FormField>
+        )}
 
         <FormField field="expectedSalary" error={errors.expectedSalary}>
           <label className="block text-sm font-medium text-text-primary mb-1">

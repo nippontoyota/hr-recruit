@@ -1,11 +1,13 @@
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.enums import DocumentType, PipelineStage, FormStatus, ScreeningStatus, ActivityType
 from app.core.compat import parse_source_channel
-from app.core.positions import DEPARTMENTS, EXPERIENCE_LEVELS
+from app.core.positions import DEPARTMENTS, EXPERIENCE_LEVELS, OPENING_TYPES
+from app.schemas.evaluation import EvaluationOut
 from app.utils import validators as v
 
 
@@ -22,6 +24,7 @@ class CandidateCreate(BaseModel):
     position_applied_for: str = "Unknown"
     experience: str = "Fresher"
     department: str | None = None
+    opening_type: str | None = None
     branch_location: str | None = Field(
         default=None,
         validation_alias=AliasChoices("branch_location", "branch_name"),
@@ -55,6 +58,15 @@ class CandidateCreate(BaseModel):
     def check_experience(cls, value: str) -> str:
         if value not in EXPERIENCE_LEVELS:
             raise ValueError("Experience must be Fresher or Experienced.")
+        return value
+
+    @field_validator("opening_type")
+    @classmethod
+    def check_opening_type(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        if value not in OPENING_TYPES:
+            raise ValueError("Opening type must be New opening or Replacement.")
         return value
 
     @model_validator(mode="after")
@@ -128,12 +140,13 @@ class PreFormApplicationData(BaseModel):
     presDistrict: str = ""
     presPinCode: str = ""
 
-    aadhaarNumber: str
-    panNumber: str
-    drivingLicenseNumber: str
+    aadhaarNumber: str = ""
+    panNumber: str = ""
+    drivingLicenseNumber: str = ""
     passportNumber: str = ""
 
-    confidentToDrive: bool
+    hasValidDrivingLicense: bool = False
+    confidentToDrive: bool = False
     drive2Wheeler: bool = False
     drive3Wheeler: bool = False
     drive4Wheeler: bool = False
@@ -152,12 +165,14 @@ class PreFormApplicationData(BaseModel):
     class12Mode: str
 
     gradCourse: str = ""
+    gradStream: str = ""
     gradCollege: str = ""
     gradPercentage: str = ""
     gradPassingYear: str = ""
     gradMode: str = ""
 
     postGradCourse: str = ""
+    postGradStream: str = ""
     postGradCollege: str = ""
     postGradPercentage: str = ""
     postGradPassingYear: str = ""
@@ -309,7 +324,7 @@ class PreFormApplicationData(BaseModel):
 
     emailId: str
     declarationPlace: str
-    declarationDate: str
+    declarationDate: str = ""
     declarationName: str
 
     @staticmethod
@@ -369,13 +384,11 @@ class PreFormApplicationData(BaseModel):
                 v.validate_text_field(getattr(self, f"{prefix}District"), f"{label} district", 2, 100)
                 v.validate_pin_code(getattr(self, f"{prefix}PinCode"), f"{label} PIN code")
 
-        v.validate_aadhaar(self.aadhaarNumber)
-        v.validate_pan(self.panNumber)
-        v.validate_driving_license(self.drivingLicenseNumber)
-        v.validate_passport(self.passportNumber)
+        if not isinstance(self.hasValidDrivingLicense, bool):
+            raise ValueError("Valid driving license selection is required.")
 
-        if not isinstance(self.confidentToDrive, bool):
-            raise ValueError("Confident to drive is required.")
+        if self.hasValidDrivingLicense and not isinstance(self.confidentToDrive, bool):
+            raise ValueError("Confident to drive selection is required.")
 
         v.validate_text_field(self.class10School, "10th school name", 2, 150)
         v.validate_text_field(self.class10Board, "10th board", 2, 100)
@@ -662,6 +675,7 @@ class CandidateOut(BaseModel):
     position_applied_for: str
     experience: str = "Fresher"
     department: str | None = None
+    opening_type: str | None = None
     share_url: str | None = None
     pre_form_status: FormStatus
     pre_form_sent_at: datetime | None
@@ -692,6 +706,7 @@ class CandidateOut(BaseModel):
     offer_blockers: list[str] = []
     screening: "CandidateScreeningOut | None" = None
     work_state: CandidateWorkState | None = None
+    evaluations: list[EvaluationOut] = Field(default_factory=list)
 
 
 class CandidateListOut(BaseModel):
@@ -738,6 +753,7 @@ class CandidateListOut(BaseModel):
 class StageChange(BaseModel):
     to_stage: PipelineStage
     remarks: str | None = None
+    raw_data: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def check_reject_remarks(self) -> "StageChange":
@@ -845,7 +861,7 @@ class PublicCandidateOut(BaseModel):
     email: str | None = None
     source: str
     position_applied_for: str
-    experience: str = "Fresher"
+    experience: str | None = "Fresher"
     has_resume: bool = False
     token: str | None = None
 
@@ -853,7 +869,10 @@ class PublicCandidateOut(BaseModel):
 class PublicFullStatusOut(BaseModel):
     full_name: str
     is_awaiting_full_fill: bool
+    pre_form_status: FormStatus | None = None
     pre_form_expires_at: datetime | None = None
+    position_applied_for: str | None = None
+    branch_location: str | None = None
 
 
 class PublicUploadOut(BaseModel):
@@ -880,6 +899,18 @@ class CandidatePortalResponseIn(BaseModel):
 
 class WhatsAppInviteCreate(BaseModel):
     variables: dict[str, str]
+
+
+class WhatsAppTemplateSave(BaseModel):
+    candidateName: str | None = None
+    position: str | None = None
+    formLink: str | None = None
+    branchName: str | None = None
+    visitDate: str | None = None
+    arrivalTime: str | None = None
+    mapsLink: str | None = None
+    recruiterName: str | None = None
+    extraInstructions: str | None = None
 
 
 class CandidatePaginatedOut(BaseModel):

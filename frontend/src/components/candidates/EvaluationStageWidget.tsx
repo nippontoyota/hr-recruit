@@ -12,8 +12,9 @@ import {
   createEvaluation,
   getDepartmentQuestions,
 } from '../../api/evaluations';
+import { updateCandidateDepartment } from '../../api/candidates';
 import type { Candidate, Evaluation } from '../../types';
-import { cn, extractError } from '../../lib/utils';
+import { cn, extractError, isAbortError, copyTextToClipboard } from '../../lib/utils';
 import { formatDate, formatTime } from '../../lib/dateTime';
 import { catalogPosition, positionsFor } from '../../lib/positions';
 import { usePrint } from '../../hooks/usePrint';
@@ -43,7 +44,7 @@ export function EvaluationStageWidget({
   isReadOnly = false,
 }: EvaluationStageWidgetProps) {
   const { user } = useAuth();
-  const cached = (peekCandidateEvaluations(candidate.id) ?? []).filter((e) => evalTypes.includes(e.type));
+  const cached = ((candidate.evaluations ?? peekCandidateEvaluations(candidate.id)) ?? []).filter((e) => evalTypes.includes(e.type));
   const stageReady = evalTypes.every((type) => cached.some((e) => e.type === type));
   const [evaluations, setEvaluations] = useState<Evaluation[]>(cached);
   const [loading, setLoading] = useState(!stageReady);
@@ -52,7 +53,7 @@ export function EvaluationStageWidget({
   const [technicalQuestions, setTechnicalQuestions] = useState<any[] | null>(null);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [designation, setDesignation] = useState(
-    catalogPosition(candidate.department, candidate.position_applied_for)
+    catalogPosition(candidate.department, candidate.position_applied_for) || candidate.position_applied_for || ''
   );
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [waShareEv, setWaShareEv] = useState<Evaluation | null>(null);
@@ -63,8 +64,30 @@ export function EvaluationStageWidget({
   const deptCount = deptType ? evaluations.filter((e) => e.type === deptType).length : 0;
 
   useEffect(() => {
-    setDesignation(catalogPosition(candidate.department, candidate.position_applied_for));
+    setDesignation(
+      catalogPosition(candidate.department, candidate.position_applied_for) || candidate.position_applied_for || ''
+    );
   }, [candidate.id, candidate.department, candidate.position_applied_for]);
+
+  const handleDesignationChange = async (newDesignation: string) => {
+    setDesignation(newDesignation);
+    if (!newDesignation || newDesignation === candidate.position_applied_for) return;
+    try {
+      await updateCandidateDepartment(
+        candidate.id,
+        candidate.department,
+        newDesignation,
+        candidate.experience,
+        candidate.source,
+        candidate.source_reference
+      );
+      toast.success(`Designation updated to ${newDesignation}`);
+      onUpdate({ candidate: true });
+    } catch (err) {
+      console.error(err);
+      toast.error(extractError(err, 'Failed to save designation'));
+    }
+  };
 
   useEffect(() => {
     if (!evalTypes.includes('TECHNICAL_TEST')) {
@@ -83,10 +106,9 @@ export function EvaluationStageWidget({
         if (!cancelled) setTechnicalQuestions(qs);
       })
       .catch((err) => {
-        if (!cancelled) {
-          setTechnicalQuestions([]);
-          toast.error(extractError(err, 'Failed to load questions'));
-        }
+        if (cancelled || isAbortError(err)) return;
+        setTechnicalQuestions([]);
+        toast.error(extractError(err, 'Failed to load questions'));
       })
       .finally(() => {
         if (!cancelled) setLoadingQuestions(false);
@@ -104,6 +126,7 @@ export function EvaluationStageWidget({
       const data = await getCandidateEvaluations(candidate.id);
       setEvaluations(data.filter((e) => evalTypes.includes(e.type)));
     } catch (err) {
+      if (isAbortError(err)) return;
       console.error(err);
       toast.error('Failed to load evaluations');
     } finally {
@@ -157,10 +180,14 @@ export function EvaluationStageWidget({
       const tokenData = await generateEvaluationToken(evalId, isTest ? designation : undefined);
       const path = isTest ? 'test' : 'eval';
       const url = `${window.location.origin}/${path}/${tokenData.token}`;
-      await navigator.clipboard.writeText(url);
-      toast.success('Link generated and copied to clipboard!');
-      setCopiedId(evalId);
-      setTimeout(() => setCopiedId(null), 2000);
+      const copiedOk = await copyTextToClipboard(url);
+      if (copiedOk) {
+        toast.success('Link generated and copied to clipboard!');
+        setCopiedId(evalId);
+        setTimeout(() => setCopiedId(null), 2000);
+      } else {
+        toast.error('Failed to copy link');
+      }
     } catch (err) {
       console.error(err);
       toast.error('Failed to generate secure link');
@@ -312,7 +339,7 @@ export function EvaluationStageWidget({
                     ev={ev}
                     candidate={candidate}
                     designation={designation}
-                    onDesignationChange={setDesignation}
+                    onDesignationChange={handleDesignationChange}
                     technicalQuestions={technicalQuestions}
                     loadingQuestions={loadingQuestions}
                     handleInstantWhatsAppShare={handleInstantWhatsAppShare}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { getCandidates } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
-import { extractError } from '../../lib/utils';
+import { extractError, isAbortError } from '../../lib/utils';
 
 export function useCandidatesList(initialPage = 1, initialLimit = 50) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -27,8 +27,9 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
       setLoadError(null);
       loadedRef.current = true;
     } catch (err) {
-      if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) return;
+      if (signal?.aborted || isAbortError(err)) return;
       const message = extractError(err, 'Failed to load candidates');
+      if (!message) return;
       setLoadError(message);
       if (!loadedRef.current) {
         setCandidates([]);
