@@ -30,92 +30,6 @@ def _admin_user() -> User:
     )
 
 
-def test_evaluations_initialized_on_department_stage():
-    from app.services import workflow
-    db = type("DB", (), {})()
-    db.flush = lambda: None
-    
-    candidate = Candidate(
-        id=uuid4(),
-        candidate_id="NT-1",
-        full_name="Test Candidate",
-        phone="9876543210",
-        current_stage=PipelineStage.HR_INTERVIEW
-    )
-    
-    added_evaluations = []
-    
-    def mock_add(obj):
-        if isinstance(obj, Evaluation):
-            added_evaluations.append(obj)
-            
-    db.add = mock_add
-    
-    def mock_scalar(query):
-        if "BRANCH_HR" in str(query):
-            return Evaluation(
-                candidate_id=candidate.id,
-                type=EvaluationType.BRANCH_HR,
-                status=InterviewStatus.EVALUATED,
-                verdict=EvaluationVerdict.SELECTED
-            )
-        return None
-    db.scalar = mock_scalar
-    db.flush = lambda: None
-    
-    user = _admin_user()
-    workflow.transition(db, candidate, PipelineStage.DEPARTMENT_INTERVIEW, user, remarks="Start dept review")
-    
-    assert candidate.current_stage == PipelineStage.DEPARTMENT_INTERVIEW
-    assert len(added_evaluations) == 1
-    assert added_evaluations[0].type == EvaluationType.DEPT_HEAD
-    assert added_evaluations[0].status == InterviewStatus.PENDING_SCHEDULE
-
-
-def test_transition_flushes_new_evaluations_into_session():
-    from app.services import workflow
-
-    candidate = Candidate(
-        id=uuid4(),
-        candidate_id="NT-5",
-        full_name="Session Candidate",
-        phone="9876543210",
-        current_stage=PipelineStage.HR_INTERVIEW,
-    )
-
-    created_evaluations = []
-    flushed = False
-
-    class DummySession:
-        def add(self, obj):
-            if isinstance(obj, Evaluation):
-                created_evaluations.append(obj)
-
-        def scalar(self, query):
-            if "BRANCH_HR" in str(query):
-                return Evaluation(
-                    candidate_id=candidate.id,
-                    type=EvaluationType.BRANCH_HR,
-                    status=InterviewStatus.EVALUATED,
-                    verdict=EvaluationVerdict.SELECTED
-                )
-            return None
-
-        def flush(self):
-            nonlocal flushed
-            flushed = True
-
-    db = DummySession()
-    user = _admin_user()
-
-    workflow.transition(db, candidate, PipelineStage.DEPARTMENT_INTERVIEW, user, remarks="Start dept review")
-
-    assert flushed is True
-    assert len(created_evaluations) == 1
-    assert created_evaluations[0].type == EvaluationType.DEPT_HEAD
-    assert created_evaluations[0].status == InterviewStatus.PENDING_SCHEDULE
-
-
 def test_candidate_evaluations_relationship_maps_to_evaluation():
     candidate_module = importlib.import_module("app.models.candidate")
     candidate_cls = candidate_module.Candidate
@@ -193,77 +107,6 @@ def test_public_rejected_submission_uses_assigned_hr_user():
         assert transition_mock.call_args.kwargs["user"] is hr_user
     finally:
         app.dependency_overrides.clear()
-
-
-def test_transition_validation_department_to_branch():
-    from app.services import workflow
-    db = type("DB", (), {})()
-    db.flush = lambda: None
-    
-    candidate = Candidate(
-        id=uuid4(),
-        candidate_id="NT-2",
-        full_name="Test Candidate 2",
-        phone="9876543210",
-        current_stage=PipelineStage.DEPARTMENT_INTERVIEW
-    )
-    
-    # 1. No evaluation exists -> should raise HTTPException (Wait, actually auto-initialize handles it now)
-    # Since we auto-initialize, the validation requirement for existing evaluation was changed/removed.
-    db.scalar = lambda q: None
-    db.add = lambda obj: None
-    user = _admin_user()
-    
-    with pytest.raises(HTTPException) as exc:
-        workflow.transition(db, candidate, PipelineStage.BRANCH_EVALUATION, user, remarks="Move to branch")
-    assert exc.value.status_code == 400
-    assert "Department Head evaluation must be completed" in exc.value.detail
-
-    # 2. Evaluation exists but status is scheduled (not evaluated) ➔ should raise HTTPException
-    incomplete_eval = Evaluation(
-        id=uuid4(),
-        candidate_id=candidate.id,
-        type=EvaluationType.DEPT_HEAD,
-        status=InterviewStatus.SCHEDULED,
-        verdict=None
-    )
-    db.scalar = lambda q: incomplete_eval
-    
-    with pytest.raises(HTTPException) as exc:
-        workflow.transition(db, candidate, PipelineStage.BRANCH_EVALUATION, user, remarks="Move to branch")
-    assert exc.value.status_code == 400
-    
-    # 3. Evaluation is completed ➔ transition should succeed and initialize GM_LEVEL & TECHNICAL_TEST
-    completed_eval = Evaluation(
-        id=uuid4(),
-        candidate_id=candidate.id,
-        type=EvaluationType.DEPT_HEAD,
-        status=InterviewStatus.EVALUATED,
-        verdict=EvaluationVerdict.SELECTED
-    )
-    
-    added_evaluations = []
-    def mock_add(obj):
-        if isinstance(obj, Evaluation):
-            added_evaluations.append(obj)
-            
-    db.add = mock_add
-    
-    calls = []
-    def mock_scalar(q):
-        calls.append(q)
-        if len(calls) == 1:
-            return completed_eval
-        return None
-        
-    db.scalar = mock_scalar
-    db.flush = lambda: None
-    
-    workflow.transition(db, candidate, PipelineStage.BRANCH_EVALUATION, user, remarks="Move to branch")
-    assert candidate.current_stage == PipelineStage.BRANCH_EVALUATION
-    assert len(added_evaluations) == 2
-    types = {e.type for e in added_evaluations}
-    assert types == {EvaluationType.GM_LEVEL, EvaluationType.TECHNICAL_TEST}
 
 
 def test_technical_test_grading_and_no_leakage():
@@ -344,8 +187,14 @@ def test_technical_test_grading_and_no_leakage():
             }
         )
         assert response.status_code == 200
-        assert response.json()["verdict"] == "PASS" # 100% grade
-        assert evaluation.verdict == EvaluationVerdict.PASS
+        submit_body = response.json()
+        # Candidate-facing response must never leak the verdict/percentage
+        assert "verdict" not in submit_body
+        assert "score" not in submit_body
+        # But the raw x/y count is shown to the candidate at the top of the result screen
+        assert submit_body["correct_answers"] == 2
+        assert submit_body["total_questions"] == 2
+        assert evaluation.verdict == EvaluationVerdict.PASS # 100% grade, graded server-side
         assert evaluation.scores["correct_answers"] == 2
         assert evaluation.scores["total_questions"] == 2
         assert evaluation.scores["percentage"] == 100.0
@@ -368,7 +217,7 @@ def test_evaluation_token_generation_shuffles_questions():
         candidate_id="NT-5",
         full_name="Tech Candidate 2",
         phone="9876543210",
-        current_stage=PipelineStage.BRANCH_EVALUATION,
+        current_stage=PipelineStage.CSS,
         department="Sales",
         position_applied_for=POS_GEM,
         experience="Fresher",

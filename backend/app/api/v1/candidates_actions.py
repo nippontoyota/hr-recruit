@@ -758,11 +758,11 @@ def _apply_salary(db: Session, candidate: Candidate, record: dict, user: User) -
         "_uploaded_by": user.full_name,
         "_uploaded_at": uploaded_at,
     }
-    if candidate.current_stage in (PipelineStage.CSS, PipelineStage.SALARY_DETAILS):
+    if candidate.current_stage == PipelineStage.CSS:
         transition(
             db,
             candidate,
-            PipelineStage.FINAL_APPROVAL,
+            PipelineStage.SALARY_DETAILS,
             user,
             remarks="Salary sheet uploaded",
         )

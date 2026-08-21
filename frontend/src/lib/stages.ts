@@ -7,6 +7,7 @@ export function stageLabel(stage: PipelineStage | string): string {
   if (stage === 'BRANCH_INTERVIEW' || stage === 'INTERVIEWS') return 'INTERVIEWS';
   if (stage === 'HO_HR_INTERVIEW' || stage === 'HO_DEPT_INTERVIEW' || stage === 'HO_INTERVIEWS') return 'INTERVIEWS';
   if (stage === 'CSS') return 'CSS';
+  if (stage === 'SALARY_DETAILS') return 'SALARY SHEET';
   if (stage === 'TEST') return 'TECHNICAL TEST';
   if (stage === 'SENT_TO_HO') return 'SENT TO HEAD OFFICE';
   return stage

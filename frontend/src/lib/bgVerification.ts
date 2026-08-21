@@ -12,6 +12,7 @@ export interface BgSignature {
 export interface BgVerificationData {
   meta: {
     totalWorkExperience: string;
+    hasPreviousEmployment: boolean;
     completedAt?: string;
   };
   locality: {
@@ -63,7 +64,7 @@ export interface BgVerificationData {
 
 function createEmptyBgData(): BgVerificationData {
   return {
-    meta: { totalWorkExperience: '' },
+    meta: { totalWorkExperience: '', hasPreviousEmployment: false },
     locality: {
       panchayathName: '',
       councillorName: '',
@@ -130,14 +131,28 @@ function mergeBgData(base: BgVerificationData, saved?: Partial<BgVerificationDat
   };
 }
 
+function deriveHasPreviousEmployment(preForm: Record<string, any>): boolean {
+  const previousJobs = Array.isArray(preForm.previousJobs) ? preForm.previousJobs : [];
+  return (
+    preForm.previousExperience === true ||
+    previousJobs.some((job: any) => (job?.company || '').toString().trim().length > 0) ||
+    Boolean((preForm.prevCompanyName || preForm.prev1Name || '').toString().trim())
+  );
+}
+
 export function buildInitialBgData(candidate: Candidate): BgVerificationData {
+  const preForm = candidate.profile?.raw_data || {};
+  const hasPreviousEmployment = deriveHasPreviousEmployment(preForm);
+
   const saved = candidate.profile?.raw_data?.bg_verification as Partial<BgVerificationData> | undefined;
   if (saved && (saved.locality || saved.social || saved.employer)) {
-    return mergeBgData(createEmptyBgData(), saved);
+    const merged = mergeBgData(createEmptyBgData(), saved);
+    merged.meta.hasPreviousEmployment = saved.meta?.hasPreviousEmployment ?? hasPreviousEmployment;
+    return merged;
   }
 
-  const preForm = candidate.profile?.raw_data || {};
   const data = createEmptyBgData();
+  data.meta.hasPreviousEmployment = hasPreviousEmployment;
 
   data.meta.totalWorkExperience =
     candidate.profile?.total_experience ||
@@ -192,10 +207,12 @@ export function validateBgVerification(data: BgVerificationData): string[] {
   requireYesNo(data.social.activeInSocialMedia, 'Social media — active on social media');
   requireFeedback(data.social.overallFeedbackSocialMedia, 'Social media overall feedback');
 
-  requireYesNo(data.employer.financialLoansTaken, 'Employer — financial loans');
-  requireSpecifyIfYes(data.employer.financialLoansTaken, data.employer.financialLoansSpecify, 'Employer — loan details');
-  requireYesNo(data.employer.longLeavesTaken, 'Employer — long leaves taken');
-  requireFeedback(data.employer.overallFeedbackEmployer, 'Employer overall feedback');
+  if (data.meta.hasPreviousEmployment) {
+    requireYesNo(data.employer.financialLoansTaken, 'Employer — financial loans');
+    requireSpecifyIfYes(data.employer.financialLoansTaken, data.employer.financialLoansSpecify, 'Employer — loan details');
+    requireYesNo(data.employer.longLeavesTaken, 'Employer — long leaves taken');
+    requireFeedback(data.employer.overallFeedbackEmployer, 'Employer overall feedback');
+  }
 
   return errors;
 }

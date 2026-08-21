@@ -1,6 +1,7 @@
 import json
 from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
+from starlette.datastructures import UploadFile as StarletteUploadFile
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.public_token import (
@@ -144,11 +145,11 @@ async def public_apply_full(
         body = PreFormApplicationData.model_validate(raw_payload)
         
         resume_val = form.get("resume")
-        if isinstance(resume_val, UploadFile) and resume_val.filename:
+        if isinstance(resume_val, StarletteUploadFile) and resume_val.filename:
             resume_file = resume_val
-            
+
         photo_val = form.get("photo")
-        if isinstance(photo_val, UploadFile) and photo_val.filename:
+        if isinstance(photo_val, StarletteUploadFile) and photo_val.filename:
             photo_file = photo_val
     else:
         raw_payload = await request.json()
@@ -183,6 +184,10 @@ async def public_apply_full(
     if application_data.get("expectedJoiningDate"):
         profile.joining_date = application_data["expectedJoiningDate"]
 
+    name_val = str(application_data.get("nameAadhaar") or "").strip()
+    if name_val:
+        row.full_name = name_val
+
     if application_data.get("positionAppliedFor") and str(application_data["positionAppliedFor"]).lower() not in _UNSET_WHATSAPP_POSITIONS:
         row.position_applied_for = str(application_data["positionAppliedFor"]).strip()
     elif row.position_applied_for and row.position_applied_for.lower() not in _UNSET_WHATSAPP_POSITIONS:
@@ -193,8 +198,7 @@ async def public_apply_full(
         or None
     )
     if email_val:
-        if not row.email:
-            row.email = email_val
+        row.email = email_val
         profile.email = email_val
 
     existing_raw = dict(profile.raw_data or {})

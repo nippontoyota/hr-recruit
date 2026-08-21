@@ -11,6 +11,7 @@ import {
   CircleDashed,
   FileText,
   Send,
+  Wallet,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -44,6 +45,7 @@ const STAGE_ICONS: Record<string, React.ElementType> = {
   HO_DEPT_INTERVIEW: MessagesSquare,
   HO_INTERVIEWS: MessagesSquare,
   CSS: FileText,
+  SALARY_DETAILS: Wallet,
 };
 
 export function PipelineStepper({

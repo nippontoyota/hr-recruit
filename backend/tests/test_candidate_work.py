@@ -53,7 +53,6 @@ def test_ready_for_offer_requires_selected_interviews_and_salary():
     state = build_candidate_work_state(None, candidate, has_resume=True, evaluations=[])
 
     assert "HR interview" in state.blockers
-    assert "Department interview" in state.blockers
     assert "Salary sheet" in state.blockers
     assert state.next_action == "Complete required prerequisites"
     assert state.action_key == "WORKSPACE"

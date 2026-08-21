@@ -414,7 +414,7 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
       >
         <div className="shrink-0 px-6 pt-5 pb-4 flex items-center justify-between bg-white/80 backdrop-blur-xl border-b border-black/5">
           <div>
-            <h2 className="text-xl font-bold text-foreground">Live Preview</h2>
+            <h2 className="text-xl font-bold text-foreground">Send Call Letter</h2>
             <p className="mt-0.5 text-sm text-muted-foreground font-medium">
               Candidate&apos;s perspective
             </p>

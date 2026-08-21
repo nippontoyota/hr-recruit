@@ -98,10 +98,8 @@ def test_offer_letter_pdf_is_pdf():
     assert bytes(pdf)[:4] == b"%PDF"
 
 
-def test_offer_blockers_requires_both_head_office_interviews_selected():
-    assert offer_blockers(_cand(), has_resume=True, evaluations=_evals(hr=True, dept=False)) == [
-        "department interview verdict"
-    ]
+def test_offer_blockers_dept_interview_is_optional():
+    assert offer_blockers(_cand(), has_resume=True, evaluations=_evals(hr=True, dept=False)) == []
     assert offer_blockers(_cand(), has_resume=True, evaluations=_evals(hr=True, dept=True)) == []
 
 
@@ -111,7 +109,7 @@ def test_offer_blockers_lists_interview_and_salary_gaps():
         has_resume=True,
         evaluations=[],
     )
-    assert missing == ["HR interview verdict", "department interview verdict", "salary sheet"]
+    assert missing == ["HR interview verdict", "salary sheet"]
 
 
 def test_offer_blockers_rejects_invalid_salary_and_unapproved_stage():

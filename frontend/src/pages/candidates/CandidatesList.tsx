@@ -412,6 +412,7 @@ export default function CandidatesList() {
                               candidateName={candidate.full_name}
                               hasResume={candidate.has_resume}
                               variant="icon"
+                              allowReplace={!isLocalHrLocked(candidate)}
                               onClick={(e) => e.stopPropagation()}
                             />
                             {isOnHold && !isLocalHrLocked(candidate) && (

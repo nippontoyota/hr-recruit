@@ -117,8 +117,6 @@ def _derive(
     if current_stage in _OFFER_STAGES and offer_status not in {"SENT", "ACCEPTED"}:
         if verdicts.get(EvaluationType.HQ_INTERVIEW_1) != EvaluationVerdict.SELECTED:
             blockers.append("HR interview")
-        if verdicts.get(EvaluationType.HQ_INTERVIEW_2) != EvaluationVerdict.SELECTED:
-            blockers.append("Department interview")
         if not getattr(candidate, "salary_data", None):
             blockers.append("Salary sheet")
         if not has_resume:

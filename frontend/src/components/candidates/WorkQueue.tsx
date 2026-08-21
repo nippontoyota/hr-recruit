@@ -27,15 +27,10 @@ export function WorkQueue({ candidate, evaluations, className }: WorkQueueProps)
   if (!isHOStage) return null;
 
   const hoHrEval = evaluations.find(e => e.type === 'HQ_INTERVIEW_1');
-  const hoDeptEval = evaluations.find(e => e.type === 'HQ_INTERVIEW_2');
 
   const hrSelected = hoHrEval?.verdict === 'SELECTED';
   const hrDone = !!hoHrEval?.verdict;
   const hrOnHold = hoHrEval?.verdict === 'ON_HOLD';
-
-  const deptSelected = hoDeptEval?.verdict === 'SELECTED';
-  const deptDone = !!hoDeptEval?.verdict;
-  const deptOnHold = hoDeptEval?.verdict === 'ON_HOLD';
 
   const salaryUploaded = !!(candidate.salary_data && Object.keys(candidate.salary_data).length > 0);
   const blockers = (candidate.offer_blockers ?? []).filter((b) => b !== 'already offered');
@@ -48,12 +43,6 @@ export function WorkQueue({ candidate, evaluations, className }: WorkQueueProps)
       done: hrSelected,
       warning: hrOnHold,
       hint: hrOnHold ? 'On hold' : hrDone && !hrSelected ? 'Not selected' : !hrDone ? 'Pending evaluation' : undefined,
-    },
-    {
-      label: 'Dept Interview (Optional)',
-      done: !hoDeptEval || deptSelected,
-      warning: deptOnHold,
-      hint: deptOnHold ? 'On hold' : !hoDeptEval ? 'Optional / Not scheduled' : deptDone && !deptSelected ? 'Not selected' : !deptDone ? 'Pending evaluation' : undefined,
     },
     {
       label: 'Salary Sheet',
@@ -73,7 +62,7 @@ export function WorkQueue({ candidate, evaluations, className }: WorkQueueProps)
           : 'All prerequisites met'
         : blockers.length
           ? `Missing: ${blockers.join(', ')}`
-          : 'Requires HR ✓, Dept ✓, Salary ✓',
+          : 'Requires HR ✓, Salary ✓',
     },
   ];
 

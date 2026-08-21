@@ -345,7 +345,7 @@ def create(
 ):
     if body.assigned_hr_user_id is None:
         body = body.model_copy(update={"assigned_hr_user_id": user.id})
-    if user.role == UserRole.LOCAL_HR:
+    if user.role == UserRole.LOCAL_HR and user.branch_location:
         body = body.model_copy(update={"branch_location": user.branch_location})
     row = create_candidate(db, body, user.id, created_via_public_apply=False)
     return to_candidate_out(row, False, db, viewer=user).model_copy(

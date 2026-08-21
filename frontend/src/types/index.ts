@@ -47,6 +47,7 @@ export const HO_LINEAR_STAGES: PipelineStage[] = [
   'SENT_TO_HO',
   'HO_INTERVIEWS',
   'CSS',
+  'SALARY_DETAILS',
   'FINAL_APPROVAL',
   'HIRED',
 ];

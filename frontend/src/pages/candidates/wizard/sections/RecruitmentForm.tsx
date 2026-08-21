@@ -74,7 +74,11 @@ export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () =>
       </div>
 
       <div className="pt-6 border-t border-border/40">
-        <h4 className="text-sm font-semibold text-text-primary mb-4">Reference Details</h4>
+        <h4 className="text-sm font-semibold text-text-primary mb-1">Local Reference Details</h4>
+        <p className="text-xs text-text-secondary mb-4 leading-relaxed">
+          Someone from your area who can vouch for your address and character during verification.
+          This is separate from the &quot;Referred By&quot; field above.
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FormField field="refRole" error={errors.refRole}>
             <label className="block text-sm font-medium text-text-primary mb-1">

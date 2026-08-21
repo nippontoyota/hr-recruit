@@ -193,15 +193,14 @@ def _apply_evaluation_outcome(
         PipelineStage.HO_DEPT_INTERVIEW,
     )
     if evaluation.type == EvaluationType.HQ_INTERVIEW_1 and candidate.current_stage in ho_interview_stages:
-        if candidate.current_stage != PipelineStage.HO_INTERVIEWS:
-            transition(
-                db=db,
-                candidate=candidate,
-                target_stage=PipelineStage.HO_INTERVIEWS,
-                user=user,
-                remarks="HO interviews in progress.",
-                skip_handover_lock=True,
-            )
+        transition(
+            db=db,
+            candidate=candidate,
+            target_stage=PipelineStage.CSS,
+            user=user,
+            remarks="HO HR interview completed. Department interview is optional. CSS ready.",
+            skip_handover_lock=True,
+        )
     elif evaluation.type == EvaluationType.HQ_INTERVIEW_2:
         ho_evals = db.scalars(
             select(Evaluation).where(
@@ -797,6 +796,44 @@ def submit_public_evaluation(
     return {"status": "success", "message": "Evaluation scorecard submitted"}
 
 
+@router.get("/public/{token}/test-preview")
+def get_public_test_preview(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """Read-only lookup for the pre-test start screen. Never starts the timer."""
+    token_row = db.scalar(
+        select(EvaluationToken).where(
+            EvaluationToken.token == token,
+            EvaluationToken.is_used.is_(False),
+            EvaluationToken.expires_at > datetime.now(UTC)
+        )
+    )
+    if not token_row:
+        raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
+
+    evaluation = db.get(Evaluation, token_row.evaluation_id)
+    if evaluation.type != EvaluationType.TECHNICAL_TEST:
+        raise HTTPException(status_code=400, detail="This evaluation is not a technical test")
+
+    candidate = db.get(Candidate, evaluation.candidate_id)
+    dept = _candidate_dept_key(candidate)
+
+    if token_row.test_data and "questions" in token_row.test_data:
+        question_count = len(token_row.test_data["questions"])
+    else:
+        question_count = len(assemble_for_candidate(db, candidate))
+
+    already_started = bool(token_row.test_data and token_row.test_data.get("deadline_at"))
+
+    return {
+        "department": dept,
+        "question_count": question_count,
+        "duration_seconds": settings.technical_test_duration_minutes * 60,
+        "already_started": already_started,
+    }
+
+
 @router.get("/public/{token}/test-questions")
 def get_public_test_questions(
     token: str,
@@ -811,11 +848,11 @@ def get_public_test_questions(
     )
     if not token_row:
         raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
-        
+
     evaluation = db.get(Evaluation, token_row.evaluation_id)
     if evaluation.type != EvaluationType.TECHNICAL_TEST:
          raise HTTPException(status_code=400, detail="This evaluation is not a technical test")
-         
+
     candidate = db.get(Candidate, evaluation.candidate_id)
     dept = _candidate_dept_key(candidate)
 
@@ -907,8 +944,8 @@ def submit_public_test(
     return {
         "status": "success",
         "message": "Technical test submitted and graded.",
-        "verdict": evaluation.verdict.value,
-        "score": f"{percentage}%",
+        "correct_answers": correct_count,
+        "total_questions": total_count,
     }
 
 

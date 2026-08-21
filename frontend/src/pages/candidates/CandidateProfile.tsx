@@ -24,6 +24,7 @@ import { ActivityTimeline } from '../../components/candidates/ActivityTimeline';
 import { CommunicationTimeline } from '../../components/candidates/CommunicationTimeline';
 import { extractError, isAbortError } from '../../lib/utils';
 import { CSSStageWidget } from '../../components/candidates/CSSStageWidget';
+import { SalarySheetStageWidget } from '../../components/candidates/SalarySheetStageWidget';
 import { WorkQueue } from '../../components/candidates/WorkQueue';
 import { SalarySheetUpload } from '../../components/candidates/SalarySheetUpload';
 import { CandidateHeader } from '../../components/candidates/CandidateHeader';
@@ -44,7 +45,6 @@ const LOCAL_FOLLOW_STAGES: PipelineStage[] = [
 
 function mappedPipelineStage(stage: PipelineStage): PipelineStage {
   if (stage === 'HO_HR_INTERVIEW' || stage === 'HO_DEPT_INTERVIEW') return 'HO_INTERVIEWS';
-  if (stage === 'SALARY_DETAILS') return 'FINAL_APPROVAL';
   return stage;
 }
 
@@ -597,6 +597,7 @@ export default function CandidateProfile() {
       'HO_DEPT_INTERVIEW',
       'HO_INTERVIEWS',
       'CSS',
+      'SALARY_DETAILS',
       'FINAL_APPROVAL',
       'HIRED',
     ].includes(candidate.current_stage);
@@ -614,8 +615,11 @@ export default function CandidateProfile() {
       completedStages.push('HO_INTERVIEWS');
     }
 
-    if (candidate.current_stage === 'CSS' || candidate.current_stage === 'FINAL_APPROVAL' || candidate.current_stage === 'HIRED') {
+    if (['CSS', 'SALARY_DETAILS', 'FINAL_APPROVAL', 'HIRED'].includes(candidate.current_stage)) {
       completedStages.push('CSS');
+    }
+    if (['SALARY_DETAILS', 'FINAL_APPROVAL', 'HIRED'].includes(candidate.current_stage)) {
+      completedStages.push('SALARY_DETAILS');
     }
 
     // 6. FINAL_APPROVAL (legacy HQ eval marker)
@@ -744,7 +748,7 @@ export default function CandidateProfile() {
             </div>
 
             {/* ── HOLD & REJECT ACTIONS ── */}
-            {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && actualStage !== 'ON_HOLD' && actualStage !== 'CSS' && actualStage !== 'FINAL_APPROVAL' && !isReadOnly && (
+            {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && actualStage !== 'ON_HOLD' && actualStage !== 'CSS' && actualStage !== 'SALARY_DETAILS' && actualStage !== 'FINAL_APPROVAL' && !isReadOnly && (
               <div className="mb-4 flex items-center justify-end gap-2 w-full">
                 <Button
                   variant="secondary"
@@ -820,6 +824,8 @@ export default function CandidateProfile() {
                         candidateId={candidate.id}
                         candidateName={candidate.full_name}
                         hasResume={candidate.has_resume}
+                        allowReplace={!isReadOnly}
+                        onReplaced={handleUpdate}
                       />
                     )}
                   </>
@@ -886,7 +892,7 @@ export default function CandidateProfile() {
             )}
 
             {showWhatsAppSidebar && (
-              <WhatsAppPreviewPanel candidate={candidate} onUpdate={handleUpdate} isReadOnly={isReadOnly} className="2xl:hidden mt-6 rounded-xl border border-border overflow-hidden max-w-2xl mx-auto" />
+              <WhatsAppPreviewPanel candidate={candidate} onUpdate={handleUpdate} isReadOnly={isReadOnly} className="xl:hidden mt-6 rounded-xl border border-border overflow-hidden max-w-2xl ml-auto" />
             )}
 
             {!isAdmin && stageToView === 'INTERVIEWS' && (
@@ -955,7 +961,21 @@ export default function CandidateProfile() {
 
             {isAdmin && stageToView === 'CSS' && (
               <div className="rounded-xl border border-border bg-surface p-6 text-sm text-muted-foreground">
-                CSS and the salary setting sheet are prepared by Head Office HR.
+                CSS is prepared by Head Office HR.
+              </div>
+            )}
+
+            {!isAdmin && stageToView === 'SALARY_DETAILS' && (
+              <SalarySheetStageWidget
+                candidate={candidate}
+                onUpdate={handleUpdate}
+                isReadOnly={isReadOnly}
+              />
+            )}
+
+            {isAdmin && stageToView === 'SALARY_DETAILS' && (
+              <div className="rounded-xl border border-border bg-surface p-6 text-sm text-muted-foreground">
+                The salary setting sheet is prepared by Head Office HR.
               </div>
             )}
 
@@ -1036,7 +1056,7 @@ export default function CandidateProfile() {
       </div>
 
       {showWhatsAppSidebar && (
-        <WhatsAppPreviewPanel candidate={candidate} onUpdate={handleUpdate} isReadOnly={isReadOnly} className="hidden 2xl:flex sticky top-0 h-screen w-[380px] shrink-0" />
+        <WhatsAppPreviewPanel candidate={candidate} onUpdate={handleUpdate} isReadOnly={isReadOnly} className="hidden xl:flex sticky top-0 h-screen w-[320px] 2xl:w-[380px] shrink-0" />
       )}
 
       {/* ── ACTIVITY TIMELINE SIDEBAR ── */}

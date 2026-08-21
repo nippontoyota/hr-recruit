@@ -606,40 +606,30 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
                     placeholder="Write your remarks here..."
                     className="w-full flex-1 bg-transparent border-0 p-4 text-base font-medium text-foreground/90 leading-relaxed resize-none focus:ring-0 outline-none"
                   />
-                  <div className="flex justify-between items-end p-3 pt-1 border-t border-transparent">
-                    <div className="flex flex-wrap gap-1.5 max-w-[65%]">
-                      {PREDEFINED_REMARKS.map((remark, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() =>
-                            setRemarksText((prev) => (prev ? `${prev.trim()} ${remark}` : remark))
-                          }
-                          className="text-[10px] bg-background/80 hover:bg-muted/80 text-foreground px-2 py-1 rounded-md border border-border/60 transition-colors font-medium whitespace-nowrap shadow-sm"
-                          title={remark}
-                        >
-                          + {remark.substring(0, 20)}...
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSubmitScorecard}
-                      disabled={submitting}
-                      className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-lg font-bold uppercase tracking-widest text-[11px] shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center min-w-[160px]"
-                    >
-                      {submitting ? 'SAVING...' : 'SAVE EVALUATION'}
-                    </button>
+                  <div className="flex flex-wrap gap-1.5 p-3 pt-1 border-t border-transparent">
+                    {PREDEFINED_REMARKS.map((remark, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() =>
+                          setRemarksText((prev) => (prev ? `${prev.trim()} ${remark}` : remark))
+                        }
+                        className="text-[10px] bg-background/80 hover:bg-muted/80 text-foreground px-2 py-1 rounded-md border border-border/60 transition-colors font-medium whitespace-nowrap shadow-sm"
+                        title={remark}
+                      >
+                        + {remark.substring(0, 20)}...
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="flex flex-col gap-2 pt-2">
-              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1">
+              <label className="block text-[10px] font-bold text-foreground uppercase tracking-wider mb-1 text-center">
                 Final Verdict
               </label>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center justify-center gap-3">
                 <label
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 border rounded-md cursor-pointer transition-all',
@@ -744,8 +734,17 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
               </div>
             </div>
 
+            <button
+              type="button"
+              onClick={handleSubmitScorecard}
+              disabled={submitting}
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white px-5 py-3 rounded-lg font-bold uppercase tracking-widest text-[11px] shadow-md transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center"
+            >
+              {submitting ? 'SAVING...' : 'SAVE EVALUATION'}
+            </button>
+
             {isEditing && (
-              <div className="flex gap-2 justify-end pt-2">
+              <div className="flex gap-2 justify-center pt-1">
                 <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
                   Cancel
                 </Button>

@@ -8,7 +8,9 @@ interface ResumeButtonProps {
   hasResume?: boolean;
   variant?: 'icon' | 'pill';
   className?: string;
+  allowReplace?: boolean;
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onReplaced?: () => void;
 }
 
 export function ResumeButton({
@@ -17,7 +19,9 @@ export function ResumeButton({
   hasResume = true,
   variant = 'pill',
   className,
+  allowReplace = true,
   onClick,
+  onReplaced,
 }: ResumeButtonProps) {
   const { openResume } = useResumeViewer();
 
@@ -26,7 +30,7 @@ export function ResumeButton({
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
     if (event.defaultPrevented) return;
-    openResume(candidateId, candidateName);
+    openResume(candidateId, candidateName, { allowReplace, onReplaced });
   };
 
   if (variant === 'icon') {

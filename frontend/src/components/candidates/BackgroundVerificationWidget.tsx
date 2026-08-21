@@ -194,6 +194,7 @@ export function BackgroundVerificationWidget({
                     dummyBgVerification({
                       meta: {
                         totalWorkExperience: prev.meta.totalWorkExperience || '2 Years',
+                        hasPreviousEmployment: true,
                       },
                     })
                   );
@@ -414,7 +415,8 @@ export function BackgroundVerificationWidget({
           </div>
         </section>
 
-        {/* FEEDBACK FROM PREVIOUS EMPLOYER */}
+        {/* FEEDBACK FROM PREVIOUS EMPLOYER — only when the candidate reported prior work experience */}
+        {data.meta.hasPreviousEmployment && (
         <section>
           <h3 className="text-lg font-bold border-b border-border pb-2 mb-4">3. Feedback from Previous Employer</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -490,10 +492,13 @@ export function BackgroundVerificationWidget({
             </div>
           </div>
         </section>
+        )}
 
         {/* SIGNATURES */}
         <section>
-          <h3 className="text-lg font-bold border-b border-border pb-2 mb-4">4. Sign-off</h3>
+          <h3 className="text-lg font-bold border-b border-border pb-2 mb-4">
+            {data.meta.hasPreviousEmployment ? '4. Sign-off' : '3. Sign-off'}
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
             <div className="rounded-lg border border-border p-3">
               <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Prepared By</label>

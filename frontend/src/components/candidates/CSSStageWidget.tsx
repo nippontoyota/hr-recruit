@@ -89,7 +89,6 @@ export function CSSStageWidget({ candidate, evaluations, onUpdate, isReadOnly = 
               candidate={candidate}
               evaluations={evaluations}
               includeCss={true}
-              includeSalaryProposal={true}
             />
           </div>
         </div>
