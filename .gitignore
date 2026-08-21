@@ -51,3 +51,4 @@ run.bat
 patch.py
 .vercel
 .env*
+supabase/.temp/
