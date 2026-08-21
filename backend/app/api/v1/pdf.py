@@ -15,7 +15,7 @@ _STATIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../sta
 _FONT_DIR = os.path.join(_STATIC_DIR, "fonts")
 _LOGO_PATH = os.path.join(_STATIC_DIR, "nippon-toyota-logo-print.png")
 _SIGNATURE_PATH = os.path.join(_STATIC_DIR, "jerry-jacob-mathew-signature.png")
-_SIGNATURE_ASPECT = 1092 / 612  # height / width of the source signature image
+_SIGNATURE_ASPECT = 612 / 1092  # height / width of the source signature image
 _MAROON = (214, 28, 36)
 
 
@@ -212,7 +212,7 @@ def generate_offer_letter_pdf(payload: dict) -> bytearray:
     _write(pdf, "We take this opportunity to welcome you and your family into the folds of our company.")
     pdf.ln(3)
     _write(pdf, "Yours faithfully,", h=7)
-    sig_w = 26
+    sig_w = 40
     sig_y = pdf.get_y() + 2
     if os.path.isfile(_SIGNATURE_PATH):
         pdf.image(_SIGNATURE_PATH, x=pdf.l_margin, y=sig_y, w=sig_w)
