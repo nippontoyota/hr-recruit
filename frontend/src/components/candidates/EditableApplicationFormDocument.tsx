@@ -316,6 +316,10 @@ export function EditableApplicationFormDocument({
                     XIX/9C, Nippon Towers, NH-47, HMT Junction, Kalamassery P.O., Kochi – 683104
                   </div>
                 </div>
+                <div className="shrink-0 text-right pt-0.5">
+                  <div className="text-[8.5px] font-semibold uppercase tracking-wider text-slate-500">Candidate ID</div>
+                  <div className="text-[14px] font-black tracking-wide text-[#1e3a5f] border border-[#1e3a5f] rounded px-2 py-0.5">{candidate.candidate_id}</div>
+                </div>
               </div>
               <div className="iaf-rule border-t-2 border-[#1e3a5f] mb-0" />
               <div className="iaf-title font-bold text-[13px] uppercase tracking-[0.12em] text-center py-1.5 mb-2.5 border-x border-b border-[#1e3a5f]">
