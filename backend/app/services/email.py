@@ -48,7 +48,7 @@ def send_email_with_pdf(
             filename=pdf_filename
         )
         
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as server:
             server.starttls()
             server.login(settings.smtp_user, settings.smtp_password)
             server.send_message(msg, from_addr=settings.smtp_from_email, to_addrs=to_addrs)
