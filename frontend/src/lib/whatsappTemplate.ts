@@ -287,3 +287,32 @@ export function buildTechnicalTestWhatsAppMessage(input: {
   lines.push('', 'Nippon Toyota HR');
   return lines.join('\n');
 }
+
+export function buildHeadOfficeInterviewWhatsAppMessage(input: {
+  candidateName: string;
+  position: string;
+  date: string;
+  time: string;
+  mode: string;
+  locationOrLink: string;
+  recruiterName: string;
+}): string {
+  return [
+    `Dear ${input.candidateName},`,
+    '',
+    `Your Head Office interview for *${input.position}* is scheduled.`,
+    '',
+    `Date: *${input.date}*`,
+    `Reporting time: *${input.time}*`,
+    `Mode: ${input.mode}`,
+    `Location/Link: ${input.locationOrLink}`,
+    '',
+    'Please bring an updated bio-data and a passport size photo.',
+    'Dress Code - Formal Wear with Proper Grooming (Mandatory)',
+    'Please be on time.',
+    '',
+    'Regards',
+    input.recruiterName,
+    'Nippon Toyota HR',
+  ].join('\n');
+}

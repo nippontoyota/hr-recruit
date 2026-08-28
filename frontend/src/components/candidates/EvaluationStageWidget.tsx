@@ -21,6 +21,7 @@ import { usePrint } from '../../hooks/usePrint';
 import { useAuth } from '../../auth';
 import { buildTechnicalTestWhatsAppMessage, evalScheduleLabels, openWhatsAppChat } from '../../lib/whatsappTemplate';
 import { WhatsAppShareModal } from './WhatsAppSendChoices';
+import { HeadOfficeInvitePanel } from './HeadOfficeInvitePanel';
 
 const SINGLE_CARD_TYPES = new Set(['BRANCH_HR', 'HQ_INTERVIEW_1']);
 
@@ -367,6 +368,15 @@ export function EvaluationStageWidget({
           </div>
         )}
       </div>
+
+      {evalTypes.includes('HQ_INTERVIEW_1') && !isReadOnly && evaluations.find((e) => e.type === 'HQ_INTERVIEW_1') && (
+        <HeadOfficeInvitePanel
+          candidate={candidate}
+          evaluation={evaluations.find((e) => e.type === 'HQ_INTERVIEW_1')!}
+          onUpdate={onUpdate}
+          isReadOnly={isReadOnly}
+        />
+      )}
 
       <WhatsAppShareModal
         isOpen={!!waShareEv}

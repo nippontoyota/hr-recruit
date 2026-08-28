@@ -1,10 +1,11 @@
 from app.services.doubletick import (
     call_letter_placeholders,
+    hr_interview_placeholders,
     interviewer_placeholders,
     sanitize_placeholder,
     technical_test_placeholders,
 )
-from app.services.whatsapp_templates import ALL_SPECS, CALL_LETTER
+from app.services.whatsapp_templates import ALL_SPECS, CALL_LETTER, INTERVIEW_SCHEDULE
 
 
 def test_sanitize_placeholder_flattens_newlines_and_empty():
@@ -68,3 +69,27 @@ def test_interviewer_and_test_placeholder_counts():
     assert test[2] == "https://hr.example/test"
     assert all(len(spec.body) <= 1024 for spec in ALL_SPECS)
     assert all(len(spec.keys) == len(spec.examples) for spec in ALL_SPECS)
+
+
+def test_head_office_schedule_placeholders_have_no_form_link():
+    values = hr_interview_placeholders(
+        {
+            "candidateName": "Arun",
+            "position": "Sales Consultant",
+            "date": "22 Aug 2026",
+            "time": "10:30 AM",
+            "mode": "Walk-in",
+            "locationOrLink": "Nippon Toyota Head Office",
+            "recruiterName": "Jerin",
+        }
+    )
+    assert values == [
+        "Arun",
+        "Sales Consultant",
+        "22 Aug 2026",
+        "10:30 AM",
+        "Walk-in",
+        "Nippon Toyota Head Office",
+        "Jerin",
+    ]
+    assert "application form" not in INTERVIEW_SCHEDULE.body.lower()
