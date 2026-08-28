@@ -41,6 +41,7 @@ const STAGE_ICONS: Record<string, React.ElementType> = {
   BACKGROUND_VERIFICATION: UserCheck,
   APPLICATION: FileText,
   SENT_TO_HO: Send,
+  HO_INTERVIEW_INTIMATION: Send,
   HO_HR_INTERVIEW: MessagesSquare,
   HO_DEPT_INTERVIEW: MessagesSquare,
   HO_INTERVIEWS: MessagesSquare,

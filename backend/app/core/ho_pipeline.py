@@ -6,6 +6,7 @@ from app.models.stage_history import StageHistory
 
 HO_HR_PIPELINE_STAGES = (
     PipelineStage.SENT_TO_HO,
+    PipelineStage.HO_INTERVIEW_INTIMATION,
     PipelineStage.HO_INTERVIEWS,
     PipelineStage.HO_HR_INTERVIEW,
     PipelineStage.HO_DEPT_INTERVIEW,
@@ -19,6 +20,7 @@ HO_HR_PIPELINE_STAGES = (
 
 HO_HANDOVER_STAGES = (
     PipelineStage.SENT_TO_HO,
+    PipelineStage.HO_INTERVIEW_INTIMATION,
     PipelineStage.HO_INTERVIEWS,
     PipelineStage.HO_HR_INTERVIEW,
     PipelineStage.HO_DEPT_INTERVIEW,
@@ -62,6 +64,7 @@ def candidate_reached_ho(db: Session, candidate_id) -> bool:
             StageHistory.to_stage.in_(
                 (
                     PipelineStage.SENT_TO_HO,
+                    PipelineStage.HO_INTERVIEW_INTIMATION,
                     PipelineStage.HO_INTERVIEWS,
                     PipelineStage.HO_HR_INTERVIEW,
                     PipelineStage.HO_DEPT_INTERVIEW,

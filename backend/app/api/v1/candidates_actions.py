@@ -854,7 +854,7 @@ def send_to_ho(
     updated = transition(
         db=db,
         candidate=row,
-        target_stage=PipelineStage.SENT_TO_HO,
+        target_stage=PipelineStage.HO_INTERVIEW_INTIMATION,
         user=user,
         remarks="Application transferred to Head Office"
     )

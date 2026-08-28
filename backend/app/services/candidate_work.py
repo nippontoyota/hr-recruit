@@ -31,6 +31,7 @@ _STALLED_AFTER_DAYS = 4
 _HO_STAGES = frozenset(
     {
         PipelineStage.SENT_TO_HO,
+        PipelineStage.HO_INTERVIEW_INTIMATION,
         PipelineStage.HO_INTERVIEWS,
         PipelineStage.HO_HR_INTERVIEW,
         PipelineStage.HO_DEPT_INTERVIEW,
@@ -139,7 +140,9 @@ def _derive(
     elif current_stage == PipelineStage.APPLICATION:
         next_action, action_key = "Send to Head Office", "SEND_TO_HO"
     elif current_stage == PipelineStage.SENT_TO_HO:
-        next_action, action_key = "Schedule Head Office interview", "ADVANCE_STAGE"
+        next_action, action_key = "Send Head Office interview intimation", "ADVANCE_STAGE"
+    elif current_stage == PipelineStage.HO_INTERVIEW_INTIMATION:
+        next_action, action_key = "Send Head Office interview intimation", "ADVANCE_STAGE"
     elif current_stage in {PipelineStage.HO_INTERVIEWS, PipelineStage.HO_HR_INTERVIEW, PipelineStage.HO_DEPT_INTERVIEW}:
         next_action, action_key = "Complete Head Office interview", "ADVANCE_STAGE"
     elif current_stage in _CALL_LETTER_STAGES:

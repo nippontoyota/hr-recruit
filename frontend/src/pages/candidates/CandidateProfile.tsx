@@ -424,8 +424,8 @@ export default function CandidateProfile() {
     if (!candidate) return;
     setIsUpdating(true);
     try {
-      await updateCandidateStage(candidate.id, 'SENT_TO_HO', 'Sent to Head Office HR for final review.');
-      navigateToStage('SENT_TO_HO');
+      await updateCandidateStage(candidate.id, 'HO_INTERVIEW_INTIMATION', 'Application transferred to Head Office for interview intimation.');
+      navigateToStage('HO_INTERVIEW_INTIMATION');
       handleUpdate();
       toast.success('Application sent to Head Office successfully!');
     } catch (err: unknown) {
@@ -594,6 +594,7 @@ export default function CandidateProfile() {
     const bgPastStage = [
       'APPLICATION',
       'SENT_TO_HO',
+      'HO_INTERVIEW_INTIMATION',
       'HO_HR_INTERVIEW',
       'HO_DEPT_INTERVIEW',
       'HO_INTERVIEWS',
@@ -639,6 +640,9 @@ export default function CandidateProfile() {
       completedStages.push('APPLICATION');
       if (candidate.current_stage !== 'SENT_TO_HO') {
         completedStages.push('SENT_TO_HO');
+      }
+      if (!['SENT_TO_HO', 'HO_INTERVIEW_INTIMATION'].includes(candidate.current_stage)) {
+        completedStages.push('HO_INTERVIEW_INTIMATION');
       }
     }
 
@@ -738,10 +742,12 @@ export default function CandidateProfile() {
                 heldStages={heldStages}
                 customLabels={followsHoPipeline ? {
                   'SENT_TO_HO': 'CANDIDATE APPLICATION',
+                  'HO_INTERVIEW_INTIMATION': 'INTERVIEW INTIMATION',
                   'HO_INTERVIEWS': 'INTERVIEWS',
                   'FINAL_APPROVAL': 'OFFER LETTER',
                 } : isLocalHR && hasBeenSentToHO ? {
                   'SENT_TO_HO': 'SENT TO HO',
+                  'HO_INTERVIEW_INTIMATION': 'INTERVIEW INTIMATION',
                   'HO_INTERVIEWS': 'HO INTERVIEWS',
                   'FINAL_APPROVAL': 'OFFER',
                 } : undefined}
@@ -933,22 +939,22 @@ export default function CandidateProfile() {
             )}
 
             {!isAdmin && stageToView === 'SENT_TO_HO' && (
-              <>
-                {evaluations.find((e) => e.type === 'HQ_INTERVIEW_1') && (
-                  <HeadOfficeInvitePanel
-                    candidate={candidate}
-                    evaluation={evaluations.find((e) => e.type === 'HQ_INTERVIEW_1')!}
-                    onUpdate={handleUpdate}
-                    isReadOnly={isReadOnly}
-                  />
-                )}
-                <ApplicationStageWidget
-                  candidate={candidate}
-                  evaluations={evaluations}
-                  onUpdate={handleUpdate}
-                  isReadOnly={isReadOnly}
-                />
-              </>
+              <ApplicationStageWidget
+                candidate={candidate}
+                evaluations={evaluations}
+                onUpdate={handleUpdate}
+                isReadOnly={isReadOnly}
+              />
+            )}
+
+            {!isAdmin && stageToView === 'HO_INTERVIEW_INTIMATION' && evaluations.find((e) => e.type === 'HQ_INTERVIEW_1') && (
+              <HeadOfficeInvitePanel
+                candidate={candidate}
+                evaluation={evaluations.find((e) => e.type === 'HQ_INTERVIEW_1')!}
+                onUpdate={handleUpdate}
+                onSent={() => navigateToStage('HO_INTERVIEWS')}
+                isReadOnly={isReadOnly}
+              />
             )}
 
             {!isAdmin && (stageToView === 'HO_INTERVIEWS' ||

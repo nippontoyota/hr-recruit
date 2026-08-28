@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import type { Candidate, Evaluation, InterviewMode } from '../../types';
 import { scheduleEvaluation, sendEvaluationWhatsAppInvite } from '../../api/evaluations';
+import { updateCandidateStage } from '../../api/candidates';
 import { Button, Input, Select } from '../ui';
 import { WhatsAppSendChoices } from './WhatsAppSendChoices';
 import { buildHeadOfficeInterviewWhatsAppMessage, openWhatsAppChat } from '../../lib/whatsappTemplate';
@@ -15,6 +16,7 @@ interface HeadOfficeInvitePanelProps {
   candidate: Candidate;
   evaluation: Evaluation;
   onUpdate: (opts?: { candidate?: boolean }) => void;
+  onSent?: () => void;
   isReadOnly?: boolean;
 }
 
@@ -31,13 +33,15 @@ function toIso(value: string) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, isReadOnly = false }: HeadOfficeInvitePanelProps) {
+export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent, isReadOnly = false }: HeadOfficeInvitePanelProps) {
   const { user } = useAuth();
   const [scheduledTime, setScheduledTime] = useState(() => localDateTimeValue(evaluation.scheduled_time));
   const [mode, setMode] = useState<InterviewMode | ''>(evaluation.interview_mode || '');
   const [location, setLocation] = useState(evaluation.location_or_link || '');
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [whatsAppOpened, setWhatsAppOpened] = useState(false);
+  const [confirmingWhatsApp, setConfirmingWhatsApp] = useState(false);
   const evaluationScheduledTime = evaluation.scheduled_time;
   const evaluationMode = evaluation.interview_mode;
   const evaluationLocation = evaluation.location_or_link;
@@ -115,13 +119,19 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, isReadO
           recruiterName: user?.full_name || 'Head Office HR',
         },
       });
-      toast.success('Head Office invitation sent via DoubleTick');
-      onUpdate({ candidate: false });
+      await markInvitationSent('DoubleTick');
     } catch (err) {
       toast.error(extractError(err, 'Failed to send Head Office invitation'));
     } finally {
       setSending(false);
     }
+  };
+
+  const markInvitationSent = async (method: string) => {
+    await updateCandidateStage(candidate.id, 'HO_INTERVIEWS', `Head Office interview invitation sent via ${method}.`);
+    toast.success('Head Office invitation recorded; candidate moved to Interviews');
+    onUpdate({ candidate: true });
+    onSent?.();
   };
 
   const openDirectWhatsApp = () => {
@@ -132,6 +142,19 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, isReadO
       return;
     }
     toast.success('Opened WhatsApp with the invitation ready to send');
+    setWhatsAppOpened(true);
+  };
+
+  const confirmWhatsAppSent = async () => {
+    setConfirmingWhatsApp(true);
+    try {
+      await markInvitationSent('WhatsApp');
+      setWhatsAppOpened(false);
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to record that the WhatsApp invitation was sent'));
+    } finally {
+      setConfirmingWhatsApp(false);
+    }
   };
 
   return (
@@ -187,7 +210,7 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, isReadO
             <div className="mx-auto mb-3 w-fit rounded-md bg-[#E1F3FB] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-[#55656E]">Today</div>
             <div className="whitespace-pre-wrap break-words rounded-xl rounded-tl-sm bg-white px-3 py-2.5 text-[12px] leading-[1.35] text-[#111b21] shadow-sm">{message}</div>
           </div>
-          {!isReadOnly && <div className="border-t border-border bg-background p-3"><WhatsAppSendChoices onDoubleTick={() => void sendViaDoubleTick()} onOpenWhatsApp={openDirectWhatsApp} doubleTickLoading={sending} disabled={!isValid || !isSaved} openWhatsAppDisabled={!candidate.phone} stacked /></div>}
+          {!isReadOnly && <div className="border-t border-border bg-background p-3 space-y-2"><WhatsAppSendChoices onDoubleTick={() => void sendViaDoubleTick()} onOpenWhatsApp={openDirectWhatsApp} doubleTickLoading={sending || confirmingWhatsApp} disabled={!isValid || !isSaved} openWhatsAppDisabled={!candidate.phone} stacked />{whatsAppOpened && <Button type="button" variant="secondary" className="w-full" onClick={() => void confirmWhatsAppSent()} isLoading={confirmingWhatsApp}>I sent this on WhatsApp</Button>}</div>}
         </div>
       </div>
     </section>

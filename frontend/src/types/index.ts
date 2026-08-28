@@ -22,6 +22,7 @@ export type PipelineStage =
   | 'BACKGROUND_VERIFICATION'
   | 'APPLICATION'
   | 'SENT_TO_HO'
+  | 'HO_INTERVIEW_INTIMATION'
   | 'HO_INTERVIEWS'
   | 'HO_HR_INTERVIEW'
   | 'HO_DEPT_INTERVIEW'
@@ -34,6 +35,7 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   'TEST',
   'BRANCH_INTERVIEW',
   'SENT_TO_HO',
+  'HO_INTERVIEW_INTIMATION',
   'HO_INTERVIEWS',
   'CSS',
   'SALARY_DETAILS',
@@ -45,6 +47,7 @@ export const PIPELINE_STAGES: PipelineStage[] = [
 
 export const HO_LINEAR_STAGES: PipelineStage[] = [
   'SENT_TO_HO',
+  'HO_INTERVIEW_INTIMATION',
   'HO_INTERVIEWS',
   'CSS',
   'SALARY_DETAILS',
@@ -54,6 +57,7 @@ export const HO_LINEAR_STAGES: PipelineStage[] = [
 
 export const HO_POST_SEND_STAGES: PipelineStage[] = [
   'SENT_TO_HO',
+  'HO_INTERVIEW_INTIMATION',
   'HO_INTERVIEWS',
   'HO_HR_INTERVIEW',
   'HO_DEPT_INTERVIEW',

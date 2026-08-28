@@ -20,7 +20,7 @@ export function WorkQueue({ candidate, evaluations, className }: WorkQueueProps)
   const stage = candidate.current_stage;
   const workState = getCandidateWorkState(candidate);
   const isHOStage = [
-    'SENT_TO_HO', 'HO_HR_INTERVIEW', 'HO_DEPT_INTERVIEW', 'HO_INTERVIEWS',
+    'SENT_TO_HO', 'HO_INTERVIEW_INTIMATION', 'HO_HR_INTERVIEW', 'HO_DEPT_INTERVIEW', 'HO_INTERVIEWS',
     'CSS', 'FINAL_APPROVAL', 'SALARY_DETAILS',
   ].includes(stage);
 

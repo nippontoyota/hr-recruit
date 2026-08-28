@@ -6,6 +6,7 @@ export function stageLabel(stage: PipelineStage | string): string {
   if (stage === 'CANDIDATE_FORM' || stage === 'CALL_LETTER') return 'INITIAL REVIEW';
   if (stage === 'BRANCH_INTERVIEW' || stage === 'INTERVIEWS') return 'INTERVIEWS';
   if (stage === 'HO_HR_INTERVIEW' || stage === 'HO_DEPT_INTERVIEW' || stage === 'HO_INTERVIEWS') return 'INTERVIEWS';
+  if (stage === 'HO_INTERVIEW_INTIMATION') return 'INTERVIEW INTIMATION';
   if (stage === 'CSS') return 'CSS';
   if (stage === 'SALARY_DETAILS') return 'SALARY SHEET';
   if (stage === 'TEST') return 'TECHNICAL TEST';
@@ -20,6 +21,7 @@ export function getStageBadgeVariant(stage: PipelineStage | string): BadgeProps[
   if (stage === 'HIRED') return 'success';
   if (stage === 'ON_HOLD') return 'warning';
   if (stage === 'SENT_TO_HO') return 'info';
+  if (stage === 'HO_INTERVIEW_INTIMATION') return 'info';
   return 'secondary';
 }
 
@@ -32,6 +34,8 @@ export function stageColor(stage: PipelineStage): string {
     case 'ON_HOLD':
       return 'bg-warning/10 text-warning border-warning/20';
     case 'SENT_TO_HO':
+      return 'bg-info/10 text-info border-info/20';
+    case 'HO_INTERVIEW_INTIMATION':
       return 'bg-info/10 text-info border-info/20';
     default:
       return 'bg-muted text-text-secondary border-border';

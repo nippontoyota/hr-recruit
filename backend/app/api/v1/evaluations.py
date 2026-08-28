@@ -353,6 +353,7 @@ def get_candidate_evaluations(
         PipelineStage.BRANCH_INTERVIEW: [EvaluationType.BRANCH_HR, EvaluationType.DEPT_HEAD],
         PipelineStage.TEST: [EvaluationType.TECHNICAL_TEST],
         PipelineStage.SENT_TO_HO: [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2],
+        PipelineStage.HO_INTERVIEW_INTIMATION: [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2],
         PipelineStage.HO_INTERVIEWS: [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2],
         PipelineStage.HO_HR_INTERVIEW: [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2],
         PipelineStage.HO_DEPT_INTERVIEW: [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2],

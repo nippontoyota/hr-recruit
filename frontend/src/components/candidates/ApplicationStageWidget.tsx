@@ -29,7 +29,7 @@ export function ApplicationStageWidget({ candidate, evaluations, onUpdate, isRea
   const handleSendToHO = async () => {
     setIsSending(true);
     try {
-      await updateCandidateStage(candidate.id, 'SENT_TO_HO' as PipelineStage, 'Sent to Head Office HR for final review.');
+      await updateCandidateStage(candidate.id, 'HO_INTERVIEW_INTIMATION' as PipelineStage, 'Application transferred to Head Office for interview intimation.');
       toast.success('Application sent to Head Office successfully!');
       setShowConfirmModal(false);
       onUpdate(); 

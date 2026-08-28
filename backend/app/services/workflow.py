@@ -39,7 +39,7 @@ _BRANCH_SEND_STAGES = {
 def transition_prerequisites(candidate: Candidate, target_stage: PipelineStage) -> list[str]:
     """Return included workflow prerequisites without mutating the candidate."""
     missing: list[str] = []
-    if target_stage == PipelineStage.SENT_TO_HO:
+    if target_stage in {PipelineStage.SENT_TO_HO, PipelineStage.HO_INTERVIEW_INTIMATION}:
         if candidate.current_stage not in _BRANCH_SEND_STAGES:
             missing.append("candidate must still be in the branch pipeline")
     return missing
@@ -87,7 +87,8 @@ def transition(
             PipelineStage.TEST,
             PipelineStage.BACKGROUND_VERIFICATION,
             PipelineStage.APPLICATION,
-            PipelineStage.SENT_TO_HO
+            PipelineStage.SENT_TO_HO,
+            PipelineStage.HO_INTERVIEW_INTIMATION
         ]
         
         target_idx = -1
@@ -99,6 +100,18 @@ def transition(
             
             if s == PipelineStage.TEST:
                 for etype in [EvaluationType.TECHNICAL_TEST]:
+                    existing = db.scalar(sa.select(Evaluation).where(
+                        sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == etype)
+                    ))
+                    if not existing:
+                        db.add(Evaluation(
+                            candidate_id=candidate.id,
+                            type=etype,
+                            status=InterviewStatus.PENDING_SCHEDULE
+                        ))
+
+            if s == PipelineStage.HO_INTERVIEW_INTIMATION:
+                for etype in [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2]:
                     existing = db.scalar(sa.select(Evaluation).where(
                         sa.and_(Evaluation.candidate_id == candidate.id, Evaluation.type == etype)
                     ))
