@@ -18,6 +18,7 @@ import { WhatsAppPreviewPanel } from '../../components/candidates/WhatsAppPrevie
 import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { EvaluationStageWidget } from '../../components/candidates/EvaluationStageWidget';
 import { ApplicationStageWidget } from '../../components/candidates/ApplicationStageWidget';
+import { HeadOfficeInvitePanel } from '../../components/candidates/HeadOfficeInvitePanel';
 import { FinalApprovalWidget } from '../../components/candidates/FinalApprovalWidget';
 import { BackgroundVerificationWidget } from '../../components/candidates/BackgroundVerificationWidget';
 import { ActivityTimeline } from '../../components/candidates/ActivityTimeline';
@@ -932,12 +933,22 @@ export default function CandidateProfile() {
             )}
 
             {!isAdmin && stageToView === 'SENT_TO_HO' && (
-              <ApplicationStageWidget
-                candidate={candidate}
-                evaluations={evaluations}
-                onUpdate={handleUpdate}
-                isReadOnly={isReadOnly}
-              />
+              <>
+                {evaluations.find((e) => e.type === 'HQ_INTERVIEW_1') && (
+                  <HeadOfficeInvitePanel
+                    candidate={candidate}
+                    evaluation={evaluations.find((e) => e.type === 'HQ_INTERVIEW_1')!}
+                    onUpdate={handleUpdate}
+                    isReadOnly={isReadOnly}
+                  />
+                )}
+                <ApplicationStageWidget
+                  candidate={candidate}
+                  evaluations={evaluations}
+                  onUpdate={handleUpdate}
+                  isReadOnly={isReadOnly}
+                />
+              </>
             )}
 
             {!isAdmin && (stageToView === 'HO_INTERVIEWS' ||

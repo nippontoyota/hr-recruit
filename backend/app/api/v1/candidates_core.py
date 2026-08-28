@@ -23,7 +23,7 @@ from app.core.ho_pipeline import (
     HO_HANDOVER_STAGE_VALUES,
     stage_value,
 )
-from app.models.enums import PipelineStage, UserRole, ActivityType, EvaluationType, FormStatus
+from app.models.enums import PipelineStage, UserRole, ActivityType, EvaluationType, InterviewStatus, FormStatus
 from app.schemas.candidate import (
     CandidateCreate,
     CandidatePaginatedOut,
@@ -53,6 +53,34 @@ from app.services.document_service import (
 from app.services import storage
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
+
+
+def _ensure_head_office_interviews(db: Session, candidate: Candidate) -> None:
+    """Backfill the two Head Office interview records when a handover is viewed."""
+    if not handed_over_to_ho(candidate, db):
+        return
+
+    existing_types = {
+        evaluation.type
+        for evaluation in db.scalars(
+            select(Evaluation).where(Evaluation.candidate_id == candidate.id)
+        ).all()
+    }
+    missing_types = [
+        evaluation_type
+        for evaluation_type in (EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2)
+        if evaluation_type not in existing_types
+    ]
+    for evaluation_type in missing_types:
+        db.add(
+            Evaluation(
+                candidate_id=candidate.id,
+                type=evaluation_type,
+                status=InterviewStatus.PENDING_SCHEDULE,
+            )
+        )
+    if missing_types:
+        db.commit()
 
 
 def _mark_call_letter_sent(db: Session, candidate: Candidate, user: User) -> None:
@@ -363,6 +391,7 @@ def get_candidate(
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
     assert_candidate_access(user, row, db)
+    _ensure_head_office_interviews(db, row)
     if expire_pre_form_if_needed(row):
         db.commit()
         db.refresh(row)

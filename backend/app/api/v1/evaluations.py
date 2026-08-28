@@ -352,6 +352,13 @@ def get_candidate_evaluations(
     stage_to_types = {
         PipelineStage.BRANCH_INTERVIEW: [EvaluationType.BRANCH_HR, EvaluationType.DEPT_HEAD],
         PipelineStage.TEST: [EvaluationType.TECHNICAL_TEST],
+        PipelineStage.SENT_TO_HO: [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2],
+        PipelineStage.HO_INTERVIEWS: [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2],
+        PipelineStage.HO_HR_INTERVIEW: [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2],
+        PipelineStage.HO_DEPT_INTERVIEW: [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2],
+        PipelineStage.CSS: [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2],
+        PipelineStage.SALARY_DETAILS: [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2],
+        PipelineStage.FINAL_APPROVAL: [EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2],
     }
     
     req_types = stage_to_types.get(candidate.current_stage, [])
