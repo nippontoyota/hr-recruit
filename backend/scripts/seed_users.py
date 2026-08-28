@@ -30,6 +30,15 @@ BRANCH_LOGINS: list[tuple[str, str]] = [
     ("hrirj@nippontoyota.com", "Thrissur"),
 ]
 
+# Some alias emails share a branch_location (so they see the same roster) but
+# should still display under their own showroom name rather than the shared
+# bucket name.
+DISPLAY_NAME_OVERRIDES: dict[str, str] = {
+    "hrenc@nippontoyota.com": "Enchakkal",  # shares the "Trivandrum" roster with hrtvm@
+    "hrtvl@nippontoyota.com": "Thiruvalla",  # shares the "Kottayam" roster with hrktm@
+    "hrirj@nippontoyota.com": "Irinjalakuda",  # shares the "Thrissur" roster with hrtcr@
+}
+
 SEED_USERS = [
     {
         "email": "admin@nippon.local",
@@ -46,7 +55,7 @@ SEED_USERS = [
     *[
         {
             "email": email,
-            "full_name": f"{branch} HR",
+            "full_name": f"{DISPLAY_NAME_OVERRIDES.get(email, branch)} HR",
             "role": UserRole.LOCAL_HR,
             "branch_location": branch,
         }
