@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     waba_phone_number_id: str = ""
     whatsapp_call_letter_template_name: str = "nippon_interview_call_letter"
     whatsapp_hr_interview_template_name: str = "nippon_interview_schedule"
+    whatsapp_ho_interview_template_name: str = "nippon_head_office_interview_invite"
     whatsapp_interviewer_template_name: str = "nippon_interviewer_invite"
     whatsapp_technical_test_template_name: str = "nippon_technical_test_invite"
     # Comma-separated origins for the SPA (Vite default included)

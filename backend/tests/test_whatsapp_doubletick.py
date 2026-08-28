@@ -92,4 +92,5 @@ def test_head_office_schedule_placeholders_have_no_form_link():
         "Nippon Toyota Head Office",
         "Jerin",
     ]
+    assert INTERVIEW_SCHEDULE.name == "nippon_head_office_interview_invite"
     assert "application form" not in INTERVIEW_SCHEDULE.body.lower()

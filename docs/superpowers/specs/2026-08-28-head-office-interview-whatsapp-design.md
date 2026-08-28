@@ -56,8 +56,8 @@ direct WhatsApp text cannot drift apart.
 
 ## Backend and DoubleTick
 
-Use the existing evaluation invitation endpoint and the configured
-`nippon_interview_schedule` template name. Update the repository's template
+Use the existing evaluation invitation endpoint and the dedicated
+`nippon_head_office_interview_invite` template name. Update the repository's template
 specification and placeholder contract to match the approved Head Office copy.
 The endpoint will continue to record successful and failed DoubleTick attempts
 in communications and activity logs.

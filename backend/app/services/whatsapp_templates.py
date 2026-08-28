@@ -108,7 +108,7 @@ TECHNICAL_TEST = WhatsAppTemplateSpec(
 )
 
 INTERVIEW_SCHEDULE = WhatsAppTemplateSpec(
-    name="nippon_interview_schedule",
+    name="nippon_head_office_interview_invite",
     keys=("candidateName", "position", "date", "time", "mode", "locationOrLink", "recruiterName"),
     examples=(
         "Arun Kumar",

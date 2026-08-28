@@ -971,6 +971,13 @@ def send_evaluation_whatsapp_invite(
     elif evaluation.type == EvaluationType.TECHNICAL_TEST:
         template_name = settings.whatsapp_technical_test_template_name
         placeholders = technical_test_placeholders(vars_map)
+    elif evaluation.type in {
+        EvaluationType.HQ_INTERVIEW,
+        EvaluationType.HQ_INTERVIEW_1,
+        EvaluationType.HQ_INTERVIEW_2,
+    }:
+        template_name = settings.whatsapp_ho_interview_template_name
+        placeholders = hr_interview_placeholders(vars_map)
     else:
         template_name = settings.whatsapp_hr_interview_template_name
         placeholders = hr_interview_placeholders(vars_map)
