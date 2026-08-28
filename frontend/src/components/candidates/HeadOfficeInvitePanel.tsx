@@ -45,6 +45,7 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
   const evaluationScheduledTime = evaluation.scheduled_time;
   const evaluationMode = evaluation.interview_mode;
   const evaluationLocation = evaluation.location_or_link;
+  const isOnline = mode === 'ONLINE';
 
   useEffect(() => {
     setScheduledTime(localDateTimeValue(evaluationScheduledTime));
@@ -52,7 +53,7 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
     setLocation(evaluationLocation || '');
   }, [evaluation.id, evaluation.updated_at, evaluationScheduledTime, evaluationMode, evaluationLocation]);
 
-  const isValid = Boolean(candidate.phone && scheduledTime && mode && location.trim());
+  const isValid = Boolean(candidate.phone && scheduledTime && mode && (isOnline || location.trim()));
   const isSaved =
     scheduledTime === localDateTimeValue(evaluationScheduledTime) &&
     mode === (evaluationMode || '') &&
@@ -80,8 +81,10 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
       toast.error('Candidate phone number is missing');
       return false;
     }
-    if (!iso || !mode || !location.trim()) {
-      toast.error('Set the interview date, time, mode, and location or link first');
+    if (!iso || !mode || (!isOnline && !location.trim())) {
+      toast.error(isOnline
+        ? 'Set the interview date, time, and mode first'
+        : 'Set the interview date, time, mode, and Head Office location first');
       return false;
     }
     setSaving(true);
@@ -89,7 +92,7 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
       await scheduleEvaluation(evaluation.id, {
         interview_mode: mode,
         scheduled_time: iso,
-        location_or_link: location.trim(),
+        location_or_link: isOnline ? null : location.trim(),
       });
       toast.success('Head Office interview schedule saved');
       onUpdate({ candidate: false });
@@ -106,18 +109,19 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
     if (!isValid || !isSaved || sending) return;
     setSending(true);
     try {
+      const variables: Record<string, string> = {
+        candidateName: candidate.full_name,
+        position: candidate.position_applied_for || candidate.department || 'the role',
+        date: dateLabel,
+        time: timeLabel,
+        mode: modeLabel,
+        recruiterName: user?.full_name || 'Head Office HR',
+      };
+      if (!isOnline) variables.locationOrLink = location.trim();
       await sendEvaluationWhatsAppInvite(evaluation.id, {
         to_phone: candidate.phone,
         recipient_type: 'CANDIDATE',
-        variables: {
-          candidateName: candidate.full_name,
-          position: candidate.position_applied_for || candidate.department || 'the role',
-          date: dateLabel,
-          time: timeLabel,
-          mode: modeLabel,
-          locationOrLink: location.trim(),
-          recruiterName: user?.full_name || 'Head Office HR',
-        },
+        variables,
       });
       await markInvitationSent('DoubleTick');
     } catch (err) {
@@ -186,10 +190,16 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
               </Select>
             </label>
           </div>
-          <label className="block space-y-1.5 text-xs font-semibold text-foreground">
-            {mode === 'ONLINE' ? 'Meeting link' : 'Head Office location'}
-            <Input placeholder={mode === 'ONLINE' ? 'https://...' : 'Nippon Toyota Head Office'} value={location} disabled={isReadOnly || saving} onChange={(e) => setLocation(e.target.value)} />
-          </label>
+          {isOnline ? (
+            <div className="rounded-lg border border-info/30 bg-info/5 px-3 py-2.5 text-xs text-info">
+              The joining link and further interview details will be shared shortly.
+            </div>
+          ) : (
+            <label className="block space-y-1.5 text-xs font-semibold text-foreground">
+              Head Office location
+              <Input placeholder="Nippon Toyota Head Office" value={location} disabled={isReadOnly || saving} onChange={(e) => setLocation(e.target.value)} />
+            </label>
+          )}
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{dateLabel}</span>
             <span className="inline-flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" />{timeLabel}</span>

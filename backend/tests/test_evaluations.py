@@ -1,6 +1,7 @@
 import importlib
 from uuid import uuid4
 from datetime import datetime, timedelta, UTC
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,7 +14,9 @@ from app.main import app
 from app.models.candidate import Candidate
 from app.models.evaluation import Evaluation
 from app.models.evaluation_token import EvaluationToken
-from app.models.enums import PipelineStage, UserRole, EvaluationType, InterviewStatus, EvaluationVerdict
+from app.models.enums import PipelineStage, UserRole, EvaluationType, InterviewMode, InterviewStatus, EvaluationVerdict
+from app.schemas.evaluation import EvaluationWhatsAppInvite
+from app.api.v1.evaluations import send_evaluation_whatsapp_invite
 from app.models.user import User
 
 client = TestClient(app)
@@ -28,6 +31,48 @@ def _admin_user() -> User:
         role=UserRole.ADMIN,
         is_active=True,
     )
+
+
+def test_online_head_office_invite_uses_online_template():
+    evaluation_id = uuid4()
+    candidate_id = uuid4()
+    evaluation = SimpleNamespace(
+        id=evaluation_id,
+        candidate_id=candidate_id,
+        type=EvaluationType.HQ_INTERVIEW_1,
+        interview_mode=InterviewMode.ONLINE,
+    )
+    candidate = SimpleNamespace(id=candidate_id)
+    db = MagicMock()
+    db.get.side_effect = lambda model, value: evaluation if model is Evaluation else candidate
+    current_user = SimpleNamespace(id=uuid4())
+    body = EvaluationWhatsAppInvite(
+        to_phone="9876543210",
+        variables={
+            "candidateName": "Arun",
+            "position": "Sales Consultant",
+            "date": "22 Aug 2026",
+            "time": "10:30 AM",
+            "mode": "Online",
+            "recruiterName": "Jerin",
+        },
+    )
+
+    with patch(
+        "app.api.v1.evaluations.send_template",
+        return_value={"messages": [{"id": "msg-online"}]},
+    ) as send:
+        response = send_evaluation_whatsapp_invite(evaluation_id, body, db, current_user)
+
+    assert response == {"status": "success", "message_id": "msg-online"}
+    assert send.call_args.kwargs["template_name"] == "nippon_head_office_online_interview_invite"
+    assert send.call_args.kwargs["placeholders"] == [
+        "Arun",
+        "Sales Consultant",
+        "22 Aug 2026",
+        "10:30 AM",
+        "Jerin",
+    ]
 
 
 def test_candidate_evaluations_relationship_maps_to_evaluation():

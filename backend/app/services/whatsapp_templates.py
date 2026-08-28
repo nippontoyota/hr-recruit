@@ -139,6 +139,35 @@ INTERVIEW_SCHEDULE = WhatsAppTemplateSpec(
     ),
 )
 
+ONLINE_INTERVIEW_SCHEDULE = WhatsAppTemplateSpec(
+    name="nippon_head_office_online_interview_invite",
+    keys=("candidateName", "position", "date", "time", "recruiterName"),
+    examples=(
+        "Arun Kumar",
+        "Sales Consultant",
+        "22 Aug 2026",
+        "10:30 AM",
+        "Jerin Thomas",
+    ),
+    body=(
+        "Dear {{1}},\n"
+        "\n"
+        "Your Head Office online interview for *{{2}}* is scheduled.\n"
+        "\n"
+        "Date: *{{3}}*\n"
+        "Reporting time: *{{4}}*\n"
+        "Mode: Online\n"
+        "\n"
+        "The joining link and further interview details will be shared shortly.\n"
+        "\n"
+        "Please be ready at the scheduled time.\n"
+        "\n"
+        "Regards\n"
+        "{{5}}\n"
+        "Nippon Toyota HR"
+    ),
+)
+
 OFFER_INTIMATION = WhatsAppTemplateSpec(
     name="nippon_offer_intimation",
     keys=("candidateName", "position", "branchName"),
@@ -164,5 +193,6 @@ ALL_SPECS = (
     INTERVIEWER_INVITE,
     TECHNICAL_TEST,
     INTERVIEW_SCHEDULE,
+    ONLINE_INTERVIEW_SCHEDULE,
     OFFER_INTIMATION,
 )

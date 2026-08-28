@@ -297,19 +297,37 @@ export function buildHeadOfficeInterviewWhatsAppMessage(input: {
   locationOrLink: string;
   recruiterName: string;
 }): string {
+  const isOnline = input.mode.trim().toLowerCase() === 'online';
+  const scheduleLines = [
+    `Date: *${input.date}*`,
+    `Reporting time: *${input.time}*`,
+    `Mode: ${input.mode}`,
+  ];
+  if (isOnline) {
+    scheduleLines.push(
+      '',
+      'The joining link and further interview details will be shared shortly.',
+      '',
+      'Please be ready at the scheduled time.',
+    );
+  } else {
+    scheduleLines.push(`Location: ${input.locationOrLink}`);
+  }
+
   return [
     `Dear ${input.candidateName},`,
     '',
     `Your Head Office interview for *${input.position}* is scheduled.`,
     '',
-    `Date: *${input.date}*`,
-    `Reporting time: *${input.time}*`,
-    `Mode: ${input.mode}`,
-    `Location/Link: ${input.locationOrLink}`,
+    ...scheduleLines,
     '',
-    'Please bring an updated bio-data and a passport size photo.',
-    'Dress Code - Formal Wear with Proper Grooming (Mandatory)',
-    'Please be on time.',
+    ...(isOnline
+      ? ['Please keep your phone available for the joining details.']
+      : [
+          'Please bring an updated bio-data and a passport size photo.',
+          'Dress Code - Formal Wear with Proper Grooming (Mandatory)',
+          'Please be on time.',
+        ]),
     '',
     'Regards',
     input.recruiterName,

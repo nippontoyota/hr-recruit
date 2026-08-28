@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.services.whatsapp_templates import (
     CALL_LETTER,
     INTERVIEW_SCHEDULE,
+    ONLINE_INTERVIEW_SCHEDULE,
     INTERVIEWER_INVITE,
     TECHNICAL_TEST,
 )
@@ -55,6 +56,10 @@ def call_letter_placeholders(vars_map: dict | None) -> list[str]:
 
 def hr_interview_placeholders(vars_map: dict | None) -> list[str]:
     return placeholders_from_map(vars_map, INTERVIEW_SCHEDULE.keys)
+
+
+def online_interview_placeholders(vars_map: dict | None) -> list[str]:
+    return placeholders_from_map(vars_map, ONLINE_INTERVIEW_SCHEDULE.keys)
 
 
 def interviewer_placeholders(vars_map: dict | None) -> list[str]:

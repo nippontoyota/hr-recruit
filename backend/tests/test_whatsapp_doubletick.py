@@ -2,10 +2,11 @@ from app.services.doubletick import (
     call_letter_placeholders,
     hr_interview_placeholders,
     interviewer_placeholders,
+    online_interview_placeholders,
     sanitize_placeholder,
     technical_test_placeholders,
 )
-from app.services.whatsapp_templates import ALL_SPECS, CALL_LETTER, INTERVIEW_SCHEDULE
+from app.services.whatsapp_templates import ALL_SPECS, CALL_LETTER, INTERVIEW_SCHEDULE, ONLINE_INTERVIEW_SCHEDULE
 
 
 def test_sanitize_placeholder_flattens_newlines_and_empty():
@@ -94,3 +95,20 @@ def test_head_office_schedule_placeholders_have_no_form_link():
     ]
     assert INTERVIEW_SCHEDULE.name == "nippon_head_office_interview_invite"
     assert "application form" not in INTERVIEW_SCHEDULE.body.lower()
+
+
+def test_online_head_office_schedule_has_no_location_placeholder():
+    values = online_interview_placeholders(
+        {
+            "candidateName": "Arun",
+            "position": "Sales Consultant",
+            "date": "22 Aug 2026",
+            "time": "10:30 AM",
+            "recruiterName": "Jerin",
+            "locationOrLink": "must not be sent",
+        }
+    )
+    assert values == ["Arun", "Sales Consultant", "22 Aug 2026", "10:30 AM", "Jerin"]
+    assert ONLINE_INTERVIEW_SCHEDULE.name == "nippon_head_office_online_interview_invite"
+    assert "joining link and further interview details will be shared shortly" in ONLINE_INTERVIEW_SCHEDULE.body
+    assert "Location/Link" not in ONLINE_INTERVIEW_SCHEDULE.body

@@ -19,6 +19,7 @@ from app.models.enums import (
     DocumentType,
     EvaluationType,
     EvaluationVerdict,
+    InterviewMode,
     InterviewStatus,
     PipelineStage,
     UserRole,
@@ -59,6 +60,7 @@ from app.services.doubletick import (
     DoubleTickError,
     friendly_doubletick_error,
     hr_interview_placeholders,
+    online_interview_placeholders,
     interviewer_placeholders,
     technical_test_placeholders,
 )
@@ -984,8 +986,12 @@ def send_evaluation_whatsapp_invite(
         EvaluationType.HQ_INTERVIEW_1,
         EvaluationType.HQ_INTERVIEW_2,
     }:
-        template_name = settings.whatsapp_ho_interview_template_name
-        placeholders = hr_interview_placeholders(vars_map)
+        if evaluation.interview_mode == InterviewMode.ONLINE:
+            template_name = settings.whatsapp_ho_online_interview_template_name
+            placeholders = online_interview_placeholders(vars_map)
+        else:
+            template_name = settings.whatsapp_ho_interview_template_name
+            placeholders = hr_interview_placeholders(vars_map)
     else:
         template_name = settings.whatsapp_hr_interview_template_name
         placeholders = hr_interview_placeholders(vars_map)
