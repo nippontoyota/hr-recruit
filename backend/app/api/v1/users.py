@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 
 from app.core.database import get_db
+from app.api.v1.auth import clear_login_cache
 from app.core.deps import require_roles
 from app.core.security import hash_password
 from app.models.enums import UserRole
@@ -98,6 +99,7 @@ def create_user(
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    clear_login_cache()
     return UserOut.from_user(new_user)
 
 @router.get("/{user_id}", response_model=UserOut)
@@ -159,6 +161,7 @@ def update_user(
 
     db.commit()
     db.refresh(found)
+    clear_login_cache()
     return UserOut.from_user(found)
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -182,3 +185,4 @@ def delete_user(
     found.email = f"{found.email}_deleted_{uuid.uuid4().hex[:8]}"
 
     db.commit()
+    clear_login_cache()

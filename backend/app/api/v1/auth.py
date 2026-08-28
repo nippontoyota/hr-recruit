@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -12,8 +14,67 @@ from app.schemas.auth import LoginRequest, TokenResponse, UserOut
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+@dataclass(frozen=True)
+class _LoginRecord:
+    id: object
+    email: str
+    hashed_password: str
+    full_name: str
+    role: object
+    branch_location: str | None
+    department: str | None
+    is_active: bool
+
+
+_login_cache: dict[str, _LoginRecord] = {}
+
+
+def warm_login_cache(db: Session) -> None:
+    _login_cache.clear()
+    for user in db.scalars(select(User)).all():
+        _login_cache[user.email.lower()] = _LoginRecord(
+            id=user.id,
+            email=user.email,
+            hashed_password=user.hashed_password,
+            full_name=user.full_name,
+            role=user.role,
+            branch_location=user.branch_location,
+            department=user.department,
+            is_active=user.is_active,
+        )
+
+
+def clear_login_cache() -> None:
+    _login_cache.clear()
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    record = _login_cache.get(body.email.lower())
+    if record is not None:
+        valid = verify_password(body.password, record.hashed_password)
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password",
+            )
+        if not record.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
+        frontend_role = role_for_frontend(record.role)
+        token = create_access_token(user_id=record.id, email=record.email, role=frontend_role)
+        return TokenResponse(
+            access_token=token,
+            token=token,
+            user=UserOut(
+                id=record.id,
+                email=record.email,
+                full_name=record.full_name,
+                role=frontend_role,
+                branch_location=record.branch_location,
+                department=record.department,
+            ),
+        )
+
     user = db.scalar(select(User).where(User.email == body.email.lower()))
     if user is None or not verify_password(body.password, user.hashed_password):
         raise HTTPException(
