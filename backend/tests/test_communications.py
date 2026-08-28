@@ -55,7 +55,10 @@ def test_email_includes_cc_and_attachment_when_configured(monkeypatch):
             assert message.get_payload()[-1].get_filename() == "offer.pdf"
 
     smtp = FakeSMTP("", 0)
-    monkeypatch.setattr("app.services.email.smtplib.SMTP", lambda host, port: smtp)
+    monkeypatch.setattr(
+        "app.services.email.smtplib.SMTP",
+        lambda host, port, timeout: smtp if timeout == 20 else None,
+    )
 
     assert send_email_with_pdf(
         to_email="candidate@example.test",

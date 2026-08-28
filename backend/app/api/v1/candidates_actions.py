@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.deps import require_roles
 from app.core.access import get_candidate_for_user
 from app.core.offer_gate import offer_blockers
+from app.core.offer_cc import offer_cc_emails
 from app.core.positions import positions_for
 from app.core.config import settings
 from app.models.candidate import Candidate
@@ -496,23 +497,7 @@ def send_offer_letter(
     offer = resolve_offer_fields(payload)
     position_label = offer["designation"] or row.position_applied_for or "the offered role"
         
-    # Email CC: branch admin + Jerry + Naveen
-    cc_emails: list[str] = []
-    if row.branch_location:
-        branch_admin = db.scalar(
-            select(User).where(
-                User.role == UserRole.LOCAL_HR,
-                User.branch_location == row.branch_location,
-            )
-        )
-        if branch_admin and branch_admin.email:
-            cc_emails.append(branch_admin.email)
-    if settings.jerry_email:
-        cc_emails.append(settings.jerry_email)
-    if settings.naveen_email:
-        cc_emails.append(settings.naveen_email)
-    # Deduplicate / remove blank
-    cc_emails = list(dict.fromkeys([e for e in cc_emails if e and e.strip()]))
+    cc_emails = offer_cc_emails(db, row)
         
     # Send Email
     subject = f"Offer of Employment - {position_label} at Nippon Toyota"
