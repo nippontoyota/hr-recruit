@@ -158,7 +158,7 @@ ONLINE_INTERVIEW_SCHEDULE = WhatsAppTemplateSpec(
         "Reporting time: *{{4}}*\n"
         "Mode: Online\n"
         "\n"
-        "The joining link and further interview details will be shared shortly.\n"
+        "More details about the online meeting, including the joining link, will be shared with you shortly.\n"
         "\n"
         "Please be ready at the scheduled time.\n"
         "\n"

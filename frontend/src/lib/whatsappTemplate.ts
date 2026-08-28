@@ -306,7 +306,7 @@ export function buildHeadOfficeInterviewWhatsAppMessage(input: {
   if (isOnline) {
     scheduleLines.push(
       '',
-      'The joining link and further interview details will be shared shortly.',
+      'More details about the online meeting, including the joining link, will be shared with you shortly.',
       '',
       'Please be ready at the scheduled time.',
     );

@@ -192,7 +192,7 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
           </div>
           {isOnline ? (
             <div className="rounded-lg border border-info/30 bg-info/5 px-3 py-2.5 text-xs text-info">
-              The joining link and further interview details will be shared shortly.
+              More details about the online meeting, including the joining link, will be shared with you shortly.
             </div>
           ) : (
             <label className="block space-y-1.5 text-xs font-semibold text-foreground">

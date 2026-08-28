@@ -110,5 +110,5 @@ def test_online_head_office_schedule_has_no_location_placeholder():
     )
     assert values == ["Arun", "Sales Consultant", "22 Aug 2026", "10:30 AM", "Jerin"]
     assert ONLINE_INTERVIEW_SCHEDULE.name == "nippon_head_office_online_interview_invite"
-    assert "joining link and further interview details will be shared shortly" in ONLINE_INTERVIEW_SCHEDULE.body
+    assert "More details about the online meeting, including the joining link, will be shared with you shortly." in ONLINE_INTERVIEW_SCHEDULE.body
     assert "Location/Link" not in ONLINE_INTERVIEW_SCHEDULE.body
