@@ -21,6 +21,7 @@ from app.core.ho_pipeline import (
     HO_HR_PIPELINE_STAGES,
     HO_HANDOVER_STAGES,
     HO_HANDOVER_STAGE_VALUES,
+    handed_over_to_ho,
     stage_value,
 )
 from app.models.enums import PipelineStage, UserRole, ActivityType, EvaluationType, InterviewStatus, FormStatus
