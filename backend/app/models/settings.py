@@ -13,6 +13,7 @@ SCHEMA = settings.db_schema
 
 # LOCAL_HR accounts — one roster / location list per branch
 HR_BRANCHES = (
+    "Head Office",
     "Trivandrum",
     "Kollam",
     "Pathanamthitta",

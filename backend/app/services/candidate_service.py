@@ -17,14 +17,17 @@ from app.models.candidate import Candidate
 from app.models.document import Document
 from app.models.enums import ActivityType, PipelineStage
 from app.models.stage_history import StageHistory
-from app.models.user import User
+from app.models.evaluation import Evaluation
 from app.schemas.candidate import CandidateCreate, CandidateListOut, CandidateOut
+from app.schemas.evaluation import EvaluationOut
 from app.services.document_service import process_photo_url
 from app.services import storage
 
 
 def _share_url(candidate: Candidate) -> str | None:
-    if not candidate.pre_form_token:
+    if not candidate.pre_form_token or candidate.pre_form_token_revoked:
+        return None
+    if candidate.pre_form_token_purpose == PURPOSE_APPLY:
         return None
     return f"{settings.public_app_url.rstrip('/')}/pre-form/{candidate.pre_form_token}"
 
@@ -34,16 +37,32 @@ def to_candidate_out(
     has_resume: bool,
     db: Session | None = None,
     viewer: User | None = None,
+    evaluations: list[Evaluation] | None = None,
 ) -> CandidateOut:
     expire_pre_form_if_needed(candidate)
+    if evaluations is None and db is not None:
+        evaluations = list(
+            db.scalars(
+                select(Evaluation)
+                .where(Evaluation.candidate_id == candidate.id)
+                .order_by(Evaluation.created_at.asc(), Evaluation.type.asc())
+            ).all()
+        )
+    resolved_email = candidate.email
+    if not resolved_email and getattr(candidate, "profile", None):
+        prof = candidate.profile
+        resolved_email = prof.email or (prof.raw_data or {}).get("emailId")
+
     out = CandidateOut.model_validate(candidate).model_copy(
         update={
+            "email": resolved_email,
             "share_url": _share_url(candidate),
             "has_resume": has_resume,
             "is_rejoining": False,
             "handed_over_to_ho": handed_over_to_ho(candidate, db),
             "offer_blockers": offer_blockers(candidate, has_resume=has_resume, db=db) if db is not None else [],
             "salary_data": candidate.salary_data if can_view_salary(viewer) else None,
+            "evaluations": [EvaluationOut.model_validate(e) for e in (evaluations or [])],
         }
     )
     if out.profile and out.profile.photo_url:
@@ -57,14 +76,25 @@ def to_candidate_out(
     return out
 
 
-def to_candidate_list_out(candidate: Candidate, has_resume: bool, db: Session | None = None) -> CandidateListOut:
+def to_candidate_list_out(
+    candidate: Candidate,
+    has_resume: bool,
+    db: Session | None = None,
+    handed_over: bool | None = None,
+) -> CandidateListOut:
     expire_pre_form_if_needed(candidate)
+    resolved_email = candidate.email
+    if not resolved_email and getattr(candidate, "profile", None):
+        prof = candidate.profile
+        resolved_email = prof.email or (prof.raw_data or {}).get("emailId")
+
     return CandidateListOut.model_validate(candidate).model_copy(
         update={
+            "email": resolved_email,
             "share_url": _share_url(candidate),
             "has_resume": has_resume,
             "is_rejoining": False,
-            "handed_over_to_ho": handed_over_to_ho(candidate, db),
+            "handed_over_to_ho": handed_over if handed_over is not None else handed_over_to_ho(candidate, db),
         }
     )
 
@@ -95,6 +125,7 @@ def create_candidate(
         position_applied_for=body.position_applied_for,
         experience=body.experience,
         department=body.department,
+        opening_type=body.opening_type,
         branch_location=body.branch_location,
         assigned_hr_user_id=body.assigned_hr_user_id,
         current_stage=PipelineStage.CALL_LETTER,

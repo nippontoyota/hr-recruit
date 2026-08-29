@@ -254,27 +254,37 @@
 
 .iaf-screen-wrap {
   overflow-x: auto;
-  background: #e8e8e8;
+  background: #e2e8f0;
   border-radius: 12px;
-  padding: 16px 8px 20px;
+  padding: 20px 12px 24px;
 }
 
 .iaf-doc {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 20px;
   width: 210mm;
+  margin: 0 auto;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
 
-.iaf-sheet {
+.iaf-sheet,
+.css-sheet,
+.iaf-page {
   width: 210mm;
-  padding: 6mm;
+  min-height: 297mm;
+  padding: 6mm 8mm;
   box-sizing: border-box;
   background: #fff;
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.14);
-  border: 1px solid #d4d4d4;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.08);
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+}
+
+.iaf-block {
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .iaf-form {
@@ -305,23 +315,22 @@
   border-color: #1e3a5f !important;
 }
 
-.iaf-page {
-  width: 210mm;
-  padding: 6mm;
-  box-sizing: border-box;
-  background: #fff;
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.14);
-  border: 1px solid #d4d4d4;
-}
-
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm;
+    margin: 0;
   }
-  body {
+  *, *::before, *::after {
+    box-sizing: border-box !important;
+  }
+  html, body {
     background-color: white !important;
     color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .iaf-form {
     color: #1e3a5f !important;
@@ -349,26 +358,65 @@
   }
   .print-item {
     page-break-inside: avoid;
+    break-inside: avoid;
   }
   .iaf-screen-wrap {
     background: transparent !important;
     padding: 0 !important;
     overflow: visible !important;
     border-radius: 0 !important;
+    margin: 0 !important;
   }
   .iaf-doc {
-    gap: 0;
-    width: 100%;
+    gap: 0 !important;
+    width: 210mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
   }
+  .iaf-page-wrap {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+  .css-sheet,
   .iaf-sheet,
   .iaf-page {
-    width: 100%;
-    padding: 0;
-    box-shadow: none;
-    border: none;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    padding: 6mm 8mm !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: hidden !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+  .iaf-block,
+  .iaf-form tr,
+  .iaf-form table.iaf-block-table {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .iaf-form table {
+    page-break-inside: auto;
+    break-inside: auto;
   }
   .iaf-break {
-    break-before: page;
-    page-break-before: always;
+    break-before: page !important;
+    page-break-before: always !important;
   }
 }

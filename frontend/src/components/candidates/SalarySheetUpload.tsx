@@ -1,15 +1,17 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type DragEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, FileSpreadsheet } from 'lucide-react';
+import { Download, FileSpreadsheet, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadSalarySheet, type SalaryUploadResult, type SalaryUploadSkip } from '../../api/candidates';
-import { extractError } from '../../lib/utils';
-import { Button, Modal } from '../ui';
+import { extractError, cn } from '../../lib/utils';
+import { Button, Modal, LoadingSpinner } from '../ui';
 
 interface SalarySheetUploadProps {
   candidateId?: string;
   onDone?: () => void;
   compact?: boolean;
+  variant?: 'button' | 'banner' | 'card';
+  className?: string;
 }
 
 function rupees(value: number | null | undefined) {
@@ -32,10 +34,17 @@ function downloadSkippedReport(skipped: SalaryUploadSkip[]) {
   URL.revokeObjectURL(url);
 }
 
-export function SalarySheetUpload({ candidateId, onDone, compact }: SalarySheetUploadProps) {
+export function SalarySheetUpload({
+  candidateId,
+  onDone,
+  compact,
+  variant = 'button',
+  className,
+}: SalarySheetUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [result, setResult] = useState<SalaryUploadResult | null>(null);
 
   const close = () => {
@@ -77,6 +86,26 @@ export function SalarySheetUpload({ candidateId, onDone, compact }: SalarySheetU
     void run(file, true);
   };
 
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    onFile(file);
+  };
+
   const proposed = result?.proposed ?? [];
   const isPreview = !!result?.preview;
 
@@ -89,15 +118,76 @@ export function SalarySheetUpload({ candidateId, onDone, compact }: SalarySheetU
         className="hidden"
         onChange={(e) => onFile(e.target.files?.[0])}
       />
-      <Button
-        variant="secondary"
-        size={compact ? 'sm' : 'md'}
-        isLoading={busy}
-        onClick={() => inputRef.current?.click()}
-      >
-        <FileSpreadsheet className="h-4 w-4 mr-2" />
-        Upload salary sheet
-      </Button>
+
+      {variant === 'banner' || variant === 'card' ? (
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={cn(
+            'relative overflow-hidden rounded-2xl border transition-all duration-300 p-6 text-center flex flex-col items-center justify-center',
+            isDragging
+              ? 'border-emerald-500 bg-emerald-500/15 scale-[1.01] shadow-lg shadow-emerald-500/20'
+              : 'border-emerald-500/30 bg-gradient-to-b from-emerald-500/10 via-emerald-500/5 to-transparent hover:border-emerald-500/50 shadow-sm hover:shadow-md',
+            className
+          )}
+        >
+          {/* Subtle ambient light gradient effect */}
+          <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 w-72 h-32 bg-emerald-500/20 blur-3xl rounded-full" />
+
+          {/* Centered Icon Badge */}
+          <div className="relative mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-lg shadow-emerald-600/30 ring-4 ring-emerald-500/20 transition-transform duration-300 hover:scale-105">
+            {busy ? (
+              <LoadingSpinner size="md" className="text-white" />
+            ) : (
+              <FileSpreadsheet className="h-7 w-7" />
+            )}
+          </div>
+
+          {/* Title & Badge */}
+          <div className="flex items-center gap-2 justify-center mb-1">
+            <h3 className="text-base font-bold text-foreground tracking-tight">
+              Master Salary Setting Sheet
+            </h3>
+            <span className="inline-flex items-center rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+              Excel 2024
+            </span>
+          </div>
+
+          <p className="max-w-md text-xs text-muted-foreground leading-relaxed">
+            Upload <span className="font-semibold text-foreground">Salary Setting Sheet 2024 MASTER.xlsx</span> to match compensation packages strictly by <span className="font-semibold text-foreground">Job Code / Candidate ID</span>.
+          </p>
+
+          {/* Prominent Centered Colored Button */}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => inputRef.current?.click()}
+            className="mt-4 inline-flex items-center gap-2.5 px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] text-white text-sm font-bold shadow-md shadow-emerald-600/30 hover:shadow-lg hover:shadow-emerald-600/40 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Upload className="h-4 w-4 shrink-0" />
+            <span>{busy ? 'Processing Salary Sheet...' : 'Upload Master Salary Sheet'}</span>
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+          className={cn(
+            'inline-flex items-center justify-center gap-2 rounded-lg font-bold text-white bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] shadow-sm shadow-emerald-700/25 hover:shadow-md hover:shadow-emerald-700/35 transition-all duration-200 cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed',
+            compact ? 'h-8 px-3 text-xs' : 'h-9 px-4 text-xs tracking-wide uppercase',
+            className
+          )}
+        >
+          {busy ? (
+            <LoadingSpinner size="sm" className="text-white" />
+          ) : (
+            <FileSpreadsheet className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4 text-emerald-100'} />
+          )}
+          <span>{busy ? 'Reading...' : 'Upload salary sheet'}</span>
+        </button>
+      )}
 
       <Modal
         isOpen={!!result}

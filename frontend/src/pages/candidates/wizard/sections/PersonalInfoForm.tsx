@@ -88,7 +88,7 @@ export const PersonalInfoForm = ({
             }}
             error={!!errors.gender}
           >
-            <option value="">Select Gender</option>
+            <option value="" disabled>Select Gender</option>
             <option value="Male">Male</option>
             <option value="Female">Female</option>
             <option value="Other">Other</option>
@@ -155,7 +155,7 @@ export const PersonalInfoForm = ({
             }}
             error={!!errors.maritalStatus}
           >
-            <option value="">Select Status</option>
+            <option value="" disabled>Select Status</option>
             <option value="Single">Single</option>
             <option value="Married">Married</option>
             <option value="Divorced">Divorced</option>
@@ -175,7 +175,7 @@ export const PersonalInfoForm = ({
             }}
             error={!!errors.bloodGroup}
           >
-            <option value="">Select Blood Group</option>
+            <option value="" disabled>Select Blood Group</option>
             <option value="A+">A+</option>
             <option value="A-">A-</option>
             <option value="B+">B+</option>
@@ -227,20 +227,6 @@ export const PersonalInfoForm = ({
             onBlur={() => onBlurField('religionCaste')}
             error={!!errors.religionCaste}
             placeholder="e.g. Hindu / General"
-          />
-        </FormField>
-
-        <FormField field="positionSuitable" error={errors.positionSuitable}>
-          <label className="block text-sm font-medium text-text-primary mb-1">
-            Position Suitable
-          </label>
-          <Input
-            value={data.positionSuitable}
-            onChange={(e) => update('positionSuitable', e.target.value)}
-            onBlur={() => onBlurField('positionSuitable')}
-            error={!!errors.positionSuitable}
-            placeholder="Optional — other role you may suit"
-            maxLength={100}
           />
         </FormField>
       </div>

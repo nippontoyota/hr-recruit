@@ -54,7 +54,7 @@ export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () =>
             onChange={(e) => update('preferredRegion', e.target.value)}
             onBlur={() => onBlurField('preferredRegion')}
             error={!!errors.preferredRegion}
-            placeholder="e.g. Kochi, Trivandrum"
+            placeholder="e.g. Kalamassery, Cochin, Thrissur, Kottayam, Trivandrum"
           />
         </FormField>
 
@@ -74,7 +74,11 @@ export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () =>
       </div>
 
       <div className="pt-6 border-t border-border/40">
-        <h4 className="text-sm font-semibold text-text-primary mb-4">Reference Details</h4>
+        <h4 className="text-sm font-semibold text-text-primary mb-1">Local Reference Details</h4>
+        <p className="text-xs text-text-secondary mb-4 leading-relaxed">
+          Someone from your area who can vouch for your address and character during verification.
+          This is separate from the &quot;Referred By&quot; field above.
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FormField field="refRole" error={errors.refRole}>
             <label className="block text-sm font-medium text-text-primary mb-1">
@@ -88,7 +92,7 @@ export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () =>
               }}
               error={!!errors.refRole}
             >
-              <option value="">Select Role</option>
+              <option value="" disabled>Select Role</option>
               <option value="Manager">Previous Manager</option>
               <option value="Colleague">Colleague</option>
               <option value="Professor">Professor / Teacher</option>
@@ -106,6 +110,7 @@ export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () =>
               onChange={(e) => update('refName', e.target.value)}
               onBlur={() => onBlurField('refName')}
               error={!!errors.refName}
+              placeholder="e.g. Rajesh Nair"
             />
           </FormField>
 
@@ -118,6 +123,7 @@ export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () =>
               onChange={(e) => update('refPanchayat', e.target.value)}
               onBlur={() => onBlurField('refPanchayat')}
               error={!!errors.refPanchayat}
+              placeholder="e.g. Kalamassery / Aluva / Thrikkakara"
             />
           </FormField>
 
@@ -131,7 +137,7 @@ export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () =>
               onChange={(e) => update('refContactNumber', digitsOnly(e.target.value, 10))}
               onBlur={() => onBlurField('refContactNumber')}
               error={!!errors.refContactNumber}
-              placeholder="9876543210"
+              placeholder="e.g. 9876543210"
               inputMode="numeric"
               maxLength={10}
             />

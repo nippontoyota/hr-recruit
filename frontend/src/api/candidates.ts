@@ -18,6 +18,7 @@ export interface CommunicationRecord {
   failure_reason?: string | null;
 }
 import { request } from './client';
+import { setCachedCandidateEvaluations } from './evaluations';
 
 export interface PaginatedCandidates {
   data: Candidate[];
@@ -43,12 +44,69 @@ export const getCandidates = async (
   return response.data;
 };
 
-export const getCandidateById = async (id: string): Promise<Candidate | undefined> => {
-  const response = await request('GET', `/candidates/${id}`);
-  return response.data;
+const inFlightCandidateMap = new Map<string, Promise<Candidate | undefined>>();
+const candidateCache = new Map<string, { data: Candidate; ts: number }>();
+
+export const invalidateCandidateCache = (id?: string) => {
+  if (id) {
+    candidateCache.delete(id);
+    resumeBlobCache.delete(id);
+    inFlightCandidateMap.delete(id);
+    inFlightResumeBlobMap.delete(id);
+  } else {
+    candidateCache.clear();
+    resumeBlobCache.clear();
+    inFlightCandidateMap.clear();
+    inFlightResumeBlobMap.clear();
+  }
+};
+
+export const getCandidateById = async (id: string, signal?: AbortSignal): Promise<Candidate | undefined> => {
+  const cached = candidateCache.get(id);
+  if (cached && Date.now() - cached.ts < 5000) {
+    return cached.data;
+  }
+
+  let inFlight = inFlightCandidateMap.get(id);
+  if (!inFlight) {
+    inFlight = request('GET', `/candidates/${id}`, undefined)
+      .then((response) => {
+        if (response.data) {
+          candidateCache.set(id, { data: response.data, ts: Date.now() });
+          if (response.data.evaluations) {
+            setCachedCandidateEvaluations(id, response.data.evaluations);
+          }
+        }
+        return response.data as Candidate;
+      })
+      .finally(() => {
+        inFlightCandidateMap.delete(id);
+      });
+    inFlightCandidateMap.set(id, inFlight);
+  }
+
+  if (signal) {
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    return new Promise((resolve, reject) => {
+      const onAbort = () => reject(new DOMException('Aborted', 'AbortError'));
+      signal.addEventListener('abort', onAbort, { once: true });
+      inFlight!
+        .then((res) => {
+          signal.removeEventListener('abort', onAbort);
+          resolve(res);
+        })
+        .catch((err) => {
+          signal.removeEventListener('abort', onAbort);
+          reject(err);
+        });
+    });
+  }
+
+  return inFlight;
 };
 
 export const updateCandidateRawData = async (id: string, rawData: Record<string, any>): Promise<Candidate> => {
+  invalidateCandidateCache(id);
   const response = await request('PATCH', `/candidates/${id}/profile/raw_data`, { raw_data: rawData });
   return response.data;
 };
@@ -61,6 +119,7 @@ export const updateCandidateDepartment = async (
   source?: string,
   sourceReference?: string,
 ): Promise<Candidate> => {
+  invalidateCandidateCache(id);
   const response = await request('PATCH', `/candidates/${id}/department`, {
     department,
     ...(positionAppliedFor !== undefined ? { position_applied_for: positionAppliedFor } : {}),
@@ -77,12 +136,10 @@ export const createCandidate = async (candidateData: Partial<Candidate>): Promis
 };
 
 export const uploadResume = async (candidateId: string, file: File, options?: { public?: boolean }): Promise<any> => {
+  invalidateCandidateCache(candidateId);
   const formData = new FormData();
   formData.append('file', file);
-  const path = options?.public
-    ? `/candidates/public-resume/${candidateId}`
-    : `/candidates/${candidateId}/resume`;
-
+  const path = options?.public ? `/candidates/${candidateId}/resume` : `/candidates/${candidateId}/resume`;
   const response = await request('POST', path, formData);
   return response.data;
 };
@@ -92,25 +149,60 @@ export const getCandidateResume = async (candidateId: string): Promise<ResumeDoc
   return response.data;
 };
 
-/** Fetch resume PDF via metadata + direct CDN download (single loading flow). */
+const inFlightResumeBlobMap = new Map<string, Promise<{ blob: Blob; fileName: string; contentType: string; sourceUrl: string }>>();
+const resumeBlobCache = new Map<string, { data: { blob: Blob; fileName: string; contentType: string; sourceUrl: string }; ts: number }>();
+
+/** Fetch resume PDF via metadata + direct CDN download (single loading flow with in-flight deduplication). */
 export const fetchCandidateResumeBlob = async (
   candidateId: string,
   signal?: AbortSignal,
 ): Promise<{ blob: Blob; fileName: string; contentType: string; sourceUrl: string }> => {
-  const meta = await getCandidateResume(candidateId);
-  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-
-  const response = await fetch(meta.download_url, { signal });
-  if (!response.ok) {
-    throw new Error('Failed to download resume file.');
+  const cached = resumeBlobCache.get(candidateId);
+  if (cached && Date.now() - cached.ts < 30000) {
+    return cached.data;
   }
-  const blob = await response.blob();
-  return {
-    blob,
-    fileName: meta.file_name,
-    contentType: meta.content_type || blob.type || 'application/octet-stream',
-    sourceUrl: meta.download_url,
-  };
+
+  let inFlight = inFlightResumeBlobMap.get(candidateId);
+  if (!inFlight) {
+    inFlight = (async () => {
+      const meta = await getCandidateResume(candidateId);
+      const response = await fetch(meta.download_url);
+      if (!response.ok) {
+        throw new Error('Failed to download resume file.');
+      }
+      const blob = await response.blob();
+      const result = {
+        blob,
+        fileName: meta.file_name,
+        contentType: meta.content_type || blob.type || 'application/octet-stream',
+        sourceUrl: meta.download_url,
+      };
+      resumeBlobCache.set(candidateId, { data: result, ts: Date.now() });
+      return result;
+    })().finally(() => {
+      inFlightResumeBlobMap.delete(candidateId);
+    });
+    inFlightResumeBlobMap.set(candidateId, inFlight);
+  }
+
+  if (signal) {
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    return new Promise((resolve, reject) => {
+      const onAbort = () => reject(new DOMException('Aborted', 'AbortError'));
+      signal.addEventListener('abort', onAbort, { once: true });
+      inFlight!
+        .then((res) => {
+          signal.removeEventListener('abort', onAbort);
+          resolve(res);
+        })
+        .catch((err) => {
+          signal.removeEventListener('abort', onAbort);
+          reject(err);
+        });
+    });
+  }
+
+  return inFlight;
 };
 
 export interface PublicCandidateBasic {
@@ -147,19 +239,53 @@ export const publicUpdateBasicCandidate = async (token: string, data: any): Prom
 export const publicGetFullStatus = async (token: string): Promise<{
   full_name: string;
   is_awaiting_full_fill: boolean;
+  pre_form_status?: string;
   pre_form_expires_at?: string;
+  position_applied_for?: string;
+  branch_location?: string;
 }> => {
   const response = await request('GET', `/candidates/public-full-status/${token}`);
   return response.data;
 };
 
-export const publicApplyFullCandidate = async (token: string, data: any): Promise<PublicCandidateBasic> => {
+export const publicApplyFullCandidate = async (
+  token: string,
+  data: any,
+  files?: { resume?: File | null; photo?: File | null }
+): Promise<PublicCandidateBasic> => {
+  if (files?.resume || files?.photo) {
+    const formData = new FormData();
+    formData.append('data', JSON.stringify(data));
+    if (files.resume) {
+      formData.append('resume', files.resume);
+    }
+    if (files.photo) {
+      formData.append('photo', files.photo);
+    }
+    const response = await request('POST', `/candidates/public-apply-full/${token}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  }
   const response = await request('POST', `/candidates/public-apply-full/${token}`, data);
   return response.data;
 };
 
-export const updateCandidateStage = async (candidateId: string, toStage: string, remarks?: string): Promise<Candidate> => {
-  const response = await request('POST', `/candidates/${candidateId}/transition`, { to_stage: toStage, remarks });
+export const updateCandidateStage = async (
+  candidateId: string,
+  toStage: string,
+  remarks?: string,
+  rawData?: Record<string, any>
+): Promise<Candidate> => {
+  invalidateCandidateCache(candidateId);
+  const response = await request('POST', `/candidates/${candidateId}/transition`, {
+    to_stage: toStage,
+    remarks,
+    ...(rawData ? { raw_data: rawData } : {}),
+  });
+  if (response.data) {
+    candidateCache.set(candidateId, { data: response.data, ts: Date.now() });
+  }
   return response.data;
 };
 
@@ -247,6 +373,27 @@ export const sendWhatsAppInvite = async (
   return response.data;
 };
 
+export const saveWhatsAppTemplate = async (
+  candidateId: string,
+  variables: Record<string, string>
+): Promise<Candidate> => {
+  const response = await request('PATCH', `/candidates/${candidateId}/whatsapp-template`, variables);
+  return response.data;
+};
+
+export const confirmWhatsAppInvite = async (
+  candidateId: string,
+  variables?: Record<string, string>
+): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/whatsapp-invite/confirm`, variables);
+  return response.data;
+};
+
+export const confirmOfferWhatsApp = async (candidateId: string): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/offer-whatsapp/confirm`);
+  return response.data;
+};
+
 export const getActivityLogs = async (candidateId: string): Promise<ActivityLog[]> => {
   const response = await request('GET', `/candidates/${candidateId}/activity-logs`);
   return response.data;
@@ -265,6 +412,15 @@ export const uploadCandidatePhoto = async (candidateId: string, file: File): Pro
   const formData = new FormData();
   formData.append('file', file);
   const response = await request('POST', `/candidates/${candidateId}/photo`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const uploadCandidateResume = async (candidateId: string, file: File): Promise<ResumeDocument> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await request('POST', `/candidates/${candidateId}/resume`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return response.data;

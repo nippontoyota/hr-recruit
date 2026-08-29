@@ -27,6 +27,10 @@ function removeEval(evalId: string) {
 export const peekCandidateEvaluations = (candidateId: string): Evaluation[] | undefined =>
   evalCache.get(candidateId);
 
+export const setCachedCandidateEvaluations = (candidateId: string, evals: Evaluation[]) => {
+  evalCache.set(candidateId, evals);
+};
+
 export const getCandidateEvaluations = async (candidateId: string, force = false): Promise<Evaluation[]> => {
   if (!force) {
     const hit = evalCache.get(candidateId);
@@ -129,6 +133,16 @@ export const submitPublicEvaluation = async (
   return response.data;
 };
 
+export const getPublicTestPreview = async (token: string): Promise<{
+  department: string;
+  question_count: number;
+  duration_seconds: number;
+  already_started: boolean;
+}> => {
+  const response = await request('GET', `/evaluations/public/${token}/test-preview`);
+  return response.data;
+};
+
 export const getPublicTestQuestions = async (token: string): Promise<{
   department: string;
   questions: any[];
@@ -142,7 +156,7 @@ export const getPublicTestQuestions = async (token: string): Promise<{
 export const submitPublicTest = async (
   token: string,
   answers: Record<string, string>
-): Promise<{ verdict: string; score: string }> => {
+): Promise<{ status: string; message: string; correct_answers: number; total_questions: number }> => {
   const response = await request('POST', `/evaluations/public/${token}/submit-test`, { answers });
   invalidateEvals();
   return response.data;

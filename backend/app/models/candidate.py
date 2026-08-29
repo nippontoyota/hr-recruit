@@ -46,6 +46,7 @@ class Candidate(Base):
         index=True,
     )
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    opening_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     branch_location: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     is_duplicate_flagged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     duplicate_of_candidate_id: Mapped[uuid.UUID | None] = mapped_column(

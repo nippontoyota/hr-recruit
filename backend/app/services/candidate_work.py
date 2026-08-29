@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
-import os
 from collections import defaultdict
 from datetime import UTC, datetime
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.activity_log import ActivityLog
 from app.models.candidate import Candidate
-from app.models.candidate_screening import CandidateScreening
 from app.models.evaluation import Evaluation
-from app.models.followup import FollowUp
-from app.models.enums import EvaluationType, EvaluationVerdict, PipelineStage
+from app.models.enums import EvaluationType, EvaluationVerdict, FormStatus, PipelineStage
 from app.models.stage_history import StageHistory
 from app.schemas.candidate import CandidateWorkState
 
@@ -28,16 +24,8 @@ _OFFER_STAGES = frozenset(
     }
 )
 
-
-def _app_time_zone() -> ZoneInfo:
-    configured = os.getenv("VITE_APP_TIMEZONE", "Asia/Kolkata").strip() or "Asia/Kolkata"
-    try:
-        return ZoneInfo(configured)
-    except ZoneInfoNotFoundError:
-        return ZoneInfo("Asia/Kolkata")
-
-
-_APP_TIME_ZONE = _app_time_zone()
+# Counted from day 4: three full days without an update, stalled from the fourth day on.
+_STALLED_AFTER_DAYS = 4
 
 
 _HO_STAGES = frozenset(
@@ -52,6 +40,34 @@ _HO_STAGES = frozenset(
         PipelineStage.HIRED,
     }
 )
+
+
+_CALL_LETTER_STAGES = frozenset(
+    {
+        PipelineStage.CALL_LETTER,
+        PipelineStage.CANDIDATE_FORM,
+    }
+)
+
+WAITING_FOR_CALL_LETTER = "Call letter to be sent"
+CALL_LETTER_WAITING_RESPONSE = "Call letter issued, waiting for candidate response"
+CANDIDATE_FORM_FILLED = "Review application & schedule interview"
+
+
+def _form_status(candidate) -> str:
+    value = getattr(candidate, "pre_form_status", None)
+    if isinstance(value, FormStatus):
+        return value.value
+    return str(value or "").upper()
+
+
+def _call_letter_work(candidate) -> tuple[str, str]:
+    status = _form_status(candidate)
+    if status == FormStatus.SUBMITTED.value:
+        return CANDIDATE_FORM_FILLED, "ADVANCE_STAGE"
+    if status in {FormStatus.SENT.value, FormStatus.VIEWED.value}:
+        return CALL_LETTER_WAITING_RESPONSE, "WORKSPACE"
+    return WAITING_FOR_CALL_LETTER, "WORKSPACE"
 
 
 def _stage(value) -> PipelineStage | None:
@@ -75,26 +91,12 @@ def _latest(rows, attribute: str = "created_at"):
     return max(rows, key=lambda row: getattr(row, attribute, None) or datetime.min.replace(tzinfo=UTC), default=None)
 
 
-def _is_due_today(due_dates, *, now: datetime) -> bool:
-    """Return true only when an existing, active due date is today in IST."""
-    today = now.astimezone(_APP_TIME_ZONE).date()
-    for due_at in due_dates:
-        if due_at is None:
-            continue
-        if due_at.tzinfo is None:
-            due_at = due_at.replace(tzinfo=UTC)
-        if due_at.astimezone(_APP_TIME_ZONE).date() == today:
-            return True
-    return False
-
-
 def _derive(
     candidate,
     *,
     stage_history=(),
     activities=(),
     evaluations=(),
-    due_dates=(),
     has_resume: bool = False,
     now: datetime | None = None,
 ) -> CandidateWorkState:
@@ -110,24 +112,24 @@ def _derive(
         getattr(row, "type", None): getattr(row, "verdict", None)
         for row in evaluations
     }
-    if current_stage in _OFFER_STAGES:
+    offer_status = str(getattr(candidate, "offer_status", "") or "").upper()
+
+    if current_stage in _OFFER_STAGES and offer_status not in {"SENT", "ACCEPTED"}:
         if verdicts.get(EvaluationType.HQ_INTERVIEW_1) != EvaluationVerdict.SELECTED:
             blockers.append("HR interview")
-        if verdicts.get(EvaluationType.HQ_INTERVIEW_2) != EvaluationVerdict.SELECTED:
-            blockers.append("Department interview")
         if not getattr(candidate, "salary_data", None):
             blockers.append("Salary sheet")
         if not has_resume:
             blockers.append("Resume")
-    if str(getattr(candidate, "offer_status", "") or "").upper() in {"SENT", "ACCEPTED"}:
-        blockers = ["Offer already sent"]
 
     if current_stage == PipelineStage.REJECTED:
         next_action, action_key = "No further action", "NONE"
     elif current_stage == PipelineStage.ON_HOLD:
         next_action, action_key = "Review hold", "RESUME_HOLD"
-    elif str(getattr(candidate, "offer_status", "") or "").upper() == "ACCEPTED":
-        next_action, action_key = "Complete joining process", "WORKSPACE"
+    elif offer_status == "SENT":
+        next_action, action_key = "Offer sent — Awaiting candidate response", "WORKSPACE"
+    elif offer_status == "ACCEPTED":
+        next_action, action_key = "Offer accepted — Complete onboarding", "ADVANCE_STAGE"
     elif blockers:
         next_action, action_key = "Complete required prerequisites", "WORKSPACE"
     elif current_stage == PipelineStage.CSS:
@@ -140,8 +142,8 @@ def _derive(
         next_action, action_key = "Schedule Head Office interview", "ADVANCE_STAGE"
     elif current_stage in {PipelineStage.HO_INTERVIEWS, PipelineStage.HO_HR_INTERVIEW, PipelineStage.HO_DEPT_INTERVIEW}:
         next_action, action_key = "Complete Head Office interview", "ADVANCE_STAGE"
-    elif current_stage == PipelineStage.CALL_LETTER:
-        next_action, action_key = "Complete call letter", "ADVANCE_STAGE"
+    elif current_stage in _CALL_LETTER_STAGES:
+        next_action, action_key = _call_letter_work(candidate)
     elif current_stage == PipelineStage.INTERVIEWS:
         next_action, action_key = "Complete interviews", "ADVANCE_STAGE"
     elif current_stage == PipelineStage.TEST:
@@ -159,21 +161,21 @@ def _derive(
 
     days_in_stage = _age_in_days(stage_started, now)
     days_since_activity = _age_in_days(activity_at, now) if activity_at else None
+    idle_days = days_in_stage if days_since_activity is None else min(days_in_stage, days_since_activity)
     queue_keys: list[str] = []
-    if next_action not in {"No further action", "Unknown"}:
+    waiting_for_response = next_action in {CALL_LETTER_WAITING_RESPONSE, "Offer sent — Awaiting candidate response"}
+    if next_action not in {"No further action", "Unknown"} and not waiting_for_response:
         queue_keys.append("NEEDS_ACTION")
     if current_stage == PipelineStage.ON_HOLD:
         queue_keys.append("ON_HOLD")
     if current_stage in _HO_STAGES:
         queue_keys.append("WAITING_FOR_HO")
-    if getattr(candidate, "pre_form_status", None) in {"SENT", "VIEWED"}:
+    if _form_status(candidate) in {FormStatus.SENT.value, FormStatus.VIEWED.value} or offer_status == "SENT":
         queue_keys.append("WAITING_FOR_CANDIDATE")
-    if current_stage in _OFFER_STAGES and not blockers:
+    if current_stage in _OFFER_STAGES and not blockers and offer_status not in {"SENT", "ACCEPTED"}:
         queue_keys.append("READY_FOR_OFFER")
-    if days_in_stage >= 7:
+    if idle_days >= _STALLED_AFTER_DAYS:
         queue_keys.append("STALLED")
-    if _is_due_today(due_dates, now=now):
-        queue_keys.append("DUE_TODAY")
 
     return CandidateWorkState(
         next_action=next_action,
@@ -195,7 +197,6 @@ def build_candidate_work_state(
     stage_history=None,
     activities=None,
     evaluations=None,
-    due_dates=None,
 ) -> CandidateWorkState:
     """Build one candidate's state, optionally using already-loaded rows."""
     if db is not None:
@@ -205,25 +206,11 @@ def build_candidate_work_state(
             activities = list(db.scalars(select(ActivityLog).where(ActivityLog.candidate_id == candidate.id)).all())
         if evaluations is None:
             evaluations = list(db.scalars(select(Evaluation).where(Evaluation.candidate_id == candidate.id)).all())
-        if due_dates is None:
-            followups = db.scalars(
-                select(FollowUp).where(
-                    FollowUp.candidate_id == candidate.id,
-                    FollowUp.status == "PENDING",
-                )
-            ).all()
-            screening = db.scalar(
-                select(CandidateScreening).where(CandidateScreening.candidate_id == candidate.id)
-            )
-            due_dates = [followup.due_at for followup in followups]
-            if screening is not None:
-                due_dates.append(screening.follow_up_date)
     return _derive(
         candidate,
         stage_history=stage_history or (),
         activities=activities or (),
         evaluations=evaluations or (),
-        due_dates=due_dates or (),
         has_resume=has_resume,
         now=now,
     )
@@ -243,32 +230,18 @@ def build_candidate_work_states(
     histories = db.scalars(select(StageHistory).where(StageHistory.candidate_id.in_(ids))).all()
     activities = db.scalars(select(ActivityLog).where(ActivityLog.candidate_id.in_(ids))).all()
     evaluations = db.scalars(select(Evaluation).where(Evaluation.candidate_id.in_(ids))).all()
-    followups = db.scalars(
-        select(FollowUp).where(
-            FollowUp.candidate_id.in_(ids),
-            FollowUp.status == "PENDING",
-        )
-    ).all()
-    screenings = db.scalars(
-        select(CandidateScreening).where(CandidateScreening.candidate_id.in_(ids))
-    ).all()
     def by_candidate():
         return defaultdict(list, {candidate_id: [] for candidate_id in ids})
 
     history_map = by_candidate()
     activity_map = by_candidate()
     evaluation_map = by_candidate()
-    due_date_map = by_candidate()
     for row in histories:
         history_map[row.candidate_id].append(row)
     for row in activities:
         activity_map[row.candidate_id].append(row)
     for row in evaluations:
         evaluation_map[row.candidate_id].append(row)
-    for row in followups:
-        due_date_map[row.candidate_id].append(row.due_at)
-    for row in screenings:
-        due_date_map[row.candidate_id].append(row.follow_up_date)
     resume_ids = resume_ids or set()
     return {
         candidate.id: build_candidate_work_state(
@@ -279,7 +252,6 @@ def build_candidate_work_states(
             stage_history=history_map[candidate.id],
             activities=activity_map[candidate.id],
             evaluations=evaluation_map[candidate.id],
-            due_dates=due_date_map[candidate.id],
         )
         for candidate in candidates
     }

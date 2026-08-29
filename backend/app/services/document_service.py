@@ -170,7 +170,15 @@ async def save_resume_for_candidate(
         document.file_size_bytes = len(data)
         document.uploaded_by_user_id = uploaded_by_user_id
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        storage.delete_object(storage_path)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to save resume record. Please try again.",
+        ) from exc
     db.refresh(document)
     if old_storage_path and old_storage_path != storage_path:
         storage.delete_object(old_storage_path)

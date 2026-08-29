@@ -65,6 +65,7 @@ function FamilyMemberRow({
             onChange={(e) => update(fields.name, e.target.value)}
             onBlur={() => onBlurField(fields.name)}
             error={!!errors[fields.name]}
+            placeholder="Full Name"
           />
         </FormField>
         <div>
@@ -75,6 +76,7 @@ function FamilyMemberRow({
             onChange={(e) => update(fields.age, e.target.value)}
             min={0}
             max={120}
+            placeholder="e.g. 52"
           />
         </div>
         <div>
@@ -82,13 +84,15 @@ function FamilyMemberRow({
           <Input
             value={data[fields.occupation]}
             onChange={(e) => update(fields.occupation, e.target.value)}
+            placeholder="e.g. Teacher / Business / Retired"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-text-primary mb-1">Company</label>
+          <label className="block text-sm font-medium text-text-primary mb-1">Company / Institution</label>
           <Input
             value={data[fields.company]}
             onChange={(e) => update(fields.company, e.target.value)}
+            placeholder="e.g. Govt School / Self Employed"
           />
         </div>
         <div>
@@ -98,7 +102,7 @@ function FamilyMemberRow({
             onChange={(e) => update(fields.phone, digitsOnly(e.target.value, 10))}
             inputMode="numeric"
             maxLength={10}
-            placeholder="10-digit mobile"
+            placeholder="e.g. 9876543210"
           />
         </div>
       </div>

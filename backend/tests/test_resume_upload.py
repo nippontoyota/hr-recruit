@@ -80,8 +80,10 @@ def test_upload_rejects_bad_extension_when_authenticated():
     candidate = MagicMock()
     candidate.id = uuid4()
     candidate.assigned_hr_user_id = user.id
+    candidate.branch_location = user.branch_location
     db = MagicMock()
     db.get.return_value = candidate
+    db.scalar.return_value = None
 
     app.dependency_overrides[get_current_active_user] = lambda: user
     app.dependency_overrides[get_db] = lambda: db
@@ -102,8 +104,10 @@ def test_upload_rejects_oversized_file():
     candidate = MagicMock()
     candidate.id = candidate_id
     candidate.assigned_hr_user_id = user.id
+    candidate.branch_location = user.branch_location
     db = MagicMock()
     db.get.return_value = candidate
+    db.scalar.return_value = None
 
     app.dependency_overrides[get_current_active_user] = lambda: user
     app.dependency_overrides[get_db] = lambda: db
@@ -113,8 +117,8 @@ def test_upload_rejects_oversized_file():
                 f"/api/v1/candidates/{candidate_id}/resume",
                 files={"file": ("resume.pdf", b"0123456789ABCDEF", "application/pdf")},
             )
-        assert response.status_code == 400
-        assert "10 MB" in response.json()["detail"]
+        assert response.status_code == 413
+        assert "exceeds" in response.json()["detail"].lower()
     finally:
         app.dependency_overrides.clear()
 
@@ -125,11 +129,14 @@ def test_upload_success_mocked_storage():
     candidate = MagicMock()
     candidate.id = candidate_id
     candidate.assigned_hr_user_id = user.id
+    candidate.branch_location = user.branch_location
     db = MagicMock()
     db.get.return_value = candidate
     db.scalar.return_value = None
 
     def refresh(obj):
+        if getattr(obj, "id", None) is None:
+            obj.id = uuid4()
         if getattr(obj, "created_at", None) is None:
             obj.created_at = datetime.now(timezone.utc)
         if getattr(obj, "doc_type", None) is None:
@@ -169,6 +176,7 @@ def test_upload_rolls_back_storage_when_db_commit_fails():
     candidate = MagicMock()
     candidate.id = candidate_id
     candidate.assigned_hr_user_id = user.id
+    candidate.branch_location = user.branch_location
     db = MagicMock()
     db.get.return_value = candidate
     db.scalar.return_value = None

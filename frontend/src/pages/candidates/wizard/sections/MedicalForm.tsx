@@ -1,5 +1,5 @@
 import type { CandidateFormData } from '../wizardTypes';
-import type { FormSectionProps } from '../FormField';
+import { FieldError, type FormSectionProps } from '../FormField';
 
 const GENERAL_QUESTIONS: {
   field: keyof CandidateFormData;
@@ -38,47 +38,60 @@ function YesNoRow({
   label,
   letter,
   value,
+  error,
   onChange,
+  onBlur,
 }: {
   name: string;
   label: string;
   letter: string;
-  value: boolean;
+  value: boolean | null | undefined;
+  error?: string;
   onChange: (next: boolean) => void;
+  onBlur?: () => void;
 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-3 border-b border-border/40 last:border-b-0">
-      <p className="text-sm text-text-primary flex-1">
-        <span className="font-medium mr-1">({letter})</span>
-        {label} <span className="text-danger">*</span>
-      </p>
-      <div className="flex items-center gap-6 shrink-0">
-        <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
-          <input
-            type="radio"
-            name={name}
-            checked={value === true}
-            onChange={() => onChange(true)}
-            className="text-primary focus:ring-primary"
-          />
-          Yes
-        </label>
-        <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
-          <input
-            type="radio"
-            name={name}
-            checked={value === false}
-            onChange={() => onChange(false)}
-            className="text-primary focus:ring-primary"
-          />
-          No
-        </label>
+    <div className="py-3 border-b border-border/40 last:border-b-0" data-field={name}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p className="text-sm text-text-primary flex-1">
+          <span className="font-medium mr-1">({letter})</span>
+          {label} <span className="text-danger">*</span>
+        </p>
+        <div className="flex items-center gap-6 shrink-0">
+          <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+            <input
+              type="radio"
+              name={name}
+              checked={value === true}
+              onChange={() => {
+                onChange(true);
+                if (onBlur) onBlur();
+              }}
+              className="text-primary focus:ring-primary"
+            />
+            Yes
+          </label>
+          <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+            <input
+              type="radio"
+              name={name}
+              checked={value === false}
+              onChange={() => {
+                onChange(false);
+                if (onBlur) onBlur();
+              }}
+              className="text-primary focus:ring-primary"
+            />
+            No
+          </label>
+        </div>
       </div>
+      <FieldError error={error} />
     </div>
   );
 }
 
-export const MedicalForm = ({ data, update }: FormSectionProps) => {
+export const MedicalForm = ({ data, update, errors = {}, onBlurField = () => {} }: FormSectionProps) => {
   return (
     <div className="space-y-8 pb-6 max-w-3xl">
       <div className="space-y-4">
@@ -119,8 +132,10 @@ export const MedicalForm = ({ data, update }: FormSectionProps) => {
             name={q.field}
             letter={q.letter}
             label={q.label}
-            value={Boolean(data[q.field])}
+            value={data[q.field] as boolean | null | undefined}
+            error={errors[q.field]}
             onChange={(next) => update(q.field, next)}
+            onBlur={() => onBlurField(q.field)}
           />
         ))}
       </div>

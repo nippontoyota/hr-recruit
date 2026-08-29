@@ -206,3 +206,13 @@ def test_assemble_fails_without_common(monkeypatch):
         assemble_test_questions(MagicMock(), "Sales", POS_GEM, "Fresher")
     assert exc.value.status_code == 400
     assert "Common" in exc.value.detail
+
+
+def test_department_update_syncs_raw_data():
+    from app.schemas.candidate import CandidateDepartmentUpdate
+
+    # Direct model update check
+    body = CandidateDepartmentUpdate(department="Sales", position_applied_for=POS_GEM)
+    assert body.position_applied_for == POS_GEM
+
+

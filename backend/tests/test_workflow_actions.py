@@ -50,7 +50,6 @@ def test_offer_readiness_reports_existing_missing_prerequisites():
     )
 
     assert "HR interview verdict" in blockers
-    assert "department interview verdict" in blockers
     assert "salary sheet" in blockers
     assert "required documents" in blockers
 

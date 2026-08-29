@@ -9,6 +9,8 @@ import { validateBasicCandidateForm } from '../../lib/validatePreForm';
 import { SHOW_DEV_DUMMY, nextDummyCandidate } from '../../lib/devDummyData';
 import { SOURCE_OPTIONS, SOURCE_REFERENCE_LABELS, sourceNeedsReference } from '../../lib/candidateSources';
 
+const OPENING_TYPES = ['New opening', 'Replacement'] as const;
+
 
 interface AddCandidateFormProps {
   isOpen: boolean;
@@ -25,6 +27,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
   const [source, setSource] = useState('');
   const [sourceReference, setSourceReference] = useState('');
   const [department, setDepartment] = useState('');
+  const [openingType, setOpeningType] = useState('');
   const [branchLocation, setBranchLocation] = useState('');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,6 +42,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
     setSource('OTHER');
     setSourceReference('');
     setDepartment(dummy.department);
+    setOpeningType('New opening');
     setBranchLocation(user?.branch_location || dummy.branch);
     setFormError('');
   };
@@ -50,6 +54,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
     setSource('');
     setSourceReference('');
     setDepartment('');
+    setOpeningType('');
     setBranchLocation('');
     setFormError('');
     setDuplicateWarning(null);
@@ -80,6 +85,10 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
       setFormError('Department is required.');
       return;
     }
+    if (!openingType) {
+      setFormError('Opening type is required.');
+      return;
+    }
 
     setIsSubmitting(true);
     setFormError('');
@@ -96,6 +105,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
           : undefined,
         experience: experience,
         department: department.trim() || undefined,
+        opening_type: openingType,
         branch_location: branchLocation || undefined,
       } as any);
 
@@ -242,6 +252,23 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
               <option value="" disabled>Select Department</option>
               {CANDIDATE_DEPARTMENTS.map((d) => (
                 <option key={d} value={d}>{d}</option>
+              ))}
+            </Select>
+          </div>
+
+          <div className="col-span-2 sm:col-span-1">
+            <label htmlFor="candidate-opening-type" className="block text-xs font-bold text-text-primary uppercase tracking-wider mb-1">
+              Opening Type <span className="text-text-primary">*</span>
+            </label>
+            <Select
+              id="candidate-opening-type"
+              value={openingType}
+              onChange={(e) => setOpeningType(e.target.value)}
+              required
+            >
+              <option value="">Select Opening Type</option>
+              {OPENING_TYPES.map((option) => (
+                <option key={option} value={option}>{option}</option>
               ))}
             </Select>
           </div>

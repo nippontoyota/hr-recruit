@@ -1,9 +1,15 @@
 import { useRouteError, isRouteErrorResponse } from 'react-router-dom';
+import { useEffect } from 'react';
 import { Button } from '../ui/Button';
 import { AlertTriangle } from 'lucide-react';
+import { isStaleChunkError, reloadOnceForStaleChunk } from '../../lib/lazyRetry';
 
 export function RouteErrorPage() {
   const error = useRouteError();
+
+  useEffect(() => {
+    reloadOnceForStaleChunk(error);
+  }, [error]);
 
   let errorMessage = 'An unexpected error occurred.';
   if (isRouteErrorResponse(error)) {
@@ -11,6 +17,8 @@ export function RouteErrorPage() {
   } else if (error instanceof Error) {
     errorMessage = error.message;
   }
+
+  const staleChunk = isStaleChunkError(error);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -21,10 +29,12 @@ export function RouteErrorPage() {
         <div>
           <h1 className="text-xl font-semibold text-text-primary mb-2">Something went wrong</h1>
           <p className="text-sm text-text-secondary bg-content p-3 rounded-lg font-mono text-left overflow-auto max-h-48">
-            {errorMessage}
+            {staleChunk
+              ? 'This page was out of date after an update. Reload to load the latest version.'
+              : errorMessage}
           </p>
         </div>
-        <Button onClick={() => { window.location.href = '/'; }} className="w-full">
+        <Button onClick={() => { window.location.reload(); }} className="w-full">
           Reload application
         </Button>
       </div>

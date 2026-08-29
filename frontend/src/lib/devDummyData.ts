@@ -56,6 +56,7 @@ export function dummyBgVerification(overrides?: Partial<BgVerificationData>): Bg
   return {
     meta: {
       totalWorkExperience: '2 Years',
+      hasPreviousEmployment: true,
     },
     locality: {
       panchayathName: 'Kalamassery Municipality',

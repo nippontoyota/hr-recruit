@@ -54,7 +54,14 @@ from app.core.test_paper import assemble_for_candidate, assemble_test_questions,
 from app.services.workflow import transition
 from app.services import storage
 from app.services.document_service import process_photo_url
-from app.services.doubletick import send_template
+from app.services.doubletick import (
+    send_template,
+    DoubleTickError,
+    friendly_doubletick_error,
+    hr_interview_placeholders,
+    interviewer_placeholders,
+    technical_test_placeholders,
+)
 
 
 router = APIRouter(prefix="/evaluations", tags=["Evaluations"])
@@ -69,7 +76,7 @@ INTERVIEW_LINK_TYPES = frozenset(
         EvaluationType.HQ_INTERVIEW_2,
     }
 )
-INTERVIEW_TOKEN_TTL = timedelta(days=3650)
+INTERVIEW_TOKEN_TTL = timedelta(days=30)
 
 PUBLIC_SCORE_KEYS = (
     "attitude",
@@ -186,15 +193,14 @@ def _apply_evaluation_outcome(
         PipelineStage.HO_DEPT_INTERVIEW,
     )
     if evaluation.type == EvaluationType.HQ_INTERVIEW_1 and candidate.current_stage in ho_interview_stages:
-        if candidate.current_stage != PipelineStage.HO_INTERVIEWS:
-            transition(
-                db=db,
-                candidate=candidate,
-                target_stage=PipelineStage.HO_INTERVIEWS,
-                user=user,
-                remarks="HO interviews in progress.",
-                skip_handover_lock=True,
-            )
+        transition(
+            db=db,
+            candidate=candidate,
+            target_stage=PipelineStage.CSS,
+            user=user,
+            remarks="HO HR interview completed. Department interview is optional. CSS ready.",
+            skip_handover_lock=True,
+        )
     elif evaluation.type == EvaluationType.HQ_INTERVIEW_2:
         ho_evals = db.scalars(
             select(Evaluation).where(
@@ -314,12 +320,10 @@ def get_department_questions(
     current_user=Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     if candidate_id:
+        candidate = get_candidate_for_user(db, candidate_id, current_user)
         frozen = _frozen_test_questions(db, candidate_id)
         if frozen:
             return frozen
-        candidate = db.get(Candidate, candidate_id)
-        if not candidate:
-            raise HTTPException(status_code=404, detail="Candidate not found")
         department = department or candidate.department
         position = position or candidate.position_applied_for
         if experience is None:
@@ -537,10 +541,8 @@ def generate_evaluation_token(
         raise HTTPException(status_code=404, detail="Evaluation not found")
 
     candidate = None
+    candidate = get_candidate_for_user(db, evaluation.candidate_id, current_user, write=True)
     if evaluation.type == EvaluationType.TECHNICAL_TEST:
-        candidate = db.get(Candidate, evaluation.candidate_id)
-        if not candidate:
-            raise HTTPException(status_code=404, detail="Candidate not found")
         _assign_test_position(candidate, position)
 
     unused = select(EvaluationToken).where(
@@ -648,12 +650,11 @@ def get_public_evaluation_details(
     if not evaluation:
         raise HTTPException(status_code=404, detail="Evaluation scorecard not found")
 
-    if evaluation.type == EvaluationType.TECHNICAL_TEST:
-        expires = token_row.expires_at
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=UTC)
-        if expires <= datetime.now(UTC) and not token_row.is_used:
-            raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
+    expires = token_row.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if expires <= datetime.now(UTC) and not token_row.is_used:
+        raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
 
     candidate = db.get(Candidate, evaluation.candidate_id)
     if not candidate:
@@ -731,9 +732,10 @@ def get_public_evaluation_details(
         candidate_education=(raw or {}).get("highestQual", "") if raw else "",
         candidate_location=candidate.branch_location,
         candidate_skills=(raw or {}).get("skills", "") if raw else "",
-        candidate_current_salary=(raw or {}).get("currentSalary", "") if raw else "",
-        candidate_expected_salary=(raw or {}).get("expectedSalary", "") if raw else "",
-        candidate_notice_period=(raw or {}).get("noticePeriod", "") if raw else "",
+        # Compensation and notice-period data are intentionally withheld from public links.
+        candidate_current_salary=None,
+        candidate_expected_salary=None,
+        candidate_notice_period=None,
         interviewer_name=str((evaluation.scores or {}).get("interviewer_name") or "").strip() or None,
         candidate_raw_data=filter_interviewer_packet(raw),
         previous_remarks=previous_remarks,
@@ -762,12 +764,11 @@ def submit_public_evaluation(
     if evaluation.status == InterviewStatus.EVALUATED:
         raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
 
-    if evaluation.type == EvaluationType.TECHNICAL_TEST:
-        expires = token_row.expires_at
-        if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=UTC)
-        if expires <= datetime.now(UTC):
-            raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
+    expires = token_row.expires_at
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=UTC)
+    if expires <= datetime.now(UTC):
+        raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
 
     candidate = db.get(Candidate, evaluation.candidate_id)
 
@@ -795,6 +796,44 @@ def submit_public_evaluation(
     return {"status": "success", "message": "Evaluation scorecard submitted"}
 
 
+@router.get("/public/{token}/test-preview")
+def get_public_test_preview(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """Read-only lookup for the pre-test start screen. Never starts the timer."""
+    token_row = db.scalar(
+        select(EvaluationToken).where(
+            EvaluationToken.token == token,
+            EvaluationToken.is_used.is_(False),
+            EvaluationToken.expires_at > datetime.now(UTC)
+        )
+    )
+    if not token_row:
+        raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
+
+    evaluation = db.get(Evaluation, token_row.evaluation_id)
+    if evaluation.type != EvaluationType.TECHNICAL_TEST:
+        raise HTTPException(status_code=400, detail="This evaluation is not a technical test")
+
+    candidate = db.get(Candidate, evaluation.candidate_id)
+    dept = _candidate_dept_key(candidate)
+
+    if token_row.test_data and "questions" in token_row.test_data:
+        question_count = len(token_row.test_data["questions"])
+    else:
+        question_count = len(assemble_for_candidate(db, candidate))
+
+    already_started = bool(token_row.test_data and token_row.test_data.get("deadline_at"))
+
+    return {
+        "department": dept,
+        "question_count": question_count,
+        "duration_seconds": settings.technical_test_duration_minutes * 60,
+        "already_started": already_started,
+    }
+
+
 @router.get("/public/{token}/test-questions")
 def get_public_test_questions(
     token: str,
@@ -809,11 +848,11 @@ def get_public_test_questions(
     )
     if not token_row:
         raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
-        
+
     evaluation = db.get(Evaluation, token_row.evaluation_id)
     if evaluation.type != EvaluationType.TECHNICAL_TEST:
          raise HTTPException(status_code=400, detail="This evaluation is not a technical test")
-         
+
     candidate = db.get(Candidate, evaluation.candidate_id)
     dept = _candidate_dept_key(candidate)
 
@@ -902,7 +941,12 @@ def submit_public_test(
     ))
     
     db.commit()
-    return {"status": "success", "message": "Test submitted for manual evaluation."}
+    return {
+        "status": "success",
+        "message": "Technical test submitted and graded.",
+        "correct_answers": correct_count,
+        "total_questions": total_count,
+    }
 
 
 @router.post("/{eval_id}/send-whatsapp-invite")
@@ -920,31 +964,17 @@ def send_evaluation_whatsapp_invite(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
         
-    DOUBLETICK_VARIABLE_KEYS = [
-        "candidateName",
-        "position",
-        "date",
-        "time",
-        "mode",
-        "locationOrLink",
-        "recruiterName",
-    ]
-    
-    placeholders = []
-    for key in DOUBLETICK_VARIABLE_KEYS:
-        val = body.variables.get(key, "") if body.variables else ""
-        placeholders.append(val)
-        
-    
-
+    vars_map = body.variables or {}
     if body.recipient_type == "INTERVIEWER":
-        template_name = "nippon_interviewer_invite"
+        template_name = settings.whatsapp_interviewer_template_name
+        placeholders = interviewer_placeholders(vars_map)
+    elif evaluation.type == EvaluationType.TECHNICAL_TEST:
+        template_name = settings.whatsapp_technical_test_template_name
+        placeholders = technical_test_placeholders(vars_map)
     else:
-        if evaluation.type == EvaluationType.TECHNICAL_TEST:
-            template_name = "nippon_technical_test_invite"
-        else:
-            template_name = "nippon_hr_interview_invite"
-    
+        template_name = settings.whatsapp_hr_interview_template_name
+        placeholders = hr_interview_placeholders(vars_map)
+
     external_message_id = None
     try:
         res = send_template(
@@ -955,20 +985,21 @@ def send_evaluation_whatsapp_invite(
         messages = res.get("messages", [])
         if messages:
             external_message_id = messages[0].get("id")
-            
+
         status_comm = CommunicationStatus.SENT
         err_msg = None
+    except DoubleTickError as e:
+        status_comm = CommunicationStatus.FAILED
+        err_msg = e.user_message
     except Exception as e:
         status_comm = CommunicationStatus.FAILED
-        err_msg = str(e)
-        
-    # Construct content preview
+        err_msg = friendly_doubletick_error(str(e))
+
     content_lines = [
         f"Template: {template_name}",
         f"To: {body.to_phone}",
     ]
-    for key in DOUBLETICK_VARIABLE_KEYS:
-        val = body.variables.get(key, "")
+    for key, val in vars_map.items():
         content_lines.append(f"{key}: {val}")
         
     # Write to communications table

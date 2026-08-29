@@ -98,22 +98,23 @@ def test_offer_letter_pdf_is_pdf():
     assert bytes(pdf)[:4] == b"%PDF"
 
 
-def test_offer_blockers_empty_when_ready():
-    assert offer_blockers(_cand(), has_resume=True, evaluations=_evals()) == []
+def test_offer_blockers_dept_interview_is_optional():
+    assert offer_blockers(_cand(), has_resume=True, evaluations=_evals(hr=True, dept=False)) == []
+    assert offer_blockers(_cand(), has_resume=True, evaluations=_evals(hr=True, dept=True)) == []
 
 
 def test_offer_blockers_lists_interview_and_salary_gaps():
     missing = offer_blockers(
         _cand(salary_data=None, current_stage=PipelineStage.CSS),
         has_resume=True,
-        evaluations=_evals(hr=True, dept=False),
+        evaluations=[],
     )
-    assert missing == ["department interview verdict", "salary sheet"]
+    assert missing == ["HR interview verdict", "salary sheet"]
 
 
 def test_offer_blockers_rejects_invalid_salary_and_unapproved_stage():
     missing = offer_blockers(
-        _cand(salary_data={"name": "Anu"}, current_stage=PipelineStage.CSS),
+        _cand(salary_data={"name": "Anu"}, current_stage=PipelineStage.SENT_TO_HO),
         has_resume=True,
         evaluations=_evals(),
     )

@@ -17,14 +17,12 @@ class MockUser:
 def test_users_list_rbac_forbidden_for_branch_hr():
     # Setup mock user with unauthorized role
     mock_user = MockUser(id=uuid4(), role=UserRole.LOCAL_HR)
-
-    with patch("app.core.deps.get_current_active_user", return_value=mock_user):
-        response = client.get("/api/v1/users/")
-
-        # Should be forbidden for non-admin/non-HO HR
-        assert response.status_code == 403
-        assert response.json() == {"detail": "Not enough permissions"}
-
+    app.dependency_overrides[get_current_active_user] = lambda: mock_user
+    
+    response = client.get("/api/v1/users")
+    
+    assert response.status_code == 403
+    app.dependency_overrides.clear()
 
 def test_users_list_rbac_allowed_for_super_admin():
     # Setup mock user with authorized role

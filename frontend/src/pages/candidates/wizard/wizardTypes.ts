@@ -59,12 +59,13 @@ export interface CandidateFormData {
   presDistrict: string;
   presPinCode: string;
 
-  aadhaarNumber: string;
-  panNumber: string;
-  drivingLicenseNumber: string;
-  passportNumber: string;
+  aadhaarNumber?: string;
+  panNumber?: string;
+  drivingLicenseNumber?: string;
+  passportNumber?: string;
 
-  confidentToDrive: boolean;
+  hasValidDrivingLicense: boolean | null;
+  confidentToDrive: boolean | null;
   drive2Wheeler: boolean;
   drive3Wheeler: boolean;
   drive4Wheeler: boolean;
@@ -83,12 +84,14 @@ export interface CandidateFormData {
   class12Mode: string;
 
   gradCourse: string;
+  gradStream: string;
   gradCollege: string;
   gradPercentage: string;
   gradPassingYear: string;
   gradMode: string;
 
   postGradCourse: string;
+  postGradStream: string;
   postGradCollege: string;
   postGradPercentage: string;
   postGradPassingYear: string;
@@ -217,11 +220,11 @@ export interface CandidateFormData {
   achievements: string;
   hobbies: string;
 
-  prevTerminated: boolean;
-  physicalDisability: boolean;
-  nervousDisorder: boolean;
-  eyeVision: boolean;
-  criminalConviction: boolean;
+  prevTerminated: boolean | null;
+  physicalDisability: boolean | null;
+  nervousDisorder: boolean | null;
+  eyeVision: boolean | null;
+  criminalConviction: boolean | null;
   medicalRemarks: string;
 
   emergency1Relation: string;
@@ -373,7 +376,8 @@ export const initialCandidateData: CandidateFormData = {
   panNumber: '',
   drivingLicenseNumber: '',
   passportNumber: '',
-  confidentToDrive: false,
+  hasValidDrivingLicense: null,
+  confidentToDrive: null,
   drive2Wheeler: false,
   drive3Wheeler: false,
   drive4Wheeler: false,
@@ -389,11 +393,13 @@ export const initialCandidateData: CandidateFormData = {
   class12PassingYear: '',
   class12Mode: '',
   gradCourse: '',
+  gradStream: '',
   gradCollege: '',
   gradPercentage: '',
   gradPassingYear: '',
   gradMode: '',
   postGradCourse: '',
+  postGradStream: '',
   postGradCollege: '',
   postGradPercentage: '',
   postGradPassingYear: '',
@@ -489,7 +495,7 @@ export const initialCandidateData: CandidateFormData = {
   prev4To: '',
   prev4Salary: '',
   prev4Reason: '',
-  totalExperience: 'Fresher',
+  totalExperience: '',
   expectedSalary: '',
   hasReference: false,
   refRole: '',
@@ -502,11 +508,11 @@ export const initialCandidateData: CandidateFormData = {
   expectedJoiningDate: '',
   achievements: '',
   hobbies: '',
-  prevTerminated: false,
-  physicalDisability: false,
-  nervousDisorder: false,
-  eyeVision: false,
-  criminalConviction: false,
+  prevTerminated: null,
+  physicalDisability: null,
+  nervousDisorder: null,
+  eyeVision: null,
+  criminalConviction: null,
   medicalRemarks: '',
   emergency1Relation: '',
   emergency1Name: '',

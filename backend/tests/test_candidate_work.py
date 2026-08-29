@@ -53,7 +53,6 @@ def test_ready_for_offer_requires_selected_interviews_and_salary():
     state = build_candidate_work_state(None, candidate, has_resume=True, evaluations=[])
 
     assert "HR interview" in state.blockers
-    assert "Department interview" in state.blockers
     assert "Salary sheet" in state.blockers
     assert state.next_action == "Complete required prerequisites"
     assert state.action_key == "WORKSPACE"
@@ -90,52 +89,69 @@ def test_css_without_blockers_advances_to_offer_letter():
 
 
 def test_call_letter_and_application_drive_explicit_action_keys():
-    call_letter = build_candidate_work_state(None, _candidate(current_stage=PipelineStage.CALL_LETTER))
+    waiting_issue = build_candidate_work_state(None, _candidate(current_stage=PipelineStage.CALL_LETTER))
+    waiting_response = build_candidate_work_state(
+        None,
+        _candidate(current_stage=PipelineStage.CALL_LETTER, pre_form_status="SENT"),
+    )
+    form_filled = build_candidate_work_state(
+        None,
+        _candidate(current_stage=PipelineStage.CALL_LETTER, pre_form_status="SUBMITTED"),
+    )
     application = build_candidate_work_state(None, _candidate(current_stage=PipelineStage.APPLICATION))
     hold = build_candidate_work_state(None, _candidate(current_stage=PipelineStage.ON_HOLD))
 
-    assert call_letter.next_action == "Complete call letter"
-    assert call_letter.action_key == "ADVANCE_STAGE"
+    assert waiting_issue.next_action == "Call letter to be sent"
+    assert waiting_issue.action_key == "WORKSPACE"
+    assert "NEEDS_ACTION" in waiting_issue.queue_keys
+    assert "WAITING_FOR_CANDIDATE" not in waiting_issue.queue_keys
+
+    assert waiting_response.next_action == "Call letter issued, waiting for candidate response"
+    assert waiting_response.action_key == "WORKSPACE"
+    assert "WAITING_FOR_CANDIDATE" in waiting_response.queue_keys
+    assert "NEEDS_ACTION" not in waiting_response.queue_keys
+
+    assert form_filled.next_action == "Review application & schedule interview"
+    assert form_filled.action_key == "ADVANCE_STAGE"
+    assert "NEEDS_ACTION" in form_filled.queue_keys
+    assert "WAITING_FOR_CANDIDATE" not in form_filled.queue_keys
+
     assert application.next_action == "Send to Head Office"
     assert application.action_key == "SEND_TO_HO"
     assert hold.next_action == "Review hold"
     assert hold.action_key == "RESUME_HOLD"
 
 
-def test_follow_up_due_today_adds_queue_key_using_ist_date():
-    now = datetime(2026, 8, 14, 18, 0, tzinfo=UTC)
-    candidate = _candidate()
-    due_at = datetime(2026, 8, 14, 0, 30, tzinfo=UTC)
-
-    state = build_candidate_work_state(None, candidate, now=now, due_dates=[due_at])
-
-    assert "DUE_TODAY" in state.queue_keys
-
-
-def test_follow_up_due_on_another_day_does_not_add_queue_key():
-    now = datetime(2026, 8, 14, 18, 0, tzinfo=UTC)
-    candidate = _candidate()
-    due_at = datetime(2026, 8, 13, 10, 30, tzinfo=UTC)
-
-    state = build_candidate_work_state(None, candidate, now=now, due_dates=[due_at])
-
-    assert "DUE_TODAY" not in state.queue_keys
-
-
-def test_screening_and_pending_follow_up_dates_share_due_today_derivation():
-    now = datetime(2026, 8, 14, 18, 0, tzinfo=UTC)
-    candidate = _candidate()
-    screening = SimpleNamespace(follow_up_date=datetime(2026, 8, 13, 20, 0, tzinfo=UTC))
-    pending_follow_up = SimpleNamespace(due_at=datetime(2026, 8, 14, 5, 0, tzinfo=UTC))
-
-    state = build_candidate_work_state(
+def test_stalled_starts_on_the_fourth_day_without_an_update():
+    now = datetime(2026, 8, 14, tzinfo=UTC)
+    still_fresh = build_candidate_work_state(
         None,
-        candidate,
+        _candidate(created_at=now - timedelta(days=3)),
         now=now,
-        due_dates=[screening.follow_up_date, pending_follow_up.due_at],
+        activities=[SimpleNamespace(created_at=now - timedelta(days=3))],
+    )
+    stalled = build_candidate_work_state(
+        None,
+        _candidate(created_at=now - timedelta(days=4)),
+        now=now,
+        activities=[SimpleNamespace(created_at=now - timedelta(days=4))],
     )
 
-    assert "DUE_TODAY" in state.queue_keys
+    assert "STALLED" not in still_fresh.queue_keys
+    assert "STALLED" in stalled.queue_keys
+
+
+def test_recent_activity_keeps_a_long_stage_from_counting_as_stalled():
+    now = datetime(2026, 8, 14, tzinfo=UTC)
+    state = build_candidate_work_state(
+        None,
+        _candidate(created_at=now - timedelta(days=20)),
+        now=now,
+        stage_history=[SimpleNamespace(created_at=now - timedelta(days=10))],
+        activities=[SimpleNamespace(created_at=now - timedelta(days=1))],
+    )
+
+    assert "STALLED" not in state.queue_keys
 
 
 def test_hold_and_stalled_candidate_get_stable_queue_keys():
@@ -149,3 +165,19 @@ def test_hold_and_stalled_candidate_get_stable_queue_keys():
     assert state.next_action == "Review hold"
     assert state.action_key == "RESUME_HOLD"
     assert state.queue_keys == ["NEEDS_ACTION", "ON_HOLD", "STALLED"]
+
+
+def test_offer_sent_and_accepted_work_state():
+    sent_state = build_candidate_work_state(None, _candidate(offer_status="SENT"))
+    accepted_state = build_candidate_work_state(None, _candidate(offer_status="ACCEPTED"))
+
+    assert sent_state.blockers == []
+    assert sent_state.next_action == "Offer sent — Awaiting candidate response"
+    assert "WAITING_FOR_CANDIDATE" in sent_state.queue_keys
+    assert "NEEDS_ACTION" not in sent_state.queue_keys
+
+    assert accepted_state.blockers == []
+    assert accepted_state.next_action == "Offer accepted — Complete onboarding"
+    assert accepted_state.action_key == "ADVANCE_STAGE"
+    assert "NEEDS_ACTION" in accepted_state.queue_keys
+

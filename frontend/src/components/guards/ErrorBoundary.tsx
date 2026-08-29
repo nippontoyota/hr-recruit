@@ -2,6 +2,7 @@ import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Button, EmptyState } from '../ui';
 import { AlertTriangle } from 'lucide-react';
+import { isStaleChunkError, reloadOnceForStaleChunk } from '../../lib/lazyRetry';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -24,6 +25,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[ErrorBoundary]', error, errorInfo);
+    if (reloadOnceForStaleChunk(error)) return;
   }
 
   private handleReset = () => {
@@ -42,8 +44,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               'An unexpected error occurred. Please try again.'
             }
             action={
-              <Button variant="secondary" onClick={this.handleReset}>
-                Try again
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (isStaleChunkError(this.state.error)) {
+                    window.location.reload();
+                    return;
+                  }
+                  this.handleReset();
+                }}
+              >
+                {isStaleChunkError(this.state.error) ? 'Reload application' : 'Try again'}
               </Button>
             }
             className="max-w-md w-full"

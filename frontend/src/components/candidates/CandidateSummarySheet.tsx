@@ -122,6 +122,13 @@ function drivingLicence(raw: Record<string, unknown>): string {
     raw.drive4Wheeler ? '4 Wheeler' : '',
     raw.driveHeavy ? 'Heavy' : '',
   ].filter(Boolean);
+  if (raw.hasValidDrivingLicense === true) {
+    if (kinds.length) return `Yes (${kinds.join(', ')})`;
+    if (raw.confidentToDrive === true) return 'Yes (Confident)';
+    if (raw.confidentToDrive === false) return 'Yes (Not confident)';
+    return 'Yes';
+  }
+  if (raw.hasValidDrivingLicense === false) return 'No';
   if (kinds.length) return `Yes-${kinds.join(', ')}`;
   if (txt(raw.drivingLicenseNumber)) return 'Yes';
   if (raw.confidentToDrive === false) return 'No';
@@ -210,13 +217,15 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
     rawGet(raw, 'expectedSalary') || txt(candidate.profile?.expected_salary) || '';
   const joiningDays = rawGet(raw, 'noticePeriod');
   const doj = fmtDate(rawGet(raw, 'expectedJoiningDate') || candidate.profile?.joining_date);
+  const pgCourse = [rawGet(raw, 'postGradCourse'), rawGet(raw, 'postGradStream')].filter(Boolean).join(' - ');
   const pg = eduValue(
-    rawGet(raw, 'postGradCourse'),
+    pgCourse,
     rawGet(raw, 'postGradCollege'),
     rawGet(raw, 'postGradPercentage'),
   );
+  const degreeCourse = [rawGet(raw, 'gradCourse'), rawGet(raw, 'gradStream')].filter(Boolean).join(' - ');
   const degree = eduValue(
-    rawGet(raw, 'gradCourse'),
+    degreeCourse,
     rawGet(raw, 'gradCollege'),
     rawGet(raw, 'gradPercentage'),
   );
@@ -262,7 +271,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
   const age = rawGet(raw, 'age') || ageFromDob(dob);
 
   return (
-    <div className="css-sheet box-border bg-white text-[8.5px] leading-[1.2] text-black font-sans w-[210mm] min-h-[297mm] p-[4mm]">
+    <div className="css-sheet box-border bg-white text-[8.5px] leading-[1.2] text-black font-sans w-[210mm] min-h-[297mm] p-[6mm_8mm] shadow-lg print:shadow-none print:border-none">
       <table className="w-full border-collapse border border-black table-fixed">
         <colgroup>
           <col className="w-[16%]" />
@@ -310,7 +319,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           </tr>
           <tr>
             <Cell label>Post Applied</Cell>
-            <Cell colSpan={4}>{candidate.position_applied_for || ''}</Cell>
+            <Cell colSpan={4}>{candidate.position_applied_for && candidate.position_applied_for.toLowerCase() !== 'unknown' ? candidate.position_applied_for : ''}</Cell>
             <Cell label>Source</Cell>
             <Cell colSpan={3}>{source}</Cell>
             <Cell>Specify Source</Cell>
@@ -513,15 +522,58 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           </tr>
           <tr className="h-[14mm]">
             <Cell label colSpan={2} className="align-top">CMD</Cell>
-            <Cell colSpan={10}></Cell>
+            <Cell colSpan={10}>{rawGet(raw, 'cmdComments')}</Cell>
           </tr>
-          <tr className="h-[10mm]">
-            <Cell label>Offer Letter Issued</Cell>
-            <Cell label colSpan={3}>Offer Communication Message</Cell>
-            <Cell label colSpan={4}>Offer Communicationed Call</Cell>
-            <Cell label colSpan={2}>Document Carry Message</Cell>
-            <Cell>Follow Up Call (N-1)</Cell>
-            <Cell label>Date Of Joining{doj ? ` ${doj}` : ''}</Cell>
+            {/* Offer Milestones Row */}
+            <tr className="h-[10mm]">
+              <Cell label className="text-center align-middle p-1">
+                <div className="flex flex-col items-center justify-center gap-0.5">
+                  <span className="font-bold text-[8px] leading-tight">Offer Letter Issued</span>
+                  <span className="text-[12px] font-bold leading-none text-slate-800">
+                    {Boolean(candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED' || raw.offerLetterIssued === true || raw.offerLetterIssued === 'true' || raw.offerLetterIssued === 'Yes' || candidate.current_stage === 'HIRED') ? '☑' : '☐'}
+                  </span>
+                </div>
+              </Cell>
+              <Cell label colSpan={3} className="text-center align-middle p-1">
+                <div className="flex flex-col items-center justify-center gap-0.5">
+                  <span className="font-bold text-[8px] leading-tight">Offer Communication Message</span>
+                  <span className="text-[12px] font-bold leading-none text-slate-800">
+                    {Boolean(candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED' || raw.offerCommMessage === true || raw.offerCommMessage === 'true' || raw.offerCommMessage === 'Yes') ? '☑' : '☐'}
+                  </span>
+                </div>
+              </Cell>
+            <Cell label colSpan={4} className="text-center align-middle p-1">
+              <div className="flex flex-col items-center justify-center gap-0.5">
+                <span className="font-bold text-[8px] leading-tight">Offer Communicated Call</span>
+                <span className="text-[12px] font-bold leading-none text-slate-800">
+                  {Boolean(raw.offerCommCall === true || raw.offerCommCall === 'true' || raw.offerCommCall === 'Yes') ? '☑' : '☐'}
+                </span>
+              </div>
+            </Cell>
+            <Cell label colSpan={2} className="text-center align-middle p-1">
+              <div className="flex flex-col items-center justify-center gap-0.5">
+                <span className="font-bold text-[8px] leading-tight">Document Carry Message</span>
+                <span className="text-[12px] font-bold leading-none text-slate-800">
+                  {Boolean(raw.docCarryMessage === true || raw.docCarryMessage === 'true' || raw.docCarryMessage === 'Yes') ? '☑' : '☐'}
+                </span>
+              </div>
+            </Cell>
+            <Cell label className="text-center align-middle p-1">
+              <div className="flex flex-col items-center justify-center gap-0.5">
+                <span className="font-bold text-[8px] leading-tight">Follow Up Call (N-1)</span>
+                <span className="text-[12px] font-bold leading-none text-slate-800">
+                  {Boolean(raw.followUpCall === true || raw.followUpCall === 'true' || raw.followUpCall === 'Yes') ? '☑' : '☐'}
+                </span>
+              </div>
+            </Cell>
+            <Cell label className="text-center align-middle p-1">
+              <div className="flex flex-col items-center justify-center gap-0.5">
+                <span className="font-bold text-[8px] leading-tight">Date Of Joining</span>
+                <span className="font-bold text-[8.5px] text-black">
+                  {doj || '—'}
+                </span>
+              </div>
+            </Cell>
           </tr>
         </tbody>
       </table>

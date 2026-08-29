@@ -12,7 +12,14 @@ const UNKNOWN_WORK_STATE: CandidateWorkState = {
 
 /** Safely reads workflow metadata from older or partial candidate responses. */
 export function getCandidateWorkState(candidate: Pick<Candidate, 'work_state'>): CandidateWorkState {
-  return candidate.work_state ?? UNKNOWN_WORK_STATE;
+  const state = candidate.work_state ?? UNKNOWN_WORK_STATE;
+  if (state.next_action === 'Complete call letter' || state.next_action === 'Waiting for call letter to be issued') {
+    return { ...state, next_action: 'Call letter to be sent', action_key: state.action_key === 'ADVANCE_STAGE' ? 'WORKSPACE' : state.action_key };
+  }
+  if (state.next_action === 'Candidate form filled') {
+    return { ...state, next_action: 'Review application & schedule interview', action_key: 'ADVANCE_STAGE' };
+  }
+  return state;
 }
 
 export function getCandidateActionKey(candidate: Pick<Candidate, 'work_state'>): CandidateActionKey {

@@ -28,7 +28,7 @@ export const Modal = ({ isOpen, onClose, title, description, size = 'full', chil
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}
-                className="fixed inset-0 z-50 bg-black/50"
+                className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs"
               />
             </DialogPrimitive.Overlay>
 
@@ -60,7 +60,7 @@ export const Modal = ({ isOpen, onClose, title, description, size = 'full', chil
                   size === 'lg' && "w-[90vw] max-w-4xl max-h-[90vh]",
                   size === 'md' && "w-[90vw] max-w-2xl max-h-[90vh]",
                   size === 'sm' && "w-[90vw] max-w-md max-h-[90vh]",
-                  "bg-surface border border-border rounded-xl shadow-lg overflow-hidden"
+                  "bg-white border border-slate-200/90 rounded-2xl shadow-2xl overflow-hidden"
                 )}
               >
                 {/* Header */}

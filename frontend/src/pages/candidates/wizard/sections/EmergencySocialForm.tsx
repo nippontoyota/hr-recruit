@@ -46,7 +46,7 @@ function EmergencyBlock({
             onChange={(e) => update(relation, e.target.value)}
             onBlur={() => onBlurField(relation)}
             error={!!errors[relation]}
-            placeholder="e.g. Uncle / Friend"
+            placeholder="e.g. Brother / Uncle / Close Friend"
           />
         </FormField>
         <FormField field={name} error={errors[name]}>
@@ -58,6 +58,7 @@ function EmergencyBlock({
             onChange={(e) => update(name, e.target.value)}
             onBlur={() => onBlurField(name)}
             error={!!errors[name]}
+            placeholder="e.g. Suresh Kumar"
           />
         </FormField>
         <FormField field={address} error={errors[address]} >
@@ -69,6 +70,7 @@ function EmergencyBlock({
             onChange={(e) => update(address, e.target.value)}
             onBlur={() => onBlurField(address)}
             error={!!errors[address]}
+            placeholder="e.g. House No. 12, MG Road, Ernakulam"
           />
         </FormField>
         <FormField field={contact} error={errors[contact]}>
@@ -81,7 +83,7 @@ function EmergencyBlock({
             onChange={(e) => update(contact, digitsOnly(e.target.value, 10))}
             onBlur={() => onBlurField(contact)}
             error={!!errors[contact]}
-            placeholder="9876543210"
+            placeholder="e.g. 9876543210"
             inputMode="numeric"
             maxLength={10}
           />
@@ -179,7 +181,7 @@ export const EmergencySocialForm = ({ data, update, errors = {}, onBlurField = (
           may lead to rejection of my candidature or termination of employment if already engaged.
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField field="declarationPlace" error={errors.declarationPlace}>
             <label className="block text-sm font-medium text-text-primary mb-1">
               Place <span className="text-danger">*</span>
@@ -189,19 +191,7 @@ export const EmergencySocialForm = ({ data, update, errors = {}, onBlurField = (
               onChange={(e) => update('declarationPlace', e.target.value)}
               onBlur={() => onBlurField('declarationPlace')}
               error={!!errors.declarationPlace}
-              placeholder="e.g. Kochi"
-            />
-          </FormField>
-          <FormField field="declarationDate" error={errors.declarationDate}>
-            <label className="block text-sm font-medium text-text-primary mb-1">
-              Date <span className="text-danger">*</span>
-            </label>
-            <Input
-              type="date"
-              value={data.declarationDate}
-              onChange={(e) => update('declarationDate', e.target.value)}
-              onBlur={() => onBlurField('declarationDate')}
-              error={!!errors.declarationDate}
+              placeholder="e.g. Kalamassery / Kochi"
             />
           </FormField>
           <FormField field="declarationName" error={errors.declarationName}>
@@ -213,7 +203,7 @@ export const EmergencySocialForm = ({ data, update, errors = {}, onBlurField = (
               onChange={(e) => update('declarationName', e.target.value)}
               onBlur={() => onBlurField('declarationName')}
               error={!!errors.declarationName}
-              placeholder="Type your full name"
+              placeholder="e.g. Rahul Sharma"
             />
           </FormField>
         </div>

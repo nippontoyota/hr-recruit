@@ -28,29 +28,26 @@ export type PipelineStage =
   | 'SALARY_DETAILS'
   | 'CSS';
 
-export const ALL_PIPELINE_STAGES: PipelineStage[] = [
+export const PIPELINE_STAGES: PipelineStage[] = [
   'SCREENING',
   'CANDIDATE_FORM',
-  'BRANCH_INTERVIEW',
   'TEST',
+  'BRANCH_INTERVIEW',
+  'SENT_TO_HO',
+  'HO_INTERVIEWS',
+  'CSS',
+  'SALARY_DETAILS',
   'FINAL_APPROVAL',
   'HIRED',
   'REJECTED',
   'ON_HOLD',
-  'CALL_LETTER',
-  'INTERVIEWS',
-  'BACKGROUND_VERIFICATION',
-  'APPLICATION',
-  'SENT_TO_HO',
-  'HO_INTERVIEWS',
-  'SALARY_DETAILS',
-  'CSS'
 ];
 
 export const HO_LINEAR_STAGES: PipelineStage[] = [
   'SENT_TO_HO',
   'HO_INTERVIEWS',
   'CSS',
+  'SALARY_DETAILS',
   'FINAL_APPROVAL',
   'HIRED',
 ];
@@ -121,6 +118,7 @@ export interface Candidate {
   source_reference?: string;
   experience?: string;
   department?: string;
+  opening_type?: string;
   position_applied_for?: string;
   share_url?: string;
   pre_form_status: FormStatus;
@@ -131,6 +129,11 @@ export interface Candidate {
   current_stage: PipelineStage;
   screening?: CandidateScreening;
   branch_location?: string;
+  visit_branch?: string;
+  visit_date?: string;
+  visit_time?: string;
+  visit_maps_link?: string;
+  visit_instructions?: string;
   interviewer_assignments?: Record<string, string>;
   profile?: CandidateProfile;
   is_duplicate_flagged: boolean;
@@ -145,6 +148,7 @@ export interface Candidate {
   created_at: string;
   handed_over_to_ho?: boolean;
   work_state?: CandidateWorkState | null;
+  evaluations?: Evaluation[];
 }
 
 export interface ResumeDocument {
@@ -280,3 +284,4 @@ export interface ActivityLog {
   created_at: string;
 }
 
+export const ALL_PIPELINE_STAGES = PIPELINE_STAGES;

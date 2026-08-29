@@ -282,3 +282,28 @@ def test_apply_salary_stamps_uploader_and_writes_audit():
     log = db.add.call_args[0][0]
     assert "Priya Admin" in log.description
     assert log.created_by_user_id == admin.id
+
+
+def test_apply_salary_lands_on_salary_details_not_final_approval():
+    """Uploading the salary sheet from CSS should land the candidate on the
+    dedicated Salary Sheet stage so HO HR can review/print the proposal
+    there, not skip straight past it to Final Approval."""
+    from unittest.mock import MagicMock
+
+    from app.api.v1.candidates_actions import _apply_salary
+
+    candidate = Candidate(
+        id=uuid4(),
+        candidate_id="NT-90",
+        full_name="Land Here",
+        phone="9000000002",
+        current_stage=PipelineStage.CSS,
+    )
+    db = MagicMock()
+    admin = _user(UserRole.ADMIN, "Priya Admin")
+    _apply_salary(db, candidate, {"gross salary": 15000, "name": "Land Here"}, admin)
+    assert candidate.current_stage == PipelineStage.SALARY_DETAILS
+
+    # Re-uploading while already on the stage must not move it further.
+    _apply_salary(db, candidate, {"gross salary": 16000, "name": "Land Here"}, admin)
+    assert candidate.current_stage == PipelineStage.SALARY_DETAILS

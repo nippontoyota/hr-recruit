@@ -7,6 +7,7 @@ export function stageLabel(stage: PipelineStage | string): string {
   if (stage === 'BRANCH_INTERVIEW' || stage === 'INTERVIEWS') return 'INTERVIEWS';
   if (stage === 'HO_HR_INTERVIEW' || stage === 'HO_DEPT_INTERVIEW' || stage === 'HO_INTERVIEWS') return 'INTERVIEWS';
   if (stage === 'CSS') return 'CSS';
+  if (stage === 'SALARY_DETAILS') return 'SALARY SHEET';
   if (stage === 'TEST') return 'TECHNICAL TEST';
   if (stage === 'SENT_TO_HO') return 'SENT TO HEAD OFFICE';
   return stage
@@ -54,7 +55,6 @@ export function formatSource(source: string | undefined | null): string {
 
 export type CandidateQueue =
   | 'NEEDS_ACTION'
-  | 'DUE_TODAY'
   | 'WAITING_FOR_CANDIDATE'
   | 'WAITING_FOR_HO'
   | 'READY_FOR_OFFER'
@@ -63,8 +63,7 @@ export type CandidateQueue =
 
 export const QUEUE_DEFINITIONS: Array<{ key: CandidateQueue; label: string }> = [
   { key: 'NEEDS_ACTION', label: 'Needs my action' },
-  { key: 'DUE_TODAY', label: 'Due today' },
-  { key: 'WAITING_FOR_CANDIDATE', label: 'Waiting for candidate' },
+  { key: 'WAITING_FOR_CANDIDATE', label: 'Waiting for candidate response' },
   { key: 'WAITING_FOR_HO', label: 'Waiting for Head Office' },
   { key: 'READY_FOR_OFFER', label: 'Ready for offer' },
   { key: 'ON_HOLD', label: 'On hold' },

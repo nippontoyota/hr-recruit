@@ -5,7 +5,7 @@ import { getCandidatePortal, submitCandidatePortalResponse, type CandidatePortal
 import { Button } from '../../components/ui';
 import { PublicShell } from '../../components/layout/PublicShell';
 import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
-import { extractError } from '../../lib/utils';
+import { extractError, isAbortError } from '../../lib/utils';
 import { formatDateTime } from '../../lib/dateTime';
 
 function formatDate(value: string | null) {
@@ -52,6 +52,7 @@ export default function CandidatePortalPage() {
       setLoadError(null);
       setPortalData(await getCandidatePortal(token));
     } catch (err) {
+      if (isAbortError(err)) return;
       setLoadError(extractError(err, 'This link is invalid, expired, or no longer active.'));
     } finally { setLoading(false); }
   }, [token]);

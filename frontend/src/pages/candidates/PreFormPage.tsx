@@ -2,9 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { initialCandidateData } from './wizard/wizardTypes';
 import type { CandidateFormData } from './wizard/wizardTypes';
-import { uploadResume, uploadPublicCandidatePhoto, publicGetFullStatus, publicApplyFullCandidate } from '../../api/candidates';
+import { publicGetFullStatus, publicApplyFullCandidate } from '../../api/candidates';
 import { Button } from '../../components/ui';
-import { extractError } from '../../lib/utils';
+import { extractError, isAbortError } from '../../lib/utils';
 import {
   validatePreFormFields,
   validateOnePreFormField,
@@ -56,7 +56,16 @@ export default function PreFormPage() {
     publicGetFullStatus(token)
       .then(async (res) => {
         if (!res.is_awaiting_full_fill) {
-          setStatusError('This candidate application form has already been submitted or is not yet open.');
+          if (res.pre_form_status === 'SUBMITTED') {
+            setCandidateName(res.full_name);
+            setSubmitSuccess(res.full_name);
+          } else {
+            setStatusError(
+              res.pre_form_status === 'NOT_SENT'
+                ? 'This candidate application form is not yet open.'
+                : 'This candidate application form is not available on this link.'
+            );
+          }
         } else {
           setCandidateName(res.full_name);
           setExpiresAt(res.pre_form_expires_at || null);
@@ -67,6 +76,8 @@ export default function PreFormPage() {
             ...prev,
             ...(draft || {}),
             fullName: res.full_name || draft?.fullName || prev.fullName,
+            positionAppliedFor: res.position_applied_for || draft?.positionAppliedFor || prev.positionAppliedFor,
+            branchName: res.branch_location || draft?.branchName || prev.branchName,
             photoFileObject: files.photoFileObject || prev.photoFileObject,
             resumeFileObject: files.resumeFileObject || prev.resumeFileObject,
           }));
@@ -74,16 +85,17 @@ export default function PreFormPage() {
         setLoading(false);
       })
       .catch((err) => {
+        if (isAbortError(err)) return;
         setStatusError(extractError(err, 'Invalid candidate reference URL.'));
         setLoading(false);
       });
   }, [token]);
 
   useEffect(() => {
-    if (!token || loading || statusError) return;
+    if (!token || loading || statusError || submitSuccess) return;
     savePreFormDraft(token, formData);
     setLastSavedAt(new Date());
-  }, [token, formData, loading, statusError]);
+  }, [token, formData, loading, statusError, submitSuccess]);
 
   const handleUpdateField = useCallback((field: keyof CandidateFormData, value: any) => {
     if (field === 'photoFileObject') photoRef.current = value || null;
@@ -126,8 +138,10 @@ export default function PreFormPage() {
     e.preventDefault();
     if (!token) return;
 
+    const todayStr = new Date().toISOString().split('T')[0];
     const merged: CandidateFormData = {
       ...formData,
+      declarationDate: todayStr,
       photoFileObject: photoRef.current || formData.photoFileObject,
       resumeFileObject: resumeRef.current || formData.resumeFileObject,
     };
@@ -158,23 +172,11 @@ export default function PreFormPage() {
 
     try {
       const { resumeFile: _resumeFile, resumeUrl: _resumeUrl, resumeFileObject: _resumeFileObject, photoFileObject: _photoFileObject, profilePicture: _profilePicture, ...applicationData } = merged;
-      const candidateObj = await publicApplyFullCandidate(token, applicationData);
-
-      const uploads: Promise<unknown>[] = [];
-      if (merged.resumeFileObject) {
-        uploads.push(uploadResume(token, merged.resumeFileObject, { public: true }));
-      }
-      if (merged.photoFileObject) {
-        uploads.push(uploadPublicCandidatePhoto(token, merged.photoFileObject));
-      }
-      if (uploads.length) {
-        try {
-          await Promise.all(uploads);
-        } catch (uploadErr) {
-          setUploadError('Your form data is still here, but one document upload failed. Check the file and retry submission.');
-          throw uploadErr;
-        }
-      }
+      
+      const candidateObj = await publicApplyFullCandidate(token, applicationData, {
+        resume: merged.resumeFileObject || null,
+        photo: merged.photoFileObject || null,
+      });
 
       clearPreFormDraft(token);
       setSubmitSuccess(candidateObj.full_name);
@@ -186,31 +188,31 @@ export default function PreFormPage() {
   };
 
   if (loading) {
-    return <PublicShell maxWidth="2xl" title="Pre-interview form" step="Checking link"><PublicStatusPanel kind="loading" message="Checking your form link…" /></PublicShell>;
+    return <PublicShell maxWidth="2xl" title="Candidate form" step="Checking link"><PublicStatusPanel kind="loading" message="Checking your form link…" /></PublicShell>;
   }
 
   if (statusError) {
-    return <PublicShell maxWidth="2xl" title="Pre-interview form"><PublicStatusPanel kind="expired" message={`${statusError} Please ask your HR recruiter for a new link or clarification.`} /></PublicShell>;
+    return <PublicShell maxWidth="2xl" title="Candidate form"><PublicStatusPanel kind="expired" message={`${statusError} Please ask your HR recruiter for a new link or clarification.`} /></PublicShell>;
   }
 
   if (submitSuccess) {
     return (
-      <PublicShell maxWidth="2xl" title="Pre-interview form">
+      <PublicShell maxWidth="2xl" title="Candidate form">
         <PublicStatusPanel
           kind="submitted"
           title="Application submitted"
-          message={`Thank you, ${candidateName || submitSuccess}. Your pre-interview form is complete. Your recruiter will review it and contact you about next steps.`}
+          message={`Thank you, ${candidateName || submitSuccess}. Your candidate form is complete. Your recruiter will review it and contact you about next steps.`}
         />
       </PublicShell>
     );
   }
 
   return (
-    <PublicShell maxWidth="2xl" title="Pre-interview form">
+    <PublicShell maxWidth="2xl" title="Candidate form">
       <div className="page-card p-6 sm:p-8">
         <div className="mb-8 pb-6 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Pre-interview form</h1>
+            <h1 className="text-2xl font-semibold text-text-primary tracking-tight">Candidate form</h1>
             <p className="mt-2 text-sm text-text-secondary">
               Welcome, <span className="font-medium text-text-primary">{candidateName}</span>. Complete every section before submitting.
             </p>
@@ -232,7 +234,7 @@ export default function PreFormPage() {
           </section>
 
           <section className="pb-8 border-b border-border">
-            <h2 className="section-heading mb-6">Identity documents</h2>
+            <h2 className="section-heading mb-6">Driving &amp; languages</h2>
             <IdentityForm data={formData} update={handleUpdateField} errors={errors} onBlurField={handleBlurField} />
           </section>
 
@@ -268,7 +270,6 @@ export default function PreFormPage() {
 
           <div className="pt-2 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
             <div className="flex-1 space-y-1">
-              <p className="text-xs text-primary">{lastSavedAt ? `Saved locally at ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Changes save locally as you work.'}</p>
               {uploadError && <p role="alert" className="text-sm text-warning bg-warning/5 p-3 rounded-lg border border-warning/20">{uploadError}</p>}
               {errorText && (
               <p role="alert" className="text-sm text-danger bg-danger/5 p-3 rounded-lg border border-danger/20 flex-1">{errorText}</p>

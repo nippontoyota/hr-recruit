@@ -1,7 +1,9 @@
+import { useAuth } from "../auth";
 /* eslint-disable react-refresh/only-export-components */
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { AppShell } from '../components/layout/AppShell';
+import { AdminDemoShell } from '../components/layout/AdminDemoShell';
 import { ProtectedRoute } from '../components/guards/ProtectedRoute';
 import { RoleRoute } from '../components/guards/RoleRoute';
 import { LoadingSpinner } from '../components/ui';
@@ -25,6 +27,10 @@ const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard'));
 const AdminCandidatesList = lazy(() => import('../pages/admin/AdminCandidatesList'));
 const AdminBottlenecksList = lazy(() => import('../pages/admin/AdminBottlenecksList'));
 const AdminOutcomesList = lazy(() => import('../pages/admin/AdminOutcomesList'));
+const DemoAdminDashboard = lazy(() => import('../pages/admin/demo/DemoAdminDashboard'));
+const DemoAdminCandidatesList = lazy(() => import('../pages/admin/demo/DemoAdminCandidatesList'));
+const DemoAdminBottlenecksList = lazy(() => import('../pages/admin/demo/DemoAdminBottlenecksList'));
+const DemoAdminOutcomesList = lazy(() => import('../pages/admin/demo/DemoAdminOutcomesList'));
 
 const SuspenseFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -35,8 +41,6 @@ const SuspenseFallback = () => (
 const PageSuspense = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<SuspenseFallback />}>{children}</Suspense>
 );
-
-import { useAuth } from '../auth';
 
 const RootRedirect = () => {
   const { role } = useAuth();
@@ -123,6 +127,61 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: '/demo-admin',
+    errorElement: <RouteErrorPage />,
+    element: (
+      <ProtectedRoute>
+        <AdminDemoShell />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <Navigate to="/demo-admin/dashboard" replace />,
+      },
+      {
+        path: 'dashboard',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <DemoAdminDashboard />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'pipeline',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <DemoAdminCandidatesList />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'bottlenecks',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <DemoAdminBottlenecksList />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'outcomes',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <DemoAdminOutcomesList />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+    ]
+  },
+  {
     path: '/',
     errorElement: <RouteErrorPage />,
 
@@ -153,6 +212,16 @@ export const router = createBrowserRouter([
           <RoleRoute allowed={ALL_ROLES}>
             <PageSuspense>
               <CandidateProfile />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'admin/users',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <AdminUsers />
             </PageSuspense>
           </RoleRoute>
         ),
@@ -193,16 +262,6 @@ export const router = createBrowserRouter([
           <RoleRoute allowed={['ADMIN']}>
             <PageSuspense>
               <AdminOutcomesList />
-            </PageSuspense>
-          </RoleRoute>
-        ),
-      },
-      {
-        path: 'admin/users',
-        element: (
-          <RoleRoute allowed={['ADMIN']}>
-            <PageSuspense>
-              <AdminUsers />
             </PageSuspense>
           </RoleRoute>
         ),

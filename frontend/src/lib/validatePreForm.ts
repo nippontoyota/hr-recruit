@@ -71,8 +71,8 @@ function validateExperienceJobs(data: CandidateFormData): string | null {
 }
 
 function validateDeclarationDate(value: string): ValidationResult {
-  const trimmed = value.trim();
-  if (!trimmed) return { ok: false, message: 'Declaration date is required.' };
+  const trimmed = (value || '').trim();
+  if (!trimmed) return { ok: true };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
     return { ok: false, message: 'Declaration date is invalid.' };
   }
@@ -84,12 +84,13 @@ function validateDeclarationDate(value: string): ValidationResult {
 }
 
 function gradAnyFilled(data: CandidateFormData): boolean {
-  return anyFilled(data.gradCourse, data.gradCollege, data.gradPercentage, data.gradPassingYear, data.gradMode);
+  return anyFilled(data.gradCourse, data.gradStream, data.gradCollege, data.gradPercentage, data.gradPassingYear, data.gradMode);
 }
 
 function postGradAnyFilled(data: CandidateFormData): boolean {
   return anyFilled(
     data.postGradCourse,
+    data.postGradStream,
     data.postGradCollege,
     data.postGradPercentage,
     data.postGradPassingYear,
@@ -186,18 +187,16 @@ function validateSingleField(field: keyof CandidateFormData, data: CandidateForm
       if (!data.sameAsPermanent) res = validatePinCode(data.presPinCode, 'Present PIN code');
       break;
 
-    // Identity
-    case 'aadhaarNumber':
-      res = validateAadhaar(data.aadhaarNumber);
+    // Driving & Languages
+    case 'hasValidDrivingLicense':
+      if (typeof data.hasValidDrivingLicense !== 'boolean') {
+        res = { ok: false, message: 'Please specify if you have a valid driving license.' };
+      }
       break;
-    case 'panNumber':
-      res = validatePan(data.panNumber);
-      break;
-    case 'drivingLicenseNumber':
-      res = validateDrivingLicense(data.drivingLicenseNumber);
-      break;
-    case 'passportNumber':
-      res = validatePassport(data.passportNumber);
+    case 'confidentToDrive':
+      if (data.hasValidDrivingLicense && typeof data.confidentToDrive !== 'boolean') {
+        res = { ok: false, message: 'Please specify if you are confident driving.' };
+      }
       break;
 
     // Education 10th
@@ -237,7 +236,12 @@ function validateSingleField(field: keyof CandidateFormData, data: CandidateForm
     // Graduation (Optional, but validated if filled)
     case 'gradCourse':
       if (gradAnyFilled(data)) {
-        res = validateTextField(data.gradCourse, 'Graduation course', 2, 100);
+        res = validateTextField(data.gradCourse, 'Graduation degree / course type', 2, 100);
+      }
+      break;
+    case 'gradStream':
+      if (data.gradStream?.trim()) {
+        res = validateTextField(data.gradStream, 'Graduation specialization', 2, 100);
       }
       break;
     case 'gradCollege':
@@ -266,6 +270,11 @@ function validateSingleField(field: keyof CandidateFormData, data: CandidateForm
     case 'postGradCourse':
       if (postGradAnyFilled(data)) {
         res = validateTextField(data.postGradCourse, 'Post graduation course', 2, 100);
+      }
+      break;
+    case 'postGradStream':
+      if (data.postGradStream?.trim()) {
+        res = validateTextField(data.postGradStream, 'Post graduation specialization', 2, 100);
       }
       break;
     case 'postGradCollege':
@@ -419,6 +428,33 @@ function validateSingleField(field: keyof CandidateFormData, data: CandidateForm
       }
       break;
 
+    // General Information / Medical
+    case 'prevTerminated':
+      if (typeof data.prevTerminated !== 'boolean') {
+        res = { ok: false, message: 'Please select Yes or No.' };
+      }
+      break;
+    case 'nervousDisorder':
+      if (typeof data.nervousDisorder !== 'boolean') {
+        res = { ok: false, message: 'Please select Yes or No.' };
+      }
+      break;
+    case 'physicalDisability':
+      if (typeof data.physicalDisability !== 'boolean') {
+        res = { ok: false, message: 'Please select Yes or No.' };
+      }
+      break;
+    case 'eyeVision':
+      if (typeof data.eyeVision !== 'boolean') {
+        res = { ok: false, message: 'Please select Yes or No.' };
+      }
+      break;
+    case 'criminalConviction':
+      if (typeof data.criminalConviction !== 'boolean') {
+        res = { ok: false, message: 'Please select Yes or No.' };
+      }
+      break;
+
     // Declaration
     case 'emailId':
       res = validateEmail(data.emailId, true, 'Email');
@@ -444,20 +480,21 @@ const PRE_FORM_FIELDS: (keyof CandidateFormData)[] = [
   'nameAadhaar', 'gender', 'dateOfBirth', 'age', 'maritalStatus', 'bloodGroup', 'height', 'weight', 'religionCaste',
   'permHouseName', 'permPostOffice', 'permLandmark', 'permDistrict', 'permPinCode',
   'presHouseName', 'presPostOffice', 'presLandmark', 'presDistrict', 'presPinCode',
-  'aadhaarNumber', 'panNumber', 'drivingLicenseNumber', 'passportNumber',
+  'hasValidDrivingLicense',
   'class10School', 'class10Board', 'class10Percentage', 'class10PassingYear', 'class10Mode',
   'class12School', 'class12Stream', 'class12Percentage', 'class12PassingYear', 'class12Mode',
-  'gradCourse', 'gradCollege', 'gradPercentage', 'gradPassingYear', 'gradMode',
-  'postGradCourse', 'postGradCollege', 'postGradPercentage', 'postGradPassingYear', 'postGradMode',
+  'gradCourse', 'gradStream', 'gradCollege', 'gradPercentage', 'gradPassingYear', 'gradMode',
+  'postGradCourse', 'postGradStream', 'postGradCollege', 'postGradPercentage', 'postGradPassingYear', 'postGradMode',
   'languagesRead', 'languagesWrite', 'languagesSpeak',
   'fatherName', 'motherName', 'spouseName',
   'previousJobs',
   'totalExperience', 'expectedSalary',
   'sourceOfOpening', 'referredBy', 'preferredRegion', 'expectedJoiningDate',
   'refRole', 'refName', 'refPanchayat', 'refContactNumber',
+  'prevTerminated', 'nervousDisorder', 'physicalDisability', 'eyeVision', 'criminalConviction',
   'emergency1Relation', 'emergency1Name', 'emergency1Address', 'emergency1Contact',
   'emergency2Relation', 'emergency2Name', 'emergency2Address', 'emergency2Contact',
-  'emailId', 'declarationPlace', 'declarationDate', 'declarationName',
+  'emailId', 'declarationPlace', 'declarationName',
 ];
 
 export type PreFormFieldErrors = Partial<Record<keyof CandidateFormData, string>>;
@@ -483,8 +520,10 @@ export function validatePreFormFields(data: CandidateFormData): PreFormFieldErro
     if (!resumeResult.ok) errors.resumeFileObject = resumeResult.message;
   }
 
-  if (typeof data.confidentToDrive !== 'boolean') {
-    errors.confidentToDrive = 'Confident to drive is required.';
+  if (typeof data.hasValidDrivingLicense !== 'boolean') {
+    errors.hasValidDrivingLicense = 'Please specify if you have a valid driving license.';
+  } else if (data.hasValidDrivingLicense && typeof data.confidentToDrive !== 'boolean') {
+    errors.confidentToDrive = 'Please specify if you are confident driving.';
   }
 
   for (const field of PRE_FORM_FIELDS) {

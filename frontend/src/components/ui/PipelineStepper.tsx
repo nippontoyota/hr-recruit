@@ -11,6 +11,7 @@ import {
   CircleDashed,
   FileText,
   Send,
+  Wallet,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -44,6 +45,7 @@ const STAGE_ICONS: Record<string, React.ElementType> = {
   HO_DEPT_INTERVIEW: MessagesSquare,
   HO_INTERVIEWS: MessagesSquare,
   CSS: FileText,
+  SALARY_DETAILS: Wallet,
 };
 
 export function PipelineStepper({
@@ -145,7 +147,7 @@ export function PipelineStepper({
                   onClick={() => isClickable && onStageClick(stage)}
                   className={cn(
                     'relative flex h-10 w-10 items-center justify-center rounded-full border-2 bg-background transition-[border-color,background-color,transform] duration-150 active:scale-[0.97]',
-                    isCurrentViewed && 'ring-2 ring-primary ring-offset-2',
+                    isCurrentViewed && 'ring-2 ring-slate-700 ring-offset-2 dark:ring-slate-300',
                     isCompleted && 'border-success bg-success/5 text-success',
                     isHeld && 'border-warning bg-warning/5 text-warning',
                     isSkipped && 'border-dashed border-warning bg-warning/5 text-warning',
@@ -169,7 +171,7 @@ export function PipelineStepper({
                     <span
                       className={cn(
                         'mb-0.5 text-[10px] font-medium',
-                        isCurrentViewed ? 'text-primary' : isHeld ? 'text-warning' : 'text-success',
+                        isHeld ? 'text-warning' : 'text-success font-semibold',
                       )}
                     >
                       {isHeld ? 'On hold' : 'Done'}

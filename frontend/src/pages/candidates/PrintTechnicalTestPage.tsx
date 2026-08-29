@@ -4,7 +4,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getCandidateById } from '../../api/candidates';
 import { getDepartmentQuestions } from '../../api/evaluations';
 import { LoadingSpinner } from '../../components/ui';
+import { Home, ArrowLeft } from 'lucide-react';
 import type { Candidate } from '../../types';
+import { isAbortError } from '../../lib/utils';
 
 export default function PrintTechnicalTestPage() {
   const { id } = useParams();
@@ -22,23 +24,28 @@ export default function PrintTechnicalTestPage() {
 
   useEffect(() => {
     if (!id) return;
+    const controller = new AbortController();
 
     const fetchData = async () => {
       try {
-        const data = await getCandidateById(id);
+        const data = await getCandidateById(id, controller.signal);
+        if (controller.signal.aborted) return;
         if (data) {
           setCandidate(data as Candidate);
           const qs = await getDepartmentQuestions({ candidateId: data.id });
+          if (controller.signal.aborted) return;
           setQuestions(qs);
         }
-      } catch {
+      } catch (err) {
+        if (controller.signal.aborted || isAbortError(err)) return;
         setError('Failed to load candidate or test data.');
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
 
-    fetchData();
+    void fetchData();
+    return () => controller.abort();
   }, [id]);
 
   useEffect(() => {
@@ -70,6 +77,32 @@ export default function PrintTechnicalTestPage() {
   return (
     <div ref={componentRef} className="bg-white min-h-screen font-sans text-black print-container print:p-0 p-8 flex flex-col items-center">
       <div className="w-[800px] max-w-full">
+        {/* Non-printing navigation bar */}
+        <div className="no-print mb-4 p-2 bg-gray-100 border border-gray-300 rounded-lg flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/candidates')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#075E54] text-white hover:bg-[#064e46] font-bold text-xs shadow-xs"
+            >
+              <Home className="w-3.5 h-3.5" />
+              Home
+            </button>
+            <button
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white text-xs font-semibold hover:bg-gray-50 text-gray-700"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back
+            </button>
+          </div>
+          <button
+            onClick={() => handlePrint()}
+            className="px-3 py-1.5 bg-black text-white text-xs font-bold rounded-lg hover:bg-gray-800"
+          >
+            Print Test Paper
+          </button>
+        </div>
+
         {/* Header Block */}
         <div className="flex justify-between items-start mb-1 relative">
           {/* Logo / Company Name */}
@@ -127,7 +160,7 @@ export default function PrintTechnicalTestPage() {
 
         {/* Paper Title */}
         <div className="border-b-[2px] border-black pb-0.5 mb-1 text-center">
-          <h3 className="text-[12px] font-bold">Question Paper - Call Centre</h3>
+          <h3 className="text-[12px] font-bold">Question Paper - {candidate.position_applied_for || candidate.department || 'Technical Test'}</h3>
         </div>
 
         {/* Questions Table */}

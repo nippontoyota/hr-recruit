@@ -25,8 +25,8 @@ client = TestClient(app)
     ("role", "expected"),
     [
         (UserRole.ADMIN, "ADMIN"),
-        (UserRole.HO_HR, "HR"),
-        (UserRole.LOCAL_HR, "HR"),
+        (UserRole.LOCAL_HR, "LOCAL_HR"),
+        (UserRole.HO_HR, "HO_HR"),
     ],
 )
 def test_role_for_frontend(role: UserRole, expected: str):
@@ -109,7 +109,7 @@ def test_user_out_maps_role():
         is_active=True,
     )
     out = UserOut.from_user(user)
-    assert out.role == "HR"
+    assert out.role == "LOCAL_HR"
 
 
 def test_token_response_includes_token_alias():
@@ -148,7 +148,7 @@ def test_login_returns_frontend_role_and_token_alias():
         body = response.json()
         assert body["access_token"]
         assert body["token"] == body["access_token"]
-        assert body["user"]["role"] == "HR"
+        assert body["user"]["role"] == "LOCAL_HR"
     finally:
         app.dependency_overrides.clear()
 
@@ -172,6 +172,7 @@ def test_create_candidate_accepts_linkedin_source():
         source="OTHER",
         source_reference=None,
         position_applied_for="Sales",
+        experience="Fresher",
         pre_form_status=FormStatus.NOT_SENT,
         pre_form_sent_at=None,
         pre_form_submitted_at=None,
