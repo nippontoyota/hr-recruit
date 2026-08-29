@@ -1,27 +1,36 @@
+import { useAuth } from "../auth";
 /* eslint-disable react-refresh/only-export-components */
 import { createBrowserRouter, Navigate } from 'react-router-dom';
-import { Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { AppShell } from '../components/layout/AppShell';
+import { AdminDemoShell } from '../components/layout/AdminDemoShell';
 import { ProtectedRoute } from '../components/guards/ProtectedRoute';
 import { RoleRoute } from '../components/guards/RoleRoute';
 import { LoadingSpinner } from '../components/ui';
 import { ALL_ROLES } from '../types';
 import { RouteErrorPage } from '../components/layout/RouteErrorPage';
-import { lazyRetry } from '../lib/lazyRetry';
 
-const Login = lazyRetry(() => import('../pages/Login'));
-const CandidatesList = lazyRetry(() => import('../pages/candidates/CandidatesList'));
-const CandidateProfile = lazyRetry(() => import('../pages/candidates/CandidateProfile'));
-const CandidatePrintView = lazyRetry(() => import('../pages/candidates/CandidatePrintView'));
-const NotFound = lazyRetry(() => import('../pages/NotFound'));
-const ApplyForm = lazyRetry(() => import('../pages/candidates/ApplyForm'));
-const PreFormPage = lazyRetry(() => import('../pages/candidates/PreFormPage'));
+const Login = lazy(() => import('../pages/Login'));
+const CandidatesList = lazy(() => import('../pages/candidates/CandidatesList'));
+const CandidateProfile = lazy(() => import('../pages/candidates/CandidateProfile'));
+const CandidatePrintView = lazy(() => import('../pages/candidates/CandidatePrintView'));
+const NotFound = lazy(() => import('../pages/NotFound'));
+const ApplyForm = lazy(() => import('../pages/candidates/ApplyForm'));
+const PreFormPage = lazy(() => import('../pages/candidates/PreFormPage'));
 
-const PublicInterviewerPage = lazyRetry(() => import('../pages/candidates/PublicInterviewerPage'));
-const PublicTestPage = lazyRetry(() => import('../pages/candidates/PublicTestPage'));
-const PrintTechnicalTestPage = lazyRetry(() => import('../pages/candidates/PrintTechnicalTestPage'));
-const CandidatePortalPage = lazyRetry(() => import('../pages/candidates/CandidatePortalPage'));
-const AdminUsers = lazyRetry(() => import('../pages/AdminUsers'));
+const PublicInterviewerPage = lazy(() => import('../pages/candidates/PublicInterviewerPage'));
+const PublicTestPage = lazy(() => import('../pages/candidates/PublicTestPage'));
+const PrintTechnicalTestPage = lazy(() => import('../pages/candidates/PrintTechnicalTestPage'));
+const CandidatePortalPage = lazy(() => import('../pages/candidates/CandidatePortalPage'));
+const AdminUsers = lazy(() => import('../pages/AdminUsers'));
+const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard'));
+const AdminCandidatesList = lazy(() => import('../pages/admin/AdminCandidatesList'));
+const AdminBottlenecksList = lazy(() => import('../pages/admin/AdminBottlenecksList'));
+const AdminOutcomesList = lazy(() => import('../pages/admin/AdminOutcomesList'));
+const DemoAdminDashboard = lazy(() => import('../pages/admin/demo/DemoAdminDashboard'));
+const DemoAdminCandidatesList = lazy(() => import('../pages/admin/demo/DemoAdminCandidatesList'));
+const DemoAdminBottlenecksList = lazy(() => import('../pages/admin/demo/DemoAdminBottlenecksList'));
+const DemoAdminOutcomesList = lazy(() => import('../pages/admin/demo/DemoAdminOutcomesList'));
 
 const SuspenseFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
@@ -32,6 +41,14 @@ const SuspenseFallback = () => (
 const PageSuspense = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<SuspenseFallback />}>{children}</Suspense>
 );
+
+const RootRedirect = () => {
+  const { role } = useAuth();
+  if (role === 'ADMIN') {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+  return <Navigate to="/candidates" replace />;
+};
 
 export const router = createBrowserRouter([
   {
@@ -110,6 +127,61 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: '/demo-admin',
+    errorElement: <RouteErrorPage />,
+    element: (
+      <ProtectedRoute>
+        <AdminDemoShell />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <Navigate to="/demo-admin/dashboard" replace />,
+      },
+      {
+        path: 'dashboard',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <DemoAdminDashboard />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'pipeline',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <DemoAdminCandidatesList />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'bottlenecks',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <DemoAdminBottlenecksList />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'outcomes',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <DemoAdminOutcomesList />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+    ]
+  },
+  {
     path: '/',
     errorElement: <RouteErrorPage />,
 
@@ -121,7 +193,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/candidates" replace />,
+        element: <RootRedirect />,
       },
       {
         path: 'candidates',
@@ -150,6 +222,46 @@ export const router = createBrowserRouter([
           <RoleRoute allowed={['ADMIN']}>
             <PageSuspense>
               <AdminUsers />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'admin/dashboard',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <AdminDashboard />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'admin/pipeline',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <AdminCandidatesList />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'admin/bottlenecks',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <AdminBottlenecksList />
+            </PageSuspense>
+          </RoleRoute>
+        ),
+      },
+      {
+        path: 'admin/outcomes',
+        element: (
+          <RoleRoute allowed={['ADMIN']}>
+            <PageSuspense>
+              <AdminOutcomesList />
             </PageSuspense>
           </RoleRoute>
         ),

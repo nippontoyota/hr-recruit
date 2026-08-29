@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.compat import role_for_frontend
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_active_user
 from app.core.security import create_access_token, verify_password
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(body: LoginRequest, response: Response, db: Session = Depends(get_db)) -> TokenResponse:
     user = db.scalar(select(User).where(User.email == body.email.lower()))
     if user is None or not verify_password(body.password, user.hashed_password):
         raise HTTPException(
@@ -32,6 +33,16 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
         email=user.email,
         role=frontend_role,
     )
+    
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=settings.is_production,
+        samesite="lax",
+        max_age=settings.access_token_expire_minutes * 60,
+    )
+    
     user_out = UserOut.from_user(user)
     return TokenResponse(access_token=token, token=token, user=user_out)
 
@@ -46,7 +57,13 @@ from app.models.enums import UserRole
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
-def logout() -> dict[str, str]:
+def logout(response: Response) -> dict[str, str]:
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        secure=settings.is_production,
+        samesite="lax",
+    )
     return {"detail": "Logged out"}
 
 
