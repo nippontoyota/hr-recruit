@@ -134,9 +134,9 @@ export async function downloadInterviewCommentSheetPdf(candidate: Candidate, eva
   });
   text(page, 'Rating guide: 1 = needs improvement, highest number = excellent', left, tableTop - headerHeight - criteria.length * 29 - 15, regular, 7, GREY);
 
-  sectionTitle(page, 'REMARKS', left, 410, bold);
-  field(page, 'Remarks', '', left, 389, contentWidth, regular, bold);
-  page.drawRectangle({ x: left, y: 145, width: contentWidth, height: 210, borderColor: BLACK, borderWidth: 0.8 });
+  sectionTitle(page, 'REMARKS', left, 390, bold);
+  field(page, 'Remarks', '', left, 369, contentWidth, regular, bold);
+  page.drawRectangle({ x: left, y: 145, width: contentWidth, height: 190, borderColor: BLACK, borderWidth: 0.8 });
 
   sectionTitle(page, 'RECOMMENDATION', left, 92, bold);
   const options = [['Selected', left], ['Hold', left + 78], ['Rejected', left + 138]] as const;
