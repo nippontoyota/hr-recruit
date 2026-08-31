@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.core.access import assert_candidate_access, assert_local_hr_can_mutate, can_view_salary
@@ -107,12 +107,7 @@ def create_candidate(
 ) -> Candidate:
     duplicate = db.scalar(
         select(Candidate)
-        .where(
-            or_(
-                Candidate.phone == body.phone,
-                Candidate.email == body.email if body.email else False,
-            )
-        )
+        .where(Candidate.phone == body.phone)
         .order_by(Candidate.created_at.desc())
     )
 
