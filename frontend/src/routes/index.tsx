@@ -9,6 +9,7 @@ import { RoleRoute } from '../components/guards/RoleRoute';
 import { LoadingSpinner } from '../components/ui';
 import { ALL_ROLES } from '../types';
 import { RouteErrorPage } from '../components/layout/RouteErrorPage';
+import { lazyRetry } from '../lib/lazyRetry';
 
 const Login = lazyRetry(() => import('../pages/Login'));
 const CandidatesList = lazyRetry(() => import('../pages/candidates/CandidatesList'));
