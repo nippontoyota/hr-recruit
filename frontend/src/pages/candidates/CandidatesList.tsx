@@ -2,11 +2,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Button, Modal, LoadingSpinner, EmptyState, Badge } from '../../components/ui';
-import { Plus, RefreshCw, Trash, CheckSquare, Square, Minus, Play, Users } from 'lucide-react';
+import { Plus, RefreshCw, Trash, CheckSquare, Square, Minus, Play, Users, Download } from 'lucide-react';
 import { useAuth } from '../../auth';
-import { deleteCandidate, bulkDeleteCandidates, unholdCandidate } from '../../api/candidates';
+import { deleteCandidate, bulkDeleteCandidates, unholdCandidate, downloadCandidatesExcel } from '../../api/candidates';
 import { getStageBadgeVariant, stageLabel, formatSource, isCandidateQueue, matchesQueue, type CandidateQueue } from '../../lib/stages';
-import type { Candidate, PipelineStage } from '../../types';
+import type { Candidate } from '../../types';
 import { PIPELINE_STAGES, HO_PIPELINE_STAGES, HO_POST_SEND_STAGES } from '../../types';
 import { AddCandidateForm } from '../../components/candidates/AddCandidateForm';
 import { ResumeButton } from '../../components/candidates/ResumeButton';
@@ -18,6 +18,7 @@ import { cn, extractError } from '../../lib/utils';
 import { formatDate } from '../../lib/dateTime';
 import { getCandidateWorkState } from '../../lib/candidateWork';
 import { useCandidatesList } from '../../hooks/api/useCandidates';
+import { toast } from 'sonner';
 
 function CandidatesTableSkeleton() {
   return (
@@ -44,6 +45,7 @@ export default function CandidatesList() {
   const selectedQueue: CandidateQueue | '' = isCandidateQueue(searchParams.get('queue')) ? searchParams.get('queue') as CandidateQueue : '';
   const { user } = useAuth();
   const canRegister = user?.role === 'LOCAL_HR';
+  const canExport = user?.role === 'HO_HR' || user?.role === 'ADMIN';
   const canDelete = ['ADMIN', 'HO_HR', 'LOCAL_HR'].includes(user?.role as string);
   const isLocalHrLocked = (c: Candidate) =>
     user?.role === 'LOCAL_HR' && (HO_POST_SEND_STAGES.includes(c.current_stage) || !!c.handed_over_to_ho);
@@ -78,6 +80,27 @@ export default function CandidatesList() {
 
   // Add form
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const blob = await downloadCandidatesExcel();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'nippon-toyota-candidates.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Candidate Excel downloaded');
+    } catch (error) {
+      toast.error(extractError(error, 'Could not download candidates Excel'));
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Clear selection when filters change
   useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter, selectedQueue]);
@@ -198,12 +221,20 @@ export default function CandidatesList() {
       <PageHeader
         title="Candidates"
         action={
-          canRegister ? (
-            <Button onClick={() => setIsAddOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add candidate
-            </Button>
-          ) : undefined
+          <>
+            {canExport && (
+              <Button variant="secondary" onClick={() => void handleExport()} disabled={isExporting}>
+                <Download className="w-4 h-4 mr-2" />
+                {isExporting ? 'Preparing Excel…' : 'Download Excel'}
+              </Button>
+            )}
+            {canRegister && (
+              <Button onClick={() => setIsAddOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add candidate
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -300,6 +331,7 @@ export default function CandidatesList() {
                     <th>Candidate</th>
                     <th>Position</th>
                     <th>Stage</th>
+                    <th>Offer response</th>
                     <th>Branch</th>
                     <th>Next action</th>
                     <th>Source</th>
@@ -310,7 +342,7 @@ export default function CandidatesList() {
                 <tbody>
                   {noMatches ? (
                     <tr>
-                      <td colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={10} className="py-10 text-center text-sm text-muted-foreground">
                         No candidates match the selected search, stage, or queue. Try clearing a filter.
                       </td>
                     </tr>
@@ -386,6 +418,17 @@ export default function CandidatesList() {
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td className="px-4 py-2">
+                          {candidate.offer_status === 'ACCEPTED' ? (
+                            <Badge variant="success">Accepted</Badge>
+                          ) : candidate.offer_status === 'DECLINED' ? (
+                            <Badge variant="destructive">Rejected</Badge>
+                          ) : candidate.offer_status === 'SENT' ? (
+                            <Badge variant="warning">Pending</Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-2 text-text-secondary font-medium">
                           {candidate.branch_location || '-'}

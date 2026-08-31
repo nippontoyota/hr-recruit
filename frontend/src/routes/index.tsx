@@ -13,6 +13,7 @@ const Login = lazyRetry(() => import('../pages/Login'));
 const CandidatesList = lazyRetry(() => import('../pages/candidates/CandidatesList'));
 const CandidateProfile = lazyRetry(() => import('../pages/candidates/CandidateProfile'));
 const CandidatePrintView = lazyRetry(() => import('../pages/candidates/CandidatePrintView'));
+const InterviewCommentSheetPage = lazyRetry(() => import('../pages/candidates/InterviewCommentSheetPage'));
 const NotFound = lazyRetry(() => import('../pages/NotFound'));
 const ApplyForm = lazyRetry(() => import('../pages/candidates/ApplyForm'));
 const PreFormPage = lazyRetry(() => import('../pages/candidates/PreFormPage'));
@@ -105,6 +106,16 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <PageSuspense>
           <PrintTechnicalTestPage />
+        </PageSuspense>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/candidates/:id/comment-sheet',
+    element: (
+      <ProtectedRoute>
+        <PageSuspense>
+          <InterviewCommentSheetPage />
         </PageSuspense>
       </ProtectedRoute>
     ),

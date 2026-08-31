@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Link, FileText, CheckCircle, Loader2 } from 'lucide-react';
+import { Link, FileDown, FileText, CheckCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, LoadingSpinner, EmptyState, Select } from '../ui';
 import { InterviewFormCard } from './InterviewFormCard';
@@ -21,6 +21,7 @@ import { usePrint } from '../../hooks/usePrint';
 import { useAuth } from '../../auth';
 import { buildTechnicalTestWhatsAppMessage, evalScheduleLabels, openWhatsAppChat } from '../../lib/whatsappTemplate';
 import { WhatsAppShareModal } from './WhatsAppSendChoices';
+import { downloadInterviewCommentSheetPdf } from '../../lib/generateInterviewCommentSheetPdf';
 
 const SINGLE_CARD_TYPES = new Set(['BRANCH_HR', 'HQ_INTERVIEW_1']);
 
@@ -395,7 +396,19 @@ function TechnicalTestPaperWidget({ ev, candidate, designation, onDesignationCha
     documentTitle: `TechnicalTest_${candidate.full_name}`,
   });
   const roles = positionsFor(candidate.department || '');
-
+  const [downloadingCommentSheet, setDownloadingCommentSheet] = useState(false);
+  const handleDownloadCommentSheet = async () => {
+    if (downloadingCommentSheet) return;
+    setDownloadingCommentSheet(true);
+    try {
+      await downloadInterviewCommentSheetPdf(candidate, ev);
+    } catch (err) {
+      console.error('Error generating interview comment sheet:', err);
+      toast.error('Could not create the PDF. Please try again.');
+    } finally {
+      setDownloadingCommentSheet(false);
+    }
+  };
   return (
     <div>
       {/* Action Buttons — outside QP so they don't print */}
@@ -445,6 +458,14 @@ function TechnicalTestPaperWidget({ ev, candidate, designation, onDesignationCha
               </button>
             </>
           )}
+          <button
+            type="button"
+            onClick={() => void handleDownloadCommentSheet()}
+            disabled={downloadingCommentSheet}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-foreground bg-white border border-gray-300 hover:bg-gray-100 rounded-sm shadow-sm transition-colors whitespace-nowrap disabled:opacity-50"
+          >
+            <FileDown className="w-3.5 h-3.5" /> {downloadingCommentSheet ? 'Creating PDF...' : 'Download sample comment sheet'}
+          </button>
           <button
             type="button"
             onClick={() => {

@@ -20,6 +20,7 @@ _OFFER_STAGES = frozenset(
         PipelineStage.CSS,
         PipelineStage.SALARY_DETAILS,
         PipelineStage.FINAL_APPROVAL,
+        PipelineStage.OFFER_RESPONSE,
         PipelineStage.HIRED,
     }
 )
@@ -38,6 +39,7 @@ _HO_STAGES = frozenset(
         PipelineStage.CSS,
         PipelineStage.SALARY_DETAILS,
         PipelineStage.FINAL_APPROVAL,
+        PipelineStage.OFFER_RESPONSE,
         PipelineStage.HIRED,
     }
 )
@@ -128,9 +130,11 @@ def _derive(
     elif current_stage == PipelineStage.ON_HOLD:
         next_action, action_key = "Review hold", "RESUME_HOLD"
     elif offer_status == "SENT":
-        next_action, action_key = "Offer sent — Awaiting candidate response", "WORKSPACE"
+        next_action, action_key = "Offer sent. Awaiting candidate response", "WORKSPACE"
     elif offer_status == "ACCEPTED":
-        next_action, action_key = "Offer accepted — Complete onboarding", "ADVANCE_STAGE"
+        next_action, action_key = "Offer accepted. Complete onboarding", "NONE"
+    elif offer_status == "DECLINED":
+        next_action, action_key = "Offer declined. No further action", "NONE"
     elif blockers:
         next_action, action_key = "Complete required prerequisites", "WORKSPACE"
     elif current_stage == PipelineStage.CSS:
@@ -166,8 +170,8 @@ def _derive(
     days_since_activity = _age_in_days(activity_at, now) if activity_at else None
     idle_days = days_in_stage if days_since_activity is None else min(days_in_stage, days_since_activity)
     queue_keys: list[str] = []
-    waiting_for_response = next_action in {CALL_LETTER_WAITING_RESPONSE, "Offer sent — Awaiting candidate response"}
-    if next_action not in {"No further action", "Unknown"} and not waiting_for_response:
+    waiting_for_response = next_action in {CALL_LETTER_WAITING_RESPONSE, "Offer sent. Awaiting candidate response"}
+    if next_action not in {"No further action", "Unknown"} and action_key != "NONE" and not waiting_for_response:
         queue_keys.append("NEEDS_ACTION")
     if current_stage == PipelineStage.ON_HOLD:
         queue_keys.append("ON_HOLD")

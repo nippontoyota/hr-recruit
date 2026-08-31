@@ -13,6 +13,8 @@ const EMPTY_JOB: PreviousJob = {
   company: '',
   position: '',
   reporting: '',
+  reportingDesignation: '',
+  reportingPhone: '',
   fromDate: '',
   toDate: '',
   salary: '',
@@ -530,7 +532,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
                 <div className="flex flex-col items-center justify-center gap-0.5">
                   <span className="font-bold text-[8px] leading-tight">Offer Letter Issued</span>
                   <span className="text-[12px] font-bold leading-none text-slate-800">
-                    {Boolean(candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED' || raw.offerLetterIssued === true || raw.offerLetterIssued === 'true' || raw.offerLetterIssued === 'Yes' || candidate.current_stage === 'HIRED') ? '☑' : '☐'}
+                    {Boolean(candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED' || candidate.offer_status === 'DECLINED' || raw.offerLetterIssued === true || raw.offerLetterIssued === 'true' || raw.offerLetterIssued === 'Yes' || candidate.current_stage === 'OFFER_RESPONSE' || candidate.current_stage === 'HIRED') ? '☑' : '☐'}
                   </span>
                 </div>
               </Cell>
@@ -538,7 +540,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
                 <div className="flex flex-col items-center justify-center gap-0.5">
                   <span className="font-bold text-[8px] leading-tight">Offer Communication Message</span>
                   <span className="text-[12px] font-bold leading-none text-slate-800">
-                    {Boolean(candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED' || raw.offerCommMessage === true || raw.offerCommMessage === 'true' || raw.offerCommMessage === 'Yes') ? '☑' : '☐'}
+                    {Boolean(candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED' || candidate.offer_status === 'DECLINED' || raw.offerCommMessage === true || raw.offerCommMessage === 'true' || raw.offerCommMessage === 'Yes' || candidate.current_stage === 'OFFER_RESPONSE') ? '☑' : '☐'}
                   </span>
                 </div>
               </Cell>

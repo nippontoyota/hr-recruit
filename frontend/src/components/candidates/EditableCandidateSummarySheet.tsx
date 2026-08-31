@@ -19,6 +19,8 @@ const EMPTY_JOB: PreviousJob = {
   company: '',
   position: '',
   reporting: '',
+  reportingDesignation: '',
+  reportingPhone: '',
   fromDate: '',
   toDate: '',
   salary: '',
@@ -258,7 +260,7 @@ export function EditableCandidateSummarySheet({
     // Offer Milestones (Checkable)
     offerLetterIssued: initialRaw.offerLetterIssued != null
       ? Boolean(initialRaw.offerLetterIssued === true || initialRaw.offerLetterIssued === 'true' || initialRaw.offerLetterIssued === 'Yes')
-      : Boolean(candidate.offer_letter_generated_at || candidate.offer_letter_issued || candidate.current_stage === 'FINAL_APPROVAL' || candidate.current_stage === 'HIRED'),
+      : Boolean(candidate.offer_letter_generated_at || candidate.offer_letter_issued || candidate.current_stage === 'FINAL_APPROVAL' || candidate.current_stage === 'OFFER_RESPONSE' || candidate.current_stage === 'HIRED'),
     offerCommMessage: initialRaw.offerCommMessage != null
       ? Boolean(initialRaw.offerCommMessage === true || initialRaw.offerCommMessage === 'true' || initialRaw.offerCommMessage === 'Yes')
       : Boolean(candidate.offer_letter_generated_at),

@@ -9,6 +9,16 @@ from app.models.user import User
 
 _REQUIRED_CC = ("jerry@nippontoyota.com", "naveen@nippontoyota.com")
 _KALAMASSERY_HR = "hrkly@nippontoyota.com"
+_HEAD_OFFICE_FORWARDING_CC = (
+    "recruitment@nippontoyota.com",
+    "naveen@nippontoyota.com",
+    "jerry@nippontoyota.com",
+)
+
+
+def head_office_forwarding_cc_emails() -> list[str]:
+    """Internal recipients who should receive the branch-to-HO update copy."""
+    return list(_HEAD_OFFICE_FORWARDING_CC)
 
 
 def offer_cc_emails(db: Session, candidate: Candidate) -> list[str]:

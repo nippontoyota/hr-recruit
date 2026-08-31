@@ -8,7 +8,7 @@ from app.core.salary_sheet import validate_package
 from app.models.enums import EvaluationType, EvaluationVerdict, PipelineStage
 from app.utils.validators import validate_email, validate_phone
 
-OFFER_STAGES = frozenset({PipelineStage.CSS, PipelineStage.SALARY_DETAILS, PipelineStage.FINAL_APPROVAL, PipelineStage.HIRED})
+OFFER_STAGES = frozenset({PipelineStage.CSS, PipelineStage.SALARY_DETAILS, PipelineStage.FINAL_APPROVAL, PipelineStage.OFFER_RESPONSE, PipelineStage.HIRED})
 HO_TYPES = (EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2)
 
 

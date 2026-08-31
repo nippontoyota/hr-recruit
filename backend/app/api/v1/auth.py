@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.compat import role_for_frontend
@@ -75,7 +76,13 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
             ),
         )
 
-    user = db.scalar(select(User).where(User.email == body.email.lower()))
+    try:
+        user = db.scalar(select(User).where(User.email == body.email.lower()))
+    except OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The recruitment database is temporarily unavailable. Please try again in a moment.",
+        ) from exc
     if user is None or not verify_password(body.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

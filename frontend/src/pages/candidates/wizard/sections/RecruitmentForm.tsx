@@ -74,15 +74,14 @@ export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () =>
       </div>
 
       <div className="pt-6 border-t border-border/40">
-        <h4 className="text-sm font-semibold text-text-primary mb-1">Local Reference Details</h4>
+        <h4 className="text-sm font-semibold text-text-primary mb-1">Reference details for verification</h4>
         <p className="text-xs text-text-secondary mb-4 leading-relaxed">
-          Someone from your area who can vouch for your address and character during verification.
-          This is separate from the &quot;Referred By&quot; field above.
+          Choose someone who can verify your address and character. If you have work experience, you can use a previous manager or colleague. If you are a fresher, you can use a ward member, panchayat member, or another trusted person from your area. This is different from the &quot;Referred By&quot; field above.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FormField field="refRole" error={errors.refRole}>
             <label className="block text-sm font-medium text-text-primary mb-1">
-              Role of Reference <span className="text-danger">*</span>
+              Type of Reference <span className="text-danger">*</span>
             </label>
             <Select
               value={data.refRole}
@@ -92,18 +91,24 @@ export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () =>
               }}
               error={!!errors.refRole}
             >
-              <option value="" disabled>Select Role</option>
-              <option value="Manager">Previous Manager</option>
-              <option value="Colleague">Colleague</option>
+              <option value="" disabled>Select reference type</option>
+              <option value="__local_reference" disabled>Local area reference</option>
+              <option value="Ward Member">Ward Member</option>
+              <option value="Panchayat Member">Panchayat Member</option>
+              <option value="Municipality Councillor">Municipality Councillor</option>
+              <option value="Corporation Councillor">Corporation Councillor</option>
+              <option value="Other">Other trusted local person</option>
+              <option value="__work_reference" disabled>Work or personal reference</option>
+              <option value="Manager">Previous Manager / Supervisor</option>
+              <option value="Colleague">Previous Colleague</option>
               <option value="Professor">Professor / Teacher</option>
               <option value="Relative">Relative</option>
-              <option value="Other">Other</option>
             </Select>
           </FormField>
 
           <FormField field="refName" error={errors.refName}>
             <label className="block text-sm font-medium text-text-primary mb-1">
-              Name <span className="text-danger">*</span>
+              Representative&apos;s Name <span className="text-danger">*</span>
             </label>
             <Input
               value={data.refName}
@@ -116,20 +121,20 @@ export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () =>
 
           <FormField field="refPanchayat" error={errors.refPanchayat}>
             <label className="block text-sm font-medium text-text-primary mb-1">
-              Panchayat / Location <span className="text-danger">*</span>
+              Area / Locality / Workplace <span className="text-danger">*</span>
             </label>
             <Input
               value={data.refPanchayat}
               onChange={(e) => update('refPanchayat', e.target.value)}
               onBlur={() => onBlurField('refPanchayat')}
               error={!!errors.refPanchayat}
-              placeholder="e.g. Kalamassery / Aluva / Thrikkakara"
+              placeholder="e.g. Ward 12, Aluva Panchayat or Nippon Toyota Kalamassery"
             />
           </FormField>
 
           <FormField field="refContactNumber" error={errors.refContactNumber}>
             <label className="block text-sm font-medium text-text-primary mb-1">
-              Contact Number <span className="text-danger">*</span>
+              Representative&apos;s Contact Number <span className="text-danger">*</span>
             </label>
             <Input
               type="tel"

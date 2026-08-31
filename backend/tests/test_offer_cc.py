@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from app.core.offer_cc import offer_cc_emails
+from app.core.offer_cc import head_office_forwarding_cc_emails, offer_cc_emails
 
 
 def _candidate(branch: str | None = "Thevara"):
@@ -46,4 +46,12 @@ def test_offer_cc_deduplicates_addresses_case_insensitively():
     assert offer_cc_emails(db, _candidate()) == [
         "jerry@nippontoyota.com",
         "naveen@nippontoyota.com",
+    ]
+
+
+def test_head_office_forwarding_cc_includes_internal_recipients():
+    assert head_office_forwarding_cc_emails() == [
+        "recruitment@nippontoyota.com",
+        "naveen@nippontoyota.com",
+        "jerry@nippontoyota.com",
     ]

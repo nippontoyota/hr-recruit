@@ -19,7 +19,9 @@ import { ResumeButton } from '../../components/candidates/ResumeButton';
 import { EvaluationStageWidget } from '../../components/candidates/EvaluationStageWidget';
 import { ApplicationStageWidget } from '../../components/candidates/ApplicationStageWidget';
 import { HeadOfficeInvitePanel } from '../../components/candidates/HeadOfficeInvitePanel';
+import { HeadOfficeForwardingEmailStatus } from '../../components/candidates/HeadOfficeForwardingEmailStatus';
 import { FinalApprovalWidget } from '../../components/candidates/FinalApprovalWidget';
+import { OfferResponseStageWidget } from '../../components/candidates/OfferResponseStageWidget';
 import { BackgroundVerificationWidget } from '../../components/candidates/BackgroundVerificationWidget';
 import { ActivityTimeline } from '../../components/candidates/ActivityTimeline';
 import { CommunicationTimeline } from '../../components/candidates/CommunicationTimeline';
@@ -343,6 +345,12 @@ export default function CandidateProfile() {
 
       if (res) {
         if (!skipCandidate) profileCache[id] = res;
+        if (
+          ['HO_INTERVIEW_INTIMATION', 'OFFER_RESPONSE'].includes(res.current_stage)
+          && candidateRef.current?.current_stage !== res.current_stage
+        ) {
+          navigateToStage(res.current_stage);
+        }
         setCandidate(res);
         if (res.evaluations) setEvaluations(res.evaluations);
         setError(null);
@@ -601,6 +609,7 @@ export default function CandidateProfile() {
       'CSS',
       'SALARY_DETAILS',
       'FINAL_APPROVAL',
+      'OFFER_RESPONSE',
       'HIRED',
     ].includes(candidate.current_stage);
 
@@ -617,10 +626,10 @@ export default function CandidateProfile() {
       completedStages.push('HO_INTERVIEWS');
     }
 
-    if (['CSS', 'SALARY_DETAILS', 'FINAL_APPROVAL', 'HIRED'].includes(candidate.current_stage)) {
+    if (['CSS', 'SALARY_DETAILS', 'FINAL_APPROVAL', 'OFFER_RESPONSE', 'HIRED'].includes(candidate.current_stage)) {
       completedStages.push('CSS');
     }
-    if (['SALARY_DETAILS', 'FINAL_APPROVAL', 'HIRED'].includes(candidate.current_stage)) {
+    if (['SALARY_DETAILS', 'FINAL_APPROVAL', 'OFFER_RESPONSE', 'HIRED'].includes(candidate.current_stage)) {
       completedStages.push('SALARY_DETAILS');
     }
 
@@ -629,6 +638,9 @@ export default function CandidateProfile() {
     if (hqEval && hqEval.verdict) {
       if (hqEval.verdict === 'ON_HOLD') heldStages.push('FINAL_APPROVAL');
       else completedStages.push('FINAL_APPROVAL');
+    }
+    if (['OFFER_RESPONSE', 'HIRED'].includes(candidate.current_stage)) {
+      completedStages.push('FINAL_APPROVAL');
     }
 
     // 7. HIRED
@@ -669,6 +681,7 @@ export default function CandidateProfile() {
     actualStage !== 'REJECTED' &&
     actualStage !== 'HIRED' &&
     actualStage !== 'ON_HOLD' &&
+    actualStage !== 'OFFER_RESPONSE' &&
     !(isLocalHR && actualStage === 'APPLICATION');
 
   return (
@@ -745,17 +758,19 @@ export default function CandidateProfile() {
                   'HO_INTERVIEW_INTIMATION': 'INTERVIEW INTIMATION',
                   'HO_INTERVIEWS': 'INTERVIEWS',
                   'FINAL_APPROVAL': 'OFFER LETTER',
+                  'OFFER_RESPONSE': 'OFFER RESPONSE',
                 } : isLocalHR && hasBeenSentToHO ? {
                   'SENT_TO_HO': 'SENT TO HO',
                   'HO_INTERVIEW_INTIMATION': 'INTERVIEW INTIMATION',
                   'HO_INTERVIEWS': 'HO INTERVIEWS',
                   'FINAL_APPROVAL': 'OFFER',
+                  'OFFER_RESPONSE': 'OFFER RESPONSE',
                 } : undefined}
               />
             </div>
 
             {/* ── HOLD & REJECT ACTIONS ── */}
-            {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && actualStage !== 'ON_HOLD' && actualStage !== 'CSS' && actualStage !== 'SALARY_DETAILS' && actualStage !== 'FINAL_APPROVAL' && !isReadOnly && (
+            {actualStage !== 'REJECTED' && actualStage !== 'HIRED' && actualStage !== 'ON_HOLD' && actualStage !== 'CSS' && actualStage !== 'SALARY_DETAILS' && actualStage !== 'FINAL_APPROVAL' && actualStage !== 'OFFER_RESPONSE' && !isReadOnly && (
               <div className="mb-4 flex items-center justify-end gap-2 w-full">
                 <Button
                   variant="secondary"
@@ -947,6 +962,13 @@ export default function CandidateProfile() {
               />
             )}
 
+            {(stageToView === 'SENT_TO_HO' || stageToView === 'HO_INTERVIEW_INTIMATION') && (
+              <HeadOfficeForwardingEmailStatus
+                candidate={candidate}
+                onUpdate={handleUpdate}
+              />
+            )}
+
             {!isAdmin && stageToView === 'HO_INTERVIEW_INTIMATION' && evaluations.find((e) => e.type === 'HQ_INTERVIEW_1') && (
               <HeadOfficeInvitePanel
                 candidate={candidate}
@@ -1006,6 +1028,14 @@ export default function CandidateProfile() {
               <div className="rounded-xl border border-border bg-surface p-6 text-sm text-muted-foreground">
                 Offer letter and salary details are handled by Head Office.
               </div>
+            )}
+
+            {stageToView === 'OFFER_RESPONSE' && (
+              <OfferResponseStageWidget
+                candidate={candidate}
+                onUpdate={handleUpdate}
+                isReadOnly={isLocalHR}
+              />
             )}
 
 
@@ -1217,6 +1247,7 @@ export default function CandidateProfile() {
                 <option value="APPLICATION">Application</option>
                 <option value="SENT_TO_HO">Sent to Head Office</option>
                 <option value="FINAL_APPROVAL">Final Approval</option>
+                <option value="OFFER_RESPONSE">Offer Response</option>
                 <option value="ON_HOLD">On Hold</option>
                 <option value="REJECTED">Rejected</option>
                 <option value="HIRED">Hired</option>

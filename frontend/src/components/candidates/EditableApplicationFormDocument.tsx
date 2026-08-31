@@ -26,6 +26,8 @@ interface JobRow {
   co: string;
   pos: string;
   rep: string;
+  repDesignation: string;
+  repPhone: string;
   from: string;
   to: string;
   sal: string;
@@ -186,6 +188,8 @@ export function EditableApplicationFormDocument({
         co: String(j.company || j.co || ''),
         pos: String(j.position || j.pos || ''),
         rep: String(j.reporting || j.rep || ''),
+        repDesignation: String(j.reportingDesignation || j.repDesignation || ''),
+        repPhone: String(j.reportingPhone || j.repPhone || ''),
         from: String(j.from || j.fromDate || ''),
         to: String(j.to || j.toDate || ''),
         sal: String(j.salary || j.sal || ''),
@@ -194,10 +198,10 @@ export function EditableApplicationFormDocument({
     }
     const fallback: JobRow[] = [];
     if (initialRaw.prevCompanyName || initialRaw.prevPosition) {
-      fallback.push({ id: 'j1', co: String(initialRaw.prevCompanyName || ''), pos: String(initialRaw.prevPosition || ''), rep: String(initialRaw.prev1Reporting || ''), from: String(initialRaw.prev1From || ''), to: String(initialRaw.prev1To || ''), sal: String(initialRaw.prev1Salary || ''), reason: String(initialRaw.prev1Reason || '') });
+      fallback.push({ id: 'j1', co: String(initialRaw.prevCompanyName || ''), pos: String(initialRaw.prevPosition || ''), rep: String(initialRaw.prev1Reporting || ''), repDesignation: String(initialRaw.prev1ReportingDesignation || ''), repPhone: String(initialRaw.prev1ReportingPhone || ''), from: String(initialRaw.prev1From || ''), to: String(initialRaw.prev1To || ''), sal: String(initialRaw.prev1Salary || ''), reason: String(initialRaw.prev1Reason || '') });
     }
     if (initialRaw.prev2Name || initialRaw.prev2Position) {
-      fallback.push({ id: 'j2', co: String(initialRaw.prev2Name || ''), pos: String(initialRaw.prev2Position || ''), rep: String(initialRaw.prev2Reporting || ''), from: String(initialRaw.prev2From || ''), to: String(initialRaw.prev2To || ''), sal: String(initialRaw.prev2Salary || ''), reason: String(initialRaw.prev2Reason || '') });
+      fallback.push({ id: 'j2', co: String(initialRaw.prev2Name || ''), pos: String(initialRaw.prev2Position || ''), rep: String(initialRaw.prev2Reporting || ''), repDesignation: String(initialRaw.prev2ReportingDesignation || ''), repPhone: String(initialRaw.prev2ReportingPhone || ''), from: String(initialRaw.prev2From || ''), to: String(initialRaw.prev2To || ''), sal: String(initialRaw.prev2Salary || ''), reason: String(initialRaw.prev2Reason || '') });
     }
     return fallback;
   });
@@ -243,7 +247,7 @@ export function EditableApplicationFormDocument({
   const handleAddJobRow = () => {
     setJobList((prev) => [
       ...prev,
-      { id: `job-${Date.now()}`, co: '', pos: '', rep: '', from: '', to: '', sal: '', reason: '' },
+      { id: `job-${Date.now()}`, co: '', pos: '', rep: '', repDesignation: '', repPhone: '', from: '', to: '', sal: '', reason: '' },
     ]);
   };
 
@@ -742,7 +746,13 @@ export function EditableApplicationFormDocument({
                             <td className="border border-[#1e3a5f] p-0.5 text-center text-xs font-semibold">{idx + 1}</td>
                             <td className="border border-[#1e3a5f] p-0.5"><InlineCellInput value={job.co} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, co: v } : j)))} placeholder="Company & Location" /></td>
                             <td className="border border-[#1e3a5f] p-0.5"><InlineCellInput value={job.pos} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, pos: v } : j)))} placeholder="Position" /></td>
-                            <td className="border border-[#1e3a5f] p-0.5"><InlineCellInput value={job.rep} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, rep: v } : j)))} placeholder="Reporting" /></td>
+                            <td className="border border-[#1e3a5f] p-0.5">
+                              <div className="space-y-0.5">
+                                <InlineCellInput value={job.rep} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, rep: v } : j)))} placeholder="Name" />
+                                <InlineCellInput value={job.repDesignation} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, repDesignation: v } : j)))} placeholder="Designation" />
+                                <InlineCellInput value={job.repPhone} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, repPhone: v } : j)))} placeholder="Phone" />
+                              </div>
+                            </td>
                             <td className="border border-[#1e3a5f] p-0.5 text-center"><InlineCellInput value={job.from} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, from: v } : j)))} placeholder="From" className="text-center" /></td>
                             <td className="border border-[#1e3a5f] p-0.5 text-center"><InlineCellInput value={job.to} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, to: v } : j)))} placeholder="To" className="text-center" /></td>
                             <td className="border border-[#1e3a5f] p-0.5 text-center"><InlineCellInput value={job.sal} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, sal: v } : j)))} placeholder="Salary" className="text-center" /></td>

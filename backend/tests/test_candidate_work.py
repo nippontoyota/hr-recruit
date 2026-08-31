@@ -172,12 +172,28 @@ def test_offer_sent_and_accepted_work_state():
     accepted_state = build_candidate_work_state(None, _candidate(offer_status="ACCEPTED"))
 
     assert sent_state.blockers == []
-    assert sent_state.next_action == "Offer sent — Awaiting candidate response"
+    assert sent_state.next_action == "Offer sent. Awaiting candidate response"
     assert "WAITING_FOR_CANDIDATE" in sent_state.queue_keys
     assert "NEEDS_ACTION" not in sent_state.queue_keys
 
     assert accepted_state.blockers == []
-    assert accepted_state.next_action == "Offer accepted — Complete onboarding"
-    assert accepted_state.action_key == "ADVANCE_STAGE"
-    assert "NEEDS_ACTION" in accepted_state.queue_keys
+    assert accepted_state.next_action == "Offer accepted. Complete onboarding"
+    assert accepted_state.action_key == "NONE"
+    assert "NEEDS_ACTION" not in accepted_state.queue_keys
+
+
+def test_offer_response_stage_distinguishes_pending_and_declined():
+    pending = build_candidate_work_state(
+        None,
+        _candidate(current_stage=PipelineStage.OFFER_RESPONSE, offer_status="SENT"),
+    )
+    declined = build_candidate_work_state(
+        None,
+        _candidate(current_stage=PipelineStage.OFFER_RESPONSE, offer_status="DECLINED"),
+    )
+
+    assert pending.next_action == "Offer sent. Awaiting candidate response"
+    assert "WAITING_FOR_CANDIDATE" in pending.queue_keys
+    assert declined.next_action == "Offer declined. No further action"
+    assert "WAITING_FOR_CANDIDATE" not in declined.queue_keys
 

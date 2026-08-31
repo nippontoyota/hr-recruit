@@ -112,7 +112,7 @@ export function CommunicationTimeline({ candidateId, candidate }: CommunicationT
           ))}
         </ol>
       )}
-      <p className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground"><RefreshCw className="h-3 w-3" />Retry is unavailable because no safe retry endpoint exists.</p>
+      <p className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground"><RefreshCw className="h-3 w-3" />Use the action in the relevant stage to resend a failed message.</p>
     </section>
   );
 }

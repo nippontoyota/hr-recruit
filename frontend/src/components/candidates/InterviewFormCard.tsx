@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, CheckCircle, Link, Loader2, Pencil, Star, Trash2 } from 'lucide-react';
+import { Check, CheckCircle, FileDown, Link, Loader2, Pencil, Star, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Input, Select } from '../ui';
 import {
@@ -24,6 +24,7 @@ import { cn, extractError, isAbortError, copyTextToClipboard } from '../../lib/u
 import { useAuth } from '../../auth';
 import { digitsOnly, validatePhone } from '../../lib/validation';
 import { formatDate, formatTime } from '../../lib/dateTime';
+import { downloadInterviewCommentSheetPdf } from '../../lib/generateInterviewCommentSheetPdf';
 
 const PREDEFINED_REMARKS = [
   'Excellent candidate, highly recommended.',
@@ -115,6 +116,7 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [savingTitle, setSavingTitle] = useState(false);
+  const [downloadingCommentSheet, setDownloadingCommentSheet] = useState(false);
   const skipTitleSaveRef = useRef(false);
 
   const requireInterviewer =
@@ -315,6 +317,19 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
     setWhatsappOpen(false);
   };
 
+  const handleDownloadCommentSheet = async () => {
+    if (downloadingCommentSheet) return;
+    setDownloadingCommentSheet(true);
+    try {
+      await downloadInterviewCommentSheetPdf(candidate, ev);
+    } catch (err) {
+      console.error('Error generating interview comment sheet:', err);
+      toast.error('Could not create the PDF. Please try again.');
+    } finally {
+      setDownloadingCommentSheet(false);
+    }
+  };
+
   const handleSubmitScorecard = async () => {
     if (attitudeScore === 0 || commScore === 0 || knowledgeScore === 0 || !verdict) {
       toast.error('Please complete all star ratings and select a verdict');
@@ -420,6 +435,15 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
               </button>
             )}
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleDownloadCommentSheet()}
+              disabled={downloadingCommentSheet}
+              className="flex min-h-11 items-center gap-2 px-3 py-1.5 text-xs font-bold text-foreground bg-background border border-border hover:bg-muted rounded-lg shadow-sm transition-colors disabled:opacity-50"
+            >
+              <FileDown className="w-3.5 h-3.5" /> {downloadingCommentSheet ? 'Creating PDF...' : 'Download sample comment sheet'}
+            </button>
           {!isCompleted && !isReadOnly && (
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -451,6 +475,7 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
               </button>
             </div>
           )}
+          </div>
         </div>
 
         {isCompleted && !isEditing ? (

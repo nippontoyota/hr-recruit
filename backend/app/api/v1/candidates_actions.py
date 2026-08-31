@@ -1,7 +1,9 @@
 from uuid import UUID
 from datetime import datetime, timezone
+from html import escape
 import logging
 from io import BytesIO
+from typing import Literal
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -11,7 +13,7 @@ from app.core.database import get_db
 from app.core.deps import require_roles
 from app.core.access import get_candidate_for_user
 from app.core.offer_gate import offer_blockers
-from app.core.offer_cc import offer_cc_emails
+from app.core.offer_cc import head_office_forwarding_cc_emails, offer_cc_emails
 from app.core.positions import positions_for
 from app.core.config import settings
 from app.models.candidate import Candidate
@@ -117,6 +119,7 @@ def transition_stage(
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user, write=True)
+    previous_stage = row.current_stage
     if body.raw_data is not None:
         if not row.profile:
             row.profile = CandidateProfile(candidate_id=row.id, raw_data=body.raw_data)
@@ -130,6 +133,14 @@ def transition_stage(
         user=user,
         remarks=body.remarks
     )
+    if previous_stage not in {
+        PipelineStage.SENT_TO_HO,
+        PipelineStage.HO_INTERVIEW_INTIMATION,
+    } and body.to_stage in {
+        PipelineStage.SENT_TO_HO,
+        PipelineStage.HO_INTERVIEW_INTIMATION,
+    }:
+        _send_head_office_forwarding_email(db, updated, user)
     db.commit()
     db.refresh(updated)
     return to_candidate_out(updated, id in resume_candidate_ids(db, [id]), db, viewer=user)
@@ -451,7 +462,7 @@ def save_whatsapp_template(
 
 
 from app.api.v1.pdf import generate_offer_letter_pdf, resolve_offer_fields
-from app.services.email import send_email_with_pdf, EmailSendError
+from app.services.email import send_email, send_email_with_pdf, EmailSendError
 
 class SendOfferLetterRequest(BaseModel):
     candidate_name: str | None = None
@@ -462,6 +473,243 @@ class SendOfferLetterRequest(BaseModel):
     others: str | None = None
     gross_salary: str | None = None
     joining_date: str | None = None
+
+
+class OfferResponseRequest(BaseModel):
+    status: Literal["ACCEPTED", "DECLINED"]
+    reason: str | None = None
+
+
+OFFER_ACCEPTANCE_EMAIL_SUBJECT = "Offer Acceptance Confirmation & Documents Required for Joining"
+HEAD_OFFICE_FORWARDING_EMAIL_SUBJECT = "Update Regarding Interview – Nippon Toyota"
+
+
+def _offer_acceptance_email_content(candidate: Candidate) -> tuple[str, str, str]:
+    profile = getattr(candidate, "profile", None)
+    raw_data = dict(profile.raw_data or {}) if profile else {}
+    payload = {
+        "candidate": {
+            "full_name": getattr(candidate, "full_name", None),
+            "position_applied_for": getattr(candidate, "position_applied_for", None),
+            "department": getattr(candidate, "department", None),
+            "salary_data": getattr(candidate, "salary_data", None),
+        },
+        "joining_date": raw_data.get("dateOfJoining") or (profile.joining_date if profile else None),
+    }
+    fields = resolve_offer_fields(payload)
+    name = fields["candidate_name"] or getattr(candidate, "full_name", None) or "Candidate"
+    role = fields["designation"] or getattr(candidate, "position_applied_for", None) or getattr(candidate, "department", None) or "the offered position"
+    joining_date = fields["joining_date"]
+    if not joining_date:
+        raise HTTPException(status_code=400, detail="Add the joining date to the offer before sending joining instructions.")
+
+    safe_name = escape(name)
+    safe_role = escape(role)
+    safe_date = escape(joining_date)
+    body_html = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.55;">
+        <p>Dear {safe_name},</p>
+        <p>We are pleased to confirm your acceptance of the employment offer for the position of <strong>{safe_role}</strong> at Nippon Toyota.</p>
+        <p>We look forward to welcoming you to our organization on your joining date, <strong>{safe_date}</strong>, at Nippon Toyota, Kalamassery.</p>
+        <p><strong>Location:</strong> Nippon Toyota, Kalamassery - Google Maps</p>
+        <p><strong>Reporting Location:</strong> 3rd Floor - Sales Training Room / HR Department</p>
+        <p>Please carry the following documents and information with you on the day of joining for verification and completion of the joining formalities:</p>
+        <h3>Documents to be Carried</h3>
+        <ul>
+          <li>Passport-size photographs - 5 Nos.<ul><li>White background</li><li>Coat/blazer preferred</li></ul></li>
+          <li>Educational Certificate Copies - 1 Set</li>
+          <li>Experience Certificates - 1 Copy Each, if applicable</li>
+          <li>ID Proof Copies - 4 Sets Each. Please carry copies of the following ID proofs, as applicable:<ul>
+            <li>Voter ID</li><li>Driving Licence</li><li>Passport</li><li>PAN Card</li><li>Aadhaar Card</li>
+          </ul></li>
+        </ul>
+        <h3>Family Member Details</h3>
+        <ul><li>Date of Birth of family members</li><li>Aadhaar Number of family members</li></ul>
+        <h3>Family Documents</h3>
+        <ul><li>Family photograph</li><li>Ration Card copy</li></ul>
+        <h3>PF &amp; ESI Details</h3>
+        <ul><li>PF UAN Number</li><li>ESI Number, if available</li></ul>
+        <p>Please ensure that all the required documents are arranged and carried with you on the joining date to avoid any delay in completing the joining formalities.</p>
+        <p>We look forward to welcoming you to the team and wish you a successful career with us.</p>
+        <p>For further details or any queries, please feel free to contact us at 8606986060.</p>
+        <p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>Nippon Toyota<br>8606986060, 9544286099</p>
+      </body>
+    </html>
+    """
+    preview = (
+        f"Dear {name},\n\n"
+        f"Offer acceptance confirmed for {role} at Nippon Toyota.\n"
+        f"Joining date: {joining_date}.\n"
+        "Reporting location: 3rd Floor - Sales Training Room / HR Department.\n\n"
+        "Joining documents checklist included."
+    )
+    return OFFER_ACCEPTANCE_EMAIL_SUBJECT, body_html, preview
+
+
+def _head_office_forwarding_email_content(candidate: Candidate) -> tuple[str, str, str]:
+    name = escape(getattr(candidate, "full_name", None) or "Candidate")
+    body_html = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.55;">
+        <p>Dear {name},</p>
+        <p>Thank you for taking the time to attend the interview at Nippon Toyota.</p>
+        <p>We are pleased to inform you that you have been shortlisted for the next stage of our selection process, and your application has been forwarded to our Head Office for further review.</p>
+        <p>Further details regarding the upcoming steps in the selection process will be communicated to you by the Head Office Team at Nippon Toyota, Kalamassery, within the next five working days.</p>
+        <p>We appreciate your interest in joining Nippon Toyota and look forward to staying in touch with you.</p>
+        <p>For further details or any queries, please feel free to contact us at 8606986060.</p>
+        <p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>Nippon Toyota<br>8606986060, 9544286099</p>
+      </body>
+    </html>
+    """
+    preview = (
+        f"Dear {getattr(candidate, 'full_name', None) or 'Candidate'},\n\n"
+        "Your application has been forwarded to Nippon Toyota Head Office for further review.\n"
+        "Further selection details will be communicated within the next five working days."
+    )
+    return HEAD_OFFICE_FORWARDING_EMAIL_SUBJECT, body_html, preview
+
+
+def _send_head_office_forwarding_email(
+    db: Session,
+    candidate: Candidate,
+    user: User,
+) -> tuple[str, str | None]:
+    subject, body_html, preview = _head_office_forwarding_email_content(candidate)
+    error: str | None = None
+    status = CommunicationStatus.SENT
+    if not getattr(candidate, "email", None):
+        status = CommunicationStatus.FAILED
+        error = "Candidate does not have an email address on file."
+    else:
+        try:
+            send_email(
+                to_email=candidate.email,
+                subject=subject,
+                body_html=body_html,
+                cc_emails=head_office_forwarding_cc_emails(),
+            )
+        except EmailSendError as e:
+            status = CommunicationStatus.FAILED
+            error = str(e)
+            logger.warning("Head Office forwarding email failed for %s: %s", candidate.id, error)
+
+    if not candidate.profile:
+        candidate.profile = CandidateProfile(candidate_id=candidate.id)
+        db.add(candidate.profile)
+    raw_data = dict(candidate.profile.raw_data or {})
+    raw_data["headOfficeForwardingEmailStatus"] = status.value
+    if error:
+        raw_data["headOfficeForwardingEmailError"] = error
+    else:
+        raw_data.pop("headOfficeForwardingEmailError", None)
+        raw_data["headOfficeForwardingEmailSentAt"] = datetime.now(timezone.utc).isoformat()
+        raw_data["headOfficeForwardingEmailSentBy"] = str(user.id)
+    candidate.profile.raw_data = raw_data
+
+    db.add(
+        Communication(
+            candidate_id=candidate.id,
+            type=CommunicationType.EMAIL,
+            direction=CommunicationDirection.OUTGOING,
+            status=status,
+            subject=subject,
+            content_preview=preview if not error else f"Head Office forwarding email failed: {error}",
+            created_by=user.id,
+        )
+    )
+    db.add(
+        ActivityLog(
+            candidate_id=candidate.id,
+            activity_type=ActivityType.EMAIL,
+            title="Head Office Forwarding Email Sent" if not error else "Head Office Forwarding Email Failed",
+            description=(
+                "Sent the Head Office forwarding interview update email."
+                if not error
+                else f"Error: {error}"
+            ),
+            created_by_user_id=user.id,
+        )
+    )
+    return status.value, error
+
+
+def _send_offer_whatsapp_intimation(
+    db: Session,
+    candidate: Candidate,
+    user: User,
+    placeholders: list[str],
+) -> tuple[str, str | None]:
+    template_name = settings.offer_whatsapp_intimation_template_name
+    if not template_name:
+        error = "Offer letter WhatsApp template is not configured."
+        status = CommunicationStatus.FAILED
+        external_message_id = None
+    else:
+        try:
+            res = send_template(
+                to_phone=candidate.phone,
+                template_name=template_name,
+                placeholders=placeholders,
+            )
+            messages = res.get("messages", [])
+            external_message_id = messages[0].get("id") if messages else None
+            status = CommunicationStatus.SENT
+            error = None
+        except DoubleTickError as e:
+            error = e.user_message
+            status = CommunicationStatus.FAILED
+            external_message_id = None
+            logger.warning("Offer WhatsApp delivery failed for %s: %s", candidate.id, error)
+        except Exception:
+            error = "DoubleTick could not send the offer WhatsApp intimation."
+            status = CommunicationStatus.FAILED
+            external_message_id = None
+            logger.exception("Unexpected offer WhatsApp delivery failure for %s", candidate.id)
+
+    if status == CommunicationStatus.SENT:
+        db.add(
+            Communication(
+                candidate_id=candidate.id,
+                type=CommunicationType.WHATSAPP,
+                direction=CommunicationDirection.OUTGOING,
+                status=status,
+                content_preview=f"Offer letter intimation sent. Position: {placeholders[1]}",
+                external_message_id=external_message_id,
+                created_by=user.id,
+            )
+        )
+        db.add(
+            ActivityLog(
+                candidate_id=candidate.id,
+                activity_type=ActivityType.WHATSAPP,
+                title="Offer Letter WhatsApp Sent",
+                description=f"Template: {template_name}. Offer letter email attached.",
+                created_by_user_id=user.id,
+            )
+        )
+    else:
+        db.add(
+            Communication(
+                candidate_id=candidate.id,
+                type=CommunicationType.WHATSAPP,
+                direction=CommunicationDirection.OUTGOING,
+                status=status,
+                content_preview=f"Offer letter intimation failed: {error}",
+                created_by=user.id,
+            )
+        )
+        db.add(
+            ActivityLog(
+                candidate_id=candidate.id,
+                activity_type=ActivityType.WHATSAPP,
+                title="Offer Letter WhatsApp Failed",
+                description=error or "DoubleTick could not send the offer WhatsApp intimation.",
+                created_by_user_id=user.id,
+            )
+        )
+
+    return status.value, error
 
 @router.post("/{id}/offer-letter/send", response_model=CandidateOut)
 def send_offer_letter(
@@ -549,109 +797,20 @@ def send_offer_letter(
     db.add(log)
     
     # WhatsApp intimation is tracked independently from the already-sent email.
-    offer_whatsapp_status = "PENDING"
-    template_name = settings.offer_whatsapp_intimation_template_name
-    if template_name:
-        try:
-            placeholders = [
-                offer["candidate_name"] or row.full_name or "",
-                position_label,
-                row.branch_location or "Nippon Toyota",
-            ]
+    offer_whatsapp_status, offer_whatsapp_error = _send_offer_whatsapp_intimation(
+        db,
+        row,
+        user,
+        [
+            offer["candidate_name"] or row.full_name or "",
+            position_label,
+            row.branch_location or "Nippon Toyota",
+        ],
+    )
 
-            res = send_template(
-                to_phone=row.phone,
-                template_name=template_name,
-                placeholders=placeholders,
-            )
-
-            messages = res.get("messages", [])
-            external_message_id = messages[0].get("id") if messages else None
-            offer_whatsapp_status = "SENT"
-
-            comm = Communication(
-                candidate_id=id,
-                type=CommunicationType.WHATSAPP,
-                direction=CommunicationDirection.OUTGOING,
-                status=CommunicationStatus.SENT,
-                content_preview=f"Offer letter intimation sent. Position: {row.position_applied_for}",
-                external_message_id=external_message_id,
-                created_by=user.id,
-            )
-            db.add(comm)
-
-            db.add(
-                ActivityLog(
-                    candidate_id=id,
-                    activity_type=ActivityType.WHATSAPP,
-                    title="Offer Letter WhatsApp Sent",
-                    description=f"Template: {template_name}. Offer letter email attached.",
-                    created_by_user_id=user.id,
-                )
-            )
-        except DoubleTickError as e:
-            offer_whatsapp_status = "FAILED"
-            # Email delivery has already succeeded. Preserve that result and record
-            # WhatsApp as failed instead of rolling back the email audit trail.
-            logger.warning("Offer WhatsApp delivery failed for %s: %s", row.id, e.user_message)
-            db.add(
-                Communication(
-                    candidate_id=id,
-                    type=CommunicationType.WHATSAPP,
-                    direction=CommunicationDirection.OUTGOING,
-                    status=CommunicationStatus.FAILED,
-                    content_preview=f"Offer letter intimation failed: {e.user_message}",
-                    created_by=user.id,
-                )
-            )
-            db.add(
-                ActivityLog(
-                    candidate_id=id,
-                    activity_type=ActivityType.WHATSAPP,
-                    title="Offer Letter WhatsApp Failed",
-                    description=e.user_message,
-                    created_by_user_id=user.id,
-                )
-            )
-        except Exception as e:
-            offer_whatsapp_status = "FAILED"
-            logger.exception("Unexpected offer WhatsApp delivery failure for %s", row.id)
-            db.add(
-                Communication(
-                    candidate_id=id,
-                    type=CommunicationType.WHATSAPP,
-                    direction=CommunicationDirection.OUTGOING,
-                    status=CommunicationStatus.FAILED,
-                    content_preview="Offer letter intimation failed. Manual WhatsApp follow-up required.",
-                    created_by=user.id,
-                )
-            )
-            db.add(
-                ActivityLog(
-                    candidate_id=id,
-                    activity_type=ActivityType.WHATSAPP,
-                    title="Offer Letter WhatsApp Failed",
-                    description="Manual WhatsApp follow-up is required after the email was sent.",
-                    created_by_user_id=user.id,
-                )
-            )
-    elif settings.is_production:
-        offer_whatsapp_status = "FAILED"
-        db.add(
-            Communication(
-                candidate_id=id,
-                type=CommunicationType.WHATSAPP,
-                direction=CommunicationDirection.OUTGOING,
-                status=CommunicationStatus.FAILED,
-                content_preview="Offer letter WhatsApp template is not configured. Manual WhatsApp follow-up required.",
-                created_by=user.id,
-            )
-        )
-
-    # Update candidate offer_status, advance stage if in CSS, and update CSS milestone flags
+    # Update candidate offer_status, move to the response stage, and update CSS milestone flags
     row.offer_status = "SENT"
-    if row.current_stage in (PipelineStage.CSS, PipelineStage.SALARY_DETAILS):
-        row.current_stage = PipelineStage.FINAL_APPROVAL
+    row.current_stage = PipelineStage.OFFER_RESPONSE
 
     if not row.profile:
         row.profile = CandidateProfile(candidate_id=row.id)
@@ -660,6 +819,12 @@ def send_offer_letter(
     existing_raw["offerLetterIssued"] = True
     existing_raw["offerCommMessage"] = True
     existing_raw["offerWhatsAppStatus"] = offer_whatsapp_status
+    if offer_whatsapp_error:
+        existing_raw["offerWhatsAppError"] = offer_whatsapp_error
+    else:
+        existing_raw.pop("offerWhatsAppError", None)
+        existing_raw["offerWhatsAppSentAt"] = datetime.now(timezone.utc).isoformat()
+        existing_raw["offerWhatsAppSentBy"] = str(user.id)
     existing_raw["offerLetterSentAt"] = datetime.now(timezone.utc).isoformat()
     if offer.get("joining_date"):
         existing_raw["dateOfJoining"] = offer["joining_date"]
@@ -667,6 +832,170 @@ def send_offer_letter(
 
     db.commit()
     db.refresh(row)
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
+
+
+@router.post("/{id}/offer-response", response_model=CandidateOut)
+def update_offer_response(
+    id: UUID,
+    body: OfferResponseRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
+):
+    row = get_candidate_for_user(db, id, user, write=True)
+    if row.offer_status not in {"SENT", "ACCEPTED", "DECLINED"}:
+        raise HTTPException(status_code=400, detail="Send the offer letter before recording an offer response.")
+    if row.current_stage in {PipelineStage.REJECTED, PipelineStage.ON_HOLD, PipelineStage.HIRED}:
+        raise HTTPException(status_code=400, detail="This candidate is no longer awaiting an offer response.")
+    if body.status == "DECLINED" and not (body.reason or "").strip():
+        raise HTTPException(status_code=400, detail="A reason is required when the offer is rejected.")
+
+    if row.current_stage != PipelineStage.OFFER_RESPONSE:
+        transition(db, row, PipelineStage.OFFER_RESPONSE, user, "Offer response stage opened.")
+    row.offer_status = body.status
+    response_label = "accepted" if body.status == "ACCEPTED" else "rejected"
+    reason = (body.reason or "").strip()
+    db.add(
+        ActivityLog(
+            candidate_id=id,
+            activity_type=ActivityType.SYSTEM,
+            title=f"Offer {response_label.title()}",
+            description=f"Head Office HR marked the offer as {response_label}." + (f" Reason: {reason}" if reason else ""),
+            created_by_user_id=user.id,
+        )
+    )
+    db.commit()
+    db.refresh(row)
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
+
+
+@router.post("/{id}/offer-acceptance-email/send", response_model=CandidateOut)
+def send_offer_acceptance_email(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
+):
+    row = get_candidate_for_user(db, id, user, write=True)
+    if row.offer_status != "ACCEPTED":
+        raise HTTPException(status_code=400, detail="Record the candidate as accepted before sending joining instructions.")
+    if not row.email:
+        raise HTTPException(status_code=400, detail="Candidate does not have an email address on file.")
+
+    subject, body_html, preview = _offer_acceptance_email_content(row)
+    try:
+        send_email(
+            to_email=row.email,
+            subject=subject,
+            body_html=body_html,
+            cc_emails=offer_cc_emails(db, row),
+        )
+    except EmailSendError as e:
+        if not row.profile:
+            row.profile = CandidateProfile(candidate_id=row.id)
+            db.add(row.profile)
+        raw_data = dict(row.profile.raw_data or {})
+        raw_data["offerAcceptanceEmailStatus"] = "FAILED"
+        raw_data["offerAcceptanceEmailError"] = str(e)
+        row.profile.raw_data = raw_data
+        db.add(
+            Communication(
+                candidate_id=id,
+                type=CommunicationType.EMAIL,
+                direction=CommunicationDirection.OUTGOING,
+                status=CommunicationStatus.FAILED,
+                subject=subject,
+                content_preview=f"Offer acceptance email failed: {e}",
+                created_by=user.id,
+            )
+        )
+        db.add(
+            ActivityLog(
+                candidate_id=id,
+                activity_type=ActivityType.EMAIL,
+                title="Offer Acceptance Email Failed",
+                description=f"Error: {e}",
+                created_by_user_id=user.id,
+            )
+        )
+        db.commit()
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    if not row.profile:
+        row.profile = CandidateProfile(candidate_id=row.id)
+        db.add(row.profile)
+    raw_data = dict(row.profile.raw_data or {})
+    raw_data["offerAcceptanceEmailStatus"] = "SENT"
+    raw_data.pop("offerAcceptanceEmailError", None)
+    raw_data["offerAcceptanceEmailSentAt"] = datetime.now(timezone.utc).isoformat()
+    raw_data["offerAcceptanceEmailSentBy"] = str(user.id)
+    row.profile.raw_data = raw_data
+    db.add(
+        Communication(
+            candidate_id=id,
+            type=CommunicationType.EMAIL,
+            direction=CommunicationDirection.OUTGOING,
+            status=CommunicationStatus.SENT,
+            subject=subject,
+            content_preview=preview,
+            created_by=user.id,
+        )
+    )
+    db.add(
+        ActivityLog(
+            candidate_id=id,
+            activity_type=ActivityType.EMAIL,
+            title="Offer Acceptance Email Sent",
+            description="Sent offer acceptance confirmation and joining document checklist.",
+            created_by_user_id=user.id,
+        )
+    )
+    db.commit()
+    db.refresh(row)
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
+
+
+@router.post("/{id}/offer-whatsapp/resend", response_model=CandidateOut)
+def resend_offer_whatsapp(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
+):
+    row = get_candidate_for_user(db, id, user, write=True)
+    if row.offer_status not in {"SENT", "ACCEPTED"}:
+        raise HTTPException(status_code=400, detail="Send the offer email before retrying WhatsApp.")
+    if not row.phone:
+        raise HTTPException(status_code=400, detail="Candidate does not have a phone number on file.")
+
+    status, error = _send_offer_whatsapp_intimation(
+        db,
+        row,
+        user,
+        [
+            row.full_name or "",
+            row.position_applied_for or "the offered role",
+            row.branch_location or "Nippon Toyota",
+        ],
+    )
+    if row.profile is None:
+        row.profile = CandidateProfile(candidate_id=row.id)
+        db.add(row.profile)
+    raw = dict(row.profile.raw_data or {})
+    raw["offerWhatsAppStatus"] = status
+    if error:
+        raw["offerWhatsAppError"] = error
+    else:
+        raw.pop("offerWhatsAppError", None)
+        raw["offerWhatsAppSentAt"] = datetime.now(timezone.utc).isoformat()
+        raw["offerWhatsAppSentBy"] = str(user.id)
+    row.profile.raw_data = raw
+    db.commit()
+    db.refresh(row)
+
+    if status != "SENT":
+        raise HTTPException(
+            status_code=502,
+            detail=f"Offer email is sent, but WhatsApp intimation failed: {error or 'DoubleTick could not send the message.'}",
+        )
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
 
 
@@ -686,6 +1015,7 @@ def confirm_offer_whatsapp(
         db.add(row.profile)
     raw = dict(row.profile.raw_data or {})
     raw["offerWhatsAppStatus"] = "SENT"
+    raw.pop("offerWhatsAppError", None)
     raw["offerWhatsAppSentAt"] = datetime.now(timezone.utc).isoformat()
     raw["offerWhatsAppSentBy"] = str(user.id)
     row.profile.raw_data = raw
@@ -851,6 +1181,7 @@ def send_to_ho(
             detail=f"Cannot send candidate to Head Office: missing {', '.join(missing)}.",
         )
 
+    previous_stage = row.current_stage
     updated = transition(
         db=db,
         candidate=row,
@@ -858,6 +1189,26 @@ def send_to_ho(
         user=user,
         remarks="Application transferred to Head Office"
     )
+    if previous_stage not in {
+        PipelineStage.SENT_TO_HO,
+        PipelineStage.HO_INTERVIEW_INTIMATION,
+    }:
+        _send_head_office_forwarding_email(db, updated, user)
     db.commit()
     db.refresh(updated)
     return to_candidate_out(updated, id in resume_candidate_ids(db, [id]), db, viewer=user)
+
+
+@router.post("/{id}/head-office-forwarding-email/resend", response_model=CandidateOut)
+def resend_head_office_forwarding_email(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    row = get_candidate_for_user(db, id, user)
+    status, error = _send_head_office_forwarding_email(db, row, user)
+    db.commit()
+    db.refresh(row)
+    if status != "SENT":
+        raise HTTPException(status_code=502, detail=error or "Could not resend the Head Office forwarding email.")
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]), db, viewer=user)

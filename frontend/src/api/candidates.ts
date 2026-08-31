@@ -294,6 +294,35 @@ export const sendOfferLetter = async (candidateId: string, fields?: Record<strin
   return response.data;
 };
 
+export const downloadCandidatesExcel = async (): Promise<Blob> => {
+  const response = await request('GET', '/candidates/export.xlsx', undefined, {
+    headers: {
+      Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    },
+    responseType: 'blob',
+  });
+  return response.data as Blob;
+};
+
+export const updateOfferResponse = async (
+  candidateId: string,
+  status: 'ACCEPTED' | 'DECLINED',
+  reason?: string,
+): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/offer-response`, { status, reason });
+  return response.data;
+};
+
+export const sendOfferAcceptanceEmail = async (candidateId: string): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/offer-acceptance-email/send`);
+  return response.data;
+};
+
+export const resendHeadOfficeForwardingEmail = async (candidateId: string): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/head-office-forwarding-email/resend`);
+  return response.data;
+};
+
 export interface SalaryUploadMatch {
   id: string;
   candidate_id: string;
@@ -391,6 +420,11 @@ export const confirmWhatsAppInvite = async (
 
 export const confirmOfferWhatsApp = async (candidateId: string): Promise<Candidate> => {
   const response = await request('POST', `/candidates/${candidateId}/offer-whatsapp/confirm`);
+  return response.data;
+};
+
+export const resendOfferWhatsApp = async (candidateId: string): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/offer-whatsapp/resend`);
   return response.data;
 };
 

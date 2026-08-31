@@ -31,6 +31,7 @@ class PipelineStage(str, enum.Enum):
     HO_DEPT_INTERVIEW = "HO_DEPT_INTERVIEW"
     SALARY_DETAILS = "SALARY_DETAILS"
     CSS = "CSS"
+    OFFER_RESPONSE = "OFFER_RESPONSE"
     
     # Deprecated stages (kept for SQLAlchemy pg_enum mapping compatibility)
     DEPARTMENT_INTERVIEW = "DEPARTMENT_INTERVIEW"

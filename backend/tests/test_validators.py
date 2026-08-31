@@ -135,6 +135,42 @@ def test_pre_form_accepts_valid_payload():
     PreFormApplicationData.model_validate(_valid_pre_form())
 
 
+def _experienced_pre_form() -> dict:
+    payload = _valid_pre_form()
+    payload.update(
+        {
+            "previousExperience": True,
+            "totalExperience": "2 years",
+            "previousJobs": [
+                {
+                    "company": "Popular Vehicles",
+                    "position": "Service Advisor",
+                    "reporting": "Manoj Kumar",
+                    "reportingDesignation": "Service Manager",
+                    "reportingPhone": "9876543210",
+                    "fromDate": "2023-01",
+                    "toDate": "2025-01",
+                    "salary": "25000",
+                    "reason": "Career growth",
+                }
+            ],
+        }
+    )
+    return payload
+
+
+def test_pre_form_requires_reporting_person_details_for_previous_experience():
+    payload = _experienced_pre_form()
+    payload["previousJobs"][0].pop("reportingDesignation")
+    with pytest.raises(ValueError, match="designation"):
+        PreFormApplicationData.model_validate(payload)
+
+    payload = _experienced_pre_form()
+    payload["previousJobs"][0].pop("reportingPhone")
+    with pytest.raises(ValueError, match="phone"):
+        PreFormApplicationData.model_validate(payload)
+
+
 def test_pre_form_requires_father_and_mother_name():
     payload = _valid_pre_form()
     payload.pop("fatherName", None)
@@ -188,6 +224,8 @@ def test_pre_form_rejects_incomplete_extra_previous_job():
             "company": "First Co",
             "position": "Advisor",
             "reporting": "Manager",
+            "reportingDesignation": "Branch Manager",
+            "reportingPhone": "9876543210",
             "fromDate": "2020-01",
             "toDate": "2021-12",
             "salary": "18000",
@@ -216,6 +254,8 @@ def test_pre_form_accepts_extra_previous_jobs():
             "company": f"Company {i}",
             "position": "Advisor",
             "reporting": "Manager",
+            "reportingDesignation": "Branch Manager",
+            "reportingPhone": "9876543210",
             "fromDate": "2018-01",
             "toDate": "2019-12",
             "salary": "20000",

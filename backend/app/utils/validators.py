@@ -18,7 +18,19 @@ MARITAL_STATUSES = {"Single", "Married", "Divorced", "Widowed"}
 BLOOD_GROUPS = {"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"}
 STUDY_MODES = {"Regular", "Distance"}
 OPENING_SOURCES = {"Advertisement", "Agency", "Employee Referral", "Walk-in", "Social Media"}
-REF_ROLES = {"Manager", "Colleague", "Professor", "Relative", "Other"}
+# Local representatives are the current form options. The legacy relationship
+# values remain valid so older applications can still be edited and submitted.
+REF_ROLES = {
+    "Ward Member",
+    "Panchayat Member",
+    "Municipality Councillor",
+    "Corporation Councillor",
+    "Manager",
+    "Colleague",
+    "Professor",
+    "Relative",
+    "Other",
+}
 
 MIN_AGE = 18
 MAX_AGE = 65

@@ -13,6 +13,7 @@ HO_HR_PIPELINE_STAGES = (
     PipelineStage.CSS,
     PipelineStage.SALARY_DETAILS,
     PipelineStage.FINAL_APPROVAL,
+    PipelineStage.OFFER_RESPONSE,
     PipelineStage.HIRED,
     PipelineStage.ON_HOLD,
     PipelineStage.REJECTED,
@@ -27,6 +28,7 @@ HO_HANDOVER_STAGES = (
     PipelineStage.CSS,
     PipelineStage.SALARY_DETAILS,
     PipelineStage.FINAL_APPROVAL,
+    PipelineStage.OFFER_RESPONSE,
     PipelineStage.HIRED,
 )
 
@@ -71,6 +73,7 @@ def candidate_reached_ho(db: Session, candidate_id) -> bool:
                     PipelineStage.CSS,
                     PipelineStage.SALARY_DETAILS,
                     PipelineStage.FINAL_APPROVAL,
+                    PipelineStage.OFFER_RESPONSE,
                     PipelineStage.HIRED,
                 )
             ),

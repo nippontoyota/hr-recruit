@@ -140,6 +140,8 @@ export function InterviewApplicationFormDocument({
           co: row.company,
           pos: row.position,
           rep: row.reporting,
+          repDesignation: row.reportingDesignation,
+          repPhone: row.reportingPhone,
           from: row.fromDate ?? row.from,
           to: row.toDate ?? row.to,
           sal: row.salary,
@@ -149,10 +151,10 @@ export function InterviewApplicationFormDocument({
   const jobs = (listedJobs.length
     ? listedJobs
     : [
-        { co: d.prevCompanyName, pos: d.prevPosition, rep: d.prev1Reporting, from: d.prev1From, to: d.prev1To, sal: d.prev1Salary, reason: d.prev1Reason },
-        { co: d.prev2Name, pos: d.prev2Position, rep: d.prev2Reporting, from: d.prev2From, to: d.prev2To, sal: d.prev2Salary, reason: d.prev2Reason },
-        { co: d.prev3Name, pos: d.prev3Position, rep: d.prev3Reporting, from: d.prev3From, to: d.prev3To, sal: d.prev3Salary, reason: d.prev3Reason },
-        { co: d.prev4Name, pos: d.prev4Position, rep: d.prev4Reporting, from: d.prev4From, to: d.prev4To, sal: d.prev4Salary, reason: d.prev4Reason },
+        { co: d.prevCompanyName, pos: d.prevPosition, rep: d.prev1Reporting, repDesignation: d.prev1ReportingDesignation, repPhone: d.prev1ReportingPhone, from: d.prev1From, to: d.prev1To, sal: d.prev1Salary, reason: d.prev1Reason },
+        { co: d.prev2Name, pos: d.prev2Position, rep: d.prev2Reporting, repDesignation: d.prev2ReportingDesignation, repPhone: d.prev2ReportingPhone, from: d.prev2From, to: d.prev2To, sal: d.prev2Salary, reason: d.prev2Reason },
+        { co: d.prev3Name, pos: d.prev3Position, rep: d.prev3Reporting, repDesignation: d.prev3ReportingDesignation, repPhone: d.prev3ReportingPhone, from: d.prev3From, to: d.prev3To, sal: d.prev3Salary, reason: d.prev3Reason },
+        { co: d.prev4Name, pos: d.prev4Position, rep: d.prev4Reporting, repDesignation: d.prev4ReportingDesignation, repPhone: d.prev4ReportingPhone, from: d.prev4From, to: d.prev4To, sal: d.prev4Salary, reason: d.prev4Reason },
       ]
   ).filter((job) => val(job.co) || val(job.pos));
 
@@ -441,7 +443,11 @@ export function InterviewApplicationFormDocument({
                     <Td className="text-center py-1.5 px-2">{i + 1}</Td>
                     <Td className="py-1.5 px-2">{val(job.co)}</Td>
                     <Td className="py-1.5 px-2">{val(job.pos)}</Td>
-                    <Td className="py-1.5 px-2">{val(job.rep)}</Td>
+                    <Td className="py-1.5 px-2">
+                      <div>{val(job.rep)}</div>
+                      {val(job.repDesignation) ? <div className="text-[10px]">{val(job.repDesignation)}</div> : null}
+                      {val(job.repPhone) ? <div className="text-[10px]">Phone: {val(job.repPhone)}</div> : null}
+                    </Td>
                     <Td className="text-center py-1.5 px-2">{val(job.from)}</Td>
                     <Td className="text-center py-1.5 px-2">{val(job.to)}</Td>
                     <Td className="text-center py-1.5 px-2">{val(job.sal)}</Td>

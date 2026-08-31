@@ -47,7 +47,13 @@ function normalizeFetchAbort(err: unknown, callerSignal?: AbortSignal): never {
 
 const inflightGets = new Map<string, Promise<{ data: any }>>();
 
-export async function request(method: string, endpoint: string, body?: any, config?: { headers?: Record<string, string>; signal?: AbortSignal }) {
+type RequestConfig = {
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
+  responseType?: 'json' | 'blob';
+};
+
+export async function request(method: string, endpoint: string, body?: any, config?: RequestConfig) {
   const coalesceKey = method === 'GET' && body == null && !config?.signal ? endpoint : null;
   if (coalesceKey) {
     const existing = inflightGets.get(coalesceKey);
@@ -61,7 +67,7 @@ export async function request(method: string, endpoint: string, body?: any, conf
   return pending;
 }
 
-async function executeRequest(method: string, endpoint: string, body?: any, config?: { headers?: Record<string, string>; signal?: AbortSignal }) {
+async function executeRequest(method: string, endpoint: string, body?: any, config?: RequestConfig) {
   const url = `${baseURL}${endpoint}`;
   const headers: Record<string, string> = getAuthHeaders({
     'Content-Type': 'application/json',
@@ -110,6 +116,12 @@ async function executeRequest(method: string, endpoint: string, body?: any, conf
   let data;
   if (response.status === 204) {
     data = null;
+  } else if (config?.responseType === 'blob' && response.ok) {
+    try {
+      data = await response.blob();
+    } catch (err) {
+      throw normalizeFetchAbort(err, config?.signal);
+    }
   } else {
     let text: string;
     try {

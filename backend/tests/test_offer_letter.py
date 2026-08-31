@@ -1,7 +1,11 @@
 from app.api.v1.pdf import generate_offer_letter_pdf, resolve_offer_fields
+from app.api.v1 import candidates_actions
+from app.api.v1.candidates_actions import _head_office_forwarding_email_content, _send_head_office_forwarding_email
 from app.core.offer_gate import offer_blockers
 from app.models.enums import EvaluationType, EvaluationVerdict, PipelineStage
+from app.services.doubletick import DoubleTickError
 
+from uuid import uuid4
 from types import SimpleNamespace
 
 
@@ -145,3 +149,101 @@ def test_offer_blockers_body_gross_salary_does_not_replace_sheet():
         has_resume=True,
         evaluations=_evals(),
     )
+
+
+class _FakeDb:
+    def __init__(self):
+        self.added = []
+
+    def add(self, value):
+        self.added.append(value)
+
+
+def test_offer_whatsapp_intimation_records_success(monkeypatch):
+    db = _FakeDb()
+    candidate = SimpleNamespace(id=uuid4(), phone="9876543210")
+    user = SimpleNamespace(id=uuid4())
+    monkeypatch.setattr(candidates_actions.settings, "offer_whatsapp_intimation_template_name", "nippon_offer_intimation")
+    monkeypatch.setattr(candidates_actions, "send_template", lambda **_: {"messages": [{"id": "dt-123"}]})
+
+    status, error = candidates_actions._send_offer_whatsapp_intimation(
+        db, candidate, user, ["Anu", "Executive", "Kochi"]
+    )
+
+    assert status == "SENT"
+    assert error is None
+    assert any(item.external_message_id == "dt-123" for item in db.added if hasattr(item, "external_message_id"))
+
+
+def test_offer_whatsapp_intimation_records_actionable_failure(monkeypatch):
+    db = _FakeDb()
+    candidate = SimpleNamespace(id=uuid4(), phone="9876543210")
+    user = SimpleNamespace(id=uuid4())
+    monkeypatch.setattr(candidates_actions.settings, "offer_whatsapp_intimation_template_name", "nippon_offer_intimation")
+
+    def fail_send(**_):
+        raise DoubleTickError("WhatsApp template is missing or not approved in DoubleTick.")
+
+    monkeypatch.setattr(candidates_actions, "send_template", fail_send)
+
+    status, error = candidates_actions._send_offer_whatsapp_intimation(
+        db, candidate, user, ["Anu", "Executive", "Kochi"]
+    )
+
+    assert status == "FAILED"
+    assert error == "WhatsApp template is missing or not approved in DoubleTick."
+    assert any("failed" in item.content_preview.lower() for item in db.added if hasattr(item, "content_preview"))
+
+
+def test_head_office_forwarding_email_uses_candidate_name_and_template():
+    candidate = SimpleNamespace(full_name="Anu Nithin")
+
+    subject, body_html, preview = _head_office_forwarding_email_content(candidate)
+
+    assert subject == "Update Regarding Interview – Nippon Toyota"
+    assert "Dear Anu Nithin" in body_html
+    assert "forwarded to our Head Office" in body_html
+    assert "five working days" in preview
+
+
+def test_head_office_forwarding_email_records_failure_for_retry(monkeypatch):
+    db = _FakeDb()
+    candidate = SimpleNamespace(id=uuid4(), full_name="Anu Nithin", email="anu@example.com", profile=None)
+    user = SimpleNamespace(id=uuid4())
+
+    def fail_send(**_):
+        raise candidates_actions.EmailSendError(
+            "Email provider failed while sending. Check SMTP configuration and try again."
+        )
+
+    monkeypatch.setattr(candidates_actions, "send_email", fail_send)
+
+    status, error = _send_head_office_forwarding_email(db, candidate, user)
+
+    assert status == "FAILED"
+    assert error == "Email provider failed while sending. Check SMTP configuration and try again."
+    assert candidate.profile.raw_data["headOfficeForwardingEmailStatus"] == "FAILED"
+    assert any(item.status == candidates_actions.CommunicationStatus.FAILED for item in db.added if hasattr(item, "status"))
+
+
+def test_head_office_forwarding_email_sends_internal_cc(monkeypatch):
+    db = _FakeDb()
+    candidate = SimpleNamespace(id=uuid4(), full_name="Anu Nithin", email="anu@example.com", profile=None)
+    user = SimpleNamespace(id=uuid4())
+    sent = {}
+
+    def capture_send(**kwargs):
+        sent.update(kwargs)
+
+    monkeypatch.setattr(candidates_actions, "send_email", capture_send)
+
+    status, error = _send_head_office_forwarding_email(db, candidate, user)
+
+    assert status == "SENT"
+    assert error is None
+    assert sent["to_email"] == "anu@example.com"
+    assert sent["cc_emails"] == [
+        "recruitment@nippontoyota.com",
+        "naveen@nippontoyota.com",
+        "jerry@nippontoyota.com",
+    ]

@@ -56,12 +56,35 @@ function JobFields({
         </div>
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1">
-            Reporting To {star}
+            Reporting Person Name {star}
           </label>
           <Input
             value={job.reporting}
             onChange={(e) => onChange({ reporting: e.target.value })}
-            placeholder="e.g. Manoj K (Service Manager)"
+            placeholder="e.g. Manoj Kumar"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-text-primary mb-1">
+            Reporting Person&apos;s Designation {star}
+          </label>
+          <Input
+            value={job.reportingDesignation}
+            onChange={(e) => onChange({ reportingDesignation: e.target.value })}
+            placeholder="e.g. Service Manager"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-text-primary mb-1">
+            Reporting Person&apos;s Phone {star}
+          </label>
+          <Input
+            type="tel"
+            value={job.reportingPhone}
+            onChange={(e) => onChange({ reportingPhone: digitsOnly(e.target.value, 10) })}
+            placeholder="e.g. 9876543210"
+            inputMode="numeric"
+            maxLength={10}
           />
         </div>
         <div>

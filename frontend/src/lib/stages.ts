@@ -9,6 +9,7 @@ export function stageLabel(stage: PipelineStage | string): string {
   if (stage === 'HO_INTERVIEW_INTIMATION') return 'INTERVIEW INTIMATION';
   if (stage === 'CSS') return 'CSS';
   if (stage === 'SALARY_DETAILS') return 'SALARY SHEET';
+  if (stage === 'OFFER_RESPONSE') return 'OFFER RESPONSE';
   if (stage === 'TEST') return 'TECHNICAL TEST';
   if (stage === 'SENT_TO_HO') return 'SENT TO HEAD OFFICE';
   return stage
@@ -22,6 +23,7 @@ export function getStageBadgeVariant(stage: PipelineStage | string): BadgeProps[
   if (stage === 'ON_HOLD') return 'warning';
   if (stage === 'SENT_TO_HO') return 'info';
   if (stage === 'HO_INTERVIEW_INTIMATION') return 'info';
+  if (stage === 'OFFER_RESPONSE') return 'info';
   return 'secondary';
 }
 

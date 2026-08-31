@@ -10,16 +10,15 @@ class EmailSendError(Exception):
     """Raised when email cannot be sent; message is safe for HR-facing errors."""
 
 
-def send_email_with_pdf(
+def send_email(
     to_email: str,
     subject: str,
     body_html: str,
-    pdf_bytes: bytes,
-    pdf_filename: str,
     cc_emails: list[str] | None = None,
+    attachment: tuple[bytes, str, str] | None = None,
 ):
     """
-    Sends an email with a PDF attachment using standard SMTP.
+    Sends an HTML email using standard SMTP.
     """
     if not settings.smtp_password or not settings.smtp_host or not settings.smtp_from_email:
         raise EmailSendError(
@@ -40,13 +39,15 @@ def send_email_with_pdf(
         msg.set_content("Please enable HTML to view this email.")
         msg.add_alternative(body_html, subtype='html')
         
-        # Attach the PDF
-        msg.add_attachment(
-            pdf_bytes,
-            maintype='application',
-            subtype='pdf',
-            filename=pdf_filename
-        )
+        if attachment:
+            attachment_bytes, maintype, filename = attachment
+            subtype = 'pdf' if maintype == 'application' else 'octet-stream'
+            msg.add_attachment(
+                attachment_bytes,
+                maintype=maintype,
+                subtype=subtype,
+                filename=filename,
+            )
         
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as server:
             server.starttls()
@@ -60,3 +61,21 @@ def send_email_with_pdf(
         raise EmailSendError(
             "Email provider failed while sending. Check SMTP configuration and try again."
         ) from e
+
+
+def send_email_with_pdf(
+    to_email: str,
+    subject: str,
+    body_html: str,
+    pdf_bytes: bytes,
+    pdf_filename: str,
+    cc_emails: list[str] | None = None,
+):
+    """Sends an HTML email with a PDF attachment using standard SMTP."""
+    return send_email(
+        to_email=to_email,
+        subject=subject,
+        body_html=body_html,
+        cc_emails=cc_emails,
+        attachment=(pdf_bytes, 'application', pdf_filename),
+    )

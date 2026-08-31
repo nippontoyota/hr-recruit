@@ -2,6 +2,8 @@ export interface PreviousJob {
   company: string;
   position: string;
   reporting: string;
+  reportingDesignation: string;
+  reportingPhone: string;
   fromDate: string;
   toDate: string;
   salary: string;
@@ -12,6 +14,8 @@ export const EMPTY_PREVIOUS_JOB: PreviousJob = {
   company: '',
   position: '',
   reporting: '',
+  reportingDesignation: '',
+  reportingPhone: '',
   fromDate: '',
   toDate: '',
   salary: '',
@@ -174,6 +178,8 @@ export interface CandidateFormData {
   prevCompanyName: string;
   prevPosition: string;
   prev1Reporting: string;
+  prev1ReportingDesignation: string;
+  prev1ReportingPhone: string;
   prev1From: string;
   prev1To: string;
   prev1Salary: string;
@@ -182,6 +188,8 @@ export interface CandidateFormData {
   prev2Name: string;
   prev2Position: string;
   prev2Reporting: string;
+  prev2ReportingDesignation: string;
+  prev2ReportingPhone: string;
   prev2From: string;
   prev2To: string;
   prev2Salary: string;
@@ -190,6 +198,8 @@ export interface CandidateFormData {
   prev3Name: string;
   prev3Position: string;
   prev3Reporting: string;
+  prev3ReportingDesignation: string;
+  prev3ReportingPhone: string;
   prev3From: string;
   prev3To: string;
   prev3Salary: string;
@@ -198,6 +208,8 @@ export interface CandidateFormData {
   prev4Name: string;
   prev4Position: string;
   prev4Reporting: string;
+  prev4ReportingDesignation: string;
+  prev4ReportingPhone: string;
   prev4From: string;
   prev4To: string;
   prev4Salary: string;
@@ -251,6 +263,8 @@ function jobHasContent(job: PreviousJob): boolean {
     job.company,
     job.position,
     job.reporting,
+    job.reportingDesignation,
+    job.reportingPhone,
     job.fromDate,
     job.toDate,
     job.salary,
@@ -260,13 +274,20 @@ function jobHasContent(job: PreviousJob): boolean {
 
 export function previousJobsFromForm(data: CandidateFormData): PreviousJob[] {
   if (Array.isArray(data.previousJobs) && data.previousJobs.length > 0) {
-    return data.previousJobs;
+    return data.previousJobs.map((job) => ({
+      ...EMPTY_PREVIOUS_JOB,
+      ...job,
+      reportingDesignation: job.reportingDesignation || '',
+      reportingPhone: job.reportingPhone || '',
+    }));
   }
   return [
     {
       company: data.prevCompanyName,
       position: data.prevPosition,
       reporting: data.prev1Reporting,
+      reportingDesignation: data.prev1ReportingDesignation,
+      reportingPhone: data.prev1ReportingPhone,
       fromDate: data.prev1From,
       toDate: data.prev1To,
       salary: data.prev1Salary,
@@ -276,6 +297,8 @@ export function previousJobsFromForm(data: CandidateFormData): PreviousJob[] {
       company: data.prev2Name,
       position: data.prev2Position,
       reporting: data.prev2Reporting,
+      reportingDesignation: data.prev2ReportingDesignation,
+      reportingPhone: data.prev2ReportingPhone,
       fromDate: data.prev2From,
       toDate: data.prev2To,
       salary: data.prev2Salary,
@@ -285,6 +308,8 @@ export function previousJobsFromForm(data: CandidateFormData): PreviousJob[] {
       company: data.prev3Name,
       position: data.prev3Position,
       reporting: data.prev3Reporting,
+      reportingDesignation: data.prev3ReportingDesignation,
+      reportingPhone: data.prev3ReportingPhone,
       fromDate: data.prev3From,
       toDate: data.prev3To,
       salary: data.prev3Salary,
@@ -294,6 +319,8 @@ export function previousJobsFromForm(data: CandidateFormData): PreviousJob[] {
       company: data.prev4Name,
       position: data.prev4Position,
       reporting: data.prev4Reporting,
+      reportingDesignation: data.prev4ReportingDesignation,
+      reportingPhone: data.prev4ReportingPhone,
       fromDate: data.prev4From,
       toDate: data.prev4To,
       salary: data.prev4Salary,
@@ -309,6 +336,8 @@ export function previousJobsPatch(jobs: PreviousJob[]): Partial<CandidateFormDat
     prevCompanyName: slot(0).company,
     prevPosition: slot(0).position,
     prev1Reporting: slot(0).reporting,
+    prev1ReportingDesignation: slot(0).reportingDesignation,
+    prev1ReportingPhone: slot(0).reportingPhone,
     prev1From: slot(0).fromDate,
     prev1To: slot(0).toDate,
     prev1Salary: slot(0).salary,
@@ -316,6 +345,8 @@ export function previousJobsPatch(jobs: PreviousJob[]): Partial<CandidateFormDat
     prev2Name: slot(1).company,
     prev2Position: slot(1).position,
     prev2Reporting: slot(1).reporting,
+    prev2ReportingDesignation: slot(1).reportingDesignation,
+    prev2ReportingPhone: slot(1).reportingPhone,
     prev2From: slot(1).fromDate,
     prev2To: slot(1).toDate,
     prev2Salary: slot(1).salary,
@@ -323,6 +354,8 @@ export function previousJobsPatch(jobs: PreviousJob[]): Partial<CandidateFormDat
     prev3Name: slot(2).company,
     prev3Position: slot(2).position,
     prev3Reporting: slot(2).reporting,
+    prev3ReportingDesignation: slot(2).reportingDesignation,
+    prev3ReportingPhone: slot(2).reportingPhone,
     prev3From: slot(2).fromDate,
     prev3To: slot(2).toDate,
     prev3Salary: slot(2).salary,
@@ -330,6 +363,8 @@ export function previousJobsPatch(jobs: PreviousJob[]): Partial<CandidateFormDat
     prev4Name: slot(3).company,
     prev4Position: slot(3).position,
     prev4Reporting: slot(3).reporting,
+    prev4ReportingDesignation: slot(3).reportingDesignation,
+    prev4ReportingPhone: slot(3).reportingPhone,
     prev4From: slot(3).fromDate,
     prev4To: slot(3).toDate,
     prev4Salary: slot(3).salary,
@@ -470,6 +505,8 @@ export const initialCandidateData: CandidateFormData = {
   prevCompanyName: '',
   prevPosition: '',
   prev1Reporting: '',
+  prev1ReportingDesignation: '',
+  prev1ReportingPhone: '',
   prev1From: '',
   prev1To: '',
   prev1Salary: '',
@@ -477,6 +514,8 @@ export const initialCandidateData: CandidateFormData = {
   prev2Name: '',
   prev2Position: '',
   prev2Reporting: '',
+  prev2ReportingDesignation: '',
+  prev2ReportingPhone: '',
   prev2From: '',
   prev2To: '',
   prev2Salary: '',
@@ -484,6 +523,8 @@ export const initialCandidateData: CandidateFormData = {
   prev3Name: '',
   prev3Position: '',
   prev3Reporting: '',
+  prev3ReportingDesignation: '',
+  prev3ReportingPhone: '',
   prev3From: '',
   prev3To: '',
   prev3Salary: '',
@@ -491,6 +532,8 @@ export const initialCandidateData: CandidateFormData = {
   prev4Name: '',
   prev4Position: '',
   prev4Reporting: '',
+  prev4ReportingDesignation: '',
+  prev4ReportingPhone: '',
   prev4From: '',
   prev4To: '',
   prev4Salary: '',

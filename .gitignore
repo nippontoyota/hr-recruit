@@ -52,3 +52,7 @@ patch.py
 .vercel
 .env*
 supabase/.temp/
+
+# Local server and deployment inspection output
+*.log
+*-dry.json

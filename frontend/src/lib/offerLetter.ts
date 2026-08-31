@@ -57,6 +57,7 @@ export function defaultOfferFields(candidate: Candidate): OfferLetterFields {
     joining_date: toJoinDateInput(
       pick(salary, ['proposed doj', 'proposed date of joining', 'joining date'])
         || candidate.profile?.joining_date
+        || String(raw?.dateOfJoining || '')
         || String(raw?.expectedJoiningDate || raw?.expected_joining_date || ''),
     ),
   };

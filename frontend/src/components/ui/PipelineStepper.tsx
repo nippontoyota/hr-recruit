@@ -47,6 +47,7 @@ const STAGE_ICONS: Record<string, React.ElementType> = {
   HO_INTERVIEWS: MessagesSquare,
   CSS: FileText,
   SALARY_DETAILS: Wallet,
+  OFFER_RESPONSE: BadgeCheck,
 };
 
 export function PipelineStepper({

@@ -13,7 +13,19 @@ export const OPENING_SOURCES = [
   'Walk-in',
   'Social Media',
 ] as const;
-export const REF_ROLES = ['Manager', 'Colleague', 'Professor', 'Relative', 'Other'] as const;
+// Keep legacy values valid for existing applications while showing local civic
+// representative options first in the candidate form.
+export const REF_ROLES = [
+  'Ward Member',
+  'Panchayat Member',
+  'Municipality Councillor',
+  'Corporation Councillor',
+  'Manager',
+  'Colleague',
+  'Professor',
+  'Relative',
+  'Other',
+] as const;
 
 const PHONE = /^[6-9]\d{9}$/;
 const PIN = /^[1-9]\d{5}$/;

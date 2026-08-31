@@ -105,6 +105,8 @@ class PreviousJobEntry(BaseModel):
     company: str = ""
     position: str = ""
     reporting: str = ""
+    reportingDesignation: str = ""
+    reportingPhone: str = ""
     fromDate: str = ""
     toDate: str = ""
     salary: str = ""
@@ -255,6 +257,8 @@ class PreFormApplicationData(BaseModel):
     prevCompanyName: str = ""
     prevPosition: str = ""
     prev1Reporting: str = ""
+    prev1ReportingDesignation: str = ""
+    prev1ReportingPhone: str = ""
     prev1From: str = ""
     prev1To: str = ""
     prev1Salary: str = ""
@@ -263,6 +267,8 @@ class PreFormApplicationData(BaseModel):
     prev2Name: str = ""
     prev2Position: str = ""
     prev2Reporting: str = ""
+    prev2ReportingDesignation: str = ""
+    prev2ReportingPhone: str = ""
     prev2From: str = ""
     prev2To: str = ""
     prev2Salary: str = ""
@@ -271,6 +277,8 @@ class PreFormApplicationData(BaseModel):
     prev3Name: str = ""
     prev3Position: str = ""
     prev3Reporting: str = ""
+    prev3ReportingDesignation: str = ""
+    prev3ReportingPhone: str = ""
     prev3From: str = ""
     prev3To: str = ""
     prev3Salary: str = ""
@@ -279,6 +287,8 @@ class PreFormApplicationData(BaseModel):
     prev4Name: str = ""
     prev4Position: str = ""
     prev4Reporting: str = ""
+    prev4ReportingDesignation: str = ""
+    prev4ReportingPhone: str = ""
     prev4From: str = ""
     prev4To: str = ""
     prev4Salary: str = ""
@@ -339,18 +349,32 @@ class PreFormApplicationData(BaseModel):
         name: str,
         position: str,
         reporting: str,
+        reporting_designation: str,
+        reporting_phone: str,
         from_date: str,
         to_date: str,
         salary: str,
         reason: str,
         required: bool,
     ) -> None:
-        filled = cls._any_filled(name, position, reporting, from_date, to_date, salary, reason)
+        filled = cls._any_filled(
+            name,
+            position,
+            reporting,
+            reporting_designation,
+            reporting_phone,
+            from_date,
+            to_date,
+            salary,
+            reason,
+        )
         if not required and not filled:
             return
         v.validate_text_field(name, f"{label} company name", 2, 150)
         v.validate_text_field(position, f"{label} position", 2, 100)
         v.validate_text_field(reporting, f"{label} reporting person", 2, 100)
+        v.validate_text_field(reporting_designation, f"{label} reporting person designation", 2, 100)
+        v.validate_phone(reporting_phone, f"{label} reporting person phone")
         v.validate_text_field(from_date, f"{label} from date", 2, 50)
         v.validate_text_field(to_date, f"{label} to date", 2, 50)
         v.validate_salary(salary, f"{label} salary")
@@ -444,6 +468,8 @@ class PreFormApplicationData(BaseModel):
                     company=self.prevCompanyName,
                     position=self.prevPosition,
                     reporting=self.prev1Reporting,
+                    reportingDesignation=self.prev1ReportingDesignation,
+                    reportingPhone=self.prev1ReportingPhone,
                     fromDate=self.prev1From,
                     toDate=self.prev1To,
                     salary=self.prev1Salary,
@@ -453,6 +479,8 @@ class PreFormApplicationData(BaseModel):
                     company=self.prev2Name,
                     position=self.prev2Position,
                     reporting=self.prev2Reporting,
+                    reportingDesignation=self.prev2ReportingDesignation,
+                    reportingPhone=self.prev2ReportingPhone,
                     fromDate=self.prev2From,
                     toDate=self.prev2To,
                     salary=self.prev2Salary,
@@ -462,6 +490,8 @@ class PreFormApplicationData(BaseModel):
                     company=self.prev3Name,
                     position=self.prev3Position,
                     reporting=self.prev3Reporting,
+                    reportingDesignation=self.prev3ReportingDesignation,
+                    reportingPhone=self.prev3ReportingPhone,
                     fromDate=self.prev3From,
                     toDate=self.prev3To,
                     salary=self.prev3Salary,
@@ -471,6 +501,8 @@ class PreFormApplicationData(BaseModel):
                     company=self.prev4Name,
                     position=self.prev4Position,
                     reporting=self.prev4Reporting,
+                    reportingDesignation=self.prev4ReportingDesignation,
+                    reportingPhone=self.prev4ReportingPhone,
                     fromDate=self.prev4From,
                     toDate=self.prev4To,
                     salary=self.prev4Salary,
@@ -484,6 +516,8 @@ class PreFormApplicationData(BaseModel):
                     jobs[-1].company,
                     jobs[-1].position,
                     jobs[-1].reporting,
+                    jobs[-1].reportingDesignation,
+                    jobs[-1].reportingPhone,
                     jobs[-1].fromDate,
                     jobs[-1].toDate,
                     jobs[-1].salary,
@@ -501,6 +535,8 @@ class PreFormApplicationData(BaseModel):
                     name=job.company,
                     position=job.position,
                     reporting=job.reporting,
+                    reporting_designation=job.reportingDesignation,
+                    reporting_phone=job.reportingPhone,
                     from_date=job.fromDate,
                     to_date=job.toDate,
                     salary=job.salary,
@@ -524,6 +560,8 @@ class PreFormApplicationData(BaseModel):
         self.prevCompanyName = first.company
         self.prevPosition = first.position
         self.prev1Reporting = first.reporting
+        self.prev1ReportingDesignation = first.reportingDesignation
+        self.prev1ReportingPhone = first.reportingPhone
         self.prev1From = first.fromDate
         self.prev1To = first.toDate
         self.prev1Salary = first.salary
@@ -531,6 +569,8 @@ class PreFormApplicationData(BaseModel):
         self.prev2Name = second.company
         self.prev2Position = second.position
         self.prev2Reporting = second.reporting
+        self.prev2ReportingDesignation = second.reportingDesignation
+        self.prev2ReportingPhone = second.reportingPhone
         self.prev2From = second.fromDate
         self.prev2To = second.toDate
         self.prev2Salary = second.salary
@@ -538,6 +578,8 @@ class PreFormApplicationData(BaseModel):
         self.prev3Name = third.company
         self.prev3Position = third.position
         self.prev3Reporting = third.reporting
+        self.prev3ReportingDesignation = third.reportingDesignation
+        self.prev3ReportingPhone = third.reportingPhone
         self.prev3From = third.fromDate
         self.prev3To = third.toDate
         self.prev3Salary = third.salary
@@ -545,6 +587,8 @@ class PreFormApplicationData(BaseModel):
         self.prev4Name = fourth.company
         self.prev4Position = fourth.position
         self.prev4Reporting = fourth.reporting
+        self.prev4ReportingDesignation = fourth.reportingDesignation
+        self.prev4ReportingPhone = fourth.reportingPhone
         self.prev4From = fourth.fromDate
         self.prev4To = fourth.toDate
         self.prev4Salary = fourth.salary

@@ -3,6 +3,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func, or_, delete
 from sqlalchemy.orm import Session, joinedload
 
@@ -43,6 +44,7 @@ from app.services.candidate_service import (
     bulk_delete_candidates,
 )
 from app.services.candidate_work import build_candidate_work_state, build_candidate_work_states
+from app.services.candidate_export import build_candidates_workbook
 from app.services.document_service import (
     document_out as _document_out,
     get_resume_document as _get_resume_document,
@@ -266,6 +268,16 @@ def submit_candidate_portal_response(token: str, body: CandidatePortalResponseIn
         
     elif body.action_type in ["OFFER_ACCEPT", "OFFER_DECLINE"]:
         candidate.offer_status = "ACCEPTED" if body.action_type == "OFFER_ACCEPT" else "DECLINED"
+        if candidate.current_stage != PipelineStage.OFFER_RESPONSE:
+            old_stage = candidate.current_stage
+            candidate.current_stage = PipelineStage.OFFER_RESPONSE
+            db.add(StageHistory(
+                candidate_id=candidate.id,
+                from_stage=old_stage,
+                to_stage=PipelineStage.OFFER_RESPONSE,
+                changed_by_user_id=None,
+                reason="Offer response received from candidate portal.",
+            ))
         db.add(ActivityLog(
             candidate_id=candidate.id,
             activity_type=ActivityType.SYSTEM,
@@ -280,16 +292,11 @@ def submit_candidate_portal_response(token: str, body: CandidatePortalResponseIn
     return {"status": "success"}
 
 
-@router.get("", response_model=CandidatePaginatedOut)
-def list_candidates(
+def _candidate_list_query(
+    user: User,
     stage: PipelineStage | None = None,
     search: str | None = None,
-    page: int = 1,
-    limit: int = 50,
-    db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    skip = (page - 1) * limit
     q = select(Candidate)
     if stage in (
         PipelineStage.HO_INTERVIEWS,
@@ -314,18 +321,52 @@ def list_candidates(
                 Candidate.full_name.ilike(search_term),
                 Candidate.phone.ilike(search_term),
                 Candidate.candidate_id.ilike(search_term),
-                Candidate.email.ilike(search_term)
+                Candidate.email.ilike(search_term),
             )
         )
-        
+
     if user.role in (UserRole.ADMIN, UserRole.HO_HR):
         q = q.where(Candidate.current_stage.in_(HO_HR_PIPELINE_STAGES))
     elif user.role == UserRole.LOCAL_HR:
-        q = q.where(
-            Candidate.branch_location == user.branch_location
-        )
+        q = q.where(Candidate.branch_location == user.branch_location)
     else:
         q = q.where(Candidate.id == None)
+    return q
+
+
+@router.get("/export.xlsx")
+def export_candidates(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
+):
+    """Download every candidate currently visible to Head Office."""
+    rows = list(
+        db.scalars(
+            _candidate_list_query(user).order_by(Candidate.created_at.desc())
+        ).all()
+    )
+    workbook = build_candidates_workbook(rows)
+    return StreamingResponse(
+        workbook,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": 'attachment; filename="nippon-toyota-candidates.xlsx"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("", response_model=CandidatePaginatedOut)
+def list_candidates(
+    stage: PipelineStage | None = None,
+    search: str | None = None,
+    page: int = 1,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    skip = (page - 1) * limit
+    q = _candidate_list_query(user, stage=stage, search=search)
 
     total_count = db.scalar(select(func.count()).select_from(q.subquery())) or 0
 

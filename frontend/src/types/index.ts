@@ -14,6 +14,7 @@ export type PipelineStage =
   | 'BRANCH_INTERVIEW'
   | 'TEST'
   | 'FINAL_APPROVAL'
+  | 'OFFER_RESPONSE'
   | 'HIRED'
   | 'REJECTED'
   | 'ON_HOLD'
@@ -40,6 +41,7 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   'CSS',
   'SALARY_DETAILS',
   'FINAL_APPROVAL',
+  'OFFER_RESPONSE',
   'HIRED',
   'REJECTED',
   'ON_HOLD',
@@ -52,6 +54,7 @@ export const HO_LINEAR_STAGES: PipelineStage[] = [
   'CSS',
   'SALARY_DETAILS',
   'FINAL_APPROVAL',
+  'OFFER_RESPONSE',
   'HIRED',
 ];
 
@@ -64,6 +67,7 @@ export const HO_POST_SEND_STAGES: PipelineStage[] = [
   'CSS',
   'SALARY_DETAILS',
   'FINAL_APPROVAL',
+  'OFFER_RESPONSE',
   'HIRED',
 ];
 

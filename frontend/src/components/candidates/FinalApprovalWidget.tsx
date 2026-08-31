@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Input, LoadingSpinner, Modal, PdfViewer } from '../ui';
-import { confirmOfferWhatsApp, sendOfferLetter } from '../../api/candidates';
+import { confirmOfferWhatsApp, resendOfferWhatsApp, sendOfferLetter } from '../../api/candidates';
 import { getAuthHeaders } from '../../api/client';
 import type { Candidate } from '../../types';
 import { Mail, Pencil, MessageSquare } from 'lucide-react';
@@ -43,8 +43,11 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
   const [editing, setEditing] = useState(false);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const [showWhatsAppConfirm, setShowWhatsAppConfirm] = useState(false);
+  const [showWhatsAppFailure, setShowWhatsAppFailure] = useState(false);
+  const [whatsAppFailure, setWhatsAppFailure] = useState<string | null>(null);
   const [whatsAppOpened, setWhatsAppOpened] = useState(false);
   const [confirmingWhatsApp, setConfirmingWhatsApp] = useState(false);
+  const [resendingWhatsApp, setResendingWhatsApp] = useState(false);
   const awaitingWhatsAppReturn = useRef(false);
 
   const [fields, setFields] = useState<OfferLetterFields>(() => {
@@ -59,6 +62,8 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
   const blockers = candidate.offer_blockers ?? [];
   const alreadyOffered = blockers.includes('already offered') || candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED';
   const offerWhatsAppSent = candidate.profile?.raw_data?.offerWhatsAppStatus === 'SENT';
+  const offerWhatsAppFailed = candidate.profile?.raw_data?.offerWhatsAppStatus === 'FAILED';
+  const offerWhatsAppError = candidate.profile?.raw_data?.offerWhatsAppError as string | undefined;
   const pipelineReady = blockers.length === 0;
 
   useEffect(() => {
@@ -180,6 +185,23 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
     }
   };
 
+  const retryOfferWhatsApp = async () => {
+    setResendingWhatsApp(true);
+    try {
+      await resendOfferWhatsApp(candidate.id);
+      setShowWhatsAppFailure(false);
+      setWhatsAppFailure(null);
+      toast.success('Offer letter email sent. WhatsApp intimation sent via DoubleTick.');
+      onUpdate?.();
+    } catch (error) {
+      const message = extractError(error, 'DoubleTick could not send the WhatsApp intimation.');
+      setWhatsAppFailure(message);
+      toast.error(`WhatsApp intimation failed: ${message}`);
+    } finally {
+      setResendingWhatsApp(false);
+    }
+  };
+
   const handleSendOffer = async () => {
     if (!candidate.email) {
       toast.error('Candidate does not have an email address on file.');
@@ -195,8 +217,19 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
     }
     try {
       setSendingOffer(true);
-      await sendOfferLetter(candidate.id, payloadFromOfferFields(fields));
-      toast.success('Offer letter emailed as PDF.');
+      const updated = await sendOfferLetter(candidate.id, payloadFromOfferFields(fields));
+      const whatsappStatus = updated.profile?.raw_data?.offerWhatsAppStatus;
+      const whatsappError = updated.profile?.raw_data?.offerWhatsAppError as string | undefined;
+      if (whatsappStatus === 'SENT') {
+        toast.success('Offer letter email sent and WhatsApp intimation sent.');
+      } else if (whatsappStatus === 'FAILED') {
+        const message = whatsappError || 'DoubleTick could not send the WhatsApp intimation.';
+        setWhatsAppFailure(message);
+        setShowWhatsAppFailure(true);
+        toast.error(`Offer letter email sent, but WhatsApp intimation failed: ${message}`);
+      } else {
+        toast.success('Offer letter email sent. WhatsApp intimation is pending.');
+      }
       onUpdate?.();
     } catch (error: unknown) {
       toast.error(extractError(error, 'Failed to send offer letter.'));
@@ -209,11 +242,17 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
     <div className="space-y-4 w-full">
       {alreadyOffered && !offerWhatsAppSent && user?.role !== 'LOCAL_HR' && (
         <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 space-y-3">
-          <p className="text-sm font-semibold text-amber-950">Offer email sent. WhatsApp intimation still needs confirmation.</p>
-          <p className="text-xs text-amber-900">Open WhatsApp with the message ready, send it yourself, then confirm when you return here.</p>
-          <Button type="button" variant="secondary" onClick={openOfferWhatsApp} disabled={!candidate.phone}>
-            <MessageSquare className="mr-2 h-4 w-4" /> Open WhatsApp to send
-          </Button>
+          <p className="text-sm font-semibold text-amber-950">
+            Offer email sent. {offerWhatsAppFailed ? 'WhatsApp intimation failed.' : 'WhatsApp intimation still needs confirmation.'}
+          </p>
+          {offerWhatsAppFailed && offerWhatsAppError && <p className="text-xs text-amber-900">Reason: {offerWhatsAppError}</p>}
+          <p className="text-xs text-amber-900">Choose DoubleTick retry or open WhatsApp and send the prepared message yourself.</p>
+          <div className="flex flex-wrap gap-2">
+            {offerWhatsAppFailed && <Button type="button" onClick={() => { setWhatsAppFailure(offerWhatsAppError || 'DoubleTick could not send the WhatsApp intimation.'); setShowWhatsAppFailure(true); }}>Retry options</Button>}
+            <Button type="button" variant="secondary" onClick={openOfferWhatsApp} disabled={!candidate.phone}>
+              <MessageSquare className="mr-2 h-4 w-4" /> Open WhatsApp to send
+            </Button>
+          </div>
           {whatsAppOpened && (
             <Button type="button" onClick={() => void confirmOfferWhatsAppSent()} isLoading={confirmingWhatsApp}>
               I sent this on WhatsApp
@@ -241,19 +280,19 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
         )}
       </div>
       {user?.role !== 'LOCAL_HR' && alreadyOffered && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4 space-y-2.5">
-          <div className="flex items-center gap-2 text-emerald-950 font-bold text-sm">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse" />
-            Offer letter dispatched & confirmed
+        <div className={`rounded-xl border p-4 space-y-2.5 ${offerWhatsAppFailed ? 'border-red-200 bg-red-50/80' : 'border-emerald-200 bg-emerald-50/80'}`}>
+          <div className={`flex items-center gap-2 font-bold text-sm ${offerWhatsAppFailed ? 'text-red-950' : 'text-emerald-950'}`}>
+            <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${offerWhatsAppFailed ? 'bg-red-600' : 'bg-emerald-600'}`} />
+            Offer letter delivery status
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-emerald-200 font-semibold text-emerald-900 shadow-2xs">
               <Mail className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              PDF Emailed: <strong className="text-foreground">{candidate.email || 'Candidate Email'}</strong>
+              Offer email: Sent <strong className="text-foreground">{candidate.email || 'Candidate Email'}</strong>
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-emerald-200 font-semibold text-emerald-900 shadow-2xs">
-              <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              WhatsApp Confirmation {offerWhatsAppSent ? 'Sent' : 'Pending'}: <strong className="text-foreground">{candidate.phone}</strong>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white font-semibold shadow-2xs ${offerWhatsAppFailed ? 'border border-red-200 text-red-900' : 'border border-emerald-200 text-emerald-900'}`}>
+              <MessageSquare className={`w-3.5 h-3.5 shrink-0 ${offerWhatsAppFailed ? 'text-red-600' : 'text-emerald-600'}`} />
+              WhatsApp intimation: {offerWhatsAppSent ? 'Sent' : offerWhatsAppFailed ? 'Failed' : 'Pending'} <strong className="text-foreground">{candidate.phone}</strong>
             </span>
           </div>
         </div>
@@ -280,6 +319,24 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="secondary" onClick={() => setShowWhatsAppConfirm(false)} disabled={confirmingWhatsApp}>Not yet</Button>
             <Button onClick={() => void confirmOfferWhatsAppSent()} isLoading={confirmingWhatsApp}>Yes, I sent it</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showWhatsAppFailure} onClose={() => setShowWhatsAppFailure(false)} title="WhatsApp intimation needs attention" size="sm">
+        <div className="space-y-4 p-6">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <p className="font-semibold">Offer letter email sent</p>
+            <p className="mt-1">DoubleTick could not send the WhatsApp intimation.</p>
+            {whatsAppFailure && <p className="mt-2 text-xs">Reason: {whatsAppFailure}</p>}
+          </div>
+          <p className="text-sm text-muted-foreground">Retry through DoubleTick, or open WhatsApp to send the prepared message manually.</p>
+          <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+            <Button variant="secondary" onClick={() => setShowWhatsAppFailure(false)} disabled={resendingWhatsApp}>Close</Button>
+            <Button variant="secondary" onClick={() => { setShowWhatsAppFailure(false); openOfferWhatsApp(); }} disabled={!candidate.phone || resendingWhatsApp}>
+              <MessageSquare className="mr-2 h-4 w-4" /> Open WhatsApp
+            </Button>
+            <Button onClick={() => void retryOfferWhatsApp()} isLoading={resendingWhatsApp}>Retry via DoubleTick</Button>
           </div>
         </div>
       </Modal>

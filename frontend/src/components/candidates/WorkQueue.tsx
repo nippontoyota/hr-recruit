@@ -21,7 +21,7 @@ export function WorkQueue({ candidate, evaluations, className }: WorkQueueProps)
   const workState = getCandidateWorkState(candidate);
   const isHOStage = [
     'SENT_TO_HO', 'HO_INTERVIEW_INTIMATION', 'HO_HR_INTERVIEW', 'HO_DEPT_INTERVIEW', 'HO_INTERVIEWS',
-    'CSS', 'FINAL_APPROVAL', 'SALARY_DETAILS',
+    'CSS', 'FINAL_APPROVAL', 'SALARY_DETAILS', 'OFFER_RESPONSE',
   ].includes(stage);
 
   if (!isHOStage) return null;
@@ -36,6 +36,7 @@ export function WorkQueue({ candidate, evaluations, className }: WorkQueueProps)
   const blockers = (candidate.offer_blockers ?? []).filter((b) => b !== 'already offered');
   const offerReady = blockers.length === 0;
   const offerSent = candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED';
+  const offerResponseRecorded = candidate.offer_status === 'ACCEPTED' || candidate.offer_status === 'DECLINED';
 
   const items: QueueItem[] = [
     {
@@ -63,6 +64,14 @@ export function WorkQueue({ candidate, evaluations, className }: WorkQueueProps)
         : blockers.length
           ? `Missing: ${blockers.join(', ')}`
           : 'Requires HR ✓, Salary ✓',
+    },
+    {
+      label: 'Offer response',
+      done: offerResponseRecorded,
+      warning: candidate.offer_status === 'DECLINED',
+      hint: offerResponseRecorded
+        ? candidate.offer_status === 'ACCEPTED' ? 'Accepted' : 'Rejected'
+        : offerSent ? 'Waiting for response' : 'Not started',
     },
   ];
 
@@ -106,18 +115,18 @@ export function WorkQueue({ candidate, evaluations, className }: WorkQueueProps)
             key={item.label}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors',
-              item.done
-                ? 'bg-success/10 border-success/30 text-success'
-                : item.warning
+              item.warning
                   ? 'bg-warning/10 border-warning/30 text-warning'
+                : item.done
+                  ? 'bg-success/10 border-success/30 text-success'
                   : 'bg-muted/50 border-border text-muted-foreground'
             )}
             title={item.hint}
           >
-            {item.done ? (
-              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-            ) : item.warning ? (
+            {item.warning ? (
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            ) : item.done ? (
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
             ) : (
               <Circle className="w-3.5 h-3.5 shrink-0" />
             )}

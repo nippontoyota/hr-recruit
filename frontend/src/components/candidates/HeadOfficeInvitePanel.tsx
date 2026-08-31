@@ -95,7 +95,7 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
         location_or_link: isOnline ? null : location.trim(),
       });
       toast.success('Head Office interview schedule saved');
-      onUpdate({ candidate: false });
+      onUpdate({ candidate: true });
       return true;
     } catch (err) {
       toast.error(extractError(err, 'Failed to save interview schedule'));
