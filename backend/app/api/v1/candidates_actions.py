@@ -33,7 +33,7 @@ from app.models.enums import (
     EvaluationVerdict,
     InterviewStatus,
 )
-from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, VisitScheduleUpdate, WhatsAppInviteCreate, WhatsAppTemplateSave, CandidateDepartmentUpdate
+from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, VisitScheduleUpdate, WhatsAppInviteCreate, WhatsAppTemplateSave, CandidateDepartmentUpdate, CandidateIdentityUpdate
 from app.services.workflow import transition, transition_prerequisites
 from app.services.doubletick import (
     send_template,
@@ -310,6 +310,48 @@ def update_candidate_department(
     db.commit()
     db.refresh(candidate)
     return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]), viewer=user)
+
+@router.patch("/{id}/identity", response_model=CandidateOut)
+def update_candidate_identity(
+    id: UUID,
+    body: CandidateIdentityUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    """Correct the candidate's own name/phone/email captured at intake, without touching pipeline data."""
+    candidate = get_candidate_for_user(db, id, user, write=True)
+    previous_name = candidate.full_name
+    previous_phone = candidate.phone
+    previous_email = candidate.email
+
+    if previous_name == body.full_name and previous_phone == body.phone and previous_email == body.email:
+        return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]), viewer=user)
+
+    candidate.full_name = body.full_name
+    candidate.phone = body.phone
+    candidate.email = body.email
+
+    changes: list[str] = []
+    if previous_name != body.full_name:
+        changes.append(f"Name changed from {previous_name} to {body.full_name}.")
+    if previous_phone != body.phone:
+        changes.append(f"Phone changed from {previous_phone} to {body.phone}.")
+    if previous_email != body.email:
+        changes.append(f"Email changed from {previous_email or '—'} to {body.email or '—'}.")
+
+    db.add(
+        ActivityLog(
+            candidate_id=id,
+            activity_type=ActivityType.SYSTEM,
+            title="Candidate Details Corrected",
+            description=" ".join(changes),
+            created_by_user_id=user.id,
+        )
+    )
+    db.commit()
+    db.refresh(candidate)
+    return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]), viewer=user)
+
 
 @router.post("/{id}/pre-form/send", response_model=CandidateOut)
 def send_pre_form(

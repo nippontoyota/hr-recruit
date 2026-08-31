@@ -853,6 +853,29 @@ class CandidateDepartmentUpdate(BaseModel):
         return self
 
 
+class CandidateIdentityUpdate(BaseModel):
+    """Correction of the candidate's own identity details captured at intake."""
+
+    full_name: str
+    phone: str
+    email: str | None = None
+
+    @field_validator("full_name")
+    @classmethod
+    def check_full_name(cls, value: str) -> str:
+        return v.validate_full_name(value)
+
+    @field_validator("phone")
+    @classmethod
+    def check_phone(cls, value: str) -> str:
+        return v.validate_phone(value)
+
+    @field_validator("email")
+    @classmethod
+    def check_email(cls, value: str | None) -> str | None:
+        return v.validate_email(value, required=False)
+
+
 class StageHistoryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

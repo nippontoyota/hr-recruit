@@ -130,6 +130,21 @@ export const updateCandidateDepartment = async (
   return response.data;
 };
 
+export const updateCandidateIdentity = async (
+  id: string,
+  fullName: string,
+  phone: string,
+  email?: string,
+): Promise<Candidate> => {
+  invalidateCandidateCache(id);
+  const response = await request('PATCH', `/candidates/${id}/identity`, {
+    full_name: fullName,
+    phone,
+    email: email || null,
+  });
+  return response.data;
+};
+
 export const createCandidate = async (candidateData: Partial<Candidate>): Promise<Candidate> => {
   const response = await request('POST', '/candidates', candidateData);
   return response.data;

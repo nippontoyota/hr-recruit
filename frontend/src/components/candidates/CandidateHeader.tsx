@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { Clipboard, Phone, Mail, MapPin, Maximize2, Camera, User as UserIcon } from 'lucide-react';
+import { Clipboard, Phone, Mail, MapPin, Maximize2, Camera, User as UserIcon, Pencil } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { Candidate } from '../../types';
 import { stageLabel } from '../../lib/stages';
 import { getCandidateWorkState } from '../../lib/candidateWork';
-import { uploadCandidatePhoto } from '../../api/candidates';
+import { uploadCandidatePhoto, updateCandidateIdentity } from '../../api/candidates';
 import { extractError, cn } from '../../lib/utils';
 import { toast } from 'sonner';
-import { Button, Modal } from '../ui';
+import { Button, Modal, Input } from '../ui';
 
 interface CandidateHeaderProps {
   candidate: Candidate;
@@ -24,7 +24,44 @@ export function CandidateHeader({
 }: CandidateHeaderProps) {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState(candidate.full_name);
+  const [editPhone, setEditPhone] = useState(candidate.phone);
+  const [editEmail, setEditEmail] = useState(candidate.email || '');
+  const [savingIdentity, setSavingIdentity] = useState(false);
   const workState = getCandidateWorkState(candidate);
+
+  const openEditModal = () => {
+    setEditName(candidate.full_name);
+    setEditPhone(candidate.phone);
+    setEditEmail(candidate.email || '');
+    setShowEditModal(true);
+  };
+
+  const saveIdentity = async () => {
+    const name = editName.trim();
+    const phone = editPhone.trim();
+    const email = editEmail.trim();
+    if (!name) {
+      toast.error('Name is required');
+      return;
+    }
+    if (!phone) {
+      toast.error('Phone number is required');
+      return;
+    }
+    setSavingIdentity(true);
+    try {
+      await updateCandidateIdentity(candidate.id, name, phone, email || undefined);
+      toast.success('Candidate details updated');
+      setShowEditModal(false);
+      onUpdate?.();
+    } catch (err: unknown) {
+      toast.error(extractError(err, 'Failed to update candidate details'));
+    } finally {
+      setSavingIdentity(false);
+    }
+  };
 
   const copyId = () => {
     void navigator.clipboard?.writeText(candidate.candidate_id);
@@ -109,9 +146,21 @@ export function CandidateHeader({
               )}
             </div>
 
-            <h1 id="candidate-profile-title" className="mt-1 text-xl sm:text-2xl font-bold tracking-tight text-text-primary truncate">
-              {candidate.full_name}
-            </h1>
+            <div className="mt-1 flex items-center gap-2 min-w-0">
+              <h1 id="candidate-profile-title" className="text-xl sm:text-2xl font-bold tracking-tight text-text-primary truncate">
+                {candidate.full_name}
+              </h1>
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  onClick={openEditModal}
+                  className="inline-flex items-center gap-1 shrink-0 rounded-md bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary hover:bg-primary hover:text-white transition-colors border border-primary/30"
+                  title="Edit candidate's name, phone, or email"
+                >
+                  <Pencil className="w-3 h-3" /> Edit
+                </button>
+              )}
+            </div>
 
             <p className="mt-0.5 text-xs sm:text-sm text-text-secondary truncate">
               {candidate.position_applied_for || 'Position not specified'}
@@ -231,6 +280,54 @@ export function CandidateHeader({
                 </>
               )}
             </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Candidate Identity Modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Edit Candidate Details"
+        description="Correct the name, phone, or email captured when this candidate was first added."
+        size="sm"
+      >
+        <div className="p-6 space-y-4">
+          <div>
+            <label htmlFor="edit-candidate-name" className="form-label">Full Name</label>
+            <Input
+              id="edit-candidate-name"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              maxLength={255}
+            />
+          </div>
+          <div>
+            <label htmlFor="edit-candidate-phone" className="form-label">Phone Number</label>
+            <Input
+              id="edit-candidate-phone"
+              value={editPhone}
+              onChange={(e) => setEditPhone(e.target.value)}
+              maxLength={20}
+            />
+          </div>
+          <div>
+            <label htmlFor="edit-candidate-email" className="form-label">Email</label>
+            <Input
+              id="edit-candidate-email"
+              type="email"
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+              maxLength={255}
+            />
+          </div>
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
+            <Button variant="ghost" onClick={() => setShowEditModal(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveIdentity} isLoading={savingIdentity}>
+              Save
+            </Button>
           </div>
         </div>
       </Modal>
