@@ -187,6 +187,9 @@ def apply_whatsapp_template(
         "mapsLink",
         "recruiterName",
         "extraInstructions",
+        "meetingPoint",
+        "touchPoint1",
+        "touchPoint2",
     ):
         if vars_in.get(key) not in (None, ""):
             template[key] = vars_in[key]

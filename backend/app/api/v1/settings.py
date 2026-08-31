@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import require_roles
 from app.models.enums import InterviewMode, UserRole
-from app.models.settings import HR_BRANCHES, InterviewerName, LocationTemplate, MessageTemplate
+from app.models.settings import HR_BRANCHES, InterviewerName, LocationTemplate, MessageTemplate, TouchpointTemplate
 from app.models.user import User
 from app.utils.validators import validate_phone
 from app.schemas.settings import (
@@ -19,6 +19,8 @@ from app.schemas.settings import (
     MessageTemplateCreate,
     MessageTemplateResponse,
     MessageTemplateUpdate,
+    TouchpointTemplateCreate,
+    TouchpointTemplateResponse,
 )
 
 router = APIRouter()
@@ -164,6 +166,85 @@ def delete_location_template(
     row = db.get(LocationTemplate, template_id)
     if not row or row.branch_location != branch_loc:
         raise HTTPException(status_code=404, detail="Location template not found")
+    db.delete(row)
+    db.commit()
+
+
+@router.get("/touchpoints", response_model=list[TouchpointTemplateResponse])
+def list_touchpoint_templates(
+    branch: str | None = Query(None, description="Branch for ADMIN/HO_HR"),
+    db: Session = Depends(get_db),
+    user: User = Depends(_HR),
+):
+    branch_loc = _resolve_branch(user, branch)
+    return list(
+        db.scalars(
+            select(TouchpointTemplate)
+            .where(TouchpointTemplate.branch_location == branch_loc)
+            .order_by(TouchpointTemplate.name)
+        ).all()
+    )
+
+
+@router.post("/touchpoints", response_model=TouchpointTemplateResponse, status_code=status.HTTP_201_CREATED)
+def create_touchpoint_template(
+    body: TouchpointTemplateCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(_HR),
+):
+    branch_loc = _resolve_branch(user, body.branch_location)
+    name = body.name.strip()
+    meeting_point = body.meeting_point.strip()
+    touch_point_1_label = body.touch_point_1_label.strip()
+    if not name or not meeting_point or not touch_point_1_label:
+        raise HTTPException(
+            status_code=400, detail="Name, meeting point, and Touch Point 1 are required."
+        )
+    touch_point_2_label = (body.touch_point_2_label or "").strip() or None
+    existing = db.scalar(
+        select(TouchpointTemplate).where(
+            TouchpointTemplate.branch_location == branch_loc,
+            func.lower(TouchpointTemplate.name) == name.lower(),
+        )
+    )
+    if existing:
+        existing.meeting_point = meeting_point
+        existing.touch_point_1_label = touch_point_1_label
+        existing.touch_point_1_phone = (body.touch_point_1_phone or "").strip() or None
+        existing.touch_point_2_label = touch_point_2_label
+        existing.touch_point_2_phone = (body.touch_point_2_phone or "").strip() or None
+        if body.is_default:
+            existing.is_default = True
+        db.commit()
+        db.refresh(existing)
+        return existing
+    row = TouchpointTemplate(
+        branch_location=branch_loc,
+        name=name,
+        meeting_point=meeting_point,
+        touch_point_1_label=touch_point_1_label,
+        touch_point_1_phone=(body.touch_point_1_phone or "").strip() or None,
+        touch_point_2_label=touch_point_2_label,
+        touch_point_2_phone=(body.touch_point_2_phone or "").strip() or None,
+        is_default=body.is_default,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/touchpoints/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_touchpoint_template(
+    template_id: uuid.UUID,
+    branch: str | None = Query(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(_HR),
+):
+    branch_loc = _resolve_branch(user, branch)
+    row = db.get(TouchpointTemplate, template_id)
+    if not row or row.branch_location != branch_loc:
+        raise HTTPException(status_code=404, detail="Touchpoint template not found")
     db.delete(row)
     db.commit()
 

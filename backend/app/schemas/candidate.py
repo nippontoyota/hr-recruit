@@ -978,6 +978,9 @@ class WhatsAppTemplateSave(BaseModel):
     mapsLink: str | None = None
     recruiterName: str | None = None
     extraInstructions: str | None = None
+    meetingPoint: str | None = None
+    touchPoint1: str | None = None
+    touchPoint2: str | None = None
 
 
 class CandidatePaginatedOut(BaseModel):

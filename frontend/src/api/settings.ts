@@ -120,3 +120,60 @@ export async function deleteLocation(id: string, branch?: string | null): Promis
   const prev = locationCache.get(key);
   if (prev) locationCache.set(key, prev.filter((row) => row.id !== id));
 }
+
+export interface TouchpointTemplateRow {
+  id: string;
+  branch_location: string;
+  name: string;
+  meeting_point: string;
+  touch_point_1_label: string;
+  touch_point_1_phone?: string | null;
+  touch_point_2_label?: string | null;
+  touch_point_2_phone?: string | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+const touchpointCache = new Map<string, TouchpointTemplateRow[]>();
+
+export async function listTouchpoints(branch?: string | null): Promise<TouchpointTemplateRow[]> {
+  const key = branchKey(branch);
+  const hit = touchpointCache.get(key);
+  if (hit) return hit;
+  const res = await request('GET', `/settings/touchpoints${branchQuery(branch)}`);
+  touchpointCache.set(key, res.data);
+  return res.data;
+}
+
+export async function createTouchpoint(data: {
+  name: string;
+  meeting_point: string;
+  touch_point_1_label: string;
+  touch_point_1_phone?: string;
+  touch_point_2_label?: string;
+  touch_point_2_phone?: string;
+  branch?: string | null;
+}): Promise<TouchpointTemplateRow> {
+  const res = await request('POST', '/settings/touchpoints', {
+    name: data.name,
+    meeting_point: data.meeting_point,
+    touch_point_1_label: data.touch_point_1_label,
+    ...(data.touch_point_1_phone ? { touch_point_1_phone: data.touch_point_1_phone } : {}),
+    ...(data.touch_point_2_label ? { touch_point_2_label: data.touch_point_2_label } : {}),
+    ...(data.touch_point_2_phone ? { touch_point_2_phone: data.touch_point_2_phone } : {}),
+    ...(data.branch ? { branch_location: data.branch } : {}),
+  });
+  const key = branchKey(data.branch);
+  const prev = touchpointCache.get(key) || [];
+  const idx = prev.findIndex((item) => item.id === res.data.id);
+  touchpointCache.set(key, idx >= 0 ? prev.map((item, i) => (i === idx ? res.data : item)) : [...prev, res.data]);
+  return res.data;
+}
+
+export async function deleteTouchpoint(id: string, branch?: string | null): Promise<void> {
+  await request('DELETE', `/settings/touchpoints/${id}${branchQuery(branch)}`);
+  const key = branchKey(branch);
+  const prev = touchpointCache.get(key);
+  if (prev) touchpointCache.set(key, prev.filter((row) => row.id !== id));
+}

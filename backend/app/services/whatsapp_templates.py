@@ -65,6 +65,115 @@ CALL_LETTER = WhatsAppTemplateSpec(
     ),
 )
 
+CALL_LETTER_V2_ONE_TOUCHPOINT = WhatsAppTemplateSpec(
+    name="nippon_interview_call_letter_v2",
+    keys=(
+        "candidateName",
+        "position",
+        "visitDate",
+        "branchName",
+        "formLink",
+        "arrivalTime",
+        "meetingPoint",
+        "touchPoint1",
+        "mapsLink",
+        "recruiterName",
+    ),
+    examples=(
+        "Arun Kumar",
+        "Sales Consultant",
+        "20 Aug 2026",
+        "Kalamassery",
+        "https://hr-recruit.vercel.app/pre-form/example",
+        "9:15 AM",
+        "Floor 3rd - Sales Training Room / HR Department",
+        "Sreehari (HRD) 8606986060",
+        "https://maps.google.com/?q=Nippon+Toyota+Kalamassery",
+        "Anu",
+    ),
+    body=(
+        "Dear {{1}},\n"
+        "\n"
+        '"Greetings from Nippon HRD"\n'
+        "\n"
+        "This is to inform you that, pertaining to your application for *{{2}}*, "
+        "we have scheduled a direct interview on *{{3}}* at Nippon Toyota, *{{4}}*. "
+        "Please bring an updated bio-data and a passport size photo.\n"
+        "\n"
+        "Also complete the Job Application Form using the link below without fail:\n"
+        "{{5}}\n"
+        "\n"
+        "Reporting Time - *{{6}}*\n"
+        "Dress Code - Formal Wear with Proper Grooming (Mandatory)\n"
+        "Meeting Point - {{7}}\n"
+        "Touch Point 1 - {{8}}\n"
+        "\n"
+        "Location Link -\n"
+        "{{9}}\n"
+        "\n"
+        "Regards\n"
+        "{{10}}\n"
+        "Talent Acquisition Team\n"
+        "Nippon Toyota"
+    ),
+)
+
+CALL_LETTER_V2_TWO_TOUCHPOINTS = WhatsAppTemplateSpec(
+    name="nippon_interview_call_letter_v2_two_touchpoints",
+    keys=(
+        "candidateName",
+        "position",
+        "visitDate",
+        "branchName",
+        "formLink",
+        "arrivalTime",
+        "meetingPoint",
+        "touchPoint1",
+        "touchPoint2",
+        "mapsLink",
+        "recruiterName",
+    ),
+    examples=(
+        "Arun Kumar",
+        "Sales Consultant",
+        "20 Aug 2026",
+        "Kalamassery",
+        "https://hr-recruit.vercel.app/pre-form/example",
+        "9:15 AM",
+        "Floor 3rd - Sales Training Room / HR Department",
+        "Sreehari (HRD) 8606986060",
+        "Mathew (HRD) 9544286099",
+        "https://maps.google.com/?q=Nippon+Toyota+Kalamassery",
+        "Anu",
+    ),
+    body=(
+        "Dear {{1}},\n"
+        "\n"
+        '"Greetings from Nippon HRD"\n'
+        "\n"
+        "This is to inform you that, pertaining to your application for *{{2}}*, "
+        "we have scheduled a direct interview on *{{3}}* at Nippon Toyota, *{{4}}*. "
+        "Please bring an updated bio-data and a passport size photo.\n"
+        "\n"
+        "Also complete the Job Application Form using the link below without fail:\n"
+        "{{5}}\n"
+        "\n"
+        "Reporting Time - *{{6}}*\n"
+        "Dress Code - Formal Wear with Proper Grooming (Mandatory)\n"
+        "Meeting Point - {{7}}\n"
+        "Touch Point 1 - {{8}}\n"
+        "Touch Point 2 - {{9}}\n"
+        "\n"
+        "Location Link -\n"
+        "{{10}}\n"
+        "\n"
+        "Regards\n"
+        "{{11}}\n"
+        "Talent Acquisition Team\n"
+        "Nippon Toyota"
+    ),
+)
+
 INTERVIEWER_INVITE = WhatsAppTemplateSpec(
     name="nippon_interviewer_invite",
     keys=("interviewerName", "candidateName", "mode", "locationOrLink"),
@@ -190,6 +299,8 @@ OFFER_INTIMATION = WhatsAppTemplateSpec(
 
 ALL_SPECS = (
     CALL_LETTER,
+    CALL_LETTER_V2_ONE_TOUCHPOINT,
+    CALL_LETTER_V2_TWO_TOUCHPOINTS,
     INTERVIEWER_INVITE,
     TECHNICAL_TEST,
     INTERVIEW_SCHEDULE,

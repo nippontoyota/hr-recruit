@@ -10,10 +10,30 @@ export interface WhatsAppTemplateVars {
   mapsLink: string;
   recruiterName: string;
   extraInstructions: string;
+  /** Structured Meeting Point / Touch Point fields, saved per branch. When both
+   * meetingPoint and touchPoint1 are set, these drive the message instead of the
+   * freeform extraInstructions text (which is kept for older saved drafts). */
+  meetingPoint: string;
+  touchPoint1: string;
+  touchPoint2: string;
 }
 
 const DEFAULT_EXTRA =
   'Meeting Point – Floor 3rd – Sales Training Room / HR Department\nTouch Point 1 – Sreehari (HRD) 8606986060\nTouch Point 2 – Mathew (HRD) 9544286099';
+
+/** Builds the Meeting Point / Touch Point block from structured fields, falling
+ * back to freeform extraInstructions (or the hardcoded default) when unset. */
+export function composeExtraInstructions(vars: Pick<WhatsAppTemplateVars, 'meetingPoint' | 'touchPoint1' | 'touchPoint2' | 'extraInstructions'>): string {
+  const meetingPoint = vars.meetingPoint.trim();
+  const touchPoint1 = vars.touchPoint1.trim();
+  const touchPoint2 = vars.touchPoint2.trim();
+  if (meetingPoint && touchPoint1) {
+    const lines = [`Meeting Point – ${meetingPoint}`, `Touch Point 1 – ${touchPoint1}`];
+    if (touchPoint2) lines.push(`Touch Point 2 – ${touchPoint2}`);
+    return lines.join('\n');
+  }
+  return vars.extraInstructions.trim() || DEFAULT_EXTRA;
+}
 
 const UNSET_POSITIONS = new Set(['', 'unknown', 'unknown position', 'the applied']);
 
@@ -42,7 +62,7 @@ export function buildWhatsAppMessage(vars: WhatsAppTemplateVars): string {
   const dateLabel = vars.visitDate.trim() || '(select visit date)';
   const branchLabel = vars.branchName.trim() || '(select location)';
   const maps = vars.mapsLink.trim() || '(select location link)';
-  const extra = vars.extraInstructions.trim() || DEFAULT_EXTRA;
+  const extra = composeExtraInstructions(vars);
   const positionLabel = sanitizeWhatsAppPosition(vars.position) || '(select position)';
 
   return [
@@ -117,6 +137,9 @@ export function defaultTemplateVars(input: {
   recruiterName?: string;
   arrivalTime?: string;
   extraInstructions?: string;
+  meetingPoint?: string;
+  touchPoint1?: string;
+  touchPoint2?: string;
 }): WhatsAppTemplateVars {
   const visitDate =
     input.visitDate == null || input.visitDate === ''
@@ -134,6 +157,9 @@ export function defaultTemplateVars(input: {
     mapsLink: '',
     recruiterName: input.recruiterName || 'HR Team',
     extraInstructions: input.extraInstructions?.trim() || DEFAULT_EXTRA,
+    meetingPoint: input.meetingPoint?.trim() || '',
+    touchPoint1: input.touchPoint1?.trim() || '',
+    touchPoint2: input.touchPoint2?.trim() || '',
   };
 }
 
@@ -213,6 +239,9 @@ export function mergeWhatsAppVars(input: {
       filled(stored.extraInstructions) ||
       filled(local.extraInstructions) ||
       defaults.extraInstructions,
+    meetingPoint: filled(stored.meetingPoint) || filled(local.meetingPoint) || defaults.meetingPoint,
+    touchPoint1: filled(stored.touchPoint1) || filled(local.touchPoint1) || defaults.touchPoint1,
+    touchPoint2: filled(stored.touchPoint2) || filled(local.touchPoint2) || defaults.touchPoint2,
     recruiterName: filled(stored.recruiterName) || filled(local.recruiterName) || defaults.recruiterName,
   };
 }

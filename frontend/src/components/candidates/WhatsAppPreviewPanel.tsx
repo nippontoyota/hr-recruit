@@ -29,6 +29,10 @@ import {
   deleteLocation,
   listLocations,
   type LocationTemplateRow,
+  createTouchpoint,
+  deleteTouchpoint,
+  listTouchpoints,
+  type TouchpointTemplateRow,
 } from '../../api/settings';
 interface WhatsAppPreviewPanelProps {
   candidate: Candidate;
@@ -42,7 +46,6 @@ const FIELD_LABELS: Partial<Record<keyof WhatsAppTemplateVars, string>> = {
   position: 'Position',
   visitDate: 'Visit date',
   arrivalTime: 'Arrival time',
-  extraInstructions: 'Instructions',
   recruiterName: 'Recruiter name',
 };
 
@@ -50,7 +53,6 @@ const EDITABLE_FIELDS: (keyof WhatsAppTemplateVars)[] = [
   'candidateName',
   'position',
   'arrivalTime',
-  'extraInstructions',
   'recruiterName',
 ];
 
@@ -125,6 +127,9 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
   const [isSending, setIsSending] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [places, setPlaces] = useState<LocationTemplateRow[]>([]);
+  const [touchpoints, setTouchpoints] = useState<TouchpointTemplateRow[]>([]);
+  const [touchpointName, setTouchpointName] = useState('');
+  const [showTouchPoint2, setShowTouchPoint2] = useState(false);
 
   const refreshPlaces = async () => {
     try {
@@ -132,6 +137,15 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
     } catch (err) {
       if (isAbortError(err)) return;
       toast.error(extractError(err, 'Failed to load locations'));
+    }
+  };
+
+  const refreshTouchpoints = async () => {
+    try {
+      setTouchpoints(await listTouchpoints(branch));
+    } catch (err) {
+      if (isAbortError(err)) return;
+      toast.error(extractError(err, 'Failed to load touch points'));
     }
   };
 
@@ -198,8 +212,12 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
   }, []);
 
   const openEditor = () => {
-    setDraft(varsForCandidate(candidate, user?.full_name));
+    const next = varsForCandidate(candidate, user?.full_name);
+    setDraft(next);
+    setShowTouchPoint2(!!next.touchPoint2.trim());
+    setTouchpointName('');
     void refreshPlaces();
+    void refreshTouchpoints();
     setIsEditing(true);
   };
 
@@ -253,6 +271,69 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
       toast.success('Location removed');
     } catch (err) {
       toast.error(extractError(err, 'Failed to remove location'));
+    }
+  };
+
+  const selectTouchpoint = (id: string) => {
+    const preset = touchpoints.find((p) => p.id === id);
+    if (!preset) {
+      setDraft((current) => ({ ...current, meetingPoint: '', touchPoint1: '', touchPoint2: '' }));
+      setShowTouchPoint2(false);
+      return;
+    }
+    const touchPoint2 = preset.touch_point_2_label
+      ? [preset.touch_point_2_label, preset.touch_point_2_phone].filter(Boolean).join(' ')
+      : '';
+    setDraft((current) => ({
+      ...current,
+      meetingPoint: preset.meeting_point,
+      touchPoint1: [preset.touch_point_1_label, preset.touch_point_1_phone].filter(Boolean).join(' '),
+      touchPoint2,
+    }));
+    setShowTouchPoint2(!!touchPoint2);
+  };
+
+  const handleSaveTouchpoint = async () => {
+    if (!touchpointName.trim()) {
+      toast.error('Name this preset before saving (e.g. the branch name)');
+      return;
+    }
+    if (!draft.meetingPoint.trim() || !draft.touchPoint1.trim()) {
+      toast.error('Enter a Meeting Point and Touch Point 1');
+      return;
+    }
+    try {
+      const row = await createTouchpoint({
+        name: touchpointName,
+        meeting_point: draft.meetingPoint,
+        touch_point_1_label: draft.touchPoint1,
+        ...(showTouchPoint2 && draft.touchPoint2.trim() ? { touch_point_2_label: draft.touchPoint2 } : {}),
+        branch,
+      });
+      setTouchpoints(await listTouchpoints(branch));
+      const nextVars = {
+        ...vars,
+        meetingPoint: row.meeting_point,
+        touchPoint1: [row.touch_point_1_label, row.touch_point_1_phone].filter(Boolean).join(' '),
+        touchPoint2: row.touch_point_2_label
+          ? [row.touch_point_2_label, row.touch_point_2_phone].filter(Boolean).join(' ')
+          : '',
+      };
+      setVars(nextVars);
+      storeTemplateVars(candidate.id, nextVars);
+      toast.success('Meeting/Touch Points saved for this branch');
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to save touch points'));
+    }
+  };
+
+  const handleRemoveTouchpoint = async (preset: TouchpointTemplateRow) => {
+    try {
+      await deleteTouchpoint(preset.id, branch);
+      setTouchpoints(await listTouchpoints(branch));
+      toast.success('Touch point preset removed');
+    } catch (err) {
+      toast.error(extractError(err, 'Failed to remove touch point preset'));
     }
   };
 
@@ -667,6 +748,100 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
               <FieldError error={draftErrors.branchName} />
               <p className="text-xs text-muted-foreground">
                 Save remembers this location for the branch. Save changes stores the invite details for this candidate.
+              </p>
+            </div>
+
+            <div className="sm:col-span-2 space-y-3 rounded-lg border border-border p-3">
+              <label className="form-label">Meeting Point &amp; Touch Points</label>
+              <Select
+                value={
+                  touchpoints.find(
+                    (p) =>
+                      p.meeting_point === draft.meetingPoint &&
+                      [p.touch_point_1_label, p.touch_point_1_phone].filter(Boolean).join(' ') === draft.touchPoint1
+                  )?.id || ''
+                }
+                onChange={(event) => selectTouchpoint(event.target.value)}
+                searchable
+              >
+                <option value="">Select saved preset…</option>
+                {touchpoints.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </Select>
+
+              <ul className="space-y-1">
+                {touchpoints.map((preset) => (
+                  <li
+                    key={preset.id}
+                    className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm"
+                  >
+                    <span className="truncate font-medium">{preset.name}</span>
+                    <button
+                      type="button"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => handleRemoveTouchpoint(preset)}
+                      title={`Remove ${preset.name}`}
+                      aria-label={`Remove ${preset.name}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              <Input
+                placeholder="Meeting point (e.g. Floor 3rd - Sales Training Room / HR Department)"
+                value={draft.meetingPoint}
+                onChange={(event) => updateDraft('meetingPoint', event.target.value)}
+              />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Input
+                  placeholder="Touch Point 1 (e.g. Sreehari (HRD) 8606986060)"
+                  value={draft.touchPoint1}
+                  onChange={(event) => updateDraft('touchPoint1', event.target.value)}
+                />
+                {showTouchPoint2 ? (
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Touch Point 2 (e.g. Mathew (HRD) 9544286099)"
+                      value={draft.touchPoint2}
+                      onChange={(event) => updateDraft('touchPoint2', event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => {
+                        setShowTouchPoint2(false);
+                        updateDraft('touchPoint2', '');
+                      }}
+                      title="Remove Touch Point 2"
+                      aria-label="Remove Touch Point 2"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <Button type="button" variant="ghost" onClick={() => setShowTouchPoint2(true)}>
+                    + Add Touch Point 2
+                  </Button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+                <Input
+                  placeholder="Save this set as… (e.g. branch name)"
+                  value={touchpointName}
+                  onChange={(event) => setTouchpointName(event.target.value)}
+                />
+                <Button type="button" variant="secondary" onClick={handleSaveTouchpoint}>
+                  Save
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Save remembers Meeting Point + Touch Points for this branch — pick it instantly next time. Leave Touch Point 2 out if there's only one contact.
               </p>
             </div>
 

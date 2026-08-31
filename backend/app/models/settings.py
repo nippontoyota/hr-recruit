@@ -67,6 +67,30 @@ class MessageTemplate(Base):
     )
 
 
+class TouchpointTemplate(Base):
+    """Per-branch reusable meeting point / touch-point presets for the call letter."""
+
+    __tablename__ = "touchpoint_templates"
+    __table_args__ = (
+        UniqueConstraint("branch_location", "name", name="uq_touchpoint_templates_branch_name"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    branch_location: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    meeting_point: Mapped[str] = mapped_column(Text, nullable=False)
+    touch_point_1_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    touch_point_1_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    touch_point_2_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    touch_point_2_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class InterviewerName(Base):
     """Per-branch interviewer roster for scorecards."""
 

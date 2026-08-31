@@ -1,15 +1,19 @@
 import httpx
 import logging
 import re
+import time
 from typing import List
 
 from app.core.config import settings
 from app.services.whatsapp_templates import (
     CALL_LETTER,
+    CALL_LETTER_V2_ONE_TOUCHPOINT,
+    CALL_LETTER_V2_TWO_TOUCHPOINTS,
     INTERVIEW_SCHEDULE,
     ONLINE_INTERVIEW_SCHEDULE,
     INTERVIEWER_INVITE,
     TECHNICAL_TEST,
+    WhatsAppTemplateSpec,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,6 +56,17 @@ def placeholders_from_map(vars_map: dict | None, keys: tuple[str, ...] | list[st
 
 def call_letter_placeholders(vars_map: dict | None) -> list[str]:
     return placeholders_from_map(vars_map, CALL_LETTER.keys)
+
+
+def call_letter_v2_spec(touch_point_2: str | None) -> WhatsAppTemplateSpec:
+    """Picks the 1- or 2-touchpoint call letter template based on what's filled in."""
+    if touch_point_2 and touch_point_2.strip():
+        return CALL_LETTER_V2_TWO_TOUCHPOINTS
+    return CALL_LETTER_V2_ONE_TOUCHPOINT
+
+
+def call_letter_v2_placeholders(vars_map: dict | None, touch_point_2: str | None) -> list[str]:
+    return placeholders_from_map(vars_map, call_letter_v2_spec(touch_point_2).keys)
 
 
 def hr_interview_placeholders(vars_map: dict | None) -> list[str]:
@@ -232,6 +247,107 @@ def send_template(
             raise DoubleTickError(friendly_doubletick_error(str(raw)), str(raw))
 
     return res_json
+
+
+def list_templates(name: str | None = None, status_filter: str | None = None) -> list[dict]:
+    """GET /v2/templates — used to check Meta approval status before switching a send path over."""
+    api_key = settings.doubletick_api_key
+    if not api_key:
+        raise DoubleTickError("DoubleTick is not configured on the server (API key missing).")
+
+    params: dict[str, str] = {}
+    if name:
+        params["name"] = name
+    if status_filter:
+        params["status"] = status_filter
+
+    url = "https://public.doubletick.io/v2/templates"
+    headers = {"Accept": "application/json", "Authorization": api_key}
+
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(url, params=params, headers=headers)
+    except httpx.RequestError as e:
+        raise DoubleTickError(
+            "Could not reach DoubleTick (network error). Try again in a moment.", str(e)
+        ) from e
+
+    if response.status_code < 200 or response.status_code >= 300:
+        raw = _extract_api_error_text(response)
+        raise DoubleTickError(friendly_doubletick_error(raw), raw)
+
+    data = response.json()
+    return data if isinstance(data, list) else data.get("templates", [])
+
+
+_TEMPLATE_STATUS_CACHE_TTL_SECONDS = 300
+_template_status_cache: dict[str, tuple[str | None, float]] = {}
+
+
+def template_status(name: str) -> str | None:
+    """
+    Returns the Meta approval status ('APPROVED', 'PENDING', ...) for a template
+    name, or None if not found. Cached for a few minutes so a pending-template
+    check on every send doesn't add latency or trip DoubleTick's rate limit.
+    """
+    cached = _template_status_cache.get(name)
+    if cached is not None and time.monotonic() - cached[1] < _TEMPLATE_STATUS_CACHE_TTL_SECONDS:
+        return cached[0]
+
+    try:
+        templates = list_templates(name=name, status_filter="ALL")
+        status = next((tpl.get("status") for tpl in templates if tpl.get("name") == name), None)
+    except DoubleTickError:
+        return cached[0] if cached is not None else None
+
+    _template_status_cache[name] = (status, time.monotonic())
+    return status
+
+
+def create_template(spec: WhatsAppTemplateSpec) -> dict:
+    """
+    Submits a new WhatsApp template to Meta for approval via DoubleTick's
+    POST /template endpoint. Approval is async and can take hours; the template
+    is unusable for sending until DoubleTick reports status == 'APPROVED'
+    (check with template_status()).
+    """
+    api_key = settings.doubletick_api_key
+    if not api_key:
+        raise DoubleTickError("DoubleTick is not configured on the server (API key missing).")
+
+    url = "https://public.doubletick.io/template"
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": api_key,
+    }
+    payload = {
+        "name": spec.name,
+        "language": "en",
+        "category": spec.category,
+        "components": {
+            "body": {
+                "text": spec.body,
+                "example": spec.example_map(),
+            }
+        },
+    }
+
+    logger.info("Submitting DoubleTick template '%s' for approval", spec.name)
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(url, json=payload, headers=headers)
+    except httpx.RequestError as e:
+        raise DoubleTickError(
+            "Could not reach DoubleTick (network error). Try again in a moment.", str(e)
+        ) from e
+
+    if response.status_code < 200 or response.status_code >= 300:
+        raw = _extract_api_error_text(response)
+        logger.error("DoubleTick template creation failed (%s): %s", response.status_code, raw)
+        raise DoubleTickError(friendly_doubletick_error(raw), raw)
+
+    return response.json()
 
 
 if __name__ == "__main__":

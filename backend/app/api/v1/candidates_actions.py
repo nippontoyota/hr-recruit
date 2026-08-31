@@ -40,6 +40,9 @@ from app.services.doubletick import (
     DoubleTickError,
     friendly_doubletick_error,
     call_letter_placeholders,
+    call_letter_v2_placeholders,
+    call_letter_v2_spec,
+    template_status,
 )
 from app.services import storage
 
@@ -382,8 +385,21 @@ def send_whatsapp_invite(
     if not position or position.lower() in {"unknown", "unknown position", "the applied"}:
         raise HTTPException(status_code=400, detail="Position is required before sending.")
 
+    meeting_point = (vars_map.get("meetingPoint") or "").strip()
+    touch_point_1 = (vars_map.get("touchPoint1") or "").strip()
+    touch_point_2 = (vars_map.get("touchPoint2") or "").strip()
+
     template_name = settings.whatsapp_call_letter_template_name
     placeholders = call_letter_placeholders(vars_map)
+    if meeting_point and touch_point_1:
+        v2_spec = call_letter_v2_spec(touch_point_2)
+        try:
+            approved = template_status(v2_spec.name) == "APPROVED"
+        except Exception:
+            approved = False
+        if approved:
+            template_name = v2_spec.name
+            placeholders = call_letter_v2_placeholders(vars_map, touch_point_2)
 
     try:
         res = send_template(
@@ -405,11 +421,17 @@ def send_whatsapp_invite(
         status = CommunicationStatus.FAILED
         err_msg = friendly_doubletick_error(str(e))
 
-    extra = (vars_map.get("extraInstructions") or "").strip() or (
-        "Meeting Point – Floor 3rd – Sales Training Room / HR Department\n"
-        "Touch Point 1 – Sreehari (HRD) 8606986060\n"
-        "Touch Point 2 – Mathew (HRD) 9544286099"
-    )
+    if meeting_point and touch_point_1:
+        extra_lines = [f"Meeting Point – {meeting_point}", f"Touch Point 1 – {touch_point_1}"]
+        if touch_point_2:
+            extra_lines.append(f"Touch Point 2 – {touch_point_2}")
+        extra = "\n".join(extra_lines)
+    else:
+        extra = (vars_map.get("extraInstructions") or "").strip() or (
+            "Meeting Point – Floor 3rd – Sales Training Room / HR Department\n"
+            "Touch Point 1 – Sreehari (HRD) 8606986060\n"
+            "Touch Point 2 – Mathew (HRD) 9544286099"
+        )
     content_lines = [
         f"Dear {vars_map.get('candidateName', '')},",
         "",
