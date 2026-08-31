@@ -292,3 +292,4 @@ export interface ActivityLog {
   created_at: string;
 }
 
+export const ALL_PIPELINE_STAGES = PIPELINE_STAGES;

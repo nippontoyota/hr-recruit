@@ -13,7 +13,7 @@ def test_login_returns_clear_error_when_database_is_unavailable():
     database.scalar.side_effect = OperationalError("select", {}, Exception("offline"))
 
     with pytest.raises(HTTPException) as error:
-        login(LoginRequest(email="hq@example.com", password="password123"), database)
+        login(LoginRequest(email="hq@example.com", password="password123"), Mock(), database)
 
     assert error.value.status_code == 503
     assert "database is temporarily unavailable" in error.value.detail

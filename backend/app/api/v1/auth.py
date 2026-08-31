@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.compat import role_for_frontend
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_active_user
 from app.core.security import create_access_token, verify_password
@@ -50,7 +51,7 @@ def clear_login_cache() -> None:
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(body: LoginRequest, response: Response, db: Session = Depends(get_db)) -> TokenResponse:
     record = _login_cache.get(body.email.lower())
     if record is not None:
         valid = verify_password(body.password, record.hashed_password)
@@ -63,6 +64,14 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
         frontend_role = role_for_frontend(record.role)
         token = create_access_token(user_id=record.id, email=record.email, role=frontend_role)
+        response.set_cookie(
+            key="access_token",
+            value=token,
+            httponly=True,
+            secure=settings.is_production,
+            samesite="lax",
+            max_age=settings.access_token_expire_minutes * 60,
+        )
         return TokenResponse(
             access_token=token,
             token=token,
@@ -100,6 +109,14 @@ def login(body: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
         email=user.email,
         role=frontend_role,
     )
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=settings.is_production,
+        samesite="lax",
+        max_age=settings.access_token_expire_minutes * 60,
+    )
     user_out = UserOut.from_user(user)
     return TokenResponse(access_token=token, token=token, user=user_out)
 
@@ -114,7 +131,13 @@ from app.models.enums import UserRole
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
-def logout() -> dict[str, str]:
+def logout(response: Response) -> dict[str, str]:
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        secure=settings.is_production,
+        samesite="lax",
+    )
     return {"detail": "Logged out"}
 
 

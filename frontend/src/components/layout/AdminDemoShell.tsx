@@ -8,7 +8,7 @@ import { NAV_ITEMS } from '../../lib/navigation';
 import type { UserRole } from '../../types';
 import { cn } from '../../lib/utils';
 
-export const AppShell = () => {
+export const AdminDemoShell = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, role, logout } = useAuth();
 
@@ -41,7 +41,10 @@ export const AppShell = () => {
     return colorList[Math.abs(hash) % colorList.length];
   };
 
-  const allowedNavItems = role ? NAV_ITEMS.filter((item) => item.roles.includes(role as UserRole)) : [];
+  const allowedNavItems = role ? NAV_ITEMS.filter((item) => item.roles.includes(role as UserRole)).map(item => ({
+    ...item,
+    href: item.href.replace("/admin/", "/demo-admin/").replace("/candidates", "/demo-admin/pipeline")
+  })) : [];
 
   return (
     <ResumeViewerProvider>
@@ -52,9 +55,9 @@ export const AppShell = () => {
             <div className="flex items-center gap-4 flex-1">
               {/* Mobile menu toggle removed for Admin */}
               {role === 'ADMIN' ? (
-                location.pathname !== '/admin/dashboard' && (
+                location.pathname !== '/demo-admin/dashboard' && (
                   <Link 
-                    to="/admin/dashboard"
+                    to="/demo-admin/dashboard"
                     className="flex items-center text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
                   >
                     <ChevronLeft size={16} className="mr-1" /> Back to Workspace
