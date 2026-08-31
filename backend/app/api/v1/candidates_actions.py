@@ -1205,7 +1205,7 @@ def resend_head_office_forwarding_email(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    row = get_candidate_for_user(db, id, user)
+    row = get_candidate_for_user(db, id, user, write=True)
     status, error = _send_head_office_forwarding_email(db, row, user)
     db.commit()
     db.refresh(row)

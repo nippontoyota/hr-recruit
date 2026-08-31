@@ -1,7 +1,7 @@
 """add offer response stage
 
 Revision ID: l7d8e9f0a1b2
-Revises: f4a6b8c0d2e1
+Revises: m8e9f0a1b2c3
 Create Date: 2026-08-31
 """
 
@@ -11,7 +11,7 @@ from alembic import op
 
 
 revision: str = "l7d8e9f0a1b2"
-down_revision: Union[str, None] = "f4a6b8c0d2e1"
+down_revision: Union[str, None] = "m8e9f0a1b2c3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

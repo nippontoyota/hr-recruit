@@ -1,6 +1,6 @@
 """add head office interview intimation stage
 
-Revision ID: f4a6b8c0d2e1
+Revision ID: m8e9f0a1b2c3
 Revises: k6d7e8f9a0b1
 Create Date: 2026-08-28
 """
@@ -10,7 +10,7 @@ from typing import Sequence, Union
 from alembic import op
 
 
-revision: str = "f4a6b8c0d2e1"
+revision: str = "m8e9f0a1b2c3"
 down_revision: Union[str, None] = "k6d7e8f9a0b1"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
