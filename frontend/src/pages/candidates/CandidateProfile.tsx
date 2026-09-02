@@ -20,6 +20,7 @@ import { EvaluationStageWidget } from '../../components/candidates/EvaluationSta
 import { ApplicationStageWidget } from '../../components/candidates/ApplicationStageWidget';
 import { HeadOfficeInvitePanel } from '../../components/candidates/HeadOfficeInvitePanel';
 import { HeadOfficeForwardingEmailStatus } from '../../components/candidates/HeadOfficeForwardingEmailStatus';
+import { StageEmailStatus } from '../../components/candidates/StageEmailStatus';
 import { FinalApprovalWidget } from '../../components/candidates/FinalApprovalWidget';
 import { OfferResponseStageWidget } from '../../components/candidates/OfferResponseStageWidget';
 import { BackgroundVerificationWidget } from '../../components/candidates/BackgroundVerificationWidget';
@@ -463,9 +464,13 @@ export default function CandidateProfile() {
     if (!candidate) return;
     setIsUpdating(true);
     try {
-      await updateCandidateStage(candidate.id, 'ON_HOLD', remarks);
+      const updated = await updateCandidateStage(candidate.id, 'ON_HOLD', remarks);
       handleUpdate();
-      toast.success('Candidate placed on hold');
+      if (updated.profile?.raw_data?.onHoldEmailStatus === 'FAILED') {
+        toast.warning('Candidate placed on hold, but the notification email could not be sent. See the notice below to retry.');
+      } else {
+        toast.success('Candidate placed on hold and notified by email');
+      }
     } catch (err: unknown) {
       toast.error(extractError(err, 'Failed to place candidate on hold.'));
       throw err;
@@ -483,11 +488,15 @@ export default function CandidateProfile() {
     }
     setIsRejecting(true);
     try {
-      await updateCandidateStage(candidate.id, 'REJECTED', rejectRemarks);
+      const updated = await updateCandidateStage(candidate.id, 'REJECTED', rejectRemarks);
       handleUpdate();
       setShowRejectModal(false);
       setRejectRemarks('');
-      toast.success('Candidate rejected');
+      if (updated.profile?.raw_data?.rejectionEmailStatus === 'FAILED') {
+        toast.warning('Candidate rejected, but the notification email could not be sent. See the notice below to retry.');
+      } else {
+        toast.success('Candidate rejected and notified by email');
+      }
     } catch (err: any) {
       toast.error(extractError(err, 'Failed to reject candidate.'));
     } finally {
@@ -1039,6 +1048,10 @@ export default function CandidateProfile() {
             )}
 
 
+            {(actualStage === 'REJECTED' || actualStage === 'ON_HOLD') && (
+              <StageEmailStatus candidate={candidate} kind={actualStage} onUpdate={handleUpdate} />
+            )}
+
             {actualStage === 'ON_HOLD' && (
               <div className="bg-warning/5 border border-warning/20 p-8 rounded-xl mt-6 flex flex-col items-center">
                 <div className="w-16 h-16 bg-warning rounded-full flex items-center justify-center shadow-lg mb-4">
@@ -1144,7 +1157,7 @@ export default function CandidateProfile() {
           <div className="p-3 bg-warning/5 border border-warning/20 rounded-[10px] flex items-start gap-3">
             <Pause className="w-4 h-4 text-warning shrink-0 mt-0.5" />
             <p className="text-sm text-muted-foreground">
-              This pauses active work for <strong className="text-foreground">{candidate.full_name}</strong>. The candidate can be resumed later.
+              This pauses active work for <strong className="text-foreground">{candidate.full_name}</strong> and emails them an on-hold notification. The candidate can be resumed later.
             </p>
           </div>
           <div>
@@ -1191,7 +1204,7 @@ export default function CandidateProfile() {
         <div className="space-y-4 p-6">
           <div className="p-3 bg-danger/5 border border-danger/20 rounded-[10px] flex items-start gap-3">
             <XCircle className="w-4 h-4 text-danger shrink-0 mt-0.5" />
-            <p className="text-sm text-muted-foreground">This will move the candidate to <strong className="text-danger">Rejected</strong> status. This can be reversed later.</p>
+            <p className="text-sm text-muted-foreground">This will move the candidate to <strong className="text-danger">Rejected</strong> status and email them a rejection notice. This can be reversed later.</p>
           </div>
           <div>
             <label htmlFor="rejection-reason" className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">

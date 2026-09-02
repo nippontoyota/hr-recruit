@@ -28,6 +28,7 @@ from app.models.evaluation import Evaluation
 from app.models.evaluation_token import EvaluationToken
 from app.models.user import User
 from app.models.communication import Communication
+from app.services.stage_emails import send_on_hold_email, send_rejection_email
 from app.models.enums import (
     CommunicationStatus,
     CommunicationType,
@@ -140,6 +141,7 @@ def _apply_evaluation_outcome(
         return
 
     if verdict == EvaluationVerdict.REJECTED:
+        previous_stage = candidate.current_stage
         transition(
             db=db,
             candidate=candidate,
@@ -148,8 +150,11 @@ def _apply_evaluation_outcome(
             remarks=f"Rejected during {evaluation.type.value.replace('_', ' ').title()} evaluation.",
             skip_handover_lock=True,
         )
+        if previous_stage != PipelineStage.REJECTED:
+            send_rejection_email(db, candidate, user)
         return
     if verdict == EvaluationVerdict.ON_HOLD:
+        previous_stage = candidate.current_stage
         transition(
             db=db,
             candidate=candidate,
@@ -158,6 +163,8 @@ def _apply_evaluation_outcome(
             remarks=f"Placed on hold during {evaluation.type.value.replace('_', ' ').title()} evaluation.",
             skip_handover_lock=True,
         )
+        if previous_stage != PipelineStage.ON_HOLD:
+            send_on_hold_email(db, candidate, user)
         return
     if verdict != EvaluationVerdict.SELECTED:
         return

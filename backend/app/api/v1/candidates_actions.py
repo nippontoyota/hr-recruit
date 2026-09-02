@@ -14,6 +14,7 @@ from app.core.deps import require_roles
 from app.core.access import get_candidate_for_user
 from app.core.offer_gate import offer_blockers
 from app.core.offer_cc import head_office_forwarding_cc_emails, offer_cc_emails
+from app.services.stage_emails import send_on_hold_email, send_rejection_email
 from app.core.positions import positions_for
 from app.core.config import settings
 from app.models.candidate import Candidate
@@ -144,6 +145,10 @@ def transition_stage(
         PipelineStage.HO_INTERVIEW_INTIMATION,
     }:
         _send_head_office_forwarding_email(db, updated, user)
+    if previous_stage != PipelineStage.REJECTED and body.to_stage == PipelineStage.REJECTED:
+        send_rejection_email(db, updated, user)
+    elif previous_stage != PipelineStage.ON_HOLD and body.to_stage == PipelineStage.ON_HOLD:
+        send_on_hold_email(db, updated, user)
     db.commit()
     db.refresh(updated)
     return to_candidate_out(updated, id in resume_candidate_ids(db, [id]), db, viewer=user)
@@ -1275,4 +1280,34 @@ def resend_head_office_forwarding_email(
     db.refresh(row)
     if status != "SENT":
         raise HTTPException(status_code=502, detail=error or "Could not resend the Head Office forwarding email.")
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]), db, viewer=user)
+
+
+@router.post("/{id}/rejection-email/resend", response_model=CandidateOut)
+def resend_rejection_email(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    row = get_candidate_for_user(db, id, user, write=True)
+    status, error = send_rejection_email(db, row, user)
+    db.commit()
+    db.refresh(row)
+    if status != "SENT":
+        raise HTTPException(status_code=502, detail=error or "Could not resend the rejection email.")
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]), db, viewer=user)
+
+
+@router.post("/{id}/on-hold-email/resend", response_model=CandidateOut)
+def resend_on_hold_email(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    row = get_candidate_for_user(db, id, user, write=True)
+    status, error = send_on_hold_email(db, row, user)
+    db.commit()
+    db.refresh(row)
+    if status != "SENT":
+        raise HTTPException(status_code=502, detail=error or "Could not resend the on-hold email.")
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]), db, viewer=user)

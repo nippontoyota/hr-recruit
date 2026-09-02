@@ -338,6 +338,16 @@ export const resendHeadOfficeForwardingEmail = async (candidateId: string): Prom
   return response.data;
 };
 
+export const resendRejectionEmail = async (candidateId: string): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/rejection-email/resend`);
+  return response.data;
+};
+
+export const resendOnHoldEmail = async (candidateId: string): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/on-hold-email/resend`);
+  return response.data;
+};
+
 export interface SalaryUploadMatch {
   id: string;
   candidate_id: string;
