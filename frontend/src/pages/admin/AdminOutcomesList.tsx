@@ -5,6 +5,7 @@ import { useCandidatesList } from '../../hooks/api/useCandidates';
 import { LoadingSpinner, Badge } from '../../components/ui';
 import { Search, Building2, MapPin, CheckCircle, XCircle, ExternalLink, CalendarDays } from 'lucide-react';
 import { getStageBadgeVariant, stageLabel } from '../../lib/stages';
+import { formatDate } from '../../lib/dateTime';
 import type { PipelineStage } from '../../types';
 
 type FilterMode = 'ALL' | 'HIRED' | 'REJECTED';
@@ -186,7 +187,7 @@ export default function AdminOutcomesList() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
                         <CalendarDays size={14} className="text-gray-400" />
-                        {candidate.updated_at ? new Date(candidate.updated_at).toLocaleDateString() : 'Unknown'}
+                        {candidate.updated_at ? formatDate(candidate.updated_at) : 'Unknown'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
