@@ -1235,6 +1235,60 @@ async def upload_bulk_salary(
         "skipped": skipped,
     }
 
+@router.post("/{id}/technical-test/complete", response_model=CandidateOut)
+def complete_technical_test_verification(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.LOCAL_HR, UserRole.ADMIN)),
+):
+    """Local HR marks the technical test as verified. Completion only — the result/verdict
+    is tracked separately and is not required here."""
+    row = get_candidate_for_user(db, id, user, write=True)
+    if not row.technical_test_verified:
+        row.technical_test_verified = True
+        row.technical_test_verified_at = datetime.now(timezone.utc)
+        row.technical_test_verified_by_user_id = user.id
+        db.add(
+            ActivityLog(
+                candidate_id=row.id,
+                activity_type=ActivityType.STAGE_CHANGE,
+                title="Technical Test Verification Completed",
+                description=f"Technical test verification marked complete by {user.full_name}.",
+                created_by_user_id=user.id,
+            )
+        )
+        db.commit()
+        db.refresh(row)
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]), db, viewer=user)
+
+
+@router.post("/{id}/background-verification/complete", response_model=CandidateOut)
+def complete_background_verification(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.LOCAL_HR, UserRole.ADMIN)),
+):
+    """Local HR marks background verification as completed. Completion only — the outcome
+    of the verification is tracked separately and is not required here."""
+    row = get_candidate_for_user(db, id, user, write=True)
+    if not row.background_verification_completed:
+        row.background_verification_completed = True
+        row.background_verification_completed_at = datetime.now(timezone.utc)
+        row.background_verification_completed_by_user_id = user.id
+        db.add(
+            ActivityLog(
+                candidate_id=row.id,
+                activity_type=ActivityType.STAGE_CHANGE,
+                title="Background Verification Completed",
+                description=f"Background verification marked complete by {user.full_name}.",
+                created_by_user_id=user.id,
+            )
+        )
+        db.commit()
+        db.refresh(row)
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]), db, viewer=user)
+
+
 @router.post("/{id}/send-to-ho", response_model=CandidateOut)
 def send_to_ho(
     id: UUID,

@@ -14,6 +14,8 @@ def candidate(**updates):
         "id": uuid4(),
         "current_stage": PipelineStage.APPLICATION,
         "pre_form_status": "SUBMITTED",
+        "technical_test_verified": True,
+        "background_verification_completed": True,
     }
     values.update(updates)
     return SimpleNamespace(**values)
@@ -40,6 +42,45 @@ def test_send_to_ho_blocks_after_handover():
         PipelineStage.SENT_TO_HO,
     )
     assert missing == ["candidate must still be in the branch pipeline"]
+
+
+def test_send_to_ho_blocks_when_technical_test_not_verified():
+    missing = transition_prerequisites(
+        candidate(technical_test_verified=False),
+        PipelineStage.SENT_TO_HO,
+    )
+    assert missing == ["technical test verification"]
+
+
+def test_send_to_ho_blocks_when_background_verification_not_completed():
+    missing = transition_prerequisites(
+        candidate(background_verification_completed=False),
+        PipelineStage.SENT_TO_HO,
+    )
+    assert missing == ["background verification"]
+
+
+def test_send_to_ho_blocks_when_both_checks_incomplete():
+    missing = transition_prerequisites(
+        candidate(technical_test_verified=False, background_verification_completed=False),
+        PipelineStage.SENT_TO_HO,
+    )
+    assert missing == ["technical test verification", "background verification"]
+
+
+def test_send_to_ho_allows_handover_when_both_checks_complete():
+    assert transition_prerequisites(
+        candidate(technical_test_verified=True, background_verification_completed=True),
+        PipelineStage.SENT_TO_HO,
+    ) == []
+
+
+def test_ho_interview_intimation_also_requires_both_checks():
+    missing = transition_prerequisites(
+        candidate(technical_test_verified=False, background_verification_completed=False),
+        PipelineStage.HO_INTERVIEW_INTIMATION,
+    )
+    assert missing == ["technical test verification", "background verification"]
 
 
 def test_offer_readiness_reports_existing_missing_prerequisites():

@@ -42,6 +42,10 @@ def transition_prerequisites(candidate: Candidate, target_stage: PipelineStage) 
     if target_stage in {PipelineStage.SENT_TO_HO, PipelineStage.HO_INTERVIEW_INTIMATION}:
         if candidate.current_stage not in _BRANCH_SEND_STAGES:
             missing.append("candidate must still be in the branch pipeline")
+        if not getattr(candidate, "technical_test_verified", False):
+            missing.append("technical test verification")
+        if not getattr(candidate, "background_verification_completed", False):
+            missing.append("background verification")
     return missing
 
 

@@ -747,7 +747,19 @@ class CandidateOut(BaseModel):
     has_resume: bool = False
     is_rejoining: bool = False
     handed_over_to_ho: bool = False
+    technical_test_verified: bool = False
+    technical_test_verified_at: datetime | None = None
+    background_verification_completed: bool = False
+    background_verification_completed_at: datetime | None = None
+    ho_handover_blockers: list[str] = []
     offer_blockers: list[str] = []
+
+    @field_validator("technical_test_verified", "background_verification_completed", mode="before")
+    @classmethod
+    def _default_completion_flag(cls, value: bool | None) -> bool:
+        # Rows built without going through a DB flush (server_default not yet applied) can
+        # surface None here; treat that the same as "not yet completed".
+        return bool(value)
     screening: "CandidateScreeningOut | None" = None
     work_state: CandidateWorkState | None = None
     evaluations: list[EvaluationOut] = Field(default_factory=list)

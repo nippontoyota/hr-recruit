@@ -62,6 +62,20 @@ class Candidate(Base):
         UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id"), nullable=True, index=True
     )
     is_head_office_hire: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False, nullable=False)
+
+    # Head Office handover gate — Local HR must mark both complete before the candidate
+    # can be transitioned to SENT_TO_HO / HO_INTERVIEW_INTIMATION. "Completed" reflects
+    # only that the process was carried out, not its outcome/verdict.
+    technical_test_verified: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False, nullable=False)
+    technical_test_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    technical_test_verified_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id"), nullable=True
+    )
+    background_verification_completed: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False, nullable=False)
+    background_verification_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    background_verification_completed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id"), nullable=True
+    )
     interviewer_assignments: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     offer_status: Mapped[str | None] = mapped_column(String(50), nullable=True) # PENDING, ACCEPTED, DECLINED
     salary_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True) # Mapped from Bulk Excel Upload

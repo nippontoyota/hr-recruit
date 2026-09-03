@@ -18,6 +18,7 @@ from app.models.document import Document
 from app.models.enums import ActivityType, PipelineStage
 from app.models.stage_history import StageHistory
 from app.models.evaluation import Evaluation
+from app.services.workflow import transition_prerequisites
 from app.schemas.candidate import CandidateCreate, CandidateListOut, CandidateOut
 from app.schemas.evaluation import EvaluationOut
 from app.services.document_service import process_photo_url
@@ -60,6 +61,7 @@ def to_candidate_out(
             "has_resume": has_resume,
             "is_rejoining": False,
             "handed_over_to_ho": handed_over_to_ho(candidate, db),
+            "ho_handover_blockers": transition_prerequisites(candidate, PipelineStage.SENT_TO_HO),
             "offer_blockers": offer_blockers(candidate, has_resume=has_resume, db=db) if db is not None else [],
             "salary_data": candidate.salary_data if can_view_salary(viewer) else None,
             "evaluations": [EvaluationOut.model_validate(e) for e in (evaluations or [])],
