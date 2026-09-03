@@ -155,6 +155,11 @@ export interface Candidate {
   offer_blockers?: string[];
   created_at: string;
   handed_over_to_ho?: boolean;
+  technical_test_verified?: boolean;
+  technical_test_verified_at?: string | null;
+  background_verification_completed?: boolean;
+  background_verification_completed_at?: string | null;
+  ho_handover_blockers?: string[];
   work_state?: CandidateWorkState | null;
   evaluations?: Evaluation[];
 }

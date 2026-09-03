@@ -3,9 +3,17 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "browserslist": [
+    "Chrome >= 60",
+    "Edge >= 79",
+    "Firefox >= 60",
+    "Safari >= 12",
+    "not dead"
+  ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run verify:build",
+    "verify:build": "node scripts/verify-dual-build.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -30,11 +38,13 @@
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-legacy": "^8.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "autoprefixer": "^10.5.2",
     "oxlint": "^1.71.0",
     "postcss": "^8.5.16",
     "tailwindcss": "^4.3.2",
+    "terser": "^5.51.2",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"
   }

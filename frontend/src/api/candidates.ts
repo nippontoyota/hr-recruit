@@ -304,6 +304,18 @@ export const updateCandidateStage = async (
   return response.data;
 };
 
+export const completeTechnicalTestVerification = async (candidateId: string): Promise<Candidate> => {
+  invalidateCandidateCache(candidateId);
+  const response = await request('POST', `/candidates/${candidateId}/technical-test/complete`);
+  return response.data;
+};
+
+export const completeBackgroundVerification = async (candidateId: string): Promise<Candidate> => {
+  invalidateCandidateCache(candidateId);
+  const response = await request('POST', `/candidates/${candidateId}/background-verification/complete`);
+  return response.data;
+};
+
 export const sendOfferLetter = async (candidateId: string, fields?: Record<string, string>): Promise<Candidate> => {
   const response = await request('POST', `/candidates/${candidateId}/offer-letter/send`, fields || {});
   return response.data;
