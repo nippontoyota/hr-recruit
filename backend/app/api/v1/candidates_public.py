@@ -19,6 +19,7 @@ from app.core.public_token import (
 from app.models.candidate import Candidate
 from app.models.candidate_profile import CandidateProfile
 from app.models.enums import PipelineStage, UserRole, FormStatus, DocumentType
+from app.models.document import Document
 from app.models.user import User
 from app.schemas.candidate import (
     CandidateCreate,
