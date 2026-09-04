@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func, or_, delete
 from sqlalchemy.orm import Session, joinedload
@@ -34,7 +34,8 @@ from app.schemas.candidate import (
     CandidatePortalOut,
     CandidatePortalEvaluationOut,
     CandidatePortalResponseIn,
-    CandidateOut
+    CandidateOut,
+    CandidateWorkState,
 )
 from app.schemas.candidate_query import CandidateListQuery
 
@@ -388,6 +389,7 @@ def export_candidates_csv(
 @router.get("", response_model=CandidatePaginatedOut)
 def list_candidates(
     query: CandidateListQuery = Depends(),
+    include_work_state: bool = Query(default=True),
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
@@ -395,7 +397,7 @@ def list_candidates(
     rows, total_count = candidate_list_rows_with_count(db, q, query.page, query.limit)
     cand_ids = [row.id for row in rows]
     with_resume = resume_candidate_ids(db, cand_ids)
-    work_states = build_candidate_work_states(db, rows, resume_ids=with_resume)
+    work_states = build_candidate_work_states(db, rows, resume_ids=with_resume) if include_work_state else {}
 
     ho_history_ids = set(
         db.scalars(
@@ -415,7 +417,7 @@ def list_candidates(
             db=None,
             handed_over=(stage_value(row.current_stage) in HO_HANDOVER_STAGE_VALUES or row.id in ho_history_ids),
         ).model_copy(
-            update={"work_state": work_states[row.id]}
+            update={"work_state": work_states.get(row.id)}
         )
         for row in rows
     ]
@@ -426,6 +428,25 @@ def list_candidates(
         page=query.page,
         limit=query.limit
     )
+
+
+@router.get("/work-states", response_model=dict[str, CandidateWorkState])
+def candidate_work_states(
+    candidate_id: list[UUID] = Query(default=[]),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    """Return queue metadata separately so the candidate table is fast to first paint."""
+    if not candidate_id:
+        return {}
+    rows = list(
+        db.scalars(
+            build_candidate_list_query(user, CandidateListQuery()).where(Candidate.id.in_(candidate_id))
+        ).all()
+    )
+    resume_ids = resume_candidate_ids(db, [row.id for row in rows])
+    states = build_candidate_work_states(db, rows, resume_ids=resume_ids)
+    return {str(row_id): state for row_id, state in states.items()}
 
 
 @router.post("", response_model=CandidateOut, status_code=201)

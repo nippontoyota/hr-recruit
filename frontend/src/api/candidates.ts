@@ -33,13 +33,26 @@ export const getCandidates = async (
   limit: number = 50,
   queryState?: CandidateListQueryState,
   signal?: AbortSignal,
+  includeWorkState = true,
 ): Promise<PaginatedCandidates> => {
   const query = candidateQueryParams(queryState ?? {
     search: '', stages: [], offerStatuses: [], branches: [], sources: [], position: '', nextActions: [],
     createdDate: '', sentDate: '', sortBy: 'created_at', sortDirection: 'desc',
   }, page, limit);
+  if (!includeWorkState) query.set('include_work_state', 'false');
 
   const response = await request('GET', `/candidates?${query.toString()}`, undefined, { signal });
+  return response.data;
+};
+
+export const getCandidateWorkStates = async (
+  candidateIds: string[],
+  signal?: AbortSignal,
+): Promise<Record<string, Candidate['work_state']>> => {
+  if (candidateIds.length === 0) return {};
+  const query = new URLSearchParams();
+  candidateIds.forEach((id) => query.append('candidate_id', id));
+  const response = await request('GET', `/candidates/work-states?${query.toString()}`, undefined, { signal });
   return response.data;
 };
 

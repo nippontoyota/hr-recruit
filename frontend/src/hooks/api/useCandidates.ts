@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { getCandidates } from '../../api/candidates';
+import { getCandidates, getCandidateWorkStates } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { extractError, isAbortError } from '../../lib/utils';
 import { emptyCandidateListQuery, type CandidateListQueryState } from '../../lib/candidateListQuery';
@@ -99,13 +99,28 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
     if (!loadedRef.current) setLoading(true);
     else setRefreshing(true);
     try {
-      const res = await getCandidates(page, limit, requestQuery, signal);
+      const res = await getCandidates(page, limit, requestQuery, signal, false);
       if (signal?.aborted) return;
       setCandidates(res.data);
       setTotalCount(res.total_count);
       setLoadError(null);
       writeCandidateListCache(cacheKey, res.data, res.total_count);
       loadedRef.current = true;
+      void getCandidateWorkStates(res.data.map((candidate) => candidate.id), signal)
+        .then((workStates) => {
+          if (signal?.aborted) return;
+          const merged = res.data.map((candidate) => ({
+            ...candidate,
+            work_state: workStates[candidate.id] ?? candidate.work_state,
+          }));
+          setCandidates(merged);
+          writeCandidateListCache(cacheKey, merged, res.total_count);
+        })
+        .catch((err) => {
+          if (!signal?.aborted && !isAbortError(err)) {
+            // Queue metadata is supplementary; the candidate list remains usable.
+          }
+        });
     } catch (err) {
       if (signal?.aborted || isAbortError(err)) return;
       const message = extractError(err, 'Failed to load candidates');
