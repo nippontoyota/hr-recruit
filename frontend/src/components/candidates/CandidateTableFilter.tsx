@@ -37,7 +37,7 @@ export function CandidateTableFilter({ label, values, options, textValue = '', d
           </label>)}
         </div>}
         {onTextChange && <input autoFocus={!options} value={textValue} onChange={(event) => onTextChange(event.target.value)} placeholder={`Search ${label.toLowerCase()}`} className="h-9 w-full rounded border border-border bg-background px-2 text-xs outline-none focus:border-primary" />}
-        {onDateChange && <input value={dateValue} onChange={(event) => onDateChange(event.target.value)} placeholder="DD-MM-YYYY" inputMode="numeric" className="h-9 w-full rounded border border-border bg-background px-2 text-xs outline-none focus:border-primary" />}
+        {onDateChange && <input value={dateValue} onChange={(event) => onDateChange(event.target.value)} placeholder="DD/MM/YYYY" inputMode="numeric" className="h-9 w-full rounded border border-border bg-background px-2 text-xs outline-none focus:border-primary" />}
         <button type="button" onClick={() => setOpen(false)} className="w-full rounded bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Apply</button>
       </PopoverContent>
     </Popover>

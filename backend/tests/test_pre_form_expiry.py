@@ -60,7 +60,7 @@ def test_expire_leaves_open_form_alone():
 def test_expired_message_includes_day_and_month():
     row = _candidate(pre_form_expires_at=datetime(2026, 8, 14, 12, 0, tzinfo=UTC))
     assert pre_form_expired_detail(row) == (
-        "This form link expired on 14 August. Please contact your recruiter for a new link."
+        "This form link expired on 14/08/2026. Please contact your recruiter for a new link."
     )
 
 

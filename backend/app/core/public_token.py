@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.activity_log import ActivityLog
 from app.models.candidate import Candidate
 from app.models.enums import ActivityType, FormStatus, PipelineStage
+from app.utils.date_format import format_date_dmy
 
 PURPOSE_APPLY = "APPLY"
 PURPOSE_PRE_FORM = "PRE_FORM"
@@ -82,7 +83,7 @@ def pre_form_expired_detail(candidate: Candidate) -> str:
     deadline = pre_form_deadline(candidate) or datetime.now(UTC)
     local = deadline.astimezone(_IST)
     return (
-        f"This form link expired on {local.day} {local.strftime('%B')}. "
+        f"This form link expired on {format_date_dmy(local)}. "
         "Please contact your recruiter for a new link."
     )
 

@@ -31,8 +31,10 @@ function pick(data: Record<string, unknown> | null | undefined, keys: string[]):
 export function formatOfferJoinDate(value: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const [year, month, day] = value.split('-');
-    return `${day}-${month}-${year}`;
+    return `${day}/${month}/${year}`;
   }
+  const legacy = value.trim().match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (legacy) return `${legacy[1]}/${legacy[2]}/${legacy[3]}`;
   return value.trim();
 }
 

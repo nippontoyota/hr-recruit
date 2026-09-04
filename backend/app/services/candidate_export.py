@@ -13,6 +13,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from app.models.candidate import Candidate
+from app.utils.date_format import format_date_dmy
 
 
 EXPORT_COLUMNS = (
@@ -46,9 +47,9 @@ def _csv_value(value):
     if hasattr(value, "value"):
         value = value.value
     if isinstance(value, datetime):
-        return value.astimezone(_IST).strftime("%d-%m-%Y") if value.tzinfo else value.strftime("%d-%m-%Y")
+        return format_date_dmy(value.astimezone(_IST) if value.tzinfo else value)
     if isinstance(value, date):
-        return value.strftime("%d-%m-%Y")
+        return format_date_dmy(value)
     return "" if value is None else str(value)
 
 

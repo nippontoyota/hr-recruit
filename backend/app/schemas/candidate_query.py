@@ -28,9 +28,9 @@ def parse_dmy(value: str | date | None) -> date | None:
     if value is None or isinstance(value, date):
         return value
     try:
-        return datetime.strptime(value, "%d-%m-%Y").date()
+        return datetime.strptime(value.replace("/", "-"), "%d-%m-%Y").date()
     except ValueError as exc:
-        raise ValueError("Use date format DD-MM-YYYY") from exc
+        raise ValueError("Use date format DD/MM/YYYY") from exc
 
 
 class CandidateListQuery(BaseModel):

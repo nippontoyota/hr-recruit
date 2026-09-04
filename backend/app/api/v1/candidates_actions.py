@@ -46,6 +46,7 @@ from app.services.doubletick import (
     template_status,
 )
 from app.services import storage
+from app.utils.date_format import format_date_dmy
 
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 logger = logging.getLogger(__name__)
@@ -236,7 +237,7 @@ def update_visit_schedule(
         candidate_id=id,
         activity_type=ActivityType.SYSTEM,
         title="Visit Schedule Updated",
-        description=f"Visit schedule updated. Branch: {candidate.visit_branch}, Date: {candidate.visit_date}",
+        description=f"Visit schedule updated. Branch: {candidate.visit_branch}, Date: {format_date_dmy(candidate.visit_date)}",
         created_by_user_id=user.id,
     )
     db.add(log)
@@ -381,7 +382,9 @@ def send_whatsapp_invite(
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     candidate = get_candidate_for_user(db, id, user, write=True)
-    vars_map = body.variables or {}
+    vars_map = dict(body.variables or {})
+    if vars_map.get("visitDate"):
+        vars_map["visitDate"] = format_date_dmy(vars_map["visitDate"])
     if not (vars_map.get("visitDate") or "").strip():
         raise HTTPException(status_code=400, detail="Visit date is required before sending.")
     if not (vars_map.get("branchName") or "").strip() or not (vars_map.get("mapsLink") or "").strip():
@@ -574,7 +577,8 @@ def _offer_acceptance_email_content(candidate: Candidate) -> tuple[str, str, str
 
     safe_name = escape(name)
     safe_role = escape(role)
-    safe_date = escape(joining_date)
+    display_joining_date = format_date_dmy(joining_date)
+    safe_date = escape(display_joining_date)
     body_html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.55;">
@@ -609,7 +613,7 @@ def _offer_acceptance_email_content(candidate: Candidate) -> tuple[str, str, str
     preview = (
         f"Dear {name},\n\n"
         f"Offer acceptance confirmed for {role} at Nippon Toyota.\n"
-        f"Joining date: {joining_date}.\n"
+        f"Joining date: {display_joining_date}.\n"
         "Reporting location: 3rd Floor - Sales Training Room / HR Department.\n\n"
         "Joining documents checklist included."
     )
