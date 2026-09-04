@@ -13,7 +13,7 @@ import { formatDate, formatDateTime } from '../../lib/dateTime';
 
 interface PreFormStatusProps {
   candidate: Candidate;
-  onUpdate?: () => void;
+  onUpdate?: (candidate?: Candidate) => void;
   isReadOnly?: boolean;
 }
 
@@ -58,11 +58,12 @@ export function PreFormStatus({ candidate, onUpdate, isReadOnly = false }: PreFo
         await uploadCandidateResume(candidate.id, newResumeFile);
       }
       toast.loading('Saving application form details...', { id: 'save-flow' });
-      await updateCandidateRawData(candidate.id, updatedRawData);
+      const updatedCandidate = await updateCandidateRawData(candidate.id, updatedRawData);
       toast.success('Application form updated successfully!', { id: 'save-flow' });
       setLocalRawData({ ...updatedRawData });
+      onUpdate?.(updatedCandidate);
       setIsEditing(false);
-      if (onUpdate) onUpdate();
+      return updatedCandidate;
     } catch (err: unknown) {
       toast.error(extractError(err, 'Failed to update application form'), { id: 'save-flow' });
     } finally {

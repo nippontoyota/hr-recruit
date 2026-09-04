@@ -43,6 +43,7 @@ from app.services.candidate_service import (
     to_candidate_list_out,
     to_candidate_out,
     bulk_delete_candidates,
+    merge_hr_application_raw_data,
 )
 from app.services.candidate_work import build_candidate_work_state, build_candidate_work_states
 from app.services.candidate_export import build_candidates_workbook, iter_candidates_csv
@@ -485,29 +486,25 @@ def update_profile_raw_data(
     assert_candidate_access(user, row, db)
     assert_local_hr_can_mutate(user, row, db)
 
+    submitted_raw = body.raw_data if isinstance(body.raw_data, dict) else {}
+    merged_raw = merge_hr_application_raw_data(row.profile.raw_data if row.profile else {}, submitted_raw)
     if not row.profile:
-        row.profile = CandidateProfile(candidate_id=row.id, raw_data=body.raw_data)
+        row.profile = CandidateProfile(candidate_id=row.id, raw_data=merged_raw)
         db.add(row.profile)
     else:
-        row.profile.raw_data = body.raw_data
+        row.profile.raw_data = merged_raw
 
-    if isinstance(body.raw_data, dict):
-        if body.raw_data.get("positionAppliedFor"):
-            pos = str(body.raw_data["positionAppliedFor"]).strip()
-            if pos and pos.lower() != "unknown":
-                row.position_applied_for = pos
-        if body.raw_data.get("fullName"):
-            fn = str(body.raw_data["fullName"]).strip()
-            if fn:
-                row.full_name = fn
-        if body.raw_data.get("mobileNumber"):
-            ph = str(body.raw_data["mobileNumber"]).strip()
-            if ph:
-                row.phone = ph
-        if body.raw_data.get("emailId"):
-            em = str(body.raw_data["emailId"]).strip()
-            if em:
-                row.email = em
+    pos = str(submitted_raw.get("positionAppliedFor") or "").strip()
+    if pos and pos.lower() != "unknown":
+        row.position_applied_for = pos
+    fn = str(submitted_raw.get("fullName") or "").strip()
+    if fn:
+        row.full_name = fn
+    ph = str(submitted_raw.get("mobileNumber") or submitted_raw.get("contactNumber") or "").strip()
+    if ph:
+        row.phone = ph
+    if "emailId" in submitted_raw:
+        row.email = str(submitted_raw.get("emailId") or "").strip() or None
 
     log = ActivityLog(
         candidate_id=row.id,
@@ -518,7 +515,9 @@ def update_profile_raw_data(
     )
     db.add(log)
     db.commit()
-    db.refresh(row)
+    row = db.scalar(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.id == id))
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate disappeared after update.")
     has_resume = id in resume_candidate_ids(db, [id])
     return to_candidate_out(row, has_resume, db, viewer=user).model_copy(
         update={"work_state": build_candidate_work_state(db, row, has_resume=has_resume)}

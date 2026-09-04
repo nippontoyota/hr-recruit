@@ -68,6 +68,10 @@ export const invalidateCandidateCache = (id?: string) => {
   }
 };
 
+export const setCachedCandidate = (candidate: Candidate) => {
+  candidateCache.set(candidate.id, { data: candidate, ts: Date.now() });
+};
+
 export const getCandidateById = async (id: string, signal?: AbortSignal): Promise<Candidate | undefined> => {
   const cached = candidateCache.get(id);
   if (cached && Date.now() - cached.ts < 5000) {

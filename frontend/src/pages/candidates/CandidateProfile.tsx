@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Input, LoadingSpinner, EmptyState, Modal, PipelineStepper, Select } from '../../components/ui';
 import { ArrowLeft, Home, X, XCircle, MapPin, Phone, Mail, Trophy, Pause, Play, History, Edit2, Check } from 'lucide-react';
-import { getCandidateById, updateCandidateStage, unholdCandidate, resolveDuplicateCandidate, updateCandidateDepartment } from '../../api/candidates';
+import { getCandidateById, updateCandidateStage, unholdCandidate, resolveDuplicateCandidate, updateCandidateDepartment, setCachedCandidate } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { HO_LINEAR_STAGES, HO_POST_SEND_STAGES } from '../../types';
 import { CANDIDATE_DEPARTMENTS } from '../../types';
@@ -386,8 +386,15 @@ export default function CandidateProfile() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const handleUpdate = (opts?: { candidate?: boolean }) => {
-    void fetchCandidate(opts);
+  const handleUpdate = (updated?: Candidate | { candidate?: boolean }) => {
+    if (updated && 'id' in updated) {
+      profileCache[updated.id] = updated;
+      setCachedCandidate(updated);
+      setCandidate(updated);
+      if (updated.evaluations) setEvaluations(updated.evaluations);
+      return;
+    }
+    void fetchCandidate(updated);
   };
 
   const handleStageClick = (clickedStage: PipelineStage) => {

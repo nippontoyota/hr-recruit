@@ -22,6 +22,27 @@ from app.services.workflow import transition_prerequisites
 from app.schemas.candidate import CandidateCreate, CandidateListOut, CandidateOut
 from app.schemas.evaluation import EvaluationOut
 from app.services.document_service import process_photo_url
+
+
+SYSTEM_MANAGED_RAW_DATA_KEYS = frozenset(
+    {
+        "whatsapp_template", "whatsapp_invite", "bg_verification",
+        "headOfficeForwardingEmailStatus", "headOfficeForwardingEmailError",
+        "headOfficeForwardingEmailSentAt", "headOfficeForwardingEmailSentBy",
+        "rejectionEmailStatus", "rejectionEmailError", "rejectionEmailSentAt", "rejectionEmailSentBy",
+        "onHoldEmailStatus", "onHoldEmailError", "onHoldEmailSentAt", "onHoldEmailSentBy",
+        "offerAcceptanceEmailStatus", "offerAcceptanceEmailError",
+        "offerAcceptanceEmailSentAt", "offerAcceptanceEmailSentBy",
+        "offerWhatsAppStatus", "offerWhatsAppError", "offerWhatsAppSentAt", "offerWhatsAppSentBy",
+    }
+)
+
+
+def merge_hr_application_raw_data(existing: dict | None, submitted: dict) -> dict:
+    """Apply HR form data without dropping server-owned workflow metadata."""
+    current = dict(existing or {})
+    preserved = {key: value for key, value in current.items() if key in SYSTEM_MANAGED_RAW_DATA_KEYS}
+    return {**submitted, **preserved}
 from app.services import storage
 
 
