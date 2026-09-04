@@ -50,8 +50,7 @@ from app.services.candidate_export import build_candidates_workbook, iter_candid
 from app.services.candidate_list_query import (
     build_candidate_list_query,
     candidate_csv_rows,
-    candidate_list_count,
-    candidate_list_rows,
+    candidate_list_rows_with_count,
 )
 from app.services.document_service import (
     document_out as _document_out,
@@ -393,8 +392,7 @@ def list_candidates(
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     q = build_candidate_list_query(user, query)
-    total_count = candidate_list_count(db, q)
-    rows = candidate_list_rows(db, q, query.page, query.limit)
+    rows, total_count = candidate_list_rows_with_count(db, q, query.page, query.limit)
     cand_ids = [row.id for row in rows]
     with_resume = resume_candidate_ids(db, cand_ids)
     work_states = build_candidate_work_states(db, rows, resume_ids=with_resume)

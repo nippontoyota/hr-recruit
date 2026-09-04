@@ -109,6 +109,23 @@ def candidate_list_rows(db: Session, statement: Select, page: int, limit: int) -
     return list(db.scalars(statement.offset((page - 1) * limit).limit(limit)).all())
 
 
+def candidate_list_rows_with_count(
+    db: Session,
+    statement: Select,
+    page: int,
+    limit: int,
+) -> tuple[list[Candidate], int]:
+    """Fetch one page and its filtered total in a single database round trip."""
+    counted = statement.add_columns(func.count().over().label("_total_count"))
+    result = db.execute(counted.offset((page - 1) * limit).limit(limit))
+    rows: list[Candidate] = []
+    total_count = 0
+    for candidate, row_count in result.all():
+        rows.append(candidate)
+        total_count = int(row_count or 0)
+    return rows, total_count
+
+
 def candidate_csv_rows(db: Session, statement: Select, batch_size: int = 200) -> Iterator[Candidate]:
     result = db.scalars(statement.execution_options(yield_per=batch_size))
     yield from result
