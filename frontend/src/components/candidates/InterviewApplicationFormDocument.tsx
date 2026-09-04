@@ -430,8 +430,8 @@ export function InterviewApplicationFormDocument({
                     <Td className="font-semibold text-center w-[22%] py-1.5 px-2">Previous Company Name &amp; Address</Td>
                     <Td className="font-semibold text-center w-[12%] py-1.5 px-2">Position Held</Td>
                     <Td className="font-semibold text-center w-[16%] py-1.5 px-2">Reporting Person</Td>
-                    <Td className="font-semibold text-center w-[10%] py-1.5 px-2">From</Td>
-                    <Td className="font-semibold text-center w-[10%] py-1.5 px-2">To</Td>
+                    <Td className="font-semibold text-center w-[12%] whitespace-nowrap py-1.5 px-2">From</Td>
+                    <Td className="font-semibold text-center w-[12%] whitespace-nowrap py-1.5 px-2">To</Td>
                     <Td className="font-semibold text-center w-[12%] py-1.5 px-2">Last Drawn Salary</Td>
                     <Td className="font-semibold text-center py-1.5 px-2">Reason for Leaving</Td>
                   </tr>
@@ -448,8 +448,8 @@ export function InterviewApplicationFormDocument({
                       {val(job.repDesignation) ? <div className="text-[10px]">{val(job.repDesignation)}</div> : null}
                       {val(job.repPhone) ? <div className="text-[10px]">Phone: {val(job.repPhone)}</div> : null}
                     </Td>
-                    <Td className="text-center py-1.5 px-2">{val(job.from)}</Td>
-                    <Td className="text-center py-1.5 px-2">{val(job.to)}</Td>
+                    <Td className="text-center whitespace-nowrap py-1.5 px-2">{fmtDate(job.from)}</Td>
+                    <Td className="text-center whitespace-nowrap py-1.5 px-2">{fmtDate(job.to)}</Td>
                     <Td className="text-center py-1.5 px-2">{val(job.sal)}</Td>
                     <Td className="py-1.5 px-2">{val(job.reason)}</Td>
                   </tr>

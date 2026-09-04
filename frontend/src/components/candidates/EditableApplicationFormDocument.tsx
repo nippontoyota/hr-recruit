@@ -63,15 +63,17 @@ function InlineCellInput({
   onChange,
   placeholder = '',
   className = '',
+  type = 'text',
 }: {
   value: string | number | undefined | null;
   onChange: (val: string) => void;
   placeholder?: string;
   className?: string;
+  type?: string;
 }) {
   return (
     <input
-      type="text"
+      type={type}
       value={value !== null && value !== undefined ? String(value) : ''}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
@@ -190,18 +192,18 @@ export function EditableApplicationFormDocument({
         rep: String(j.reporting || j.rep || ''),
         repDesignation: String(j.reportingDesignation || j.repDesignation || ''),
         repPhone: String(j.reportingPhone || j.repPhone || ''),
-        from: String(j.from || j.fromDate || ''),
-        to: String(j.to || j.toDate || ''),
+        from: toDateInputValue(j.from || j.fromDate),
+        to: toDateInputValue(j.to || j.toDate),
         sal: String(j.salary || j.sal || ''),
         reason: String(j.reason || ''),
       }));
     }
     const fallback: JobRow[] = [];
     if (initialRaw.prevCompanyName || initialRaw.prevPosition) {
-      fallback.push({ id: 'j1', co: String(initialRaw.prevCompanyName || ''), pos: String(initialRaw.prevPosition || ''), rep: String(initialRaw.prev1Reporting || ''), repDesignation: String(initialRaw.prev1ReportingDesignation || ''), repPhone: String(initialRaw.prev1ReportingPhone || ''), from: String(initialRaw.prev1From || ''), to: String(initialRaw.prev1To || ''), sal: String(initialRaw.prev1Salary || ''), reason: String(initialRaw.prev1Reason || '') });
+      fallback.push({ id: 'j1', co: String(initialRaw.prevCompanyName || ''), pos: String(initialRaw.prevPosition || ''), rep: String(initialRaw.prev1Reporting || ''), repDesignation: String(initialRaw.prev1ReportingDesignation || ''), repPhone: String(initialRaw.prev1ReportingPhone || ''), from: toDateInputValue(initialRaw.prev1From), to: toDateInputValue(initialRaw.prev1To), sal: String(initialRaw.prev1Salary || ''), reason: String(initialRaw.prev1Reason || '') });
     }
     if (initialRaw.prev2Name || initialRaw.prev2Position) {
-      fallback.push({ id: 'j2', co: String(initialRaw.prev2Name || ''), pos: String(initialRaw.prev2Position || ''), rep: String(initialRaw.prev2Reporting || ''), repDesignation: String(initialRaw.prev2ReportingDesignation || ''), repPhone: String(initialRaw.prev2ReportingPhone || ''), from: String(initialRaw.prev2From || ''), to: String(initialRaw.prev2To || ''), sal: String(initialRaw.prev2Salary || ''), reason: String(initialRaw.prev2Reason || '') });
+      fallback.push({ id: 'j2', co: String(initialRaw.prev2Name || ''), pos: String(initialRaw.prev2Position || ''), rep: String(initialRaw.prev2Reporting || ''), repDesignation: String(initialRaw.prev2ReportingDesignation || ''), repPhone: String(initialRaw.prev2ReportingPhone || ''), from: toDateInputValue(initialRaw.prev2From), to: toDateInputValue(initialRaw.prev2To), sal: String(initialRaw.prev2Salary || ''), reason: String(initialRaw.prev2Reason || '') });
     }
     return fallback;
   });
@@ -716,8 +718,8 @@ export function EditableApplicationFormDocument({
                       <td className="border border-[#1e3a5f] font-semibold text-center w-[22%] py-1 px-2">Previous Company</td>
                       <td className="border border-[#1e3a5f] font-semibold text-center w-[14%] py-1 px-2">Position</td>
                       <td className="border border-[#1e3a5f] font-semibold text-center w-[14%] py-1 px-2">Reporting Person</td>
-                      <td className="border border-[#1e3a5f] font-semibold text-center w-[10%] py-1 px-1">From</td>
-                      <td className="border border-[#1e3a5f] font-semibold text-center w-[10%] py-1 px-1">To</td>
+                      <td className="border border-[#1e3a5f] font-semibold text-center w-[12%] whitespace-nowrap py-1 px-1">From</td>
+                      <td className="border border-[#1e3a5f] font-semibold text-center w-[12%] whitespace-nowrap py-1 px-1">To</td>
                       <td className="border border-[#1e3a5f] font-semibold text-center w-[10%] py-1 px-1">Salary</td>
                       <td className="border border-[#1e3a5f] font-semibold text-center py-1 px-2">Reason for Leaving</td>
                       <td className="border border-[#1e3a5f] w-8 text-center" />
@@ -753,8 +755,8 @@ export function EditableApplicationFormDocument({
                                 <InlineCellInput value={job.repPhone} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, repPhone: v } : j)))} placeholder="Phone" />
                               </div>
                             </td>
-                            <td className="border border-[#1e3a5f] p-0.5 text-center"><InlineCellInput value={job.from} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, from: v } : j)))} placeholder="From" className="text-center" /></td>
-                            <td className="border border-[#1e3a5f] p-0.5 text-center"><InlineCellInput value={job.to} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, to: v } : j)))} placeholder="To" className="text-center" /></td>
+                            <td className="border border-[#1e3a5f] p-0.5 text-center whitespace-nowrap"><InlineCellInput type="date" value={toDateInputValue(job.from)} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, from: v } : j)))} placeholder="From" className="text-center" /></td>
+                            <td className="border border-[#1e3a5f] p-0.5 text-center whitespace-nowrap"><InlineCellInput type="date" value={toDateInputValue(job.to)} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, to: v } : j)))} placeholder="To" className="text-center" /></td>
                             <td className="border border-[#1e3a5f] p-0.5 text-center"><InlineCellInput value={job.sal} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, sal: v } : j)))} placeholder="Salary" className="text-center" /></td>
                             <td className="border border-[#1e3a5f] p-0.5"><InlineCellInput value={job.reason} onChange={(v) => setJobList((prev) => prev.map((j, i) => (i === idx ? { ...j, reason: v } : j)))} placeholder="Reason" /></td>
                             <td className="border border-[#1e3a5f] p-0.5 text-center">

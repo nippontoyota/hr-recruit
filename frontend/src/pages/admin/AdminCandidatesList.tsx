@@ -7,10 +7,11 @@ import { LoadingSpinner, Badge } from '../../components/ui';
 import { Search, ChevronLeft, Building2, MapPin, Calendar, ExternalLink } from 'lucide-react';
 import { getStageBadgeVariant, stageLabel } from '../../lib/stages';
 import { ALL_PIPELINE_STAGES } from '../../types';
+import { formatDate as formatRecruitmentDate } from '../../lib/dateTime';
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  return formatRecruitmentDate(dateStr);
 }
 
 export default function AdminCandidatesList() {

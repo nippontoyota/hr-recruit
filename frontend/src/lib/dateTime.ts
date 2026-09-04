@@ -33,6 +33,13 @@ export function formatDate(value: string | Date | null | undefined): string {
       const [, y, m, d] = isoMatch;
       return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
     }
+    // Legacy employment records may contain month-only values (YYYY-MM).
+    // Treat them as the first day of that month so displayed dates are complete.
+    const isoMonthMatch = trimmed.match(/^(\d{4})-(\d{1,2})$/);
+    if (isoMonthMatch) {
+      const [, y, m] = isoMonthMatch;
+      return `01/${m.padStart(2, '0')}/${y}`;
+    }
     // Match DD-MM-YYYY or DD/MM/YYYY
     const dmyMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
     if (dmyMatch) {
@@ -51,7 +58,7 @@ export function formatDate(value: string | Date | null | undefined): string {
 }
 
 export function formatDateDmy(value: string | Date | null | undefined): string {
-  return formatDate(value).replaceAll('/', '-');
+  return formatDate(value);
 }
 
 export function formatDateTime(value: string | Date | null | undefined): string {

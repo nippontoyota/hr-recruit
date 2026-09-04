@@ -92,7 +92,7 @@ function JobFields({
             From {star}
           </label>
           <Input
-            type="month"
+            type="date"
             value={job.fromDate}
             onChange={(e) => onChange({ fromDate: e.target.value })}
           />
@@ -102,7 +102,7 @@ function JobFields({
             To {star}
           </label>
           <Input
-            type="month"
+            type="date"
             value={job.toDate}
             onChange={(e) => onChange({ toDate: e.target.value })}
           />
