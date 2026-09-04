@@ -46,6 +46,8 @@ function normalizeFetchAbort(err: unknown, callerSignal?: AbortSignal): never {
 }
 
 const inflightGets = new Map<string, Promise<{ data: any }>>();
+const getResponseCache = new Map<string, { data: any; expiresAt: number }>();
+const GET_CACHE_TTL_MS = 15_000;
 
 type RequestConfig = {
   headers?: Record<string, string>;
@@ -54,15 +56,36 @@ type RequestConfig = {
 };
 
 export async function request(method: string, endpoint: string, body?: any, config?: RequestConfig) {
+  if (method !== 'GET') {
+    // A write may change any dependent read, so never let a prior GET survive
+    // a mutation. This cache is a latency optimization, not a source of truth.
+    getResponseCache.clear();
+  }
+
   const coalesceKey = method === 'GET' && body == null && !config?.signal ? endpoint : null;
   if (coalesceKey) {
+    const cached = getResponseCache.get(coalesceKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return Promise.resolve({ data: cached.data });
+    }
+    if (cached) getResponseCache.delete(coalesceKey);
     const existing = inflightGets.get(coalesceKey);
     if (existing) return existing;
   }
 
-  const pending = executeRequest(method, endpoint, body, config).finally(() => {
-    if (coalesceKey) inflightGets.delete(coalesceKey);
-  });
+  const pending = executeRequest(method, endpoint, body, config)
+    .then((response) => {
+      if (coalesceKey) {
+        getResponseCache.set(coalesceKey, {
+          data: response.data,
+          expiresAt: Date.now() + GET_CACHE_TTL_MS,
+        });
+      }
+      return response;
+    })
+    .finally(() => {
+      if (coalesceKey) inflightGets.delete(coalesceKey);
+    });
   if (coalesceKey) inflightGets.set(coalesceKey, pending);
   return pending;
 }
