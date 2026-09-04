@@ -27,7 +27,12 @@ from app.schemas.candidate import (
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
 from app.services.candidate_service import create_candidate
-from app.services.document_service import save_resume_for_candidate, save_photo_for_candidate, resume_candidate_ids
+from app.services.document_service import (
+    get_resume_document,
+    save_resume_for_candidate,
+    save_photo_for_candidate,
+    resume_candidate_ids,
+)
 from uuid import UUID
 from sqlalchemy import select
 
@@ -164,8 +169,17 @@ async def public_apply_full(
         await save_resume_for_candidate(db, row, resume_file, uploaded_by_user_id=None)
     if photo_file:
         await save_photo_for_candidate(db, row, photo_file)
-        
-    profile = db.scalar(select(CandidateProfile).where(CandidateProfile.candidate_id == row.id))
+
+    profile = db.scalar(select(CandidateProfile).where(CandidateProfile.candidate_id == row.id)) or row.profile
+    # The text form is never allowed to become SUBMITTED on its own. Public
+    # clients upload the files first, but enforce the invariant here too so a
+    # stale/alternate client cannot create a text-only application.
+    if not get_resume_document(db, row.id) or not getattr(profile, "photo_url", None):
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload both your resume and candidate photo before submitting.",
+        )
+
     if not profile:
         profile = CandidateProfile(candidate_id=row.id)
         db.add(profile)

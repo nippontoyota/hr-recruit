@@ -71,6 +71,7 @@ def test_public_apply_full_saves_resume_and_photo():
         with (
             patch("app.services.storage.upload_object") as upload,
             patch("app.services.storage.create_signed_url", return_value="https://signed.example/x"),
+            patch("app.api.v1.candidates_public.get_resume_document", return_value=MagicMock()),
         ):
             payload = _valid_pre_form()
             payload["permDistrict"] = "Ernakulam"
@@ -96,13 +97,16 @@ def test_public_apply_full_updates_name_and_email_to_latest_submission():
     value and must overwrite the old one -- not be silently ignored."""
     import json
 
+    from app.models.candidate_profile import CandidateProfile
+
     row = _candidate(full_name="Shiva", email="old@example.com")
+    row.profile = CandidateProfile(candidate_id=row.id, photo_url="candidates/photo.jpg")
     db = MagicMock()
     calls = {"n": 0}
 
     def scalar(*_a, **_kw):
         calls["n"] += 1
-        return row if calls["n"] == 1 else None
+        return row if calls["n"] == 1 else row.profile
 
     db.scalar.side_effect = scalar
     app.dependency_overrides[get_db] = lambda: db
@@ -110,12 +114,30 @@ def test_public_apply_full_updates_name_and_email_to_latest_submission():
         payload = _valid_pre_form()
         payload["nameAadhaar"] = "Shiva Sajay"
         payload["emailId"] = "shiva.sajay@example.com"
-        response = client.post(
-            "/api/v1/candidates/public-apply-full/live-token",
-            json=payload,
-        )
+        with patch("app.api.v1.candidates_public.get_resume_document", return_value=MagicMock()):
+            response = client.post(
+                "/api/v1/candidates/public-apply-full/live-token",
+                json=payload,
+            )
         assert response.status_code == 200, response.text
         assert row.full_name == "Shiva Sajay"
         assert row.email == "shiva.sajay@example.com"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_public_apply_full_rejects_text_without_both_files():
+    row = _candidate()
+    db = MagicMock()
+    db.scalar.return_value = row
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        response = client.post(
+            "/api/v1/candidates/public-apply-full/live-token",
+            json=_valid_pre_form(),
+        )
+        assert response.status_code == 400
+        assert "both" in response.json()["detail"]
+        assert row.pre_form_status == FormStatus.SENT
     finally:
         app.dependency_overrides.clear()
