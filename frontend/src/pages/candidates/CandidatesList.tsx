@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Button, Modal, LoadingSpinner, EmptyState, Badge } from '../../components/ui';
-import { Plus, RefreshCw, Trash, CheckSquare, Square, Minus, Play, Users, Download } from 'lucide-react';
+import { Plus, RefreshCw, Trash, CheckSquare, Square, Minus, Play, Users, Download, ArrowDown, ArrowUp } from 'lucide-react';
 import { useAuth } from '../../auth';
-import { deleteCandidate, bulkDeleteCandidates, unholdCandidate, downloadCandidatesExcel } from '../../api/candidates';
+import { deleteCandidate, bulkDeleteCandidates, unholdCandidate, downloadCandidatesCsv } from '../../api/candidates';
 import { getStageBadgeVariant, stageLabel, formatSource, isCandidateQueue, matchesQueue, type CandidateQueue } from '../../lib/stages';
 import type { Candidate } from '../../types';
 import { PIPELINE_STAGES, HO_PIPELINE_STAGES, HO_POST_SEND_STAGES } from '../../types';
@@ -15,10 +15,12 @@ import { RecentOpeningsCard } from '../../components/candidates/RecentOpeningsCa
 import { CandidateFilters } from '../../components/candidates/CandidateFilters';
 import { WorkQueueSummary } from '../../components/candidates/WorkQueueSummary';
 import { cn, extractError } from '../../lib/utils';
-import { formatDate } from '../../lib/dateTime';
+import { formatDateDmy } from '../../lib/dateTime';
 import { getCandidateWorkState } from '../../lib/candidateWork';
 import { useCandidatesList } from '../../hooks/api/useCandidates';
 import { toast } from 'sonner';
+import { CandidateTableFilter } from '../../components/candidates/CandidateTableFilter';
+import { cycleSort, type CandidateSortField } from '../../lib/candidateListQuery';
 
 function CandidatesTableSkeleton() {
   return (
@@ -36,6 +38,13 @@ function CandidatesTableSkeleton() {
       </div>
     </div>
   );
+}
+
+function HeaderSort({ label, field, query, onSort }: { label: string; field: CandidateSortField; query: { sortBy: string; sortDirection: 'asc' | 'desc' }; onSort: () => void }) {
+  const active = query.sortBy === field;
+  return <button type="button" onClick={(event) => { event.stopPropagation(); onSort(); }} className="inline-flex items-center gap-1 font-semibold hover:text-primary" aria-label={`Sort by ${label}`} aria-sort={active ? (query.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+    {label}{active && (query.sortDirection === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+  </button>;
 }
 
 
@@ -63,6 +72,9 @@ export default function CandidatesList() {
     setSearchQuery,
     stageFilter,
     setStageFilter,
+    advancedQuery,
+    setAdvancedQuery,
+    activeFilterCount,
     limit,
     refetch: fetchCandidatesList
   } = useCandidatesList(1, 50);
@@ -82,21 +94,30 @@ export default function CandidatesList() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  const handleExport = async () => {
+  const setAdvanced = (update: Partial<typeof advancedQuery>) => {
+    setAdvancedQuery((previous) => ({ ...previous, ...update }));
+    setPage(1);
+  };
+
+  const handleCsvExport = async () => {
     setIsExporting(true);
     try {
-      const blob = await downloadCandidatesExcel();
+      const blob = await downloadCandidatesCsv({
+        ...advancedQuery,
+        search: searchQuery,
+        stages: stageFilter ? [stageFilter] : advancedQuery.stages,
+      });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'nippon-toyota-candidates.xlsx';
+      link.download = 'nippon-toyota-candidates.csv';
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      toast.success('Candidate Excel downloaded');
+      toast.success('Candidate CSV downloaded');
     } catch (error) {
-      toast.error(extractError(error, 'Could not download candidates Excel'));
+      toast.error(extractError(error, 'Could not download candidates CSV'));
     } finally {
       setIsExporting(false);
     }
@@ -209,7 +230,7 @@ export default function CandidatesList() {
   };
 
 
-  const filtersActive = Boolean(searchQuery || stageFilter || selectedQueue);
+  const filtersActive = Boolean(searchQuery || stageFilter || selectedQueue || activeFilterCount);
   const showEmptyRoster = !loading && !loadError && candidates.length === 0 && !filtersActive;
   const noMatches = !loading && !loadError && candidates.length > 0 && filteredCandidates.length === 0;
   const resultSummary = loading
@@ -223,9 +244,9 @@ export default function CandidatesList() {
         action={
           <>
             {canExport && (
-              <Button variant="secondary" onClick={() => void handleExport()} disabled={isExporting}>
+              <Button variant="secondary" onClick={() => void handleCsvExport()} disabled={isExporting}>
                 <Download className="w-4 h-4 mr-2" />
-                {isExporting ? 'Preparing Excel…' : 'Download Excel'}
+                {isExporting ? 'Preparing CSV…' : 'Download CSV'}
               </Button>
             )}
             {canRegister && (
@@ -257,12 +278,12 @@ export default function CandidatesList() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             stageFilter={stageFilter}
-            onStageChange={setStageFilter}
+            onStageChange={(value) => { setAdvancedQuery((previous) => ({ ...previous, stages: [] })); setStageFilter(value); setPage(1); }}
             stages={PIPELINE_STAGES.filter((stage) => user?.role === 'HO_HR' || user?.role === 'ADMIN'
               ? HO_PIPELINE_STAGES.includes(stage) || stage === 'REJECTED'
               : true)}
             hasActiveFilters={filtersActive}
-            onClear={() => { setSearchQuery(''); setStageFilter(''); setQueue(''); }}
+            onClear={() => { setSearchQuery(''); setStageFilter(''); setAdvancedQuery((previous) => ({ ...previous, stages: [], offerStatuses: [], branches: [], sources: [], position: '', nextActions: [], createdDate: '', sentDate: '' })); setQueue(''); setPage(1); }}
           />
           <p className="px-1 text-xs text-muted-foreground" aria-live="polite">{resultSummary}</p>
           <div className="sr-only" aria-live="polite">{loading ? 'Loading candidates.' : `${filteredCandidates.length} candidates available.`}</div>
@@ -328,14 +349,14 @@ export default function CandidatesList() {
                         )}
                       </button>
                     </th>
-                    <th>Candidate</th>
-                    <th>Position</th>
-                    <th>Stage</th>
-                    <th>Offer response</th>
-                    <th>Branch</th>
-                    <th>Next action</th>
-                    <th>Source</th>
-                    <th>Date Added</th>
+                    <th><HeaderSort label="Candidate" field="full_name" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'full_name'))} /><CandidateTableFilter label="Candidate" values={[]} textValue={advancedQuery.search} onChange={() => undefined} onTextChange={(value) => { setSearchQuery(value); setPage(1); }} /></th>
+                    <th><HeaderSort label="Position" field="position_applied_for" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'position_applied_for'))} /><CandidateTableFilter label="Position" values={[]} onChange={() => undefined} textValue={advancedQuery.position} onTextChange={(value) => setAdvanced({ position: value })} /></th>
+                    <th><HeaderSort label="Stage" field="current_stage" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'current_stage'))} /><CandidateTableFilter label="Stage" values={advancedQuery.stages} onChange={(values) => { setStageFilter(''); setAdvanced({ stages: values as typeof advancedQuery.stages }); }} options={PIPELINE_STAGES.map((value) => ({ value, label: stageLabel(value) }))} /></th>
+                    <th><HeaderSort label="Offer response" field="offer_status" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'offer_status'))} /><CandidateTableFilter label="Offer response" values={advancedQuery.offerStatuses} onChange={(values) => setAdvanced({ offerStatuses: values })} options={[{ value: 'SENT', label: 'Pending' }, { value: 'ACCEPTED', label: 'Accepted' }, { value: 'DECLINED', label: 'Rejected' }]} /></th>
+                    <th><HeaderSort label="Branch" field="branch_location" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'branch_location'))} /><CandidateTableFilter label="Branch" values={advancedQuery.branches} onChange={(values) => setAdvanced({ branches: values })} options={['Trivandrum', 'Kollam', 'Pathanamthitta', 'Kayamkulam', 'Kottayam', 'Muvattupuzha', 'Kalamassery', 'Cochin', 'Thrissur'].map((value) => ({ value, label: value }))} /></th>
+                    <th><HeaderSort label="Next action" field="current_stage" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'current_stage'))} /><CandidateTableFilter label="Next action" values={advancedQuery.nextActions} onChange={(values) => setAdvanced({ nextActions: values })} options={['Call letter to be sent', 'Call letter issued, waiting for candidate response', 'Review application & schedule interview', 'Review hold', 'Offer sent. Awaiting candidate response', 'Offer accepted. Complete onboarding', 'Offer declined. No further action', 'Continue to offer letter', 'Prepare offer', 'Send to Head Office', 'Complete Head Office interview', 'Complete interviews', 'Complete technical test', 'Complete background verification', 'Advance candidate'].map((value) => ({ value, label: value }))} /></th>
+                    <th><HeaderSort label="Source" field="source" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'source'))} /><CandidateTableFilter label="Source" values={advancedQuery.sources} onChange={(values) => setAdvanced({ sources: values })} options={['WALK_IN', 'INDEED', 'NAUKRI', 'REFERRAL', 'CAMPUS', 'LINKEDIN', 'OTHER'].map((value) => ({ value, label: formatSource(value) }))} /></th>
+                    <th><HeaderSort label="Date added" field="created_at" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'created_at'))} /><CandidateTableFilter label="Date added" values={[]} onChange={() => undefined} dateValue={advancedQuery.createdDate} onDateChange={(value) => setAdvanced({ createdDate: value })} /><CandidateTableFilter label="Application form sent" values={[]} onChange={() => undefined} dateValue={advancedQuery.sentDate} onDateChange={(value) => setAdvanced({ sentDate: value })} /></th>
                     <th className="text-right">Actions</th>
                   </tr>
                 </thead>
@@ -446,7 +467,7 @@ export default function CandidatesList() {
                           </span>
                         </td>
                         <td className="px-4 py-2 text-xs text-muted-foreground font-medium">
-                          {formatDate(candidate.created_at)}
+                          {formatDateDmy(candidate.created_at)}
                         </td>
                         <td className="px-4 py-2 text-right">
                           <div className="flex items-center justify-end gap-1">

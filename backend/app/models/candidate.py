@@ -25,6 +25,8 @@ class Candidate(Base):
 
     __table_args__ = (
         Index("ix_candidate_stage_created", "current_stage", "created_at"),
+        Index("ix_candidate_branch_created", "branch_location", "created_at"),
+        Index("ix_candidate_pre_form_sent_at", "pre_form_sent_at"),
         {"schema": SCHEMA} if SCHEMA else None,
     )
 

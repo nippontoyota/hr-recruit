@@ -1,4 +1,4 @@
-import type { Candidate, ResumeDocument, ActivityLog, PipelineStage } from '../types';
+import type { Candidate, ResumeDocument, ActivityLog } from '../types';
 export interface CommunicationRecord {
   id: string;
   candidate_id: string;
@@ -19,6 +19,7 @@ export interface CommunicationRecord {
 }
 import { request } from './client';
 import { setCachedCandidateEvaluations } from './evaluations';
+import { candidateQueryParams, type CandidateListQueryState } from '../lib/candidateListQuery';
 
 export interface PaginatedCandidates {
   data: Candidate[];
@@ -30,18 +31,24 @@ export interface PaginatedCandidates {
 export const getCandidates = async (
   page: number = 1,
   limit: number = 50,
-  search?: string,
-  stage?: PipelineStage | '',
+  queryState?: CandidateListQueryState,
   signal?: AbortSignal,
 ): Promise<PaginatedCandidates> => {
-  const query = new URLSearchParams();
-  query.append('page', page.toString());
-  query.append('limit', limit.toString());
-  if (search) query.append('search', search);
-  if (stage) query.append('stage', stage);
+  const query = candidateQueryParams(queryState ?? {
+    search: '', stages: [], offerStatuses: [], branches: [], sources: [], position: '', nextActions: [],
+    createdDate: '', sentDate: '', sortBy: 'created_at', sortDirection: 'desc',
+  }, page, limit);
 
   const response = await request('GET', `/candidates?${query.toString()}`, undefined, { signal });
   return response.data;
+};
+
+export const downloadCandidatesCsv = async (queryState: CandidateListQueryState): Promise<Blob> => {
+  const query = candidateQueryParams(queryState, 1, 200);
+  query.delete('page');
+  query.delete('limit');
+  const response = await request('GET', `/candidates/export.csv?${query.toString()}`, undefined, { responseType: 'blob' });
+  return response.data as Blob;
 };
 
 const inFlightCandidateMap = new Map<string, Promise<Candidate | undefined>>();

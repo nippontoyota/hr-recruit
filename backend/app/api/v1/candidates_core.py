@@ -36,6 +36,7 @@ from app.schemas.candidate import (
     CandidatePortalResponseIn,
     CandidateOut
 )
+from app.schemas.candidate_query import CandidateListQuery
 
 from app.services.candidate_service import (
     create_candidate,
@@ -44,7 +45,13 @@ from app.services.candidate_service import (
     bulk_delete_candidates,
 )
 from app.services.candidate_work import build_candidate_work_state, build_candidate_work_states
-from app.services.candidate_export import build_candidates_workbook
+from app.services.candidate_export import build_candidates_workbook, iter_candidates_csv
+from app.services.candidate_list_query import (
+    build_candidate_list_query,
+    candidate_csv_rows,
+    candidate_list_count,
+    candidate_list_rows,
+)
 from app.services.document_service import (
     document_out as _document_out,
     get_resume_document as _get_resume_document,
@@ -359,22 +366,34 @@ def export_candidates(
     )
 
 
-@router.get("", response_model=CandidatePaginatedOut)
-def list_candidates(
-    stage: PipelineStage | None = None,
-    search: str | None = None,
-    page: int = 1,
-    limit: int = 50,
+@router.get("/export.csv")
+def export_candidates_csv(
+    query: CandidateListQuery = Depends(),
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    skip = (page - 1) * limit
-    q = _candidate_list_query(user, stage=stage, search=search)
+    """Stream every candidate matching the current list filters."""
+    statement = build_candidate_list_query(user, query)
+    rows = candidate_csv_rows(db, statement)
+    return StreamingResponse(
+        iter_candidates_csv(rows),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="nippon-toyota-candidates.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
 
-    total_count = db.scalar(select(func.count()).select_from(q.subquery())) or 0
 
-    q = q.order_by(Candidate.created_at.desc()).offset(skip).limit(limit)
-    rows = list(db.scalars(q).all())
+@router.get("", response_model=CandidatePaginatedOut)
+def list_candidates(
+    query: CandidateListQuery = Depends(),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    q = build_candidate_list_query(user, query)
+    total_count = candidate_list_count(db, q)
+    rows = candidate_list_rows(db, q, query.page, query.limit)
     cand_ids = [row.id for row in rows]
     with_resume = resume_candidate_ids(db, cand_ids)
     work_states = build_candidate_work_states(db, rows, resume_ids=with_resume)
@@ -405,8 +424,8 @@ def list_candidates(
     return CandidatePaginatedOut(
         data=data,
         total_count=total_count,
-        page=page,
-        limit=limit
+        page=query.page,
+        limit=query.limit
     )
 
 

@@ -50,6 +50,10 @@ export function formatDate(value: string | Date | null | undefined): string {
   return `${day}/${month}/${year}`;
 }
 
+export function formatDateDmy(value: string | Date | null | undefined): string {
+  return formatDate(value).replaceAll('/', '-');
+}
+
 export function formatDateTime(value: string | Date | null | undefined): string {
   if (!value) return '-';
   const date = value instanceof Date ? value : new Date(value);

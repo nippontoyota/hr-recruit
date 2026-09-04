@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from io import BytesIO
-from typing import Iterable
+from io import BytesIO, StringIO
+from typing import Iterable, Iterator
+import csv
+from zoneinfo import ZoneInfo
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -30,10 +32,35 @@ EXPORT_COLUMNS = (
     ("Pre-form status", "pre_form_status"),
     ("Applied at", "applied_at"),
     ("Date added", "created_at"),
+    ("Application form sent", "pre_form_sent_at"),
     ("Last updated", "updated_at"),
     ("Duplicate flagged", "is_duplicate_flagged"),
     ("Head Office hire", "is_head_office_hire"),
 )
+
+_IST = ZoneInfo("Asia/Kolkata")
+
+
+def _csv_value(value):
+    if hasattr(value, "value"):
+        value = value.value
+    if isinstance(value, datetime):
+        return value.astimezone(_IST).strftime("%d-%m-%Y") if value.tzinfo else value.strftime("%d-%m-%Y")
+    if isinstance(value, date):
+        return value.strftime("%d-%m-%Y")
+    return "" if value is None else str(value)
+
+
+def iter_candidates_csv(candidates: Iterable[Candidate]) -> Iterator[str]:
+    buffer = StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([heading for heading, _ in EXPORT_COLUMNS])
+    yield buffer.getvalue()
+    for candidate in candidates:
+        buffer.seek(0)
+        buffer.truncate(0)
+        writer.writerow([_csv_value(getattr(candidate, attribute, None)) for _, attribute in EXPORT_COLUMNS])
+        yield buffer.getvalue()
 
 
 def _cell_value(value):
