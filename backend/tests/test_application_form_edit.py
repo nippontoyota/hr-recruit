@@ -2,8 +2,12 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+from fastapi import Depends, FastAPI
+from fastapi.testclient import TestClient
+
 from app.api.v1.candidates_core import update_profile_raw_data
 from app.models.enums import ActivityType, UserRole
+from app.schemas.candidate_query import CandidateListQuery
 from app.services.candidate_service import merge_hr_application_raw_data
 
 
@@ -80,3 +84,16 @@ def test_application_edit_endpoint_returns_committed_canonical_candidate():
         if getattr(item.args[0], "activity_type", None) == ActivityType.NOTE
     )
     assert activity.args[0].title == "Application Form Updated"
+
+
+def test_candidate_list_query_works_as_fastapi_dependency_without_filters():
+    app = FastAPI()
+
+    @app.get("/candidates")
+    def list_candidates(query: CandidateListQuery = Depends()):
+        return {"stage": query.stage, "offer_status": query.offer_status}
+
+    response = TestClient(app).get("/candidates")
+
+    assert response.status_code == 200
+    assert response.json() == {"stage": [], "offer_status": []}

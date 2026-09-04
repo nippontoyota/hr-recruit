@@ -35,12 +35,15 @@ def parse_dmy(value: str | date | None) -> date | None:
 
 class CandidateListQuery(BaseModel):
     search: str | None = Field(default=None, max_length=120)
-    stage: list[PipelineStage] = Field(default_factory=list)
-    offer_status: list[str] = Field(default_factory=list, max_length=10)
-    branch: list[str] = Field(default_factory=list, max_length=50)
-    source: list[str] = Field(default_factory=list, max_length=50)
+    # Explicit list defaults are intentional: FastAPI's dependency adapter on
+    # the Vercel runtime can pass Field's default_factory sentinel for omitted
+    # query-list parameters instead of evaluating it.
+    stage: list[PipelineStage] = Field(default=[])
+    offer_status: list[str] = Field(default=[], max_length=10)
+    branch: list[str] = Field(default=[], max_length=50)
+    source: list[str] = Field(default=[], max_length=50)
     position: str | None = Field(default=None, max_length=255)
-    next_action: list[str] = Field(default_factory=list, max_length=30)
+    next_action: list[str] = Field(default=[], max_length=30)
     created_date: date | None = None
     created_before: date | None = None
     created_after: date | None = None
