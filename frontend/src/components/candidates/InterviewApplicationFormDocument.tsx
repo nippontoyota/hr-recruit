@@ -137,14 +137,14 @@ export function InterviewApplicationFormDocument({
     ? d.previousJobs
         .filter((row): row is Record<string, unknown> => !!row && typeof row === 'object')
         .map((row) => ({
-          co: row.company,
-          pos: row.position,
-          rep: row.reporting,
-          repDesignation: row.reportingDesignation,
-          repPhone: row.reportingPhone,
+          co: row.company ?? row.co,
+          pos: row.position ?? row.pos,
+          rep: row.reporting ?? row.rep,
+          repDesignation: row.reportingDesignation ?? row.repDesignation,
+          repPhone: row.reportingPhone ?? row.repPhone,
           from: row.fromDate ?? row.from,
           to: row.toDate ?? row.to,
-          sal: row.salary,
+          sal: row.salary ?? row.sal,
           reason: row.reason,
         }))
     : [];
