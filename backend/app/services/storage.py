@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 from fastapi import HTTPException, status
@@ -61,6 +62,42 @@ def upload_object(path: str, data: bytes, content_type: str, *, upsert: bool = T
         raise _storage_failure("upload") from exc
     if response.status_code >= 400:
         raise _storage_failure("upload")
+
+
+def create_signed_upload_url(path: str) -> dict[str, str]:
+    """Create a short-lived Supabase signed upload URL for browser uploads."""
+    base, key, bucket = _require_storage_config()
+    url = f"{base}/storage/v1/object/upload/sign/{bucket}/{path}"
+    try:
+        response = _get_client().post(url, json={}, headers=_headers(key))
+    except httpx.HTTPError as exc:
+        raise _storage_failure("sign upload") from exc
+    if response.status_code >= 400:
+        raise _storage_failure("sign upload")
+    payload = response.json()
+    relative_url = payload.get("url")
+    if not relative_url:
+        raise _storage_failure("sign upload")
+    signed_url = urljoin(f"{base}/", str(relative_url).lstrip("/"))
+    token = parse_qs(urlparse(signed_url).query).get("token", [""])[0]
+    if not token:
+        raise _storage_failure("sign upload")
+    return {"signed_url": signed_url, "token": token}
+
+
+def object_exists(path: str) -> bool:
+    """Verify that a browser upload reached Storage before recording it."""
+    base, key, bucket = _require_storage_config()
+    url = f"{base}/storage/v1/object/{bucket}/{path}"
+    try:
+        response = _get_client().head(url, headers=_headers(key))
+    except httpx.HTTPError as exc:
+        raise _storage_failure("verify upload") from exc
+    if response.status_code == 404:
+        return False
+    if response.status_code >= 400:
+        raise _storage_failure("verify upload")
+    return True
 
 
 def delete_object(path: str) -> None:

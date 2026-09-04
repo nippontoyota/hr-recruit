@@ -1,9 +1,13 @@
 import json
 from datetime import UTC, datetime
+from pathlib import Path
+from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
+from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.public_token import (
     PURPOSE_APPLY,
     PURPOSE_PRE_FORM,
@@ -14,7 +18,7 @@ from app.core.public_token import (
 )
 from app.models.candidate import Candidate
 from app.models.candidate_profile import CandidateProfile
-from app.models.enums import PipelineStage, UserRole, FormStatus
+from app.models.enums import PipelineStage, UserRole, FormStatus, DocumentType
 from app.models.user import User
 from app.schemas.candidate import (
     CandidateCreate,
@@ -29,11 +33,14 @@ router = APIRouter(prefix="/candidates", tags=["candidates"])
 from app.services.candidate_service import create_candidate
 from app.services.document_service import (
     get_resume_document,
+    resolve_resume_content_type,
+    resume_extension,
+    safe_filename,
     save_resume_for_candidate,
     save_photo_for_candidate,
     resume_candidate_ids,
 )
-from uuid import UUID
+from app.services import storage
 from sqlalchemy import select
 
 
@@ -127,6 +134,116 @@ def public_full_status(
         position_applied_for=pos,
         branch_location=row.branch_location,
     )
+
+
+class PublicUploadUrlRequest(BaseModel):
+    kind: str = Field(pattern="^(resume|photo)$")
+    file_name: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(min_length=1, max_length=255)
+    file_size: int = Field(gt=0)
+
+
+class PublicUploadUrlOut(BaseModel):
+    kind: str
+    path: str
+    file_name: str
+    content_type: str
+    signed_url: str
+
+
+class PublicUploadConfirmRequest(BaseModel):
+    kind: str = Field(pattern="^(resume|photo)$")
+    path: str = Field(min_length=1, max_length=500)
+    file_name: str = Field(min_length=1, max_length=255)
+    content_type: str = Field(min_length=1, max_length=255)
+    file_size: int = Field(gt=0)
+
+
+@router.post("/public-upload-url/{token}", response_model=PublicUploadUrlOut)
+def public_upload_url(
+    token: str,
+    body: PublicUploadUrlRequest,
+    db: Session = Depends(get_db),
+):
+    row = candidate_by_public_token(db, token, PURPOSE_PRE_FORM)
+    if not pre_form_fillable(row):
+        raise HTTPException(status_code=400, detail="This form is not open for uploads.")
+    if body.file_size > settings.resume_max_bytes:
+        raise HTTPException(status_code=413, detail="The selected file is too large.")
+
+    if body.kind == "resume":
+        extension = resume_extension(body.file_name)
+        content_type = resolve_resume_content_type(body.content_type, extension)
+        filename = safe_filename(body.file_name, extension)
+        path = f"candidates/{row.id}/resume-{uuid4().hex}{extension}"
+    else:
+        content_type = body.content_type.lower()
+        if content_type not in {"image/jpeg", "image/png", "image/webp"}:
+            raise HTTPException(status_code=400, detail="Photo must be a JPEG, PNG, or WEBP image.")
+        filename = safe_filename(body.file_name, Path(body.file_name).suffix.lower() or ".jpg")
+        path = f"candidates/{row.id}/photo-{uuid4().hex}{Path(filename).suffix.lower()}"
+
+    signed = storage.create_signed_upload_url(path)
+    return PublicUploadUrlOut(
+        kind=body.kind,
+        path=path,
+        file_name=filename,
+        content_type=content_type,
+        signed_url=signed["signed_url"],
+    )
+
+
+@router.post("/public-upload-confirm/{token}", response_model=PublicUploadOut)
+def public_upload_confirm(
+    token: str,
+    body: PublicUploadConfirmRequest,
+    db: Session = Depends(get_db),
+):
+    row = candidate_by_public_token(db, token, PURPOSE_PRE_FORM)
+    if not pre_form_accepts_uploads(row):
+        raise HTTPException(status_code=400, detail="This form is not open for uploads.")
+    prefix = f"candidates/{row.id}/{body.kind}-"
+    if not body.path.startswith(prefix):
+        raise HTTPException(status_code=400, detail="Invalid upload path.")
+    if body.file_size > settings.resume_max_bytes:
+        raise HTTPException(status_code=413, detail="The selected file is too large.")
+    if not storage.object_exists(body.path):
+        raise HTTPException(status_code=400, detail="The file upload did not finish. Please retry.")
+
+    if body.kind == "resume":
+        extension = resume_extension(body.file_name)
+        content_type = resolve_resume_content_type(body.content_type, extension)
+        document = get_resume_document(db, row.id)
+        if document is None:
+            document = Document(
+                candidate_id=row.id,
+                doc_type=DocumentType.RESUME,
+                file_name=safe_filename(body.file_name, extension),
+                content_type=content_type,
+                storage_path=body.path,
+                file_size_bytes=body.file_size,
+                uploaded_by_user_id=None,
+            )
+            db.add(document)
+        else:
+            document.file_name = safe_filename(body.file_name, extension)
+            document.content_type = content_type
+            document.storage_path = body.path
+            document.file_size_bytes = body.file_size
+        db.commit()
+        return PublicUploadOut(status="ok", file_name=document.file_name)
+
+    content_type = body.content_type.lower()
+    if content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Photo must be a JPEG, PNG, or WEBP image.")
+    profile = row.profile
+    if profile is None:
+        profile = CandidateProfile(candidate_id=row.id)
+        row.profile = profile
+        db.add(profile)
+    profile.photo_url = body.path
+    db.commit()
+    return PublicUploadOut(status="ok", photo_url=body.path)
 
 @router.post("/public-apply-full/{token}", response_model=PublicCandidateOut)
 async def public_apply_full(

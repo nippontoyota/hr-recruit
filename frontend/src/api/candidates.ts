@@ -520,21 +520,49 @@ export const uploadCandidateResume = async (candidateId: string, file: File): Pr
 };
 
 export const uploadPublicCandidatePhoto = async (token: string, file: File): Promise<{ status: string, photo_url: string }> => {
-  const formData = new FormData();
-  formData.append('file', file);
-  const response = await request('POST', `/candidates/public-photo/${token}`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeoutMs: 120_000,
-  });
-  return response.data;
+  return uploadPublicCandidateFile(token, 'photo', file);
 };
 
 export const uploadPublicCandidateResume = async (token: string, file: File): Promise<{ status: string, file_name: string }> => {
-  const formData = new FormData();
-  formData.append('file', file);
-  const response = await request('POST', `/candidates/public-resume/${token}`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeoutMs: 120_000,
-  });
-  return response.data;
+  return uploadPublicCandidateFile(token, 'resume', file);
 };
+
+async function uploadPublicCandidateFile<T extends 'photo' | 'resume'>(token: string, kind: T, file: File) {
+  const signed = await request('POST', `/candidates/public-upload-url/${token}`, {
+    kind,
+    file_name: file.name,
+    content_type: file.type || 'application/octet-stream',
+    file_size: file.size,
+  }, { timeoutMs: 30_000 });
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const uploadResponse = await fetch(signed.data.signed_url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': signed.data.content_type,
+          'x-upsert': 'true',
+        },
+        body: file,
+      });
+      if (!uploadResponse.ok) {
+        throw new Error(`Storage upload failed (${uploadResponse.status}).`);
+      }
+      const confirmed = await request('POST', `/candidates/public-upload-confirm/${token}`, {
+        kind,
+        path: signed.data.path,
+        file_name: signed.data.file_name,
+        content_type: signed.data.content_type,
+        file_size: file.size,
+      }, { timeoutMs: 30_000 });
+      return confirmed.data as T extends 'photo'
+        ? { status: string; photo_url: string }
+        : { status: string; file_name: string };
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
