@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.activity_log import ActivityLog
@@ -234,9 +234,48 @@ def build_candidate_work_states(
     ids = [candidate.id for candidate in candidates]
     if not ids:
         return {}
-    histories = db.scalars(select(StageHistory).where(StageHistory.candidate_id.in_(ids))).all()
-    activities = db.scalars(select(ActivityLog).where(ActivityLog.candidate_id.in_(ids))).all()
-    evaluations = db.scalars(select(Evaluation).where(Evaluation.candidate_id.in_(ids))).all()
+    # The list only needs the latest row from each audit stream. Loading every
+    # historical row made this read path grow linearly with candidate activity.
+    history_ranked = (
+        select(
+            StageHistory.id.label("row_id"),
+            func.row_number().over(
+                partition_by=StageHistory.candidate_id,
+                order_by=StageHistory.created_at.desc(),
+            ).label("row_number"),
+        )
+        .where(StageHistory.candidate_id.in_(ids))
+        .subquery()
+    )
+    histories = db.scalars(
+        select(StageHistory)
+        .join(history_ranked, StageHistory.id == history_ranked.c.row_id)
+        .where(history_ranked.c.row_number == 1)
+    ).all()
+
+    activity_ranked = (
+        select(
+            ActivityLog.id.label("row_id"),
+            func.row_number().over(
+                partition_by=ActivityLog.candidate_id,
+                order_by=ActivityLog.created_at.desc(),
+            ).label("row_number"),
+        )
+        .where(ActivityLog.candidate_id.in_(ids))
+        .subquery()
+    )
+    activities = db.scalars(
+        select(ActivityLog)
+        .join(activity_ranked, ActivityLog.id == activity_ranked.c.row_id)
+        .where(activity_ranked.c.row_number == 1)
+    ).all()
+
+    evaluations = db.scalars(
+        select(Evaluation).where(
+            Evaluation.candidate_id.in_(ids),
+            Evaluation.type.in_((EvaluationType.HQ_INTERVIEW_1, EvaluationType.HQ_INTERVIEW_2)),
+        )
+    ).all()
     def by_candidate():
         return defaultdict(list, {candidate_id: [] for candidate_id in ids})
 
