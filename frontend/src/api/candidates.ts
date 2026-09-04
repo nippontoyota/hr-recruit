@@ -542,7 +542,6 @@ async function uploadPublicCandidateFile<T extends 'photo' | 'resume'>(token: st
         method: 'PUT',
         headers: {
           'Content-Type': signed.data.content_type,
-          'x-upsert': 'true',
         },
         body: file,
       });

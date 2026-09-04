@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from urllib.parse import parse_qs, urljoin, urlparse
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 from fastapi import HTTPException, status
@@ -78,7 +78,15 @@ def create_signed_upload_url(path: str) -> dict[str, str]:
     relative_url = payload.get("url")
     if not relative_url:
         raise _storage_failure("sign upload")
-    signed_url = urljoin(f"{base}/", str(relative_url).lstrip("/"))
+    raw_url = str(relative_url)
+    if raw_url.startswith("http://") or raw_url.startswith("https://"):
+        signed_url = raw_url
+    elif raw_url.startswith("/storage/v1/"):
+        signed_url = f"{base}{raw_url}"
+    else:
+        # Supabase returns `/object/upload/sign/...` from this REST endpoint,
+        # while the public URL includes the `/storage/v1` prefix.
+        signed_url = f"{base}/storage/v1{raw_url if raw_url.startswith('/') else '/' + raw_url}"
     token = parse_qs(urlparse(signed_url).query).get("token", [""])[0]
     if not token:
         raise _storage_failure("sign upload")
