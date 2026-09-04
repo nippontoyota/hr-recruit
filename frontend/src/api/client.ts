@@ -70,13 +70,9 @@ export async function request(method: string, endpoint: string, body?: any, conf
 async function executeRequest(method: string, endpoint: string, body?: any, config?: RequestConfig) {
   const url = `${baseURL}${endpoint}`;
   const headers: Record<string, string> = getAuthHeaders({
-    ...(method === 'GET' ? {} : { 'Content-Type': 'application/json' }),
+    'Content-Type': 'application/json',
     ...(config?.headers || {}),
   });
-  // Login already establishes the HttpOnly access-token cookie. Avoiding the
-  // bearer header on reads keeps authenticated GETs a simple CORS request and
-  // removes an OPTIONS round trip from the latency-critical list page.
-  if (method === 'GET') delete headers.Authorization;
 
 
   let fetchBody: any = body;
