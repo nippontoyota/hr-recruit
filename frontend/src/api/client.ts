@@ -53,6 +53,7 @@ type RequestConfig = {
   headers?: Record<string, string>;
   signal?: AbortSignal;
   responseType?: 'json' | 'blob';
+  timeoutMs?: number;
 };
 
 export async function request(method: string, endpoint: string, body?: any, config?: RequestConfig) {
@@ -108,7 +109,7 @@ async function executeRequest(method: string, endpoint: string, body?: any, conf
   }
 
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 30000);
+  const timeoutId = window.setTimeout(() => controller.abort(), config?.timeoutMs ?? 30000);
   const onCallerAbort = () => controller.abort();
   if (config?.signal) {
     config.signal.addEventListener('abort', onCallerAbort, { once: true });

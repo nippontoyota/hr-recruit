@@ -303,10 +303,16 @@ export const publicApplyFullCandidate = async (
     }
     const response = await request('POST', `/candidates/public-apply-full/${token}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      // Mobile connections can take longer to upload a phone photo and resume.
+      // Keep the draft in the form while allowing the single submission request
+      // enough time to finish; other API requests retain the normal 30s timeout.
+      timeoutMs: 120_000,
     });
     return response.data;
   }
-  const response = await request('POST', `/candidates/public-apply-full/${token}`, data);
+  const response = await request('POST', `/candidates/public-apply-full/${token}`, data, {
+    timeoutMs: 120_000,
+  });
   return response.data;
 };
 
