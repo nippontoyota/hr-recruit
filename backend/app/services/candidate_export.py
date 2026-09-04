@@ -32,11 +32,12 @@ EXPORT_COLUMNS = (
     ("Pre-form status", "pre_form_status"),
     ("Applied at", "applied_at"),
     ("Date added", "created_at"),
-    ("Application form sent", "pre_form_sent_at"),
     ("Last updated", "updated_at"),
     ("Duplicate flagged", "is_duplicate_flagged"),
     ("Head Office hire", "is_head_office_hire"),
 )
+
+CSV_COLUMNS = EXPORT_COLUMNS[:16] + (("Application form sent", "pre_form_sent_at"),) + EXPORT_COLUMNS[16:]
 
 _IST = ZoneInfo("Asia/Kolkata")
 
@@ -54,12 +55,12 @@ def _csv_value(value):
 def iter_candidates_csv(candidates: Iterable[Candidate]) -> Iterator[str]:
     buffer = StringIO()
     writer = csv.writer(buffer)
-    writer.writerow([heading for heading, _ in EXPORT_COLUMNS])
+    writer.writerow([heading for heading, _ in CSV_COLUMNS])
     yield buffer.getvalue()
     for candidate in candidates:
         buffer.seek(0)
         buffer.truncate(0)
-        writer.writerow([_csv_value(getattr(candidate, attribute, None)) for _, attribute in EXPORT_COLUMNS])
+        writer.writerow([_csv_value(getattr(candidate, attribute, None)) for _, attribute in CSV_COLUMNS])
         yield buffer.getvalue()
 
 
