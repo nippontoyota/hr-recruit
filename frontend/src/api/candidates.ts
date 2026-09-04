@@ -296,12 +296,12 @@ export const publicApplyFullCandidate = async (
   // combined multipart request once the total payload is too large, and the
   // text must never be marked submitted without its selected files reaching
   // storage successfully.
-  if (files?.photo) {
-    await uploadPublicCandidatePhoto(token, files.photo);
-  }
-  if (files?.resume) {
-    await uploadPublicCandidateResume(token, files.resume);
-  }
+  // Upload both attachments concurrently. The final JSON request still waits
+  // for both confirmations, preserving the all-or-nothing submission gate.
+  await Promise.all([
+    files?.photo ? uploadPublicCandidatePhoto(token, files.photo) : Promise.resolve(),
+    files?.resume ? uploadPublicCandidateResume(token, files.resume) : Promise.resolve(),
+  ]);
   const response = await request('POST', `/candidates/public-apply-full/${token}`, data, {
     timeoutMs: 120_000,
   });
