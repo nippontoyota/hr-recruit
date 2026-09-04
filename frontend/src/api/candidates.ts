@@ -292,23 +292,15 @@ export const publicApplyFullCandidate = async (
   data: any,
   files?: { resume?: File | null; photo?: File | null }
 ): Promise<PublicCandidateBasic> => {
-  if (files?.resume || files?.photo) {
-    const formData = new FormData();
-    formData.append('data', JSON.stringify(data));
-    if (files.resume) {
-      formData.append('resume', files.resume);
-    }
-    if (files.photo) {
-      formData.append('photo', files.photo);
-    }
-    const response = await request('POST', `/candidates/public-apply-full/${token}`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      // Mobile connections can take longer to upload a phone photo and resume.
-      // Keep the draft in the form while allowing the single submission request
-      // enough time to finish; other API requests retain the normal 30s timeout.
-      timeoutMs: 120_000,
-    });
-    return response.data;
+  // Files are deliberately uploaded before the form data. Vercel rejects a
+  // combined multipart request once the total payload is too large, and the
+  // text must never be marked submitted without its selected files reaching
+  // storage successfully.
+  if (files?.photo) {
+    await uploadPublicCandidatePhoto(token, files.photo);
+  }
+  if (files?.resume) {
+    await uploadPublicCandidateResume(token, files.resume);
   }
   const response = await request('POST', `/candidates/public-apply-full/${token}`, data, {
     timeoutMs: 120_000,
@@ -532,6 +524,17 @@ export const uploadPublicCandidatePhoto = async (token: string, file: File): Pro
   formData.append('file', file);
   const response = await request('POST', `/candidates/public-photo/${token}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeoutMs: 120_000,
+  });
+  return response.data;
+};
+
+export const uploadPublicCandidateResume = async (token: string, file: File): Promise<{ status: string, file_name: string }> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await request('POST', `/candidates/public-resume/${token}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeoutMs: 120_000,
   });
   return response.data;
 };
