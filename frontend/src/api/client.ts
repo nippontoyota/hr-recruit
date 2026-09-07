@@ -1,7 +1,20 @@
 import { isAbortError } from '../lib/utils';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL
-  || (import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : 'https://hr-recruit-api.vercel.app/api/v1');
+const configuredBaseURL = typeof import.meta.env.VITE_API_BASE_URL === 'string'
+  ? import.meta.env.VITE_API_BASE_URL.trim()
+  : '';
+const fallbackBaseURL = import.meta.env.DEV
+  ? 'http://127.0.0.1:8000/api/v1'
+  : 'https://hr-recruit-api.vercel.app/api/v1';
+// A relative API URL is useful with the Vite dev proxy, but production is a
+// separate static deployment and must use the backend origin explicitly.
+const baseURL = configuredBaseURL && (import.meta.env.DEV || /^https?:\/\//i.test(configuredBaseURL))
+  ? configuredBaseURL
+  : fallbackBaseURL;
+
+export function getApiBaseUrl(): string {
+  return baseURL;
+}
 
 export const AUTH_EXPIRED_EVENT = 'auth:expired';
 const ACCESS_TOKEN_KEY = 'access_token';

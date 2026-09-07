@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Input, LoadingSpinner, Modal, PdfViewer } from '../ui';
 import { confirmOfferWhatsApp, resendOfferWhatsApp, sendOfferLetter } from '../../api/candidates';
-import { getAuthHeaders } from '../../api/client';
+import { getApiBaseUrl, getAuthHeaders } from '../../api/client';
 import type { Candidate } from '../../types';
 import { Mail, Pencil, MessageSquare } from 'lucide-react';
 import { openWhatsAppChat } from '../../lib/whatsappTemplate';
@@ -117,9 +117,7 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
 
     (async () => {
       try {
-        const baseURL = import.meta.env.VITE_API_BASE_URL
-          || (import.meta.env.DEV ? 'http://127.0.0.1:8000/api/v1' : 'https://hr-recruit-api.vercel.app/api/v1');
-        const response = await fetch(`${baseURL}/pdf/offer-letter`, {
+        const response = await fetch(`${getApiBaseUrl()}/pdf/offer-letter`, {
           method: 'POST',
           headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
           body,
