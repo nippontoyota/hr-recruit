@@ -13,6 +13,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from app.models.candidate import Candidate
+from app.core.branding import normalize_brand
 from app.utils.date_format import format_date_dmy
 
 
@@ -36,6 +37,7 @@ EXPORT_COLUMNS = (
     ("Last updated", "updated_at"),
     ("Duplicate flagged", "is_duplicate_flagged"),
     ("Head Office hire", "is_head_office_hire"),
+    ("Brand", "brand"),
 )
 
 CSV_COLUMNS = EXPORT_COLUMNS[:16] + (("Application form sent", "pre_form_sent_at"),) + EXPORT_COLUMNS[16:]
@@ -53,6 +55,11 @@ def _csv_value(value):
     return "" if value is None else str(value)
 
 
+def _export_value(candidate: Candidate, attribute: str):
+    value = getattr(candidate, attribute, None)
+    return normalize_brand(value) if attribute == "brand" else value
+
+
 def iter_candidates_csv(candidates: Iterable[Candidate]) -> Iterator[str]:
     buffer = StringIO()
     writer = csv.writer(buffer)
@@ -61,7 +68,7 @@ def iter_candidates_csv(candidates: Iterable[Candidate]) -> Iterator[str]:
     for candidate in candidates:
         buffer.seek(0)
         buffer.truncate(0)
-        writer.writerow([_csv_value(getattr(candidate, attribute, None)) for _, attribute in CSV_COLUMNS])
+        writer.writerow([_csv_value(_export_value(candidate, attribute)) for _, attribute in CSV_COLUMNS])
         yield buffer.getvalue()
 
 
@@ -98,7 +105,7 @@ def build_candidates_workbook(candidates: Iterable[Candidate]) -> BytesIO:
             cell = sheet.cell(
                 row=row_index,
                 column=column_index,
-                value=_cell_value(getattr(candidate, attribute, None)),
+                value=_cell_value(_export_value(candidate, attribute)),
             )
             if isinstance(cell.value, (datetime, date)):
                 cell.number_format = "dd-mm-yyyy hh:mm"

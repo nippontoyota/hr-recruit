@@ -96,6 +96,7 @@ export interface User {
   full_name: string;
   role: UserRole;
   branch_location?: string;
+  brand?: string;
   department?: string;
 }
 
@@ -124,6 +125,7 @@ export interface Candidate {
   email?: string;
   source: string;
   source_reference?: string;
+  brand?: string;
   experience?: string;
   department?: string;
   opening_type?: string;
@@ -251,6 +253,7 @@ export interface EvaluationPublicDetails {
   type: EvaluationType;
   candidate_name: string;
   candidate_position: string;
+  brand?: string;
   candidate_resume_url?: string;
   candidate_photo_url?: string;
   candidate_experience?: string;

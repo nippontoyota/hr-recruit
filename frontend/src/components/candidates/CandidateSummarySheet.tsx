@@ -3,6 +3,7 @@ import type { Candidate, Evaluation } from '../../types';
 import { previousJobsFromForm, type CandidateFormData, type PreviousJob } from '../../pages/candidates/wizard/wizardTypes';
 import { formatSource } from '../../lib/stages';
 import { formatDate } from '../../lib/dateTime';
+import { getBrandConfig } from '../../lib/branding';
 
 interface CandidateSummarySheetProps {
   candidate: Candidate;
@@ -171,6 +172,8 @@ function Cell({
 }
 
 export function CandidateSummarySheet({ candidate, evaluations }: CandidateSummarySheetProps) {
+  const brand = getBrandConfig(candidate.brand);
+  const riverClass = brand.key === 'RIVER' ? 'css-sheet-river' : '';
   const raw = (candidate.profile?.raw_data || {}) as Record<string, unknown>;
   const salarySheet = (candidate.salary_data || {}) as Record<string, unknown>;
   const jobs = [...previousJobsFromForm(raw as unknown as CandidateFormData)];
@@ -272,7 +275,14 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
   const age = rawGet(raw, 'age') || ageFromDob(dob);
 
   return (
-    <div className="css-sheet box-border bg-white text-[8.5px] leading-[1.2] text-black font-sans w-[210mm] min-h-[297mm] p-[6mm_8mm] shadow-lg print:shadow-none print:border-none">
+    <div className={`css-sheet ${riverClass} box-border bg-white text-[8.5px] leading-[1.2] text-black font-sans w-[210mm] min-h-[297mm] p-[6mm_8mm] shadow-lg print:shadow-none print:border-none`}>
+      <div className="css-brand-section mb-2 flex items-center justify-between border-b-2 border-black px-2 py-1.5">
+        <div className="flex items-center gap-2">
+          <img src={brand.logo} alt={`${brand.name} logo`} className="h-[9mm] w-auto object-contain" />
+          <span className="text-[12px] font-black uppercase tracking-wide">{brand.name} candidate summary</span>
+        </div>
+        <span className="text-[8px] font-semibold">{brand.companyName}</span>
+      </div>
       <table className="w-full border-collapse border border-black table-fixed">
         <colgroup>
           <col className="w-[16%]" />

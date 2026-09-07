@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.branding import normalize_brand
 from app.core.config import settings
 from app.core.public_token import (
     PURPOSE_APPLY,
@@ -51,6 +52,7 @@ def _public_out(row: Candidate, db: Session, *, token: str | None = None) -> Pub
         phone=row.phone,
         email=row.email,
         source=row.source,
+        brand=normalize_brand(row.brand),
         position_applied_for=row.position_applied_for,
         experience=row.experience,
         has_resume=row.id in resume_candidate_ids(db, [row.id]),
@@ -69,7 +71,7 @@ def public_apply(
         raise HTTPException(status_code=400, detail="Invalid HR recruiter ID.")
     
     body = body.model_copy(update={"assigned_hr_user_id": hr_id})
-    row = create_candidate(db, body, hr_id)
+    row = create_candidate(db, body, hr_id, brand=hr_user.brand)
     return _public_out(row, db, token=row.pre_form_token)
 
 
@@ -134,6 +136,7 @@ def public_full_status(
         pre_form_expires_at=row.pre_form_expires_at,
         position_applied_for=pos,
         branch_location=row.branch_location,
+        brand=normalize_brand(row.brand),
     )
 
 

@@ -6,6 +6,7 @@ import { extractError } from '../../lib/utils';
 import { Button } from '../ui';
 import { formatDateTime } from '../../lib/dateTime';
 import { useState } from 'react';
+import { getBrandConfig } from '../../lib/branding';
 
 interface HeadOfficeForwardingEmailStatusProps {
   candidate: Candidate;
@@ -20,6 +21,7 @@ export function HeadOfficeForwardingEmailStatus({ candidate, onUpdate }: HeadOff
   const sentAt = String(raw?.headOfficeForwardingEmailSentAt || '');
   const sentLabel = sentAt ? formatDateTime(sentAt) : '';
   const sent = status === 'SENT';
+  const brand = getBrandConfig(candidate.brand);
 
   const resend = async () => {
     setResending(true);
@@ -63,7 +65,7 @@ export function HeadOfficeForwardingEmailStatus({ candidate, onUpdate }: HeadOff
         </Button>
       </div>
       {!candidate.email && <p className="mt-3 text-xs font-medium text-danger">Add the candidate email address before retrying.</p>}
-      <p className="mt-3 text-[11px] text-text-secondary">Subject: Update Regarding Interview – Nippon Toyota</p>
+      <p className="mt-3 text-[11px] text-text-secondary">Subject: Update Regarding Interview – {brand.name}</p>
     </section>
   );
 }

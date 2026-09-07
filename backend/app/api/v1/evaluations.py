@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.access import get_candidate_for_user
+from app.core.branding import normalize_brand
 from app.core.ho_pipeline import handed_over_to_ho
 from app.core.database import get_db
 from app.core.deps import require_roles
@@ -344,7 +345,13 @@ def get_department_questions(
         )
     if not paper_key(department, position, experience):
         return []
-    return assemble_test_questions(db, department, position, experience)
+    return assemble_test_questions(
+        db,
+        department,
+        position,
+        experience,
+        brand=normalize_brand(candidate.brand) if candidate_id else None,
+    )
 
 
 
@@ -743,6 +750,7 @@ def get_public_evaluation_details(
         type=evaluation.type,
         candidate_name=candidate.full_name,
         candidate_position=candidate.position_applied_for or candidate.department or "Unknown",
+        brand=normalize_brand(candidate.brand),
         candidate_resume_url=resume_url,
         candidate_photo_url=photo_url,
         candidate_experience=candidate.profile.total_experience if candidate.profile else None,
@@ -848,6 +856,7 @@ def get_public_test_preview(
         "question_count": question_count,
         "duration_seconds": settings.technical_test_duration_minutes * 60,
         "already_started": already_started,
+        "brand": normalize_brand(candidate.brand),
     }
 
 
@@ -889,6 +898,7 @@ def get_public_test_questions(
         "questions": public_questions,
         "expires_at": deadline.isoformat(),
         "duration_seconds": settings.technical_test_duration_minutes * 60,
+        "brand": normalize_brand(candidate.brand),
     }
 
 

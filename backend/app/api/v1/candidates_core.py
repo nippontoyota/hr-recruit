@@ -8,6 +8,7 @@ from sqlalchemy import select, func, or_, delete
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
+from app.core.branding import normalize_brand
 from app.core.deps import require_roles
 from app.core.access import assert_candidate_access, assert_local_hr_can_mutate, get_candidate_for_user
 from app.core.public_token import PURPOSE_PRE_FORM, candidate_by_public_token, expire_pre_form_if_needed, issue_public_token
@@ -249,6 +250,7 @@ def get_candidate_portal(token: str, db: Session = Depends(get_db)):
         phone=candidate.phone,
         email=candidate.email,
         branch_location=candidate.branch_location,
+        brand=normalize_brand(candidate.brand),
         photo_url=photo_url,
         current_stage=candidate.current_stage,
         offer_status=candidate.offer_status,
@@ -458,7 +460,7 @@ def create(
         body = body.model_copy(update={"assigned_hr_user_id": user.id})
     if user.role == UserRole.LOCAL_HR and user.branch_location:
         body = body.model_copy(update={"branch_location": user.branch_location})
-    row = create_candidate(db, body, user.id, created_via_public_apply=False)
+    row = create_candidate(db, body, user.id, created_via_public_apply=False, brand=user.brand)
     return to_candidate_out(row, False, db, viewer=user).model_copy(
         update={"work_state": build_candidate_work_state(db, row)}
     )

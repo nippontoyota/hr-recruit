@@ -253,6 +253,7 @@ export interface PublicCandidateBasic {
   experience?: string;
   has_resume?: boolean;
   token?: string;
+  brand?: string;
 }
 
 export const publicApplyCandidate = async (candidateData: any, hrId: string): Promise<PublicCandidateBasic> => {
@@ -260,7 +261,7 @@ export const publicApplyCandidate = async (candidateData: any, hrId: string): Pr
   return response.data;
 };
 
-export const getRecruiterPublic = async (hrId: string): Promise<{ full_name: string; branch_location?: string }> => {
+export const getRecruiterPublic = async (hrId: string): Promise<{ full_name: string; branch_location?: string; brand?: string }> => {
   const response = await request('GET', `/auth/users/${hrId}/public`);
   return response.data;
 };
@@ -282,6 +283,7 @@ export const publicGetFullStatus = async (token: string): Promise<{
   pre_form_expires_at?: string;
   position_applied_for?: string;
   branch_location?: string;
+  brand?: string;
 }> => {
   const response = await request('GET', `/candidates/public-full-status/${token}`);
   return response.data;

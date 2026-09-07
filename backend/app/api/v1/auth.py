@@ -31,6 +31,7 @@ class _LoginRecord:
     full_name: str
     role: object
     branch_location: str | None
+    brand: str | None
     department: str | None
     is_active: bool
     cached_at: float = field(default_factory=time.monotonic)
@@ -47,6 +48,7 @@ def _record_from_user(user: User) -> _LoginRecord:
         full_name=user.full_name,
         role=user.role,
         branch_location=user.branch_location,
+        brand=getattr(user, "brand", None),
         department=user.department,
         is_active=user.is_active,
     )
@@ -95,6 +97,7 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
                 full_name=record.full_name,
                 role=frontend_role,
                 branch_location=record.branch_location,
+                brand=record.brand,
                 department=record.department,
             ),
         )

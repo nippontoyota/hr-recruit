@@ -9,6 +9,7 @@ from sqlalchemy import delete, select, text, update
 from sqlalchemy.orm import Session
 
 from app.core.access import assert_candidate_access, assert_local_hr_can_mutate, can_view_salary
+from app.core.branding import RIVER, brand_is_river, normalize_brand
 from app.core.config import settings
 from app.core.ho_pipeline import handed_over_to_ho
 from app.core.public_token import PURPOSE_APPLY, expire_pre_form_if_needed, issue_public_token
@@ -136,6 +137,7 @@ def to_candidate_out(
 
     out = CandidateOut.model_validate(candidate).model_copy(
         update={
+            "brand": normalize_brand(candidate.brand),
             "email": resolved_email,
             "share_url": _share_url(candidate),
             "has_resume": has_resume,
@@ -172,6 +174,7 @@ def to_candidate_list_out(
 
     return CandidateListOut.model_validate(candidate).model_copy(
         update={
+            "brand": normalize_brand(candidate.brand),
             "email": resolved_email,
             "share_url": _share_url(candidate),
             "has_resume": has_resume,
@@ -186,6 +189,7 @@ def create_candidate(
     body: CandidateCreate,
     created_by_user_id: UUID,
     created_via_public_apply: bool = True,
+    brand: str | None = None,
 ) -> Candidate:
     duplicate = db.scalar(
         select(Candidate)
@@ -204,6 +208,7 @@ def create_candidate(
         department=body.department,
         opening_type=body.opening_type,
         branch_location=body.branch_location,
+        brand=RIVER if brand_is_river(brand) else None,
         assigned_hr_user_id=body.assigned_hr_user_id,
         current_stage=PipelineStage.CALL_LETTER,
         is_duplicate_flagged=duplicate is not None,

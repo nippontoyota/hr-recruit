@@ -17,6 +17,7 @@ import { cn, extractError, isAbortError, resumeEmbedUrl, formatSalary } from '..
 import { PublicShell } from '../../components/layout/PublicShell';
 import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
 import { formatDate } from '../../lib/dateTime';
+import { brandThemeStyle, getBrandConfig } from '../../lib/branding';
 
 const PERSONAL_KEYS = ['age', 'gender', 'maritalStatus', 'dateOfBirth', 'permDistrict', 'presDistrict'];
 const LANGUAGE_KEYS = ['languagesRead', 'languagesWrite', 'languagesSpeak', 'languagesOther'];
@@ -296,15 +297,15 @@ export default function PublicInterviewerPage() {
   };
 
   if (loading) {
-    return <PublicShell title="Interview scorecard"><PublicStatusPanel kind="loading" message="Loading the interview scorecard…" /></PublicShell>;
+    return <PublicShell brand={details?.brand} title="Interview scorecard"><PublicStatusPanel kind="loading" message="Loading the interview scorecard…" /></PublicShell>;
   }
 
   if (error || !details) {
-    return <PublicShell title="Interview scorecard"><PublicStatusPanel kind="expired" title="Scorecard link unavailable" message={`${error || 'This scorecard link is invalid or expired.'} Ask the recruitment team for a new link if needed.`} /></PublicShell>;
+    return <PublicShell brand={details?.brand} title="Interview scorecard"><PublicStatusPanel kind="expired" title="Scorecard link unavailable" message={`${error || 'This scorecard link is invalid or expired.'} Ask the recruitment team for a new link if needed.`} /></PublicShell>;
   }
 
   if (submitted) {
-    return <PublicShell title="Interview scorecard" step="Submitted"><PublicStatusPanel kind="submitted" title="Scorecard recorded" message={`Remarks for ${details.candidate_name} are saved. You can close this page.`} /></PublicShell>;
+    return <PublicShell brand={details.brand} title="Interview scorecard" step="Submitted"><PublicStatusPanel kind="submitted" title="Scorecard recorded" message={`Remarks for ${details.candidate_name} are saved. You can close this page.`} /></PublicShell>;
   }
 
   const resumeUrl = details.candidate_resume_url;
@@ -526,11 +527,11 @@ export default function PublicInterviewerPage() {
   );
 
   return (
-    <div className="min-h-dvh bg-background text-foreground">
+    <div className="min-h-dvh bg-background text-foreground" style={brandThemeStyle(details.brand)}>
       <header className="border-b border-border bg-surface px-4 py-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Nippon Toyota
+            {getBrandConfig(details.brand).name}
           </p>
           <h1 className="text-base font-semibold truncate">{details.candidate_name}</h1>
           <p className="text-xs text-muted-foreground truncate">{details.candidate_position}</p>

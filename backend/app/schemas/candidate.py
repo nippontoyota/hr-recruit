@@ -741,6 +741,7 @@ class CandidateOut(BaseModel):
     email: str | None
     source: str
     source_reference: str | None
+    brand: str | None = None
     position_applied_for: str
     experience: str = "Fresher"
     department: str | None = None
@@ -800,6 +801,7 @@ class CandidateListOut(BaseModel):
     email: str | None
     source: str
     source_reference: str | None
+    brand: str | None = None
     position_applied_for: str
     experience: str = "Fresher"
     department: str | None = None
@@ -964,6 +966,7 @@ class PublicCandidateOut(BaseModel):
     phone: str
     email: str | None = None
     source: str
+    brand: str | None = None
     position_applied_for: str
     experience: str | None = "Fresher"
     has_resume: bool = False
@@ -977,6 +980,7 @@ class PublicFullStatusOut(BaseModel):
     pre_form_expires_at: datetime | None = None
     position_applied_for: str | None = None
     branch_location: str | None = None
+    brand: str | None = None
 
 
 class PublicUploadOut(BaseModel):
@@ -991,6 +995,7 @@ class CandidatePortalOut(BaseModel):
     phone: str
     email: str | None = None
     branch_location: str | None = None
+    brand: str | None = None
     photo_url: str | None = None
     current_stage: PipelineStage
     offer_status: str | None

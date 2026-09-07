@@ -1,4 +1,4 @@
-"""Assemble the 15-question technical test (6 common + 9 from the role bank)."""
+"""Assemble brand-aware technical tests from common and role-specific banks."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from app.core.positions import (
     ROLE_SAMPLE_SIZE,
     paper_key,
 )
+from app.core.branding import brand_is_river
 from app.models.candidate import Candidate
 from app.models.technical_question import TechnicalQuestion
 
@@ -33,14 +34,17 @@ def assemble_test_questions(
     department: str | None,
     position: str | None,
     experience: str | None,
+    brand: str | None = None,
 ) -> list[TechnicalQuestion]:
-    common = _load_paper(db, PAPER_COMMON)
-    if len(common) < COMMON_QUESTION_COUNT:
-        raise HTTPException(
-            status_code=400,
-            detail="Common technical questions are not seeded.",
-        )
-    common = list(common[:COMMON_QUESTION_COUNT])
+    common: list[TechnicalQuestion] = []
+    if not brand_is_river(brand):
+        common = _load_paper(db, PAPER_COMMON)
+        if len(common) < COMMON_QUESTION_COUNT:
+            raise HTTPException(
+                status_code=400,
+                detail="Common technical questions are not seeded.",
+            )
+        common = list(common[:COMMON_QUESTION_COUNT])
 
     key = paper_key(department, position, experience)
     if not key:
@@ -68,6 +72,7 @@ def assemble_for_candidate(db: Session, candidate: Candidate) -> list[TechnicalQ
         candidate.department,
         candidate.position_applied_for,
         candidate.experience,
+        brand=candidate.brand,
     )
 
 

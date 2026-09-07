@@ -74,15 +74,15 @@ export default function CandidatePortalPage() {
     } finally { setSubmitting(false); }
   };
 
-  if (loading) return <PublicShell title="Candidate portal"><PublicStatusPanel kind="loading" message="Loading your candidate portal…" /></PublicShell>;
-  if (loadError || !portalData) return <PublicShell title="Candidate portal"><PublicStatusPanel kind="expired" title="Link unavailable" message={`${loadError || 'This portal link is no longer active.'} Ask your HR recruiter for help or a fresh link.`} actionLabel="Try again" onAction={() => { setLoading(true); void fetchPortal(); }} /></PublicShell>;
+  if (loading) return <PublicShell brand={portalData?.brand} title="Candidate portal"><PublicStatusPanel kind="loading" message="Loading your candidate portal…" /></PublicShell>;
+  if (loadError || !portalData) return <PublicShell brand={portalData?.brand} title="Candidate portal"><PublicStatusPanel kind="expired" title="Link unavailable" message={`${loadError || 'This portal link is no longer active.'} Ask your HR recruiter for help or a fresh link.`} actionLabel="Try again" onAction={() => { setLoading(true); void fetchPortal(); }} /></PublicShell>;
 
   const pendingInterviews = portalData.evaluations.filter((evaluation) => !evaluation.candidate_response);
   const respondedInterviews = portalData.evaluations.filter((evaluation) => evaluation.candidate_response);
   const offerPending = portalData.offer_status && !['ACCEPTED', 'DECLINED'].includes(portalData.offer_status);
 
   return (
-    <PublicShell title="Candidate portal" step="Review and respond">
+    <PublicShell brand={portalData.brand} title="Candidate portal" step="Review and respond">
       <div className="space-y-6">
         <section className="page-card p-5 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">Candidate portal</p>

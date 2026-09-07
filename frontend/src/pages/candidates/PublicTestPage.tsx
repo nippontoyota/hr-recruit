@@ -20,6 +20,7 @@ interface TestPreview {
   question_count: number;
   duration_seconds: number;
   already_started: boolean;
+  brand?: string;
 }
 
 const EASE = [0.23, 1, 0.32, 1] as const;
@@ -51,6 +52,7 @@ export default function PublicTestPage() {
   const { token } = useParams<{ token: string }>();
 
   const [preview, setPreview] = useState<TestPreview | null>(null);
+  const [brand, setBrand] = useState<string | undefined>();
   const [previewLoading, setPreviewLoading] = useState(true);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -75,6 +77,7 @@ export default function PublicTestPage() {
       setPreviewError(null);
       const res = await getPublicTestQuestions(token);
       setDepartment(res.department);
+      setBrand(res.brand);
       setQuestions(res.questions);
       if (res.expires_at) {
         setDeadline(new Date(res.expires_at));
@@ -96,6 +99,7 @@ export default function PublicTestPage() {
     try {
       const res = await getPublicTestPreview(token);
       setPreview(res);
+      setBrand(res.brand);
       if (res.already_started) {
         await beginTest();
       }
@@ -159,7 +163,7 @@ export default function PublicTestPage() {
 
   if (previewLoading) {
     return (
-      <PublicShell title="Technical test">
+      <PublicShell brand={brand} title="Technical test">
         <PhaseTransition id="loading">
           <PublicStatusPanel kind="loading" message="Loading your technical test…" />
         </PhaseTransition>
@@ -169,7 +173,7 @@ export default function PublicTestPage() {
 
   if (submitted) {
     return (
-      <PublicShell title="Technical test" step="Submitted">
+      <PublicShell brand={brand} title="Technical test" step="Submitted">
         <PhaseTransition id="submitted">
           <div className="space-y-4">
             {score && (
@@ -200,7 +204,7 @@ export default function PublicTestPage() {
     const timerUrgent = secondsLeft !== null && secondsLeft <= 60;
 
     return (
-      <PublicShell title="Technical test" step={`Question ${currentIdx + 1} of ${questions.length}`} maxWidth="2xl">
+      <PublicShell brand={brand} title="Technical test" step={`Question ${currentIdx + 1} of ${questions.length}`} maxWidth="2xl">
         <PhaseTransition id="quiz">
           <div className="flex flex-col items-center">
             <div className="w-full max-w-3xl bg-surface sm:border-l-[3px] sm:border-r-[3px] border-dashed border-primary/40 min-h-screen flex flex-col">
@@ -324,7 +328,7 @@ export default function PublicTestPage() {
 
   if (previewError || !preview) {
     return (
-      <PublicShell title="Technical test">
+      <PublicShell brand={brand} title="Technical test">
         <PhaseTransition id="error">
           <PublicStatusPanel
             kind="expired"
@@ -341,7 +345,7 @@ export default function PublicTestPage() {
   const minutes = Math.round(preview.duration_seconds / 60);
 
   return (
-    <PublicShell title="Technical test" step={preview.department ? preview.department.toUpperCase() : undefined}>
+    <PublicShell brand={brand} title="Technical test" step={preview.department ? preview.department.toUpperCase() : undefined}>
       <PhaseTransition id="start">
         <div className="page-card mx-auto w-full max-w-md p-8 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">

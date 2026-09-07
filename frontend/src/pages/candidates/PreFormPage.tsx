@@ -29,6 +29,7 @@ export default function PreFormPage() {
   const { token } = useParams<{ token: string }>();
 
   const [candidateName, setCandidateName] = useState<string | null>(null);
+  const [candidateBrand, setCandidateBrand] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
 
@@ -55,6 +56,7 @@ export default function PreFormPage() {
     const draft = loadPreFormDraft(token);
     publicGetFullStatus(token)
       .then(async (res) => {
+        setCandidateBrand(res.brand);
         if (!res.is_awaiting_full_fill) {
           if (res.pre_form_status === 'SUBMITTED') {
             setCandidateName(res.full_name);
@@ -188,16 +190,16 @@ export default function PreFormPage() {
   };
 
   if (loading) {
-    return <PublicShell maxWidth="2xl" title="Candidate form" step="Checking link"><PublicStatusPanel kind="loading" message="Checking your form link…" /></PublicShell>;
+    return <PublicShell brand={candidateBrand} maxWidth="2xl" title="Candidate form" step="Checking link"><PublicStatusPanel kind="loading" message="Checking your form link…" /></PublicShell>;
   }
 
   if (statusError) {
-    return <PublicShell maxWidth="2xl" title="Candidate form"><PublicStatusPanel kind="expired" message={`${statusError} Please ask your HR recruiter for a new link or clarification.`} /></PublicShell>;
+    return <PublicShell brand={candidateBrand} maxWidth="2xl" title="Candidate form"><PublicStatusPanel kind="expired" message={`${statusError} Please ask your HR recruiter for a new link or clarification.`} /></PublicShell>;
   }
 
   if (submitSuccess) {
     return (
-      <PublicShell maxWidth="2xl" title="Candidate form">
+      <PublicShell brand={candidateBrand} maxWidth="2xl" title="Candidate form">
         <PublicStatusPanel
           kind="submitted"
           title="Application submitted"
@@ -208,7 +210,7 @@ export default function PreFormPage() {
   }
 
   return (
-    <PublicShell maxWidth="2xl" title="Candidate form">
+    <PublicShell brand={candidateBrand} maxWidth="2xl" title="Candidate form">
       <div className="page-card p-6 sm:p-8">
         <div className="mb-8 pb-6 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>

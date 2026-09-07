@@ -15,6 +15,7 @@ export default function ApplyForm() {
   const formToken = searchParams.get('token');
 
   const [recruiterName, setRecruiterName] = useState<string | null>(null);
+  const [candidateBrand, setCandidateBrand] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
 
@@ -59,6 +60,7 @@ export default function ApplyForm() {
         }
         if (formToken) {
           const candidate = await publicGetBasicCandidate(formToken);
+          setCandidateBrand(candidate.brand);
           setFullName(draft?.fullName || candidate.full_name);
           setPhone(draft?.phone || candidate.phone);
           setEmail(draft?.email || candidate.email || '');
@@ -71,6 +73,7 @@ export default function ApplyForm() {
         } else if (hrId) {
           const recruiter = await getRecruiterPublic(hrId);
           setRecruiterName(recruiter.full_name);
+          setCandidateBrand(recruiter.brand);
           if (draft) {
             setFullName(draft.fullName || '');
             setPhone(draft.phone || '');
@@ -185,16 +188,16 @@ export default function ApplyForm() {
   };
 
   if (loading) {
-    return <PublicShell title="Candidate registration"><PublicStatusPanel kind="loading" message="Checking your candidate link…" /></PublicShell>;
+    return <PublicShell brand={candidateBrand} title="Candidate registration"><PublicStatusPanel kind="loading" message="Checking your candidate link…" /></PublicShell>;
   }
 
   if (errorText) {
-    return <PublicShell title="Candidate registration"><PublicStatusPanel kind="expired" title="Link unavailable" message={`${errorText} Please request a fresh link from your HR recruiter if the problem continues.`} /></PublicShell>;
+    return <PublicShell brand={candidateBrand} title="Candidate registration"><PublicStatusPanel kind="expired" title="Link unavailable" message={`${errorText} Please request a fresh link from your HR recruiter if the problem continues.`} /></PublicShell>;
   }
 
   if (submitSuccess) {
     return (
-      <PublicShell title="Candidate registration">
+      <PublicShell brand={candidateBrand} title="Candidate registration">
         <PublicStatusPanel
           kind="submitted"
           title="Details submitted"
@@ -205,7 +208,7 @@ export default function ApplyForm() {
   }
 
   return (
-    <PublicShell title="Candidate registration">
+    <PublicShell brand={candidateBrand} title="Candidate registration">
       <div className="page-card p-6 sm:p-8">
         <div className="mb-8 pb-6 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>

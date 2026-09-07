@@ -315,6 +315,41 @@
   border-color: #1e3a5f !important;
 }
 
+.iaf-form-river {
+  color: #007DB6 !important;
+}
+.iaf-form-river table,
+.iaf-form-river td,
+.iaf-form-river th {
+  border-color: #007DB6 !important;
+}
+.iaf-form-river .iaf-th {
+  background: #007DB6 !important;
+  color: #fff !important;
+}
+.iaf-form-river .iaf-title {
+  background: #ABD5E7 !important;
+  color: #12120D !important;
+}
+.iaf-form-river .iaf-line,
+.iaf-form-river .iaf-rule,
+.iaf-form-river .iaf-tick {
+  border-color: #007DB6 !important;
+}
+.css-sheet-river {
+  color: #12120D;
+}
+.css-sheet-river table,
+.css-sheet-river td,
+.css-sheet-river th {
+  border-color: #007DB6 !important;
+}
+.css-sheet-river .css-brand-section {
+  border-color: #007DB6 !important;
+  background: #ABD5E7 !important;
+  color: #12120D !important;
+}
+
 .comment-sheet-screen-wrap {
   min-height: 100vh;
   background: #e2e8f0;

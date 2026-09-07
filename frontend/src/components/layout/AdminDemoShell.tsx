@@ -7,10 +7,13 @@ import { ResumeViewerProvider } from '../candidates/ResumeViewer';
 import { NAV_ITEMS } from '../../lib/navigation';
 import type { UserRole } from '../../types';
 import { cn } from '../../lib/utils';
+import { brandThemeStyle, getBrandConfig } from '../../lib/branding';
+import { BrandMark } from './BrandMark';
 
 export const AdminDemoShell = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, role, logout } = useAuth();
+  const brand = getBrandConfig(user?.brand);
 
   const location = useLocation();
   const isCandidateProfile = location.pathname.match(/^\/candidates\/[a-zA-Z0-9_-]+$/);
@@ -48,7 +51,7 @@ export const AdminDemoShell = () => {
 
   return (
     <ResumeViewerProvider>
-      <div className="flex h-screen w-full bg-background overflow-hidden font-sans flex-col">
+      <div className="flex h-screen w-full bg-background overflow-hidden font-sans flex-col" style={brandThemeStyle(user?.brand)}>
         {!isCandidateProfile && (
           <header className="sticky top-0 z-[var(--z-sticky)] flex items-center justify-between h-14 bg-surface px-4 lg:px-6 shrink-0">
             {/* Logo / Mobile Menu */}
@@ -64,9 +67,11 @@ export const AdminDemoShell = () => {
                   </Link>
                 )
               ) : (
-                <span className="text-base font-accent font-extrabold text-text-primary tracking-tight hidden md:block">
-                  Nippon Recruitment CRM
-                </span>
+                brand.key === 'RIVER' ? (
+                  <BrandMark brand={user?.brand} compact subtitle="HR workspace" />
+                ) : (
+                  <span className="text-base font-accent font-extrabold text-text-primary tracking-tight hidden md:block">Nippon Recruitment CRM</span>
+                )
               )}
             </div>
 

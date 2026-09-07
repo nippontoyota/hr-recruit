@@ -36,6 +36,7 @@ class UserOut(BaseModel):
     full_name: str
     role: str
     branch_location: str | None = None
+    brand: str | None = None
 
     department: str | None = None
 
@@ -47,6 +48,7 @@ class UserOut(BaseModel):
             full_name=user.full_name,
             role=role_for_frontend(user.role),
             branch_location=user.branch_location,
+            brand=getattr(user, "brand", None),
             department=user.department,
         )
 

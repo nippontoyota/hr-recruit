@@ -74,6 +74,7 @@ class EvaluationPublicOut(BaseModel):
     type: EvaluationType
     candidate_name: str
     candidate_position: str
+    brand: str | None = None
     candidate_resume_url: str | None = None
     candidate_photo_url: str | None = None
     candidate_education: str | None = None

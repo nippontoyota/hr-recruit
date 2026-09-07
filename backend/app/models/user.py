@@ -21,6 +21,7 @@ class User(Base):
         Enum(UserRole, name="user_role", schema=settings.db_schema, create_type=False),
         nullable=False,
     )
+    brand: Mapped[str | None] = mapped_column(String(50), nullable=True)
     branch_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

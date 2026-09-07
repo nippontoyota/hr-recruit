@@ -37,7 +37,7 @@ def test_candidate_workbook_contains_roster_fields_and_is_safe_to_open():
 
     assert sheet.max_row == 2
     assert sheet.freeze_panes == "A2"
-    assert sheet.auto_filter.ref == "A1:S1"
+    assert sheet.auto_filter.ref == "A1:T1"
     assert sheet["A1"].value == "Candidate ID"
     assert sheet["A2"].value == "NT-100"
     assert sheet["B2"].value == "'=Potential Formula"

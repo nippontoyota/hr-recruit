@@ -14,6 +14,7 @@ from app.core.deps import require_roles
 from app.core.access import get_candidate_for_user
 from app.core.offer_gate import offer_blockers
 from app.core.offer_cc import head_office_forwarding_cc_emails, offer_cc_emails
+from app.core.branding import brand_is_river
 from app.services.stage_emails import send_on_hold_email, send_rejection_email
 from app.core.positions import positions_for
 from app.core.config import settings
@@ -556,6 +557,10 @@ OFFER_ACCEPTANCE_EMAIL_SUBJECT = "Offer Acceptance Confirmation & Documents Requ
 HEAD_OFFICE_FORWARDING_EMAIL_SUBJECT = "Update Regarding Interview – Nippon Toyota"
 
 
+def _candidate_brand_label(candidate: Candidate) -> str:
+    return "River" if brand_is_river(getattr(candidate, "brand", None)) else "Nippon Toyota"
+
+
 def _offer_acceptance_email_content(candidate: Candidate) -> tuple[str, str, str]:
     profile = getattr(candidate, "profile", None)
     raw_data = dict(profile.raw_data or {}) if profile else {}
@@ -577,15 +582,16 @@ def _offer_acceptance_email_content(candidate: Candidate) -> tuple[str, str, str
 
     safe_name = escape(name)
     safe_role = escape(role)
+    brand_name = _candidate_brand_label(candidate)
     display_joining_date = format_date_dmy(joining_date)
     safe_date = escape(display_joining_date)
     body_html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.55;">
         <p>Dear {safe_name},</p>
-        <p>We are pleased to confirm your acceptance of the employment offer for the position of <strong>{safe_role}</strong> at Nippon Toyota.</p>
-        <p>We look forward to welcoming you to our organization on your joining date, <strong>{safe_date}</strong>, at Nippon Toyota, Kalamassery.</p>
-        <p><strong>Location:</strong> Nippon Toyota, Kalamassery - Google Maps</p>
+        <p>We are pleased to confirm your acceptance of the employment offer for the position of <strong>{safe_role}</strong> at {brand_name}.</p>
+        <p>We look forward to welcoming you to our organization on your joining date, <strong>{safe_date}</strong>, at {brand_name}, Kalamassery.</p>
+        <p><strong>Location:</strong> {brand_name}, Kalamassery - Google Maps</p>
         <p><strong>Reporting Location:</strong> 3rd Floor - Sales Training Room / HR Department</p>
         <p>Please carry the following documents and information with you on the day of joining for verification and completion of the joining formalities:</p>
         <h3>Documents to be Carried</h3>
@@ -606,13 +612,13 @@ def _offer_acceptance_email_content(candidate: Candidate) -> tuple[str, str, str
         <p>Please ensure that all the required documents are arranged and carried with you on the joining date to avoid any delay in completing the joining formalities.</p>
         <p>We look forward to welcoming you to the team and wish you a successful career with us.</p>
         <p>For further details or any queries, please feel free to contact us at 8606986060.</p>
-        <p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>Nippon Toyota<br>8606986060, 9544286099</p>
+        <p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>{brand_name}<br>8606986060, 9544286099</p>
       </body>
     </html>
     """
     preview = (
         f"Dear {name},\n\n"
-        f"Offer acceptance confirmed for {role} at Nippon Toyota.\n"
+        f"Offer acceptance confirmed for {role} at {brand_name}.\n"
         f"Joining date: {display_joining_date}.\n"
         "Reporting location: 3rd Floor - Sales Training Room / HR Department.\n\n"
         "Joining documents checklist included."
@@ -622,25 +628,27 @@ def _offer_acceptance_email_content(candidate: Candidate) -> tuple[str, str, str
 
 def _head_office_forwarding_email_content(candidate: Candidate) -> tuple[str, str, str]:
     name = escape(getattr(candidate, "full_name", None) or "Candidate")
+    brand_name = _candidate_brand_label(candidate)
+    subject = f"Update Regarding Interview – {brand_name}"
     body_html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.55;">
         <p>Dear {name},</p>
-        <p>Thank you for taking the time to attend the interview at Nippon Toyota.</p>
+        <p>Thank you for taking the time to attend the interview at {brand_name}.</p>
         <p>We are pleased to inform you that you have been shortlisted for the next stage of our selection process, and your application has been forwarded to our Head Office for further review.</p>
-        <p>Further details regarding the upcoming steps in the selection process will be communicated to you by the Head Office Team at Nippon Toyota, Kalamassery, within the next five working days.</p>
-        <p>We appreciate your interest in joining Nippon Toyota and look forward to staying in touch with you.</p>
+        <p>Further details regarding the upcoming steps in the selection process will be communicated to you by the {brand_name} Head Office Team, Kalamassery, within the next five working days.</p>
+        <p>We appreciate your interest in joining {brand_name} and look forward to staying in touch with you.</p>
         <p>For further details or any queries, please feel free to contact us at 8606986060.</p>
-        <p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>Nippon Toyota<br>8606986060, 9544286099</p>
+        <p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>{brand_name}<br>8606986060, 9544286099</p>
       </body>
     </html>
     """
     preview = (
         f"Dear {getattr(candidate, 'full_name', None) or 'Candidate'},\n\n"
-        "Your application has been forwarded to Nippon Toyota Head Office for further review.\n"
+        f"Your {brand_name} application has been forwarded to the {brand_name} Head Office for further review.\n"
         "Further selection details will be communicated within the next five working days."
     )
-    return HEAD_OFFICE_FORWARDING_EMAIL_SUBJECT, body_html, preview
+    return subject, body_html, preview
 
 
 def _send_head_office_forwarding_email(

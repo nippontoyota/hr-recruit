@@ -138,6 +138,7 @@ export const getPublicTestPreview = async (token: string): Promise<{
   question_count: number;
   duration_seconds: number;
   already_started: boolean;
+  brand?: string;
 }> => {
   const response = await request('GET', `/evaluations/public/${token}/test-preview`);
   return response.data;
@@ -148,6 +149,7 @@ export const getPublicTestQuestions = async (token: string): Promise<{
   questions: any[];
   expires_at?: string;
   duration_seconds?: number;
+  brand?: string;
 }> => {
   const response = await request('GET', `/evaluations/public/${token}/test-questions`);
   return response.data;

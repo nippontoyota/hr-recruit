@@ -3,6 +3,7 @@ import { Download, Loader2 } from 'lucide-react';
 import type { Candidate } from '../../types';
 import { formatDate } from '../../lib/dateTime';
 import { fetchCandidateResumeBlob } from '../../api/candidates';
+import { getBrandConfig } from '../../lib/branding';
 import { PdfViewer, DocxViewer } from '../ui';
 import { familyMembersFromForm, type CandidateFormData } from '../../pages/candidates/wizard/wizardTypes';
 
@@ -76,6 +77,8 @@ export function InterviewApplicationFormDocument({
   afterDeclaration,
 }: InterviewApplicationFormDocumentProps) {
   const d = (candidate.profile?.raw_data ?? {}) as Record<string, unknown>;
+  const brand = getBrandConfig(candidate.brand);
+  const riverClass = brand.key === 'RIVER' ? 'iaf-form-river' : '';
   const photoUrl = candidate.profile?.photo_url;
   const applied = d.appliedDate || candidate.pre_form_submitted_at || candidate.applied_at || candidate.created_at;
   const rawPos = candidate.position_applied_for || d.positionAppliedFor;
@@ -196,24 +199,24 @@ export function InterviewApplicationFormDocument({
           <span className="text-[11px] text-slate-600 font-medium hidden sm:inline">Personal Data · Education · Family Details · Employment Record</span>
         </div>
 
-        <section className="iaf-sheet iaf-form font-sans text-[11px] leading-[1.38] antialiased">
+        <section className={`iaf-sheet iaf-form ${riverClass} font-sans text-[11px] leading-[1.38] antialiased`}>
           <div>
             {/* Header Block */}
             <div className="flex items-start gap-3 mb-2">
               <img
-                src="/nippon-toyota-logo.png"
-                alt="Nippon Toyota"
+                src={brand.logo}
+                alt={`${brand.name} logo`}
                 className="h-[13mm] w-auto object-contain shrink-0 bg-transparent"
               />
               <div className="flex-1 text-center min-w-0 pt-0.5">
                 <div className="font-bold text-[15px] tracking-[0.04em] uppercase leading-tight">
-                  Nippon Motor Corporation Pvt Ltd
+                  {brand.companyName}
                 </div>
                 <div className="text-[10px] leading-tight mt-1 text-slate-600">
-                  XIX/9C, Nippon Towers, NH-47, HMT Junction, Kalamassery P.O., Kochi – 683104
+                  {brand.documentAddress}
                 </div>
                 <div className="text-[10px] leading-tight text-slate-600">
-                  Ph: 0484-2860331 / 8606986060 &nbsp;|&nbsp; E-Mail: recruitment@nippontoyota.com
+                  {brand.documentContact}
                 </div>
               </div>
               <div className="shrink-0 text-right pt-0.5">
@@ -461,7 +464,7 @@ export function InterviewApplicationFormDocument({
                 </tr>
                 {val(d.referredBy) ? (
                   <tr>
-                    <Td colSpan={8} className="py-1.5 px-2">Referred by / Friend / Relative working at Nippon Toyota <Line className="min-w-[45%]">{val(d.referredBy)}</Line></Td>
+                    <Td colSpan={8} className="py-1.5 px-2">Referred by / Friend / Relative working at {brand.name} <Line className="min-w-[45%]">{val(d.referredBy)}</Line></Td>
                   </tr>
                 ) : null}
                 <tr>
@@ -476,7 +479,7 @@ export function InterviewApplicationFormDocument({
 
           {/* Page 1 Footer */}
           <div className="mt-3 pt-1.5 border-t border-dashed border-[#1e3a5f]/40 flex justify-between items-center text-[9.5px] font-semibold text-[#1e3a5f]/80">
-            <span>Nippon Motor Corporation Pvt Ltd — Recruitment Confidential</span>
+            <span>{brand.companyName} — Recruitment Confidential</span>
             <span className="font-bold tracking-wider uppercase">Page 1 of 2</span>
           </div>
         </section>
@@ -494,14 +497,14 @@ export function InterviewApplicationFormDocument({
           <span className="text-[11px] text-slate-600 font-medium hidden sm:inline">General Information · References · Emergency Contacts · Declaration</span>
         </div>
 
-        <section className="iaf-sheet iaf-form font-sans text-[11px] leading-[1.38] antialiased">
+        <section className={`iaf-sheet iaf-form ${riverClass} font-sans text-[11px] leading-[1.38] antialiased`}>
           <div>
             {/* Page 2 Top Header */}
             <div className="flex items-center justify-between pb-1.5 mb-3 border-b-2 border-[#1e3a5f]">
               <div className="flex items-center gap-2.5">
                 <img
-                  src="/nippon-toyota-logo.png"
-                  alt="Nippon Toyota"
+                  src={brand.logo}
+                  alt={`${brand.name} logo`}
                   className="h-[9mm] w-auto object-contain shrink-0 bg-transparent"
                 />
                 <span className="font-bold text-[13px] uppercase tracking-wider text-[#1e3a5f]">

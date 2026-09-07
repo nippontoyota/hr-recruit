@@ -47,6 +47,7 @@ class Candidate(Base):
         default=PipelineStage.CALL_LETTER,
         index=True,
     )
+    brand: Mapped[str | None] = mapped_column(String(50), nullable=True)
     department: Mapped[str | None] = mapped_column(String(255), nullable=True)
     opening_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     branch_location: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)

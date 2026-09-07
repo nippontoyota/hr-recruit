@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '../../lib/utils';
 import { BrandMark } from './BrandMark';
+import { brandThemeStyle } from '../../lib/branding';
 
 interface PublicShellProps {
   children: ReactNode;
@@ -8,6 +9,7 @@ interface PublicShellProps {
   className?: string;
   title?: string;
   step?: string;
+  brand?: string | null;
 }
 
 const widthClass = {
@@ -16,12 +18,12 @@ const widthClass = {
   '2xl': 'max-w-2xl',
 } as const;
 
-export function PublicShell({ children, maxWidth = 'xl', className, title, step }: PublicShellProps) {
+export function PublicShell({ children, maxWidth = 'xl', className, title, step, brand }: PublicShellProps) {
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-content">
+    <div className="flex min-h-[100dvh] flex-col bg-content" style={brandThemeStyle(brand)}>
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <BrandMark subtitle="Candidate services" />
+          <BrandMark brand={brand} subtitle="Candidate services" />
           {(title || step) && (
             <div className="hidden text-right sm:block">
               {title && <p className="text-sm font-medium text-text-primary">{title}</p>}

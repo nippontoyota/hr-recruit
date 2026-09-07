@@ -21,6 +21,7 @@ export interface CandidatePortalOut {
   current_stage: PipelineStage;
   offer_status: string | null;
   evaluations: CandidatePortalEvaluationOut[];
+  brand?: string;
 }
 
 export const getCandidatePortal = async (token: string): Promise<CandidatePortalOut> => {
