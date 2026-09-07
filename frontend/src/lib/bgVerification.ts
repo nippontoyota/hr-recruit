@@ -1,4 +1,5 @@
 import type { Candidate } from '../types';
+import { previousJobsFromForm, type CandidateFormData } from '../pages/candidates/wizard/wizardTypes';
 
 export type YesNo = 'Yes' | 'No' | '';
 
@@ -132,10 +133,10 @@ function mergeBgData(base: BgVerificationData, saved?: Partial<BgVerificationDat
 }
 
 function deriveHasPreviousEmployment(preForm: Record<string, any>): boolean {
-  const previousJobs = Array.isArray(preForm.previousJobs) ? preForm.previousJobs : [];
+  const previousJobs = previousJobsFromForm(preForm as CandidateFormData);
   return (
     preForm.previousExperience === true ||
-    previousJobs.some((job: any) => (job?.company || '').toString().trim().length > 0) ||
+    previousJobs.length > 0 ||
     Boolean((preForm.prevCompanyName || preForm.prev1Name || '').toString().trim())
   );
 }
@@ -167,11 +168,12 @@ export function buildInitialBgData(candidate: Candidate): BgVerificationData {
   data.social.facebookName = preForm.facebookName || preForm.facebookUrl || '';
   data.social.instagramName = preForm.instagramName || preForm.instagramUrl || '';
 
+  const firstJob = previousJobsFromForm(preForm as CandidateFormData)[0];
   data.employer.employerName =
-    preForm.prevCompanyName || preForm.prev1Name || candidate.profile?.current_company || '';
-  data.employer.designation = preForm.prevPosition || preForm.prev1Position || '';
-  data.employer.periodOfEmploymentFrom = preForm.prev1From || '';
-  data.employer.periodOfEmploymentTo = preForm.prev1To || '';
+    firstJob?.company || preForm.prevCompanyName || preForm.prev1Name || candidate.profile?.current_company || '';
+  data.employer.designation = firstJob?.position || preForm.prevPosition || preForm.prev1Position || '';
+  data.employer.periodOfEmploymentFrom = firstJob?.fromDate || preForm.prev1From || '';
+  data.employer.periodOfEmploymentTo = firstJob?.toDate || preForm.prev1To || '';
   data.employer.totalYearOfEmployment = data.meta.totalWorkExperience;
 
   return data;

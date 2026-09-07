@@ -210,6 +210,23 @@ def test_storage_unconfigured_returns_503():
         assert "not configured" in exc.value.detail
 
 
+def test_strict_storage_delete_raises_on_supabase_failure():
+    response = MagicMock(status_code=500)
+    http_client = MagicMock()
+    http_client.request.return_value = response
+
+    with (
+        patch.object(storage, "_get_client", return_value=http_client),
+        patch.object(storage.settings, "supabase_url", "https://supabase.example"),
+        patch.object(storage.settings, "supabase_service_role_key", "service-role"),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            storage.delete_objects_strict(["candidates/demo/resume.pdf"])
+
+    assert exc.value.status_code == 502
+    assert "delete" in exc.value.detail.lower()
+
+
 def test_cors_allows_vite_origin():
     response = client.options(
         "/api/v1/candidates",

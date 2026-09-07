@@ -667,15 +667,15 @@
   .iaf-page-wrap {
     width: 210mm !important;
     min-height: 297mm !important;
-    height: 297mm !important;
-    max-height: 297mm !important;
+    height: auto !important;
+    max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
     page-break-after: always !important;
     break-after: page !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-    overflow: hidden !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    overflow: visible !important;
     box-sizing: border-box !important;
   }
   .css-sheet,
@@ -683,16 +683,16 @@
   .iaf-page {
     width: 210mm !important;
     min-height: 297mm !important;
-    height: 297mm !important;
-    max-height: 297mm !important;
+    height: auto !important;
+    max-height: none !important;
     padding: 6mm 8mm !important;
     margin: 0 !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
     border: none !important;
-    overflow: hidden !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
+    overflow: visible !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
     page-break-after: always !important;
     break-after: page !important;
   }

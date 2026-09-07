@@ -245,7 +245,7 @@ export default function PreFormPage() {
 
           <section className="pb-8 border-b border-border">
             <h2 className="section-heading mb-6">Family details</h2>
-            <FamilyForm data={formData} update={handleUpdateField} errors={errors} onBlurField={handleBlurField} />
+            <FamilyForm data={formData} update={handleUpdateField} patch={handlePatch} errors={errors} onBlurField={handleBlurField} />
           </section>
 
           <section className="pb-8 border-b border-border">

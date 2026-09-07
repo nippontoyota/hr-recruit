@@ -113,6 +113,17 @@ class PreviousJobEntry(BaseModel):
     reason: str = ""
 
 
+class FamilyMemberEntry(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    relation: str = ""
+    name: str = ""
+    age: str = ""
+    occupation: str = ""
+    company: str = ""
+    phone: str = ""
+
+
 class PreFormApplicationData(BaseModel):
     """Validated payload for public call-letter / pre-interview application form."""
 
@@ -191,6 +202,8 @@ class PreFormApplicationData(BaseModel):
     languagesWrite: str
     languagesSpeak: str
     languagesOther: str = ""
+
+    familyMembers: list[FamilyMemberEntry] = Field(default_factory=list)
 
     fatherName: str
     fatherAge: str = ""
@@ -459,6 +472,21 @@ class PreFormApplicationData(BaseModel):
         if self.maritalStatus == "Married":
             v.validate_text_field(self.spouseName, "Spouse name", 2, 100)
 
+        for idx, member in enumerate(self.familyMembers):
+            if not self._any_filled(
+                member.relation,
+                member.name,
+                member.age,
+                member.occupation,
+                member.company,
+                member.phone,
+            ):
+                continue
+            if member.name.strip():
+                v.validate_text_field(member.name, f"Family member {idx + 1} name", 2, 100)
+            if member.phone.strip():
+                v.validate_phone(member.phone, f"Family member {idx + 1} phone")
+
         v.validate_salary(self.expectedSalary)
 
         jobs = list(self.previousJobs)
@@ -547,9 +575,6 @@ class PreFormApplicationData(BaseModel):
             if not self.totalExperience.strip():
                 self.totalExperience = "Fresher"
             jobs = []
-
-        if len(jobs) > 10:
-            raise ValueError("At most 10 previous employers can be added.")
 
         self.previousJobs = jobs
         empty = PreviousJobEntry()

@@ -20,7 +20,7 @@ import { SHOW_DEV_DUMMY, dummyBgVerification } from '../../lib/devDummyData';
 
 interface BackgroundVerificationWidgetProps {
   candidate: Candidate;
-  onUpdate: () => void;
+  onUpdate: (candidate?: Candidate) => void;
   navigateToStage?: (stage: PipelineStage) => void;
   isReadOnly?: boolean;
 }
@@ -71,9 +71,9 @@ export function BackgroundVerificationWidget({
     }));
   };
 
-  const persistData = async (payload: BgVerificationData) => {
+  const persistData = async (payload: BgVerificationData): Promise<Candidate> => {
     const currentRawData = candidate.profile?.raw_data || {};
-    await updateCandidateRawData(candidate.id, {
+    return updateCandidateRawData(candidate.id, {
       ...currentRawData,
       bg_verification: payload,
     });
@@ -91,9 +91,9 @@ export function BackgroundVerificationWidget({
           hrmName ? createInterviewer(hrmName, branch) : Promise.resolve(),
         ]);
       }
-      await persistData(data);
+      const updatedCandidate = await persistData(data);
       toast.success(bgFinished ? 'Background verification changes saved' : 'Background verification progress saved');
-      onUpdate();
+      onUpdate(updatedCandidate);
     } catch (err) {
       toast.error(extractError(err, 'Failed to save changes'));
     } finally {
@@ -148,7 +148,7 @@ export function BackgroundVerificationWidget({
       };
 
       // Atomic single request for saving BG verification data and transitioning stage
-      await updateCandidateStage(
+      const updatedCandidate = await updateCandidateStage(
         candidate.id,
         'APPLICATION' as PipelineStage,
         'Background Verification completed.',
@@ -158,7 +158,7 @@ export function BackgroundVerificationWidget({
       if (navigateToStage) {
         navigateToStage('APPLICATION');
       }
-      onUpdate();
+      onUpdate(updatedCandidate);
     } catch (err) {
       toast.error(extractError(err, 'Failed to complete verification'));
       setIsCompleting(false);

@@ -22,7 +22,23 @@ export const EMPTY_PREVIOUS_JOB: PreviousJob = {
   reason: '',
 };
 
-export const MAX_PREVIOUS_JOBS = 10;
+export interface FamilyMember {
+  relation: string;
+  name: string;
+  age: string;
+  occupation: string;
+  company: string;
+  phone: string;
+}
+
+export const EMPTY_FAMILY_MEMBER: FamilyMember = {
+  relation: '',
+  name: '',
+  age: '',
+  occupation: '',
+  company: '',
+  phone: '',
+};
 
 export interface CandidateFormData {
   candidateId: string;
@@ -112,6 +128,8 @@ export interface CandidateFormData {
   languagesWrite: string;
   languagesSpeak: string;
   languagesOther: string;
+
+  familyMembers: FamilyMember[];
 
   fatherName: string;
   fatherAge: string;
@@ -272,14 +290,166 @@ function jobHasContent(job: PreviousJob): boolean {
   ].some((value) => (value || '').trim().length > 0);
 }
 
+function familyMemberHasContent(member: FamilyMember): boolean {
+  return [member.relation, member.name, member.age, member.occupation, member.company, member.phone]
+    .some((value) => (value || '').trim().length > 0);
+}
+
+function familyMemberFromRaw(value: unknown): FamilyMember | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const member: FamilyMember = {
+    relation: String(row.relation ?? row.rel ?? '').trim(),
+    name: String(row.name ?? '').trim(),
+    age: String(row.age ?? '').trim(),
+    occupation: String(row.occupation ?? row.occ ?? '').trim(),
+    company: String(row.company ?? row.co ?? '').trim(),
+    phone: String(row.phone ?? row.ph ?? '').trim(),
+  };
+  return familyMemberHasContent(member) ? member : null;
+}
+
+function legacyFamilyMember(
+  data: CandidateFormData,
+  prefix: 'father' | 'mother' | 'spouse' | 'child1' | 'child2' | 'child3' | 'sibling1' | 'sibling2' | 'sibling3',
+  relation: string,
+): FamilyMember {
+  return {
+    relation: prefix.startsWith('child') || prefix.startsWith('sibling')
+      ? String(data[`${prefix}Relation` as keyof CandidateFormData] || relation)
+      : relation,
+    name: String(data[`${prefix}Name` as keyof CandidateFormData] || ''),
+    age: String(data[`${prefix}Age` as keyof CandidateFormData] || ''),
+    occupation: String(data[`${prefix}Occupation` as keyof CandidateFormData] || ''),
+    company: String(data[`${prefix}Company` as keyof CandidateFormData] || ''),
+    phone: String(data[`${prefix}Phone` as keyof CandidateFormData] || ''),
+  };
+}
+
+export function familyMembersFromForm(data: CandidateFormData): FamilyMember[] {
+  if (Array.isArray(data.familyMembers) && data.familyMembers.length > 0) {
+    return data.familyMembers
+      .map(familyMemberFromRaw)
+      .filter((member): member is FamilyMember => member !== null);
+  }
+  return [
+    legacyFamilyMember(data, 'father', 'Father'),
+    legacyFamilyMember(data, 'mother', 'Mother'),
+    legacyFamilyMember(data, 'spouse', 'Spouse'),
+    legacyFamilyMember(data, 'child1', 'Son / Daughter'),
+    legacyFamilyMember(data, 'child2', 'Son / Daughter'),
+    legacyFamilyMember(data, 'child3', 'Son / Daughter'),
+    legacyFamilyMember(data, 'sibling1', 'Brother / Sister'),
+    legacyFamilyMember(data, 'sibling2', 'Brother / Sister'),
+    legacyFamilyMember(data, 'sibling3', 'Brother / Sister'),
+  ].filter(familyMemberHasContent);
+}
+
+export function familyMembersPatch(members: FamilyMember[]): Partial<CandidateFormData> {
+  const normalized = members
+    .map(familyMemberFromRaw)
+    .filter((member): member is FamilyMember => member !== null);
+  const empty = EMPTY_FAMILY_MEMBER;
+  const findRelation = (relation: string, fallbackIndex: number) =>
+    normalized.find((member) => member.relation.trim().toLowerCase() === relation) || normalized[fallbackIndex] || empty;
+  const father = findRelation('father', 0);
+  const mother = findRelation('mother', 1);
+  const spouse = normalized.find((member) => member.relation.trim().toLowerCase() === 'spouse') || empty;
+  const optional = normalized.filter((member) => member !== father && member !== mother && member !== spouse);
+  const child1 = optional[0] || empty;
+  const child2 = optional[1] || empty;
+  const child3 = optional[2] || empty;
+  const sibling1 = optional[3] || empty;
+  const sibling2 = optional[4] || empty;
+  const sibling3 = optional[5] || empty;
+  return {
+    familyMembers: normalized,
+    fatherName: father.name,
+    fatherAge: father.age,
+    fatherOccupation: father.occupation,
+    fatherCompany: father.company,
+    fatherPhone: father.phone,
+    motherName: mother.name,
+    motherAge: mother.age,
+    motherOccupation: mother.occupation,
+    motherCompany: mother.company,
+    motherPhone: mother.phone,
+    spouseName: spouse.name,
+    spouseAge: spouse.age,
+    spouseOccupation: spouse.occupation,
+    spouseCompany: spouse.company,
+    spousePhone: spouse.phone,
+    child1Relation: child1.relation,
+    child1Name: child1.name,
+    child1Age: child1.age,
+    child1Occupation: child1.occupation,
+    child1Company: child1.company,
+    child1Phone: child1.phone,
+    child2Relation: child2.relation,
+    child2Name: child2.name,
+    child2Age: child2.age,
+    child2Occupation: child2.occupation,
+    child2Company: child2.company,
+    child2Phone: child2.phone,
+    child3Relation: child3.relation,
+    child3Name: child3.name,
+    child3Age: child3.age,
+    child3Occupation: child3.occupation,
+    child3Company: child3.company,
+    child3Phone: child3.phone,
+    sibling1Relation: sibling1.relation,
+    sibling1Name: sibling1.name,
+    sibling1Age: sibling1.age,
+    sibling1Occupation: sibling1.occupation,
+    sibling1Company: sibling1.company,
+    sibling1Phone: sibling1.phone,
+    sibling2Relation: sibling2.relation,
+    sibling2Name: sibling2.name,
+    sibling2Age: sibling2.age,
+    sibling2Occupation: sibling2.occupation,
+    sibling2Company: sibling2.company,
+    sibling2Phone: sibling2.phone,
+    sibling3Relation: sibling3.relation,
+    sibling3Name: sibling3.name,
+    sibling3Age: sibling3.age,
+    sibling3Occupation: sibling3.occupation,
+    sibling3Company: sibling3.company,
+    sibling3Phone: sibling3.phone,
+  };
+}
+
+function rawJobValue(row: Record<string, unknown>, canonical: string, ...aliases: string[]): string {
+  for (const key of [canonical, ...aliases]) {
+    if (Object.prototype.hasOwnProperty.call(row, key)) {
+      const value = row[key];
+      return value == null ? '' : String(value).trim();
+    }
+  }
+  return '';
+}
+
+function normalizePreviousJob(value: unknown): PreviousJob | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const job: PreviousJob = {
+    company: rawJobValue(row, 'company', 'co'),
+    position: rawJobValue(row, 'position', 'pos'),
+    reporting: rawJobValue(row, 'reporting', 'rep'),
+    reportingDesignation: rawJobValue(row, 'reportingDesignation', 'repDesignation'),
+    reportingPhone: rawJobValue(row, 'reportingPhone', 'repPhone'),
+    fromDate: rawJobValue(row, 'fromDate', 'from', 'from_date'),
+    toDate: rawJobValue(row, 'toDate', 'to', 'to_date'),
+    salary: rawJobValue(row, 'salary', 'sal'),
+    reason: rawJobValue(row, 'reason'),
+  };
+  return jobHasContent(job) ? job : null;
+}
+
 export function previousJobsFromForm(data: CandidateFormData): PreviousJob[] {
   if (Array.isArray(data.previousJobs) && data.previousJobs.length > 0) {
-    return data.previousJobs.map((job) => ({
-      ...EMPTY_PREVIOUS_JOB,
-      ...job,
-      reportingDesignation: job.reportingDesignation || '',
-      reportingPhone: job.reportingPhone || '',
-    }));
+    return data.previousJobs
+      .map(normalizePreviousJob)
+      .filter((job): job is PreviousJob => job !== null);
   }
   return [
     {
@@ -449,6 +619,7 @@ export const initialCandidateData: CandidateFormData = {
   languagesWrite: '',
   languagesSpeak: '',
   languagesOther: '',
+  familyMembers: [],
   fatherName: '',
   fatherAge: '',
   fatherOccupation: '',

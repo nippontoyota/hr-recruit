@@ -1,5 +1,5 @@
 import { useState, useRef, type ReactNode } from 'react';
-import { Camera, Save, X, RotateCcw } from 'lucide-react';
+import { Camera, Save, X, Plus, RotateCcw } from 'lucide-react';
 import type { Candidate, Evaluation } from '../../types';
 import { previousJobsFromForm, type CandidateFormData, type PreviousJob } from '../../pages/candidates/wizard/wizardTypes';
 import { formatSource } from '../../lib/stages';
@@ -154,7 +154,6 @@ export function EditableCandidateSummarySheet({
       salary: rawGet(initialRaw, 'currentSalary', 'prev1Salary'),
     });
   }
-  while (initialJobs.length < 6) initialJobs.push(EMPTY_JOB);
 
   // Initialize evaluations list
   const ranked = [
@@ -289,6 +288,10 @@ export function EditableCandidateSummarySheet({
     });
   };
 
+  const addJob = () => {
+    setJobs((prev) => [...prev, { ...EMPTY_JOB }]);
+  };
+
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -306,7 +309,7 @@ export function EditableCandidateSummarySheet({
     const updatedRaw: Record<string, unknown> = {
       ...initialRaw,
       ...form,
-      previousJobs: jobs.filter((j) => j.company || j.position || j.salary),
+      previousJobs: jobs.filter((j) => Object.values(j).some((value) => value.trim() !== '')),
     };
     await onSave(updatedRaw, photoFile || undefined);
   };
@@ -649,7 +652,7 @@ export function EditableCandidateSummarySheet({
               <Cell label>From</Cell>
               <Cell label>To</Cell>
             </tr>
-            {jobs.slice(0, 6).map((job, i) => (
+            {jobs.map((job, i) => (
               <tr key={`job-${i}`} className="h-[9mm]">
                 <Cell>
                   <InlineInput value={job.company} onChange={(v) => updateJob(i, 'company', v)} />
@@ -846,6 +849,13 @@ export function EditableCandidateSummarySheet({
             </tr>
           </tbody>
         </table>
+        <button
+          type="button"
+          onClick={addJob}
+          className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#1e3a5f] hover:underline"
+        >
+          <Plus className="w-3.5 h-3.5" /> Add experience row
+        </button>
       </div>
     </div>
   );

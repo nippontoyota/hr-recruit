@@ -182,7 +182,6 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
       salary: rawGet(raw, 'currentSalary', 'prev1Salary'),
     });
   }
-  while (jobs.length < 6) jobs.push(EMPTY_JOB);
 
   const photo = candidate.profile?.photo_url;
   const dob = rawGet(raw, 'dateOfBirth');
@@ -454,7 +453,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell label>From</Cell>
             <Cell label>To</Cell>
           </tr>
-          {jobs.slice(0, 6).map((job, i) => (
+          {jobs.map((job, i) => (
             <tr key={`job-${i}`} className="h-[9mm]">
               <Cell>{job.company}</Cell>
               <Cell>{fmtDate(job.fromDate) || job.fromDate}</Cell>

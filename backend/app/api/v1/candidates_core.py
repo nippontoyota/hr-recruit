@@ -3,7 +3,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select, func, or_, delete
 from sqlalchemy.orm import Session, joinedload
 
@@ -43,6 +43,7 @@ from app.services.candidate_service import (
     create_candidate,
     to_candidate_list_out,
     to_candidate_out,
+    delete_candidates,
     bulk_delete_candidates,
     merge_hr_application_raw_data,
 )
@@ -61,8 +62,6 @@ from app.services.document_service import (
     save_photo_for_candidate as _save_photo_for_candidate,
     save_resume_for_candidate as _save_resume_for_candidate,
 )
-from app.services import storage
-
 router = APIRouter(prefix="/candidates", tags=["candidates"])
 
 
@@ -513,6 +512,19 @@ def update_profile_raw_data(
     else:
         row.profile.raw_data = merged_raw
 
+    jobs = merged_raw.get("previousJobs")
+    if not isinstance(jobs, list):
+        jobs = []
+    experience_level = "Experienced" if submitted_raw.get("previousExperience") or jobs else "Fresher"
+    row.profile.experience_level = experience_level
+    row.experience = experience_level
+    row.profile.total_experience = str(submitted_raw.get("totalExperience") or "").strip() or None
+    first_job = jobs[0] if jobs and isinstance(jobs[0], dict) else {}
+    row.profile.current_company = str(first_job.get("company") or "").strip() or None
+    row.profile.expected_salary = str(submitted_raw.get("expectedSalary") or "").strip() or None
+    joining_date = submitted_raw.get("expectedJoiningDate") or submitted_raw.get("dateOfJoining")
+    row.profile.joining_date = str(joining_date or "").strip() or None
+
     pos = str(submitted_raw.get("positionAppliedFor") or "").strip()
     if pos and pos.lower() != "unknown":
         row.position_applied_for = pos
@@ -544,34 +556,13 @@ def update_profile_raw_data(
 
 
 @router.delete("/{id}", status_code=204)
-def delete_candidate_endpoint(
+async def delete_candidate_endpoint(
     id: UUID,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    row = get_candidate_for_user(db, id, user, write=True)
-    
-    docs = db.scalars(select(Document).where(Document.candidate_id == id)).all()
-    storage_paths = [doc.storage_path for doc in docs if doc.storage_path]
-    if storage_paths:
-        try:
-            storage.delete_objects(storage_paths)
-        except Exception as e:
-            pass
-            
-    db.execute(delete(Document).where(Document.candidate_id == id))
-    db.execute(delete(StageHistory).where(StageHistory.candidate_id == id))
-        
-    from sqlalchemy import update
-    db.execute(
-        update(Candidate)
-        .where(Candidate.duplicate_of_candidate_id == id)
-        .values(duplicate_of_candidate_id=None, is_duplicate_flagged=False)
-    )
-                
-    db.delete(row)
-    db.commit()
-    return {"status": "success", "message": "Candidate and all associated records deleted."}
+    await delete_candidates(db, [id], user)
+    return Response(status_code=204)
 
 
 @router.post("/{id}/resolve-duplicate")

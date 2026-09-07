@@ -1,7 +1,6 @@
 import type { CandidateFormData, PreviousJob } from '../wizardTypes';
 import {
   EMPTY_PREVIOUS_JOB,
-  MAX_PREVIOUS_JOBS,
   previousJobsFromForm,
   previousJobsPatch,
 } from '../wizardTypes';
@@ -178,7 +177,6 @@ export const EmploymentForm = ({ data, update, patch, errors = {}, onBlurField =
   };
 
   const addJob = () => {
-    if (visibleJobs.length >= MAX_PREVIOUS_JOBS) return;
     writeJobs([...visibleJobs, { ...EMPTY_PREVIOUS_JOB }]);
   };
 
@@ -217,11 +215,9 @@ export const EmploymentForm = ({ data, update, patch, errors = {}, onBlurField =
             />
           ))}
 
-          {visibleJobs.length < MAX_PREVIOUS_JOBS && (
-            <Button type="button" variant="secondary" size="sm" onClick={addJob}>
-              Add previous employer
-            </Button>
-          )}
+          <Button type="button" variant="secondary" size="sm" onClick={addJob}>
+            Add previous employer
+          </Button>
         </div>
       )}
 

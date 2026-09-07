@@ -1,5 +1,10 @@
 import type { CandidateFormData, PreviousJob } from '../pages/candidates/wizard/wizardTypes';
-import { EMPTY_PREVIOUS_JOB, previousJobsFromForm } from '../pages/candidates/wizard/wizardTypes';
+import {
+  EMPTY_PREVIOUS_JOB,
+  familyMembersFromForm,
+  previousJobsFromForm,
+  type FamilyMember,
+} from '../pages/candidates/wizard/wizardTypes';
 import {
   firstError,
   validateAadhaar,
@@ -70,6 +75,18 @@ function validateExperienceJobs(data: CandidateFormData): string | null {
   for (let i = 0; i < jobs.length; i += 1) {
     const err = validateJobObject(jobs[i], `Previous job ${i + 1}`, i === 0);
     if (err) return err;
+  }
+  return null;
+}
+
+function validateFamilyMembers(data: CandidateFormData): string | null {
+  const members = familyMembersFromForm(data);
+  for (let i = 0; i < members.length; i += 1) {
+    const member: FamilyMember = members[i];
+    if (member.phone.trim()) {
+      const result = validatePhone(member.phone, `Family member ${i + 1} phone`);
+      if (!result.ok) return result.message;
+    }
   }
   return null;
 }
@@ -326,6 +343,9 @@ function validateSingleField(field: keyof CandidateFormData, data: CandidateForm
         res = validateTextField(data.spouseName, 'Spouse name', 2, 100);
       }
       break;
+    case 'familyMembers':
+      res = validateFamilyMembers(data);
+      break;
 
     case 'previousJobs':
     case 'prevCompanyName':
@@ -490,7 +510,7 @@ const PRE_FORM_FIELDS: (keyof CandidateFormData)[] = [
   'gradCourse', 'gradStream', 'gradCollege', 'gradPercentage', 'gradPassingYear', 'gradMode',
   'postGradCourse', 'postGradStream', 'postGradCollege', 'postGradPercentage', 'postGradPassingYear', 'postGradMode',
   'languagesRead', 'languagesWrite', 'languagesSpeak',
-  'fatherName', 'motherName', 'spouseName',
+  'familyMembers', 'fatherName', 'motherName', 'spouseName',
   'previousJobs',
   'totalExperience', 'expectedSalary',
   'sourceOfOpening', 'referredBy', 'preferredRegion', 'expectedJoiningDate',

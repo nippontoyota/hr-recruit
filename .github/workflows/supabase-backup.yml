@@ -1,0 +1,43 @@
+name: Supabase portable backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out backup script
+        uses: actions/checkout@v4
+
+      - name: Create database and Storage archive
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_STORAGE_BUCKET: ${{ secrets.SUPABASE_STORAGE_BUCKET }}
+        run: python3 backend/scripts/backup_supabase.py --output-dir backup
+
+      - name: Encrypt archive before upload
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        shell: bash
+        run: |
+          test -n "$BACKUP_ENCRYPTION_KEY"
+          archive=$(find backup -maxdepth 1 -type f -name '*.tar.gz' -print -quit)
+          test -n "$archive"
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in "$archive" -out "$archive.enc" -pass env:BACKUP_ENCRYPTION_KEY
+          rm -f "$archive"
+
+      - name: Upload encrypted backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-backup-${{ github.run_id }}
+          path: backup/*.enc
+          if-no-files-found: error
+          retention-days: 7

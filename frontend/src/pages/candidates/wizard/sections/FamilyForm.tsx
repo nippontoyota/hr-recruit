@@ -1,70 +1,88 @@
-import { useState } from 'react';
-import type { CandidateFormData } from '../wizardTypes';
+import type { CandidateFormData, FamilyMember } from '../wizardTypes';
+import {
+  EMPTY_FAMILY_MEMBER,
+  familyMembersFromForm,
+  familyMembersPatch,
+} from '../wizardTypes';
 import { Input, Button } from '../../../../components/ui';
 import { digitsOnly } from '../../../../lib/validation';
 import { FormField, type FormSectionProps } from '../FormField';
 
-type MemberPrefix = 'father' | 'mother' | 'spouse' | 'child1' | 'child2' | 'sibling1' | 'sibling2';
+function hasContent(member: FamilyMember): boolean {
+  return [member.relation, member.name, member.age, member.occupation, member.company, member.phone]
+    .some((value) => value.trim() !== '');
+}
 
-const memberFields = (prefix: MemberPrefix) =>
-  ({
-    name: `${prefix}Name`,
-    age: `${prefix}Age`,
-    occupation: `${prefix}Occupation`,
-    company: `${prefix}Company`,
-    phone: `${prefix}Phone`,
-  }) as const satisfies Record<string, keyof CandidateFormData>;
+function coreMembers(data: CandidateFormData): FamilyMember[] {
+  const members = familyMembersFromForm(data);
+  const married = data.maritalStatus === 'Married';
+  const father = members.find((member) => member.relation.trim().toLowerCase() === 'father') || members[0];
+  const mother = members.find((member) => member.relation.trim().toLowerCase() === 'mother') || members[1];
+  const spouse = married
+    ? members.find((member) => member.relation.trim().toLowerCase() === 'spouse') || members[2]
+    : undefined;
+  const optional = members.filter((member) => member !== father && member !== mother && member !== spouse);
+  return [
+    father || { ...EMPTY_FAMILY_MEMBER, relation: 'Father' },
+    mother || { ...EMPTY_FAMILY_MEMBER, relation: 'Mother' },
+    ...(married
+      ? [spouse || { ...EMPTY_FAMILY_MEMBER, relation: 'Spouse' }]
+      : []),
+    ...optional,
+  ];
+}
 
 function FamilyMemberRow({
-  title,
-  prefix,
+  member,
+  index,
   required,
-  showRelation,
-  data,
-  update,
-  errors = {},
-  onBlurField = () => {},
+  updateMember,
+  removeMember,
+  errors,
+  onBlurField,
 }: {
-  title: string;
-  prefix: MemberPrefix;
-  required?: boolean;
-  showRelation?: boolean;
-  data: CandidateFormData;
-  update: FormSectionProps['update'];
-  errors?: FormSectionProps['errors'];
-  onBlurField?: FormSectionProps['onBlurField'];
+  member: FamilyMember;
+  index: number;
+  required: boolean;
+  updateMember: (index: number, patch: Partial<FamilyMember>) => void;
+  removeMember?: () => void;
+  errors: FormSectionProps['errors'];
+  onBlurField: FormSectionProps['onBlurField'];
 }) {
-  const fields = memberFields(prefix);
-  const relationKey = showRelation
-    ? (`${prefix}Relation` as keyof CandidateFormData)
-    : null;
+  const relation = member.relation.trim().toLowerCase();
+  const nameField = relation === 'father' ? 'fatherName' : relation === 'mother' ? 'motherName' : undefined;
 
   return (
     <div className="space-y-3 rounded-lg border border-border/60 p-4">
-      <h5 className="text-sm font-semibold text-text-primary">
-        {title}
-        {required && <span className="text-danger"> *</span>}
-      </h5>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {relationKey && (
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-1">Relation</label>
-            <Input
-              value={String(data[relationKey] ?? '')}
-              onChange={(e) => update(relationKey, e.target.value)}
-              placeholder="e.g. Son / Daughter / Brother"
-            />
-          </div>
+      <div className="flex items-center justify-between gap-3">
+        <h5 className="text-sm font-semibold text-text-primary">
+          {member.relation || `Family member ${index + 1}`}
+          {required && <span className="text-danger"> *</span>}
+        </h5>
+        {removeMember && (
+          <Button type="button" variant="ghost" size="sm" onClick={removeMember}>
+            Remove
+          </Button>
         )}
-        <FormField field={fields.name} error={errors[fields.name]}>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-text-primary mb-1">Relation</label>
+          <Input
+            value={member.relation}
+            onChange={(e) => updateMember(index, { relation: e.target.value })}
+            placeholder="e.g. Father / Sister"
+          />
+        </div>
+        <FormField field={nameField || `familyMembers.${index}.name`} error={nameField ? errors?.[nameField] : undefined}>
           <label className="block text-sm font-medium text-text-primary mb-1">
             Name {required && <span className="text-danger">*</span>}
           </label>
           <Input
-            value={data[fields.name]}
-            onChange={(e) => update(fields.name, e.target.value)}
-            onBlur={() => onBlurField(fields.name)}
-            error={!!errors[fields.name]}
+            value={member.name}
+            onChange={(e) => updateMember(index, { name: e.target.value })}
+            onBlur={nameField ? () => onBlurField?.(nameField) : undefined}
+            error={!!(nameField && errors?.[nameField])}
             placeholder="Full Name"
           />
         </FormField>
@@ -72,8 +90,8 @@ function FamilyMemberRow({
           <label className="block text-sm font-medium text-text-primary mb-1">Age</label>
           <Input
             type="number"
-            value={data[fields.age]}
-            onChange={(e) => update(fields.age, e.target.value)}
+            value={member.age}
+            onChange={(e) => updateMember(index, { age: e.target.value })}
             min={0}
             max={120}
             placeholder="e.g. 52"
@@ -82,24 +100,24 @@ function FamilyMemberRow({
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1">Occupation</label>
           <Input
-            value={data[fields.occupation]}
-            onChange={(e) => update(fields.occupation, e.target.value)}
+            value={member.occupation}
+            onChange={(e) => updateMember(index, { occupation: e.target.value })}
             placeholder="e.g. Teacher / Business / Retired"
           />
         </div>
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1">Company / Institution</label>
           <Input
-            value={data[fields.company]}
-            onChange={(e) => update(fields.company, e.target.value)}
+            value={member.company}
+            onChange={(e) => updateMember(index, { company: e.target.value })}
             placeholder="e.g. Govt School / Self Employed"
           />
         </div>
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1">Phone</label>
           <Input
-            value={data[fields.phone]}
-            onChange={(e) => update(fields.phone, digitsOnly(e.target.value, 10))}
+            value={member.phone}
+            onChange={(e) => updateMember(index, { phone: digitsOnly(e.target.value, 10) })}
             inputMode="numeric"
             maxLength={10}
             placeholder="e.g. 9876543210"
@@ -110,91 +128,56 @@ function FamilyMemberRow({
   );
 }
 
-function hasAnyChild(data: CandidateFormData, n: 1 | 2): boolean {
-  const prefix = `child${n}` as const;
-  return !!(
-    data[`${prefix}Name`] ||
-    data[`${prefix}Age`] ||
-    data[`${prefix}Occupation`] ||
-    data[`${prefix}Company`] ||
-    data[`${prefix}Phone`] ||
-    data[`${prefix}Relation`]
-  );
-}
+export const FamilyForm = ({ data, update, patch, errors = {}, onBlurField = () => {} }: FormSectionProps) => {
+  const members = coreMembers(data);
+  const requiredCount = data.maritalStatus === 'Married' ? 3 : 2;
 
-function hasAnySibling(data: CandidateFormData, n: 1 | 2): boolean {
-  const prefix = `sibling${n}` as const;
-  return !!(
-    data[`${prefix}Name`] ||
-    data[`${prefix}Age`] ||
-    data[`${prefix}Occupation`] ||
-    data[`${prefix}Company`] ||
-    data[`${prefix}Phone`] ||
-    data[`${prefix}Relation`]
-  );
-}
+  const writeMembers = (next: FamilyMember[]) => {
+    const nextFields = familyMembersPatch(next);
+    if (patch) {
+      patch(nextFields);
+      return;
+    }
+    (Object.entries(nextFields) as [keyof CandidateFormData, CandidateFormData[keyof CandidateFormData]][]).forEach(
+      ([field, value]) => update(field, value),
+    );
+  };
 
-export const FamilyForm = ({ data, update, errors = {}, onBlurField = () => {} }: FormSectionProps) => {
-  const married = data.maritalStatus === 'Married';
-  const [showChild1, setShowChild1] = useState(() => hasAnyChild(data, 1));
-  const [showChild2, setShowChild2] = useState(() => hasAnyChild(data, 2));
-  const [showSibling1, setShowSibling1] = useState(() => hasAnySibling(data, 1));
-  const [showSibling2, setShowSibling2] = useState(() => hasAnySibling(data, 2));
+  const updateMember = (index: number, memberPatch: Partial<FamilyMember>) => {
+    writeMembers(members.map((member, memberIndex) => (
+      memberIndex === index ? { ...member, ...memberPatch } : member
+    )));
+  };
+
+  const removeMember = (index: number) => {
+    if (index < requiredCount) return;
+    writeMembers(members.filter((_, memberIndex) => memberIndex !== index));
+  };
 
   return (
-    <div className="space-y-6 pb-6">
-      <FamilyMemberRow title="Father" prefix="father" required data={data} update={update} errors={errors} onBlurField={onBlurField} />
-      <FamilyMemberRow title="Mother" prefix="mother" required data={data} update={update} errors={errors} onBlurField={onBlurField} />
-
-      {married && (
-        <div className="animate-in fade-in duration-300">
-          <FamilyMemberRow title="Spouse" prefix="spouse" required data={data} update={update} errors={errors} onBlurField={onBlurField} />
-        </div>
-      )}
-
-      <div className="space-y-4">
-        <h4 className="text-md font-medium text-text-primary border-b border-border pb-2">Children (optional)</h4>
-        {showChild1 && (
-          <FamilyMemberRow title="Child 1" prefix="child1" showRelation data={data} update={update} />
-        )}
-        {showChild2 && (
-          <FamilyMemberRow title="Child 2" prefix="child2" showRelation data={data} update={update} />
-        )}
-        <div className="flex flex-wrap gap-2">
-          {!showChild1 && (
-            <Button type="button" variant="secondary" size="sm" onClick={() => setShowChild1(true)}>
-              Add child
-            </Button>
-          )}
-          {showChild1 && !showChild2 && (
-            <Button type="button" variant="secondary" size="sm" onClick={() => setShowChild2(true)}>
-              Add child
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <h4 className="text-md font-medium text-text-primary border-b border-border pb-2">Siblings (optional)</h4>
-        {showSibling1 && (
-          <FamilyMemberRow title="Sibling 1" prefix="sibling1" showRelation data={data} update={update} />
-        )}
-        {showSibling2 && (
-          <FamilyMemberRow title="Sibling 2" prefix="sibling2" showRelation data={data} update={update} />
-        )}
-        <div className="flex flex-wrap gap-2">
-          {!showSibling1 && (
-            <Button type="button" variant="secondary" size="sm" onClick={() => setShowSibling1(true)}>
-              Add sibling
-            </Button>
-          )}
-          {showSibling1 && !showSibling2 && (
-            <Button type="button" variant="secondary" size="sm" onClick={() => setShowSibling2(true)}>
-              Add sibling
-            </Button>
-          )}
-        </div>
-      </div>
+    <div className="space-y-6 pb-6" data-field="familyMembers">
+      {members.map((member, index) => (
+        <FamilyMemberRow
+          key={`${member.relation}-${index}`}
+          member={member}
+          index={index}
+          required={index < requiredCount}
+          updateMember={updateMember}
+          removeMember={index >= requiredCount ? () => removeMember(index) : undefined}
+          errors={errors}
+          onBlurField={onBlurField}
+        />
+      ))}
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={() => writeMembers([...members, { ...EMPTY_FAMILY_MEMBER, relation: 'Family Member' }])}
+      >
+        Add family member
+      </Button>
+      {errors.familyMembers && <p className="text-xs text-danger" role="alert">{errors.familyMembers}</p>}
+      {members.some(hasContent) && <p className="text-xs text-text-secondary">Add as many family members as needed.</p>}
     </div>
   );
 };

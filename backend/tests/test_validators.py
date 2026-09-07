@@ -267,3 +267,48 @@ def test_pre_form_accepts_extra_previous_jobs():
     assert len(parsed.previousJobs) == 5
     assert parsed.prevCompanyName == "Company 1"
     assert parsed.prev4Name == "Company 4"
+
+
+def test_pre_form_accepts_more_than_ten_previous_jobs():
+    payload = _valid_pre_form()
+    payload["previousExperience"] = True
+    payload["totalExperience"] = "20 Years"
+    payload["previousJobs"] = [
+        {
+            "company": f"Company {i}",
+            "position": "Advisor",
+            "reporting": "Manager",
+            "reportingDesignation": "Branch Manager",
+            "reportingPhone": "9876543210",
+            "fromDate": "2010-01",
+            "toDate": "2011-12",
+            "salary": "20000",
+            "reason": "Career growth",
+        }
+        for i in range(1, 16)
+    ]
+
+    parsed = PreFormApplicationData.model_validate(payload)
+
+    assert len(parsed.previousJobs) == 15
+    assert parsed.previousJobs[-1].company == "Company 15"
+
+
+def test_pre_form_accepts_fifteen_family_members():
+    payload = _valid_pre_form()
+    payload["familyMembers"] = [
+        {
+            "relation": f"Family member {i}",
+            "name": f"Member {i}",
+            "age": str(20 + i),
+            "occupation": "Employee",
+            "company": f"Company {i}",
+            "phone": "9876543210",
+        }
+        for i in range(1, 16)
+    ]
+
+    parsed = PreFormApplicationData.model_validate(payload)
+
+    assert len(parsed.familyMembers) == 15
+    assert parsed.familyMembers[-1].name == "Member 15"

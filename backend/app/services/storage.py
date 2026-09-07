@@ -133,6 +133,83 @@ def delete_objects(paths: list[str]) -> None:
         return
 
 
+def list_objects(prefix: str = "") -> list[str]:
+    """List every object below a prefix using the Storage API."""
+    base, key, bucket = _require_storage_config()
+    url = f"{base}/storage/v1/object/list/{bucket}"
+    paths: list[str] = []
+    offset = 0
+    limit = 1000
+
+    while True:
+        try:
+            response = _get_client().post(
+                url,
+                headers=_headers(key, content_type="application/json"),
+                json={
+                    "prefix": prefix,
+                    "limit": limit,
+                    "offset": offset,
+                    "sortBy": {"column": "name", "order": "asc"},
+                },
+            )
+        except httpx.HTTPError as exc:
+            raise _storage_failure("list") from exc
+        if response.status_code >= 400:
+            raise _storage_failure("list")
+
+        try:
+            entries = response.json()
+        except ValueError as exc:
+            raise _storage_failure("list") from exc
+        if not isinstance(entries, list):
+            raise _storage_failure("list")
+
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name") or "").strip()
+            if not name:
+                continue
+            # The list endpoint returns folders as entries without an id. Walk
+            # those folders recursively; files have an id and can be deleted.
+            if entry.get("id") is None:
+                child_prefix = f"{prefix.rstrip('/')}/{name}/" if prefix else f"{name}/"
+                paths.extend(list_objects(child_prefix))
+            else:
+                paths.append(f"{prefix.rstrip('/')}/{name}" if prefix else name)
+
+        if len(entries) < limit:
+            break
+        offset += limit
+
+    return paths
+
+
+def delete_objects_strict(paths: list[str]) -> None:
+    """Delete objects and raise if Supabase does not confirm every request."""
+    unique_paths = list(dict.fromkeys(path.strip("/") for path in paths if path and path.strip("/")))
+    if not unique_paths:
+        return
+
+    base, key, bucket = _require_storage_config()
+    url = f"{base}/storage/v1/object/{bucket}"
+    # Supabase Storage accepts at most 1000 paths per remove call.
+    for start in range(0, len(unique_paths), 1000):
+        chunk = unique_paths[start : start + 1000]
+        try:
+            response = _get_client().request(
+                "DELETE",
+                url,
+                headers=_headers(key, content_type="application/json"),
+                json={"prefixes": chunk},
+            )
+        except httpx.HTTPError as exc:
+            raise _storage_failure("delete") from exc
+        if response.status_code >= 400:
+            raise _storage_failure("delete")
+
+
 def download_object(path: str) -> tuple[bytes, str | None]:
     """Fetch object bytes via service role (avoids signed-URL round trip)."""
     base, key, bucket = _require_storage_config()

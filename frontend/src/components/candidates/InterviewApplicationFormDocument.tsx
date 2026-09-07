@@ -4,6 +4,7 @@ import type { Candidate } from '../../types';
 import { formatDate } from '../../lib/dateTime';
 import { fetchCandidateResumeBlob } from '../../api/candidates';
 import { PdfViewer, DocxViewer } from '../ui';
+import { familyMembersFromForm, type CandidateFormData } from '../../pages/candidates/wizard/wizardTypes';
 
 interface InterviewApplicationFormDocumentProps {
   candidate: Candidate;
@@ -121,17 +122,16 @@ export function InterviewApplicationFormDocument({
     };
   }, [candidate?.id, hideResume]);
 
-  const family = [
-    { rel: 'Father', name: d.fatherName, age: d.fatherAge, occ: d.fatherOccupation, co: d.fatherCompany, ph: d.fatherPhone },
-    { rel: 'Mother', name: d.motherName, age: d.motherAge, occ: d.motherOccupation, co: d.motherCompany, ph: d.motherPhone },
-    { rel: 'Spouse', name: d.spouseName, age: d.spouseAge, occ: d.spouseOccupation, co: d.spouseCompany, ph: d.spousePhone },
-    { rel: val(d.child1Relation) || 'Son / Daughter', name: d.child1Name, age: d.child1Age, occ: d.child1Occupation, co: d.child1Company, ph: d.child1Phone },
-    { rel: val(d.child2Relation) || 'Son / Daughter', name: d.child2Name, age: d.child2Age, occ: d.child2Occupation, co: d.child2Company, ph: d.child2Phone },
-    { rel: val(d.child3Relation) || 'Son / Daughter', name: d.child3Name, age: d.child3Age, occ: d.child3Occupation, co: d.child3Company, ph: d.child3Phone },
-    { rel: val(d.sibling1Relation) || 'Brother / Sister', name: d.sibling1Name, age: d.sibling1Age, occ: d.sibling1Occupation, co: d.sibling1Company, ph: d.sibling1Phone },
-    { rel: val(d.sibling2Relation) || 'Brother / Sister', name: d.sibling2Name, age: d.sibling2Age, occ: d.sibling2Occupation, co: d.sibling2Company, ph: d.sibling2Phone },
-    { rel: val(d.sibling3Relation) || 'Brother / Sister', name: d.sibling3Name, age: d.sibling3Age, occ: d.sibling3Occupation, co: d.sibling3Company, ph: d.sibling3Phone },
-  ].filter((row) => val(row.name));
+  const family = familyMembersFromForm(d as unknown as CandidateFormData)
+    .map((member) => ({
+      rel: member.relation || 'Family Member',
+      name: member.name,
+      age: member.age,
+      occ: member.occupation,
+      co: member.company,
+      ph: member.phone,
+    }))
+    .filter((row) => val(row.name));
 
   const listedJobs = Array.isArray(d.previousJobs)
     ? d.previousJobs

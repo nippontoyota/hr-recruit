@@ -22,7 +22,7 @@ export function PreFormStatus({ candidate, onUpdate, isReadOnly = false }: PreFo
   const handlePrint = usePrint({
     contentRef: componentRef,
     documentTitle: `ApplicationForm_${candidate.full_name}`,
-    pageStyle: `@page { size: A4 portrait; margin: 0; } html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .css-sheet, .iaf-sheet, .iaf-page { width: 210mm !important; min-height: 297mm !important; height: 297mm !important; max-height: 297mm !important; box-sizing: border-box !important; margin: 0 !important; padding: 6mm 8mm !important; box-shadow: none !important; border: none !important; }`,
+    pageStyle: `@page { size: A4 portrait; margin: 0; } html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .iaf-page-wrap { height: auto !important; max-height: none !important; overflow: visible !important; page-break-inside: auto !important; break-inside: auto !important; } .css-sheet, .iaf-sheet, .iaf-page { width: 210mm !important; min-height: 297mm !important; height: auto !important; max-height: none !important; overflow: visible !important; box-sizing: border-box !important; margin: 0 !important; padding: 6mm 8mm !important; box-shadow: none !important; border: none !important; }`,
   });
 
   const [copied, setCopied] = useState(false);

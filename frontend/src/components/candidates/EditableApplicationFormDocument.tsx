@@ -3,6 +3,7 @@ import { Camera, Plus, Trash2, Upload, FileText, Check, X, Save, AlertCircle } f
 import type { Candidate } from '../../types';
 import { Button, Input } from '../ui';
 import { toast } from 'sonner';
+import type { PreviousJob } from '../../pages/candidates/wizard/wizardTypes';
 
 interface EditableApplicationFormDocumentProps {
   candidate: Candidate;
@@ -259,10 +260,24 @@ export function EditableApplicationFormDocument({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const previousJobs: PreviousJob[] = jobList
+      .filter((j) => [j.co, j.pos, j.rep, j.repDesignation, j.repPhone, j.from, j.to, j.sal, j.reason]
+        .some((value) => value.trim() !== ''))
+      .map((j) => ({
+        company: j.co.trim(),
+        position: j.pos.trim(),
+        reporting: j.rep.trim(),
+        reportingDesignation: j.repDesignation.trim(),
+        reportingPhone: j.repPhone.trim(),
+        fromDate: j.from,
+        toDate: j.to,
+        salary: j.sal.trim(),
+        reason: j.reason.trim(),
+      }));
     const finalRaw: Record<string, unknown> = {
       ...form,
-      familyMembers: familyList.filter((f) => f.name.trim() !== ''),
-      previousJobs: jobList.filter((j) => j.co.trim() !== '' || j.pos.trim() !== ''),
+      familyMembers: familyList.filter((f) => [f.rel, f.name, f.age, f.occ, f.co, f.ph].some((value) => value.trim() !== '')),
+      previousJobs,
     };
     await onSave(finalRaw, photoFile || undefined, resumeFile || undefined);
   };

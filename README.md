@@ -82,6 +82,12 @@ This API uses its **own Supabase project** (same org as other Nippon apps; not t
 5. Open **Project Settings** → **API** and set `SUPABASE_URL` plus `SUPABASE_SERVICE_ROLE_KEY` (server only).
 6. In **Storage**, create a private bucket named `candidate-documents` (or match `SUPABASE_STORAGE_BUCKET`).
 
+### No-cost backup setup
+
+Supabase Free does not include automatic downloadable database backups, and Supabase database backups do not contain Storage objects. The repository includes a portable backup workflow at `.github/workflows/supabase-backup.yml`. It runs daily and can also be started manually from GitHub Actions.
+
+Add these repository secrets before enabling it: `SUPABASE_DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET`, and a strong `BACKUP_ENCRYPTION_KEY`. The workflow stores an encrypted seven-day artifact and does not enable paid Supabase features. Keep the repository private and periodically download an artifact to an independent location if the project becomes business-critical.
+
 ### Quick Start (Windows)
 Double-click the root [run.bat](file:///e:/Projects/NipponToyota/RecruitmentPortal/run.bat) script. It automatically:
 1. Runs backend database migrations.
