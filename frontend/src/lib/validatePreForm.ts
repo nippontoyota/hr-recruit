@@ -344,7 +344,10 @@ function validateSingleField(field: keyof CandidateFormData, data: CandidateForm
       }
       break;
     case 'familyMembers':
-      res = validateFamilyMembers(data);
+      {
+        const familyError = validateFamilyMembers(data);
+        res = familyError ? { ok: false, message: familyError } : { ok: true };
+      }
       break;
 
     case 'previousJobs':
