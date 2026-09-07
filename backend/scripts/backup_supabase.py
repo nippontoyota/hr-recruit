@@ -119,6 +119,7 @@ def build_pg_dump_command(database_url: str, output_path: Path) -> list[str]:
         "--format=custom",
         "--no-owner",
         "--no-privileges",
+        "--no-password",
         "--file",
         str(output_path),
     ]
@@ -148,7 +149,10 @@ def create_backup(output_dir: Path) -> Path:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 text=True,
+                timeout=120,
             )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("PostgreSQL backup timed out after 120 seconds.") from exc
         except subprocess.CalledProcessError as exc:
             detail = (exc.stderr or "").replace(database_url, "[redacted]").strip()
             raise RuntimeError(f"PostgreSQL backup failed: {detail[-1000:]}") from exc

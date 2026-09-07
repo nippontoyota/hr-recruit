@@ -21,6 +21,7 @@ def test_pg_dump_command_does_not_use_plain_sql_or_owner_options(tmp_path: Path)
     assert "--format=custom" in command
     assert "--no-owner" in command
     assert "--no-privileges" in command
+    assert "--no-password" in command
     assert str(tmp_path / "database.dump") in command
 
 
