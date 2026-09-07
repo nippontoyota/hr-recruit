@@ -141,13 +141,17 @@ def create_backup(output_dir: Path) -> Path:
     with tempfile.TemporaryDirectory(prefix="supabase-backup-") as temporary:
         work_dir = Path(temporary)
         database_dump = work_dir / "database.dump"
-        subprocess.run(
-            build_pg_dump_command(database_url, database_dump),
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+        try:
+            subprocess.run(
+                build_pg_dump_command(database_url, database_dump),
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or "").replace(database_url, "[redacted]").strip()
+            raise RuntimeError(f"PostgreSQL backup failed: {detail[-1000:]}") from exc
 
         storage_root = work_dir / "storage"
         objects = list_storage_objects(supabase_url, service_role_key, bucket)
