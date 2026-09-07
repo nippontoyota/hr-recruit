@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.access import get_candidate_for_user
-from app.core.branding import normalize_brand
+from app.core.branding import brand_setting, normalize_brand
 from app.core.ho_pipeline import handed_over_to_ho
 from app.core.database import get_db
 from app.core.deps import require_roles
@@ -987,16 +987,22 @@ def send_evaluation_whatsapp_invite(
     if not evaluation:
         raise HTTPException(status_code=404, detail="Evaluation not found")
         
-    candidate = db.get(Candidate, evaluation.candidate_id)
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+    candidate = get_candidate_for_user(db, evaluation.candidate_id, current_user, write=True)
         
     vars_map = body.variables or {}
     if body.recipient_type == "INTERVIEWER":
-        template_name = settings.whatsapp_interviewer_template_name
+        template_name = brand_setting(
+            candidate.brand,
+            settings.whatsapp_interviewer_template_name,
+            settings.whatsapp_river_interviewer_template_name,
+        )
         placeholders = interviewer_placeholders(vars_map)
     elif evaluation.type == EvaluationType.TECHNICAL_TEST:
-        template_name = settings.whatsapp_technical_test_template_name
+        template_name = brand_setting(
+            candidate.brand,
+            settings.whatsapp_technical_test_template_name,
+            settings.whatsapp_river_technical_test_template_name,
+        )
         placeholders = technical_test_placeholders(vars_map)
     elif evaluation.type in {
         EvaluationType.HQ_INTERVIEW,
@@ -1004,13 +1010,25 @@ def send_evaluation_whatsapp_invite(
         EvaluationType.HQ_INTERVIEW_2,
     }:
         if evaluation.interview_mode == InterviewMode.ONLINE:
-            template_name = settings.whatsapp_ho_online_interview_template_name
+            template_name = brand_setting(
+                candidate.brand,
+                settings.whatsapp_ho_online_interview_template_name,
+                settings.whatsapp_river_ho_online_interview_template_name,
+            )
             placeholders = online_interview_placeholders(vars_map)
         else:
-            template_name = settings.whatsapp_ho_interview_template_name
+            template_name = brand_setting(
+                candidate.brand,
+                settings.whatsapp_ho_interview_template_name,
+                settings.whatsapp_river_ho_interview_template_name,
+            )
             placeholders = hr_interview_placeholders(vars_map)
     else:
-        template_name = settings.whatsapp_hr_interview_template_name
+        template_name = brand_setting(
+            candidate.brand,
+            settings.whatsapp_hr_interview_template_name,
+            settings.whatsapp_river_hr_interview_template_name,
+        )
         placeholders = hr_interview_placeholders(vars_map)
 
     external_message_id = None

@@ -16,7 +16,8 @@ import {
 import { toast } from 'sonner';
 import { Button, Input, Modal, Select } from '../ui';
 import { useAuth } from '../../auth';
-import { CANDIDATE_DEPARTMENTS, NIPPON_BRANCHES } from '../../types';
+import { CANDIDATE_DEPARTMENTS } from '../../types';
+import { getBrandBranches } from '../../lib/branding';
 import { extractError, isAbortError } from '../../lib/utils';
 import {
   createOpening,
@@ -216,6 +217,7 @@ export function RecentOpeningsCard() {
       department: row.department,
       location: row.location,
       headcount: row.headcount,
+      brand: row.brand,
     });
     setFormError('');
     setFormOpen(true);
@@ -256,6 +258,7 @@ export function RecentOpeningsCard() {
       department: form.department,
       location: form.location,
       headcount,
+      brand: user?.brand,
     };
     try {
       if (editing) {
@@ -570,7 +573,7 @@ export function RecentOpeningsCard() {
                 <option value="" disabled>
                   Select location
                 </option>
-                {NIPPON_BRANCHES.map((branch) => (
+                {getBrandBranches(user?.brand).map((branch) => (
                   <option key={branch} value={branch}>
                     {branch}
                   </option>

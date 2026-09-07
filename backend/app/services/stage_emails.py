@@ -13,6 +13,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.core.offer_cc import reject_hold_cc_emails
+from app.core.branding import brand_label
 from app.models.activity_log import ActivityLog
 from app.models.candidate import Candidate
 from app.models.candidate_profile import CandidateProfile
@@ -26,10 +27,13 @@ logger = logging.getLogger(__name__)
 REJECTED_EMAIL_SUBJECT = "Update on Your Application"
 ON_HOLD_EMAIL_SUBJECT = "Update on Your Application"
 
-_SIGNATURE = (
-    "<p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>"
-    "Nippon Toyota<br>8606986060, 9544286099</p>"
-)
+def _signature(candidate: Candidate) -> str:
+    contact = "River recruitment team" if brand_label(getattr(candidate, "brand", None)) == "River" else "8606986060, 9544286099"
+    return (
+        "<p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>"
+        f"{escape(brand_label(getattr(candidate, 'brand', None)))}<br>"
+        f"{escape(contact)}</p>"
+    )
 
 
 def _job_title(candidate: Candidate) -> str:
@@ -37,18 +41,19 @@ def _job_title(candidate: Candidate) -> str:
 
 
 def _rejected_email_content(candidate: Candidate) -> tuple[str, str, str]:
+    brand = escape(brand_label(getattr(candidate, "brand", None)))
     name = escape(getattr(candidate, "full_name", None) or "Candidate")
     role = escape(_job_title(candidate))
     body_html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.55;">
         <p>Dear {name},</p>
-        <p>Thank you for taking the time to apply for the {role} position at Nippon Toyota and for your interest in joining our organization.</p>
+        <p>Thank you for taking the time to apply for the {role} position at {brand} and for your interest in joining our organization.</p>
         <p>After careful consideration, we regret to inform you that we have decided not to move forward with your application at this time. We appreciate the time and effort you invested throughout the recruitment process.</p>
-        <p>Please note that you are welcome to apply again for suitable opportunities at Nippon Toyota after 180 days from the date of this communication.</p>
+        <p>Please note that you are welcome to apply again for suitable opportunities at {brand} after 180 days from the date of this communication.</p>
         <p>We encourage you to keep an eye on our future job openings, as there may be opportunities that better match your skills and experience.</p>
         <p>We wish you all the very best in your future career endeavors.</p>
-        {_SIGNATURE}
+        {_signature(candidate)}
       </body>
     </html>
     """
@@ -61,18 +66,19 @@ def _rejected_email_content(candidate: Candidate) -> tuple[str, str, str]:
 
 
 def _on_hold_email_content(candidate: Candidate) -> tuple[str, str, str]:
+    brand = escape(brand_label(getattr(candidate, "brand", None)))
     name = escape(getattr(candidate, "full_name", None) or "Candidate")
     role = escape(_job_title(candidate))
     body_html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.55;">
         <p>Dear {name},</p>
-        <p>Thank you for your interest in the {role} position at Nippon Toyota and for taking the time to participate in our recruitment process.</p>
+        <p>Thank you for your interest in the {role} position at {brand} and for taking the time to participate in our recruitment process.</p>
         <p>We would like to inform you that your application is currently on hold while we complete our internal evaluation and recruitment process.</p>
         <p>We appreciate your patience and understanding during this period. We will keep you informed of any further updates regarding your application.</p>
         <p>Please be assured that your profile remains under consideration, and we will get back to you once there is further progress.</p>
-        <p>Thank you once again for your time and interest in joining Nippon Toyota.</p>
-        {_SIGNATURE}
+        <p>Thank you once again for your time and interest in joining {brand}.</p>
+        {_signature(candidate)}
       </body>
     </html>
     """
@@ -107,6 +113,7 @@ def _send_stage_email(
                 subject=subject,
                 body_html=body_html,
                 cc_emails=reject_hold_cc_emails(db, candidate),
+                from_name=f"{brand_label(getattr(candidate, 'brand', None))} HR",
             )
         except EmailSendError as e:
             status = CommunicationStatus.FAILED

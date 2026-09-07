@@ -21,11 +21,19 @@ class Settings(BaseSettings):
     doubletick_api_key: str = ""
     waba_phone_number_id: str = ""
     whatsapp_call_letter_template_name: str = "nippon_interview_call_letter"
+    whatsapp_river_call_letter_template_name: str = "river_interview_call_letter"
+    whatsapp_river_call_letter_v2_template_name: str = "river_interview_call_letter_v2"
+    whatsapp_river_call_letter_v2_two_touchpoints_template_name: str = "river_interview_call_letter_v2_two_touchpoints"
     whatsapp_hr_interview_template_name: str = "nippon_interview_schedule"
+    whatsapp_river_hr_interview_template_name: str = "river_interview_schedule"
     whatsapp_ho_interview_template_name: str = "nippon_head_office_interview_invite"
     whatsapp_ho_online_interview_template_name: str = "nippon_head_office_online_interview_invite"
     whatsapp_interviewer_template_name: str = "nippon_interviewer_invite"
+    whatsapp_river_interviewer_template_name: str = "river_interviewer_invite"
     whatsapp_technical_test_template_name: str = "nippon_technical_test_invite"
+    whatsapp_river_technical_test_template_name: str = "river_technical_test_invite"
+    whatsapp_river_ho_interview_template_name: str = "river_head_office_interview_invite"
+    whatsapp_river_ho_online_interview_template_name: str = "river_head_office_online_interview_invite"
     # Comma-separated origins for the SPA (Vite default included)
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     # Regex for Vercel production + preview deploys (override via env if needed)
@@ -39,6 +47,7 @@ class Settings(BaseSettings):
     # Offer letter (DOCX template + WhatsApp intimation)
     offer_letter_docx_path: str = r"C:\Users\krish\Downloads\Offer Letter.docx"
     offer_whatsapp_intimation_template_name: str = "nippon_offer_intimation"
+    river_offer_whatsapp_intimation_template_name: str = "river_offer_intimation"
 
     # CC recipients for offer email copy
     jerry_email: str = ""

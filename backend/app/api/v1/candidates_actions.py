@@ -14,7 +14,7 @@ from app.core.deps import require_roles
 from app.core.access import get_candidate_for_user
 from app.core.offer_gate import offer_blockers
 from app.core.offer_cc import head_office_forwarding_cc_emails, offer_cc_emails
-from app.core.branding import brand_is_river
+from app.core.branding import brand_is_river, brand_label, brand_setting
 from app.services.stage_emails import send_on_hold_email, send_rejection_email
 from app.core.positions import positions_for
 from app.core.config import settings
@@ -398,17 +398,30 @@ def send_whatsapp_invite(
     touch_point_1 = (vars_map.get("touchPoint1") or "").strip()
     touch_point_2 = (vars_map.get("touchPoint2") or "").strip()
 
-    template_name = settings.whatsapp_call_letter_template_name
+    is_river = brand_is_river(candidate.brand)
+    template_name = brand_setting(
+        getattr(candidate, "brand", None),
+        settings.whatsapp_call_letter_template_name,
+        settings.whatsapp_river_call_letter_template_name,
+    )
     placeholders = call_letter_placeholders(vars_map)
     if meeting_point and touch_point_1:
         v2_spec = call_letter_v2_spec(touch_point_2)
-        try:
-            approved = template_status(v2_spec.name) == "APPROVED"
-        except Exception:
-            approved = False
-        if approved:
-            template_name = v2_spec.name
+        if is_river:
+            template_name = (
+                settings.whatsapp_river_call_letter_v2_two_touchpoints_template_name
+                if touch_point_2
+                else settings.whatsapp_river_call_letter_v2_template_name
+            )
             placeholders = call_letter_v2_placeholders(vars_map, touch_point_2)
+        else:
+            try:
+                approved = template_status(v2_spec.name) == "APPROVED"
+            except Exception:
+                approved = False
+            if approved:
+                template_name = v2_spec.name
+                placeholders = call_letter_v2_placeholders(vars_map, touch_point_2)
 
     try:
         res = send_template(
@@ -437,19 +450,21 @@ def send_whatsapp_invite(
         extra = "\n".join(extra_lines)
     else:
         extra = (vars_map.get("extraInstructions") or "").strip() or (
-            "Meeting Point – Floor 3rd – Sales Training Room / HR Department\n"
+            "Meeting Point – River HR desk\nTouch Point 1 – River Talent Acquisition"
+            if brand_is_river(candidate.brand)
+            else "Meeting Point – Floor 3rd – Sales Training Room / HR Department\n"
             "Touch Point 1 – Sreehari (HRD) 8606986060\n"
             "Touch Point 2 – Mathew (HRD) 9544286099"
         )
     content_lines = [
         f"Dear {vars_map.get('candidateName', '')},",
         "",
-        '"Greetings from Nippon HRD"',
+        f'"Greetings from {brand_label(candidate.brand)} HRD"',
         "",
         (
             f"This is to inform you that, pertaining to your application for "
             f"*{vars_map.get('position', '')}*, we have scheduled a direct interview on "
-            f"*{vars_map.get('visitDate', '')}* at Nippon Toyota, *{vars_map.get('branchName', '')}*. "
+            f"*{vars_map.get('visitDate', '')}* at {brand_label(candidate.brand)}, *{vars_map.get('branchName', '')}*. "
             "Please bring an updated bio-data and a passport size photo."
         ),
         "",
@@ -466,7 +481,7 @@ def send_whatsapp_invite(
         "Regards",
         vars_map.get("recruiterName", ""),
         "Talent Acquisition Team",
-        "Nippon Toyota",
+        brand_label(candidate.brand),
     ]
     full_content = "\n".join(content_lines)
 
@@ -590,9 +605,9 @@ def _offer_acceptance_email_content(candidate: Candidate) -> tuple[str, str, str
       <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.55;">
         <p>Dear {safe_name},</p>
         <p>We are pleased to confirm your acceptance of the employment offer for the position of <strong>{safe_role}</strong> at {brand_name}.</p>
-        <p>We look forward to welcoming you to our organization on your joining date, <strong>{safe_date}</strong>, at {brand_name}, Kalamassery.</p>
-        <p><strong>Location:</strong> {brand_name}, Kalamassery - Google Maps</p>
-        <p><strong>Reporting Location:</strong> 3rd Floor - Sales Training Room / HR Department</p>
+        <p>We look forward to welcoming you to our organization on your joining date, <strong>{safe_date}</strong>, at {brand_name}.</p>
+        <p><strong>Location:</strong> {brand_name} recruitment office</p>
+        <p><strong>Reporting Location:</strong> {"River HR desk" if brand_is_river(candidate.brand) else "3rd Floor - Sales Training Room / HR Department"}</p>
         <p>Please carry the following documents and information with you on the day of joining for verification and completion of the joining formalities:</p>
         <h3>Documents to be Carried</h3>
         <ul>
@@ -611,8 +626,8 @@ def _offer_acceptance_email_content(candidate: Candidate) -> tuple[str, str, str
         <ul><li>PF UAN Number</li><li>ESI Number, if available</li></ul>
         <p>Please ensure that all the required documents are arranged and carried with you on the joining date to avoid any delay in completing the joining formalities.</p>
         <p>We look forward to welcoming you to the team and wish you a successful career with us.</p>
-        <p>For further details or any queries, please feel free to contact us at 8606986060.</p>
-        <p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>{brand_name}<br>8606986060, 9544286099</p>
+        <p>For further details or any queries, please contact the {brand_name} recruitment team.</p>
+        <p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>{brand_name}</p>
       </body>
     </html>
     """
@@ -620,7 +635,7 @@ def _offer_acceptance_email_content(candidate: Candidate) -> tuple[str, str, str
         f"Dear {name},\n\n"
         f"Offer acceptance confirmed for {role} at {brand_name}.\n"
         f"Joining date: {display_joining_date}.\n"
-        "Reporting location: 3rd Floor - Sales Training Room / HR Department.\n\n"
+        f"Reporting location: {'River HR desk' if brand_is_river(candidate.brand) else '3rd Floor - Sales Training Room / HR Department'}.\n\n"
         "Joining documents checklist included."
     )
     return OFFER_ACCEPTANCE_EMAIL_SUBJECT, body_html, preview
@@ -636,10 +651,10 @@ def _head_office_forwarding_email_content(candidate: Candidate) -> tuple[str, st
         <p>Dear {name},</p>
         <p>Thank you for taking the time to attend the interview at {brand_name}.</p>
         <p>We are pleased to inform you that you have been shortlisted for the next stage of our selection process, and your application has been forwarded to our Head Office for further review.</p>
-        <p>Further details regarding the upcoming steps in the selection process will be communicated to you by the {brand_name} Head Office Team, Kalamassery, within the next five working days.</p>
+        <p>Further details regarding the upcoming steps in the selection process will be communicated to you by the {brand_name} Head Office Team within the next five working days.</p>
         <p>We appreciate your interest in joining {brand_name} and look forward to staying in touch with you.</p>
-        <p>For further details or any queries, please feel free to contact us at 8606986060.</p>
-        <p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>{brand_name}<br>8606986060, 9544286099</p>
+        <p>For further details or any queries, please contact the {brand_name} recruitment team.</p>
+        <p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>{brand_name}</p>
       </body>
     </html>
     """
@@ -669,6 +684,7 @@ def _send_head_office_forwarding_email(
                 subject=subject,
                 body_html=body_html,
                 cc_emails=head_office_forwarding_cc_emails(),
+                from_name=f"{_candidate_brand_label(candidate)} HR",
             )
         except EmailSendError as e:
             status = CommunicationStatus.FAILED
@@ -721,7 +737,11 @@ def _send_offer_whatsapp_intimation(
     user: User,
     placeholders: list[str],
 ) -> tuple[str, str | None]:
-    template_name = settings.offer_whatsapp_intimation_template_name
+    template_name = brand_setting(
+        getattr(candidate, "brand", None),
+        settings.offer_whatsapp_intimation_template_name,
+        settings.river_offer_whatsapp_intimation_template_name,
+    )
     if not template_name:
         error = "Offer letter WhatsApp template is not configured."
         status = CommunicationStatus.FAILED
@@ -819,26 +839,28 @@ def send_offer_letter(
             "branch_location": row.branch_location,
             "department": row.department,
             "salary_data": row.salary_data,
+            "brand": row.brand,
         },
         **fields,
     }
     pdf_bytes = generate_offer_letter_pdf(payload)
     offer = resolve_offer_fields(payload)
     position_label = offer["designation"] or row.position_applied_for or "the offered role"
+    brand_name = _candidate_brand_label(row)
         
     cc_emails = offer_cc_emails(db, row)
         
     # Send Email
-    subject = f"Offer of Employment - {position_label} at Nippon Toyota"
+    subject = f"Offer of Employment - {position_label} at {brand_name}"
     body_html = f"""
     <html>
         <body>
             <p>Dear {offer['candidate_name'] or row.full_name},</p>
-            <p>We are delighted to offer you the position of <strong>{position_label}</strong> at Nippon Toyota.</p>
+            <p>We are delighted to offer you the position of <strong>{position_label}</strong> at {brand_name}.</p>
             <p>Please find your official offer letter attached as a PDF.</p>
             <p>We look forward to welcoming you to the team!</p>
             <br/>
-            <p>Best regards,<br/>Human Resources<br/>Nippon Toyota</p>
+            <p>Best regards,<br/>Human Resources<br/>{brand_name}</p>
         </body>
     </html>
     """
@@ -849,8 +871,9 @@ def send_offer_letter(
             subject=subject,
             body_html=body_html,
             pdf_bytes=bytes(pdf_bytes),
-            pdf_filename="OfferLetter_NipponToyota.pdf",
+            pdf_filename=f"OfferLetter_{brand_name.replace(' ', '')}.pdf",
             cc_emails=cc_emails,
+            from_name=f"{brand_name} HR",
         )
     except EmailSendError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -885,7 +908,7 @@ def send_offer_letter(
         [
             offer["candidate_name"] or row.full_name or "",
             position_label,
-            row.branch_location or "Nippon Toyota",
+            row.branch_location or brand_label(row.brand),
         ],
     )
 
@@ -969,6 +992,7 @@ def send_offer_acceptance_email(
             subject=subject,
             body_html=body_html,
             cc_emails=offer_cc_emails(db, row),
+            from_name=f"{_candidate_brand_label(row)} HR",
         )
     except EmailSendError as e:
         if not row.profile:
@@ -1054,7 +1078,7 @@ def resend_offer_whatsapp(
         [
             row.full_name or "",
             row.position_applied_for or "the offered role",
-            row.branch_location or "Nippon Toyota",
+            row.branch_location or brand_label(row.brand),
         ],
     )
     if row.profile is None:

@@ -1,4 +1,5 @@
 import type { Candidate } from '../types';
+import { getBrandConfig } from './branding';
 
 export interface OfferLetterFields {
   candidate_name: string;
@@ -86,12 +87,13 @@ export function payloadFromOfferFields(fields: OfferLetterFields): Record<string
 }
 
 export function buildOfferWhatsAppMessage(candidate: Candidate, fields: OfferLetterFields): string {
+  const brand = getBrandConfig(candidate.brand);
   const role = fields.designation || candidate.position_applied_for || candidate.department || 'the offered role';
   const joiningDate = fields.joining_date ? formatOfferJoinDate(fields.joining_date) : 'as discussed';
   return [
     `Dear ${candidate.full_name},`,
     '',
-    'Greetings from Nippon Toyota HR.',
+    `Greetings from ${brand.name} HR.`,
     '',
     `We are pleased to inform you that you have been selected for the position of *${role}*.`,
     `Your offer letter has been sent to ${candidate.email || 'your registered email address'}.`,
@@ -99,7 +101,7 @@ export function buildOfferWhatsAppMessage(candidate: Candidate, fields: OfferLet
     '',
     'Regards,',
     'Human Resources',
-    'Nippon Toyota',
+    brand.name,
   ].join('\\n');
 }
 

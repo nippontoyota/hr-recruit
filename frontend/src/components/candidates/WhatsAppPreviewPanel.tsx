@@ -11,7 +11,6 @@ import {
   isWhatsAppUrl,
   mergeWhatsAppVars,
   openWhatsAppChat,
-  positionForWhatsApp,
   sanitizeWhatsAppPosition,
   splitMessageLinks,
   storeTemplateVars,
@@ -21,6 +20,7 @@ import {
 } from '../../lib/whatsappTemplate';
 import { WhatsAppSendChoices } from './WhatsAppSendChoices';
 import { useAuth } from '../../auth';
+import { getBrandConfig } from '../../lib/branding';
 import { toast } from 'sonner';
 import { cn, extractError, isAbortError, copyTextToClipboard } from '../../lib/utils';
 import { sendPreForm, sendWhatsAppInvite, saveWhatsAppTemplate, confirmWhatsAppInvite } from '../../api/candidates';
@@ -103,6 +103,7 @@ function FieldError({ error }: { error?: string }) {
 
 function varsForCandidate(candidate: Candidate, recruiterName?: string | null): WhatsAppTemplateVars {
   return mergeWhatsAppVars({
+    brand: candidate.brand,
     candidateId: candidate.id,
     fullName: candidate.full_name,
     positionAppliedFor: candidate.position_applied_for,
@@ -122,6 +123,7 @@ function varsForCandidate(candidate: Candidate, recruiterName?: string | null): 
 
 export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnly = false }: WhatsAppPreviewPanelProps) {
   const { user } = useAuth();
+  const brand = getBrandConfig(candidate.brand);
   const branch = user?.branch_location || candidate.branch_location || null;
   const [isEditing, setIsEditing] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -149,13 +151,6 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
     }
   };
 
-  const candidatePosition = () =>
-    positionForWhatsApp({
-      positionAppliedFor: candidate.position_applied_for,
-      department: candidate.department,
-      experience: candidate.experience,
-    });
-
   const [vars, setVars] = useState<WhatsAppTemplateVars>(() => varsForCandidate(candidate, user?.full_name));
   const [draft, setDraft] = useState(vars);
   const [generatingLink, setGeneratingLink] = useState(false);
@@ -170,7 +165,9 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
     setVars(next);
     if (!isEditing) setDraft(next);
   }, [
+    candidate,
     candidate.id,
+    candidate.brand,
     candidate.full_name,
     candidate.share_url,
     candidate.position_applied_for,
@@ -522,10 +519,10 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
                   <ArrowLeft className="h-5 w-5 shrink-0" aria-hidden="true" />
                 </div>
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ml-0.5 border border-white/20">
-                  <img src="/toyota-HR-profile.jpeg" alt="" className="h-full w-full object-cover" />
+                  <img src={brand.key === 'RIVER' ? brand.logo : '/toyota-HR-profile.jpeg'} alt="" className="h-full w-full object-cover" />
                 </div>
                 <div className="min-w-0 text-left ml-2">
-                  <p className="truncate text-[15px] font-medium leading-tight">Nippon Toyota HR</p>
+                  <p className="truncate text-[15px] font-medium leading-tight">{brand.name} HR</p>
                   <p className="text-[11px] leading-tight text-white/90">Official Business Account</p>
                 </div>
               </div>

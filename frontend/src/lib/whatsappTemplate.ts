@@ -1,6 +1,8 @@
 import { formatDate, formatTime } from './dateTime';
+import { getBrandConfig } from './branding';
 
 export interface WhatsAppTemplateVars {
+  brand?: string | null;
   candidateName: string;
   position: string;
   formLink: string;
@@ -20,10 +22,12 @@ export interface WhatsAppTemplateVars {
 
 const DEFAULT_EXTRA =
   'Meeting Point – Floor 3rd – Sales Training Room / HR Department\nTouch Point 1 – Sreehari (HRD) 8606986060\nTouch Point 2 – Mathew (HRD) 9544286099';
+const DEFAULT_RIVER_EXTRA =
+  'Meeting Point – River HR desk\nTouch Point 1 – River Talent Acquisition';
 
 /** Builds the Meeting Point / Touch Point block from structured fields, falling
  * back to freeform extraInstructions (or the hardcoded default) when unset. */
-export function composeExtraInstructions(vars: Pick<WhatsAppTemplateVars, 'meetingPoint' | 'touchPoint1' | 'touchPoint2' | 'extraInstructions'>): string {
+export function composeExtraInstructions(vars: Pick<WhatsAppTemplateVars, 'brand' | 'meetingPoint' | 'touchPoint1' | 'touchPoint2' | 'extraInstructions'>): string {
   const meetingPoint = vars.meetingPoint.trim();
   const touchPoint1 = vars.touchPoint1.trim();
   const touchPoint2 = vars.touchPoint2.trim();
@@ -32,7 +36,7 @@ export function composeExtraInstructions(vars: Pick<WhatsAppTemplateVars, 'meeti
     if (touchPoint2) lines.push(`Touch Point 2 – ${touchPoint2}`);
     return lines.join('\n');
   }
-  return vars.extraInstructions.trim() || DEFAULT_EXTRA;
+  return vars.extraInstructions.trim() || (getBrandConfig(vars.brand).key === 'RIVER' ? DEFAULT_RIVER_EXTRA : DEFAULT_EXTRA);
 }
 
 const UNSET_POSITIONS = new Set(['', 'unknown', 'unknown position', 'the applied']);
@@ -59,6 +63,7 @@ export function positionForWhatsApp(input: {
 }
 
 export function buildWhatsAppMessage(vars: WhatsAppTemplateVars): string {
+  const brand = getBrandConfig(vars.brand);
   const dateLabel = vars.visitDate.trim() || '(select visit date)';
   const branchLabel = vars.branchName.trim() || '(select location)';
   const maps = vars.mapsLink.trim() || '(select location link)';
@@ -68,9 +73,9 @@ export function buildWhatsAppMessage(vars: WhatsAppTemplateVars): string {
   return [
     `Dear ${vars.candidateName},`,
     '',
-    `"Greetings from Nippon HRD"`,
+    `"Greetings from ${brand.name} HRD"`,
     '',
-    `This is to inform you that, pertaining to your application for *${positionLabel}*, we have scheduled a direct interview on *${dateLabel}* at Nippon Toyota, *${branchLabel}*. Please bring an updated bio-data and a passport size photo.`,
+    `This is to inform you that, pertaining to your application for *${positionLabel}*, we have scheduled a direct interview on *${dateLabel}* at ${brand.name}, *${branchLabel}*. Please bring an updated bio-data and a passport size photo.`,
     '',
     'Also complete the Job Application Form using the link below without fail:',
     vars.formLink,
@@ -85,7 +90,7 @@ export function buildWhatsAppMessage(vars: WhatsAppTemplateVars): string {
     'Regards',
     vars.recruiterName,
     'Talent Acquisition Team',
-    'Nippon Toyota',
+    brand.name,
   ].join('\n');
 }
 
@@ -128,6 +133,7 @@ export function canSendWhatsAppInvite(vars: WhatsAppTemplateVars): boolean {
 }
 
 export function defaultTemplateVars(input: {
+  brand?: string | null;
   candidateName: string;
   position?: string;
   formLink?: string;
@@ -147,6 +153,7 @@ export function defaultTemplateVars(input: {
       : formatVisitDate(input.visitDate);
 
   return {
+    brand: input.brand || null,
     candidateName: input.candidateName,
     position: sanitizeWhatsAppPosition(input.position),
     formLink: input.formLink || '(form link will appear after save)',
@@ -156,7 +163,7 @@ export function defaultTemplateVars(input: {
     arrivalTime: input.arrivalTime?.trim() || '9:15 AM',
     mapsLink: '',
     recruiterName: input.recruiterName || 'HR Team',
-    extraInstructions: input.extraInstructions?.trim() || DEFAULT_EXTRA,
+    extraInstructions: input.extraInstructions?.trim() || (getBrandConfig(input.brand).key === 'RIVER' ? DEFAULT_RIVER_EXTRA : DEFAULT_EXTRA),
     meetingPoint: input.meetingPoint?.trim() || '',
     touchPoint1: input.touchPoint1?.trim() || '',
     touchPoint2: input.touchPoint2?.trim() || '',
@@ -191,6 +198,7 @@ function visitDateLabel(value?: string | Date | null): string {
 
 /** Server visit fields win; this-browser localStorage only fills gaps from older saves. */
 export function mergeWhatsAppVars(input: {
+  brand?: string | null;
   candidateId: string;
   fullName: string;
   positionAppliedFor?: string | null;
@@ -209,6 +217,7 @@ export function mergeWhatsAppVars(input: {
   const local = loadStoredTemplateVars(input.candidateId) || {};
   const stored = input.storedTemplate || {};
   const defaults = defaultTemplateVars({
+    brand: input.brand,
     candidateName: input.fullName,
     position: positionForWhatsApp({
       positionAppliedFor: input.positionAppliedFor,
@@ -223,6 +232,7 @@ export function mergeWhatsAppVars(input: {
     ...defaults,
     ...local,
     ...stored,
+    brand: input.brand || defaults.brand,
     candidateName: filled(input.fullName) || defaults.candidateName,
     position:
       sanitizeWhatsAppPosition(input.positionAppliedFor) ||
@@ -271,6 +281,7 @@ export function openWhatsAppChat(phone: string, message: string): Window | null 
 }
 
 export function buildInterviewerWhatsAppMessage(input: {
+  brand?: string | null;
   interviewerName: string;
   candidateName: string;
   interviewTitle: string;
@@ -282,7 +293,7 @@ export function buildInterviewerWhatsAppMessage(input: {
     `Please complete the evaluation form for *${input.candidateName}* (${input.interviewTitle}):`,
     input.link,
     '',
-    'Nippon Toyota HR',
+    `${getBrandConfig(input.brand).name} HR`,
   ].join('\n');
 }
 
@@ -299,6 +310,7 @@ export function evalScheduleLabels(scheduledTime?: string | null): { dateStr: st
 }
 
 export function buildTechnicalTestWhatsAppMessage(input: {
+  brand?: string | null;
   candidateName: string;
   position: string;
   link: string;
@@ -313,11 +325,12 @@ export function buildTechnicalTestWhatsAppMessage(input: {
   ];
   if (input.date && input.date !== 'TBD') lines.push('', `Date: ${input.date}`);
   if (input.time && input.time !== 'TBD') lines.push(`Time: ${input.time}`);
-  lines.push('', 'Nippon Toyota HR');
+  lines.push('', `${getBrandConfig(input.brand).name} HR`);
   return lines.join('\n');
 }
 
 export function buildHeadOfficeInterviewWhatsAppMessage(input: {
+  brand?: string | null;
   candidateName: string;
   position: string;
   date: string;
@@ -360,6 +373,6 @@ export function buildHeadOfficeInterviewWhatsAppMessage(input: {
     '',
     'Regards',
     input.recruiterName,
-    'Nippon Toyota HR',
+    `${getBrandConfig(input.brand).name} HR`,
   ].join('\n');
 }

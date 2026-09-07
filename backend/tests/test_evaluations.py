@@ -42,10 +42,10 @@ def test_online_head_office_invite_uses_online_template():
         type=EvaluationType.HQ_INTERVIEW_1,
         interview_mode=InterviewMode.ONLINE,
     )
-    candidate = SimpleNamespace(id=candidate_id)
+    candidate = SimpleNamespace(id=candidate_id, current_stage=PipelineStage.HO_INTERVIEWS, brand=None)
     db = MagicMock()
     db.get.side_effect = lambda model, value: evaluation if model is Evaluation else candidate
-    current_user = SimpleNamespace(id=uuid4())
+    current_user = SimpleNamespace(id=uuid4(), role=UserRole.ADMIN)
     body = EvaluationWhatsAppInvite(
         to_phone="9876543210",
         variables={

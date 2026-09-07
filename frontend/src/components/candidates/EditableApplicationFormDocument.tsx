@@ -810,7 +810,7 @@ export function EditableApplicationFormDocument({
                     </tr>
                     <tr>
                       <td colSpan={9} className="border border-[#1e3a5f] py-1.5 px-2">
-                        <span className="font-semibold">Referred by / Relative at Nippon:</span>{' '}
+                        <span className="font-semibold">Referred by / Relative at {brand.name}:</span>{' '}
                         <InlineInput value={form.referredBy as string} onChange={(v) => update('referredBy', v)} className="w-[45%]" />
                       </td>
                     </tr>
@@ -833,7 +833,7 @@ export function EditableApplicationFormDocument({
 
             {/* Page 1 Footer */}
             <div className="mt-3 pt-1.5 border-t border-dashed border-[#1e3a5f]/40 flex justify-between items-center text-[9.5px] font-semibold text-[#1e3a5f]/80">
-              <span>Nippon Motor Corporation Pvt Ltd — Recruitment Confidential</span>
+              <span>{brand.companyName} — Recruitment Confidential</span>
               <span className="font-bold tracking-wider uppercase">Page 1 of 2</span>
             </div>
           </section>
@@ -1044,7 +1044,7 @@ export function EditableApplicationFormDocument({
 
             {/* Page 2 Footer */}
             <div className="mt-3 pt-1.5 border-t border-dashed border-[#1e3a5f]/40 flex justify-between items-center text-[9.5px] font-semibold text-[#1e3a5f]/80">
-              <span>Nippon Motor Corporation Pvt Ltd — Recruitment Confidential</span>
+              <span>{brand.companyName} — Recruitment Confidential</span>
               <span className="font-bold tracking-wider uppercase">Page 2 of 2</span>
             </div>
           </section>

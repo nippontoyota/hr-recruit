@@ -325,6 +325,8 @@ def create_template(spec: WhatsAppTemplateSpec) -> dict:
         "name": spec.name,
         "language": "en",
         "category": spec.category,
+        "allowCategoryUpdate": True,
+        "wabaNumbers": [_format_phone(settings.waba_phone_number_id).lstrip("+")],
         "components": {
             "body": {
                 "text": spec.body,

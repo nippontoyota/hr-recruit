@@ -2,8 +2,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
+import pytest
 
-from app.core.branding import NIPPON_TOYOTA, RIVER, brand_is_river, normalize_brand
+from app.core.access import assert_candidate_access
+from app.core.branding import NIPPON_TOYOTA, RIVER, brand_is_river, brand_setting, normalize_brand
 from app.core.positions import PAPER_COMMON
 from app.core.test_paper import assemble_test_questions
 from app.models.technical_question import TechnicalQuestion
@@ -13,6 +15,7 @@ from app.models.enums import UserRole
 from app.schemas.auth import UserOut
 from app.api.v1.candidates_actions import _head_office_forwarding_email_content
 from app.schemas.candidate import CandidateCreate
+from app.schemas.job_opening import JobOpeningCreate
 from app.services.candidate_service import create_candidate
 from scripts.seed_river_user import RIVER_EMAIL, seed_river_user
 
@@ -36,6 +39,41 @@ def test_brand_migration_is_additive_only():
     assert "UPDATE " not in source.upper()
     assert "DELETE " not in source.upper()
     assert "server_default" not in source
+
+
+def test_brand_scope_migration_is_additive_only():
+    migration = Path(__file__).parents[1] / "alembic" / "versions" / "r8s9t0u1v2w3_scope_brand_settings.py"
+    source = migration.read_text(encoding="utf-8")
+    for table in ("job_openings", "location_templates", "message_templates", "touchpoint_templates", "interviewer_names"):
+        assert table in source
+    assert "UPDATE " not in source.upper()
+    assert "DELETE " not in source.upper()
+
+
+def test_local_hr_brand_access_is_bidirectional():
+    river_user = SimpleNamespace(role=UserRole.LOCAL_HR, branch_location="River", brand=RIVER)
+    toyota_user = SimpleNamespace(role=UserRole.LOCAL_HR, branch_location="Kalamassery", brand=None)
+    river_candidate = SimpleNamespace(branch_location="River", brand=RIVER)
+    toyota_candidate = SimpleNamespace(branch_location="Kalamassery", brand=None)
+
+    assert_candidate_access(river_user, river_candidate)
+    assert_candidate_access(toyota_user, toyota_candidate)
+    with pytest.raises(Exception):
+        assert_candidate_access(river_user, toyota_candidate)
+    with pytest.raises(Exception):
+        assert_candidate_access(toyota_user, river_candidate)
+
+
+def test_brand_setting_never_falls_back_between_workspaces():
+    assert brand_setting(RIVER, "nippon_template", "river_template") == "river_template"
+    assert brand_setting(None, "nippon_template", "river_template") == "nippon_template"
+
+
+def test_job_opening_brand_and_location_must_match():
+    row = JobOpeningCreate(position="Scooter Technician", department="Service", location="River", brand=RIVER, headcount=1)
+    assert row.brand == RIVER
+    with pytest.raises(ValueError):
+        JobOpeningCreate(position="Toyota Sales", department="Sales", location="River", brand=NIPPON_TOYOTA, headcount=1)
 
 
 class FakeUserDb:

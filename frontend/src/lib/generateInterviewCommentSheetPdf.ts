@@ -9,6 +9,7 @@ import {
 import type { Candidate, Evaluation } from '../types';
 import { formatDate, formatTime } from './dateTime';
 import { interviewTitle } from './interviewTitle';
+import { getBrandConfig } from './branding';
 
 const BLACK = rgb(0.07, 0.09, 0.13);
 const GREY = rgb(0.35, 0.4, 0.47);
@@ -68,11 +69,14 @@ function ratingRow(page: PDFPage, label: string, max: number, x: number, y: numb
   text(page, 'Circle one', x + width - 54, y - 18, regular, 6.5, GREY);
 }
 
-async function loadLogo(pdf: PDFDocument): Promise<PDFImage | null> {
+async function loadLogo(pdf: PDFDocument, source: string): Promise<PDFImage | null> {
   try {
-    const response = await fetch('/nippon-toyota-logo.png');
+    const response = await fetch(source);
     if (!response.ok) return null;
-    return await pdf.embedPng(await response.arrayBuffer());
+    const bytes = await response.arrayBuffer();
+    return source.toLowerCase().endsWith('.jpg') || source.toLowerCase().endsWith('.jpeg')
+      ? await pdf.embedJpg(bytes)
+      : await pdf.embedPng(bytes);
   } catch {
     return null;
   }
@@ -80,10 +84,11 @@ async function loadLogo(pdf: PDFDocument): Promise<PDFImage | null> {
 
 export async function downloadInterviewCommentSheetPdf(candidate: Candidate, evaluation: Evaluation): Promise<void> {
   const pdf = await PDFDocument.create();
+  const brand = getBrandConfig(candidate.brand);
   const page = pdf.addPage([A4_WIDTH, A4_HEIGHT]);
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const logo = await loadLogo(pdf);
+  const logo = await loadLogo(pdf, brand.logo);
   const left = 48;
   const right = A4_WIDTH - 48;
   const contentWidth = right - left;
@@ -98,7 +103,7 @@ export async function downloadInterviewCommentSheetPdf(candidate: Candidate, eva
     });
   }
 
-  text(page, 'NIPPON TOYOTA', left, A4_HEIGHT - 50, bold, 10, TEAL);
+  text(page, brand.name.toUpperCase(), left, A4_HEIGHT - 50, bold, 10, TEAL);
   text(page, 'Interview Comment Sheet', left, A4_HEIGHT - 75, regular, 22, BLACK);
   text(page, 'Confidential interviewer record', left, A4_HEIGHT - 90, regular, 8, GREY);
   rule(page, left, A4_HEIGHT - 108, right, 1.6);

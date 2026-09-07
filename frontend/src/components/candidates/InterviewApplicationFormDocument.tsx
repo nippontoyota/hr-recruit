@@ -653,7 +653,7 @@ export function InterviewApplicationFormDocument({
 
           {/* Page 2 Footer */}
           <div className="mt-3 pt-1.5 border-t border-dashed border-[#1e3a5f]/40 flex justify-between items-center text-[9.5px] font-semibold text-[#1e3a5f]/80">
-            <span>Nippon Motor Corporation Pvt Ltd — Recruitment Confidential</span>
+            <span>{brand.companyName} — Recruitment Confidential</span>
             <span className="font-bold tracking-wider uppercase">Confidential</span>
           </div>
         </section>

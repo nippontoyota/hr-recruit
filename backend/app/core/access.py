@@ -5,6 +5,7 @@ from app.models.candidate import Candidate
 from app.models.enums import UserRole
 from app.models.user import User
 from app.core.ho_pipeline import candidate_reached_ho, handed_over_to_ho, is_ho_pipeline_stage
+from app.core.branding import brand_is_river
 
 LOCAL_HR_HANDOVER_LOCKED = (
     "This candidate has been handed over to Head Office. Local HR cannot make changes."
@@ -20,6 +21,8 @@ def assert_candidate_access(user: User, candidate: Candidate, db: Session | None
     if user.role == UserRole.LOCAL_HR:
         if candidate.branch_location != user.branch_location:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Candidate is not in your branch.")
+        if brand_is_river(candidate.brand) != brand_is_river(user.brand):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Candidate is not in your brand workspace.")
 
     if user.role in (UserRole.HO_HR, UserRole.ADMIN):
         if is_ho_pipeline_stage(candidate.current_stage):

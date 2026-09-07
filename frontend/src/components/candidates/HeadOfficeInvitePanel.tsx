@@ -71,8 +71,9 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
       mode: modeLabel,
       locationOrLink: location.trim() || 'Location or link not set',
       recruiterName: user?.full_name || 'Head Office HR',
+      brand: candidate.brand,
     }),
-    [candidate.full_name, candidate.position_applied_for, candidate.department, dateLabel, timeLabel, modeLabel, location, user?.full_name]
+    [candidate.full_name, candidate.position_applied_for, candidate.department, candidate.brand, dateLabel, timeLabel, modeLabel, location, user?.full_name]
   );
 
   const saveSchedule = async () => {
@@ -116,6 +117,7 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
         time: timeLabel,
         mode: modeLabel,
         recruiterName: user?.full_name || 'Head Office HR',
+        brand: candidate.brand,
       };
       if (!isOnline) variables.locationOrLink = location.trim();
       await sendEvaluationWhatsAppInvite(evaluation.id, {
@@ -197,7 +199,7 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
           ) : (
             <label className="block space-y-1.5 text-xs font-semibold text-foreground">
               Head Office location
-              <Input placeholder="Nippon Toyota Head Office" value={location} disabled={isReadOnly || saving} onChange={(e) => setLocation(e.target.value)} />
+              <Input placeholder={`${candidate.brand === 'RIVER' ? 'River' : 'Nippon Toyota'} Head Office`} value={location} disabled={isReadOnly || saving} onChange={(e) => setLocation(e.target.value)} />
             </label>
           )}
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
@@ -213,8 +215,8 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
 
         <div className="overflow-hidden rounded-[22px] border-[5px] border-[#18181b] bg-[#efeae2] shadow-[0_12px_28px_rgba(17,24,39,0.16)]">
           <div className="flex h-12 items-center gap-2 bg-[#075E54] px-3 text-white">
-            <div className="h-7 w-7 overflow-hidden rounded-full bg-white"><img src="/toyota-HR-profile.jpeg" alt="" className="h-full w-full object-cover" /></div>
-            <div><p className="text-xs font-semibold leading-tight">Nippon Toyota HR</p><p className="text-[10px] text-white/80">Official Business Account</p></div>
+            <div className="h-7 w-7 overflow-hidden rounded-full bg-white"><img src={candidate.brand === 'RIVER' ? '/river-logo.jpg' : '/toyota-HR-profile.jpeg'} alt="" className="h-full w-full object-cover" /></div>
+            <div><p className="text-xs font-semibold leading-tight">{candidate.brand === 'RIVER' ? 'River HR' : 'Nippon Toyota HR'}</p><p className="text-[10px] text-white/80">Official Business Account</p></div>
           </div>
           <div className="min-h-[240px] bg-[#efeae2] p-3">
             <div className="mx-auto mb-3 w-fit rounded-md bg-[#E1F3FB] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-[#55656E]">Today</div>

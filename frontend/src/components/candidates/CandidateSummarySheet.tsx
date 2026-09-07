@@ -300,13 +300,13 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
         </colgroup>
         <tbody>
           <tr>
-            <Cell colSpan={7} className="text-[15px] font-bold tracking-wide h-8">NIPPON TOYOTA</Cell>
+          <Cell colSpan={7} className="text-[15px] font-bold tracking-wide h-8">{brand.name.toUpperCase()}</Cell>
             <Cell label>Sl No</Cell>
             <Cell colSpan={4}>{candidate.candidate_id}</Cell>
           </tr>
           <tr>
             <Cell colSpan={7} className="text-[10px] font-bold">
-              NIPPON MOTOR CORPORATION (P) LTD, NIPPON TOWERS, KALAMASSERY
+              {brand.companyName.toUpperCase()}, {brand.documentAddress.toUpperCase()}
             </Cell>
             <Cell label>Date :</Cell>
             <Cell colSpan={4}>{appliedOn}</Cell>

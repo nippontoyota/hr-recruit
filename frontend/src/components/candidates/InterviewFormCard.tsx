@@ -244,6 +244,7 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
 
   const interviewerMessage = () =>
     buildInterviewerWhatsAppMessage({
+      brand: candidate.brand,
       interviewerName,
       candidateName: candidate.full_name,
       interviewTitle: interviewTitle(ev),

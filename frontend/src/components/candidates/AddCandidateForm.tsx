@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Input, Select, Modal } from '../ui';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { createCandidate } from '../../api/candidates';
-import { NIPPON_BRANCHES, CANDIDATE_DEPARTMENTS } from '../../types';
+import { CANDIDATE_DEPARTMENTS } from '../../types';
+import { getBrandBranches } from '../../lib/branding';
 import { useAuth } from '../../auth';
 import { validateBasicCandidateForm } from '../../lib/validatePreForm';
 import { SHOW_DEV_DUMMY, nextDummyCandidate } from '../../lib/devDummyData';
@@ -299,7 +300,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
                 onChange={(e) => setBranchLocation(e.target.value)}
               >
                 <option value="">Select branch</option>
-                {NIPPON_BRANCHES.map(branch => (
+                {getBrandBranches(user?.brand).map(branch => (
                   <option key={branch} value={branch}>{branch}</option>
                 ))}
               </Select>

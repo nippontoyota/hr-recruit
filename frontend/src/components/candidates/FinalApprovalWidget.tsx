@@ -94,7 +94,7 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
       department: defaults.department || prev.department,
       joining_date: prev.joining_date || defaults.joining_date,
     }));
-  }, [candidate]);
+  }, [candidate, candidate.brand]);
 
   useEffect(() => {
     storeOfferFields(candidate.id, fields);
@@ -110,6 +110,7 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
         position_applied_for: candidate.position_applied_for,
         department: candidate.department,
         salary_data: candidate.salary_data,
+        brand: candidate.brand,
       },
       ...payloadFromOfferFields(fields),
     });
@@ -147,7 +148,7 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
       cancelled = true;
       controller.abort();
     };
-  }, [candidate.full_name, candidate.position_applied_for, candidate.department, candidate.salary_data, fields]);
+  }, [candidate.full_name, candidate.position_applied_for, candidate.department, candidate.salary_data, candidate.brand, fields]);
 
   useEffect(() => {
     return () => {

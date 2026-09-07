@@ -1,6 +1,7 @@
 import type { Candidate, Evaluation } from '../../types';
 import { formatDate, formatTime } from '../../lib/dateTime';
 import { interviewTitle } from '../../lib/interviewTitle';
+import { getBrandConfig } from '../../lib/branding';
 
 interface InterviewCommentSheetProps {
   candidate: Candidate;
@@ -27,6 +28,7 @@ const RatingRow = ({ label, max }: { label: string; max: number }) => (
 );
 
 export function InterviewCommentSheet({ candidate, evaluation }: InterviewCommentSheetProps) {
+    const brand = getBrandConfig(candidate.brand);
     const scores = evaluation.scores || {};
     const interviewer = String(scores.interviewer_name || '').trim();
     const scheduled = evaluation.scheduled_time;
@@ -37,13 +39,13 @@ export function InterviewCommentSheet({ candidate, evaluation }: InterviewCommen
       <div className="comment-sheet-page">
         <header className="comment-sheet-header">
           <div>
-            <p className="comment-sheet-eyebrow">NIPPON TOYOTA</p>
+            <p className="comment-sheet-eyebrow">{brand.name.toUpperCase()}</p>
             <h1>Interview Comment Sheet</h1>
             <p className="comment-sheet-subtitle">Confidential interviewer record</p>
           </div>
           <img
-            src="/nippon-toyota-logo.png"
-            alt="Nippon Toyota"
+            src={brand.logo}
+            alt={`${brand.name} logo`}
             className="comment-sheet-logo"
           />
         </header>

@@ -8,6 +8,7 @@ export interface JobOpening {
   headcount: number;
   created_at: string;
   updated_at: string;
+  brand?: string;
 }
 
 export interface JobOpeningInput {
@@ -15,6 +16,7 @@ export interface JobOpeningInput {
   department: string;
   location: string;
   headcount: number;
+  brand?: string;
 }
 
 export async function listOpenings(): Promise<JobOpening[]> {

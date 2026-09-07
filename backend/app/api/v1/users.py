@@ -2,12 +2,13 @@ from uuid import UUID
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 
 from app.core.database import get_db
 from app.api.v1.auth import clear_login_cache
 from app.core.deps import require_roles
 from app.core.security import hash_password
+from app.core.branding import brand_is_river
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.auth import UserOut, UserCreate, UserUpdate
@@ -83,7 +84,12 @@ def create_user(
             raise HTTPException(status_code=400, detail="Branch location is required for Local HR")
         local_hr_count = db.scalar(
             select(func.count(User.id))
-            .where(User.role == UserRole.LOCAL_HR, User.branch_location == body.branch_location, User.is_active == True)
+            .where(
+                User.role == UserRole.LOCAL_HR,
+                User.branch_location == body.branch_location,
+                User.is_active == True,
+                User.brand == "RIVER" if brand_is_river(body.brand) else or_(User.brand.is_(None), User.brand == "NIPPON_TOYOTA"),
+            )
         )
         if local_hr_count > 0:
             raise HTTPException(status_code=400, detail=f"A Local HR account already exists for {body.branch_location}")
@@ -95,6 +101,7 @@ def create_user(
         role=body.role,
         branch_location=body.branch_location,
         department=body.department,
+        brand="RIVER" if brand_is_river(body.brand) else None,
     )
     db.add(new_user)
     db.commit()
@@ -143,7 +150,13 @@ def update_user(
                 raise HTTPException(status_code=400, detail="Branch location is required for Local HR")
             local_hr_count = db.scalar(
                 select(func.count(User.id))
-                .where(User.role == UserRole.LOCAL_HR, User.branch_location == new_branch, User.id != user_id, User.is_active == True)
+                .where(
+                    User.role == UserRole.LOCAL_HR,
+                    User.branch_location == new_branch,
+                    User.id != user_id,
+                    User.is_active == True,
+                    User.brand == "RIVER" if brand_is_river(body.brand if body.brand is not None else found.brand) else or_(User.brand.is_(None), User.brand == "NIPPON_TOYOTA"),
+                )
             )
             if local_hr_count > 0:
                 raise HTTPException(status_code=400, detail=f"A Local HR account already exists for {new_branch}")
@@ -156,6 +169,8 @@ def update_user(
         found.branch_location = body.branch_location
     if body.department is not None:
         found.department = body.department
+    if body.brand is not None:
+        found.brand = "RIVER" if brand_is_river(body.brand) else None
     if body.password is not None:
         found.hashed_password = hash_password(body.password)
 

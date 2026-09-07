@@ -7,6 +7,7 @@ import { LoadingSpinner } from '../../components/ui';
 import { Home, ArrowLeft } from 'lucide-react';
 import type { Candidate } from '../../types';
 import { isAbortError } from '../../lib/utils';
+import { getBrandConfig } from '../../lib/branding';
 
 export default function PrintTechnicalTestPage() {
   const { id } = useParams();
@@ -74,6 +75,7 @@ export default function PrintTechnicalTestPage() {
     );
   }
 
+  const brand = getBrandConfig(candidate.brand);
   return (
     <div ref={componentRef} className="bg-white min-h-screen font-sans text-black print-container print:p-0 p-8 flex flex-col items-center">
       <div className="w-[800px] max-w-full">
@@ -107,11 +109,12 @@ export default function PrintTechnicalTestPage() {
         <div className="flex justify-between items-start mb-1 relative">
           {/* Logo / Company Name */}
           <div className="pt-0">
+            <img src={brand.logo} alt={`${brand.name} logo`} className="h-10 w-auto object-contain mb-1" />
             <h1 className="text-xl font-black uppercase tracking-tighter leading-none mb-0">
-              TOYOTA
+              {brand.name.toUpperCase()}
             </h1>
             <h2 className="text-xs font-bold uppercase tracking-widest text-gray-700 leading-tight">
-              Motor Corporation
+              {brand.companyName}
             </h2>
             <p className="text-[9px] mt-1 italic text-gray-600">
               *candidates with one year experience and above

@@ -8,6 +8,7 @@ from sqlalchemy import Select, and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.ho_pipeline import HO_HR_PIPELINE_STAGES
+from app.core.branding import NIPPON_TOYOTA, RIVER, brand_is_river
 from app.models.candidate import Candidate
 from app.models.enums import PipelineStage, UserRole
 from app.models.user import User
@@ -21,7 +22,12 @@ def _role_predicate(user: User):
     if user.role in (UserRole.ADMIN, UserRole.HO_HR):
         return Candidate.current_stage.in_(HO_HR_PIPELINE_STAGES)
     if user.role == UserRole.LOCAL_HR:
-        return Candidate.branch_location == user.branch_location
+        brand_clause = (
+            Candidate.brand == RIVER
+            if brand_is_river(user.brand)
+            else or_(Candidate.brand.is_(None), Candidate.brand == NIPPON_TOYOTA)
+        )
+        return and_(Candidate.branch_location == user.branch_location, brand_clause)
     return Candidate.id.is_(None)
 
 

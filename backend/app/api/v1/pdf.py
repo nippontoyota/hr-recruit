@@ -6,6 +6,7 @@ from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
 from app.core.deps import require_roles
+from app.core.branding import brand_is_river, normalize_brand, RIVER
 from app.models.enums import UserRole
 from app.models.user import User
 
@@ -14,9 +15,11 @@ router = APIRouter()
 _STATIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../static"))
 _FONT_DIR = os.path.join(_STATIC_DIR, "fonts")
 _LOGO_PATH = os.path.join(_STATIC_DIR, "nippon-toyota-logo-print.png")
+_RIVER_LOGO_PATH = os.path.join(_STATIC_DIR, "river-logo.jpg")
 _SIGNATURE_PATH = os.path.join(_STATIC_DIR, "jerry-jacob-mathew-signature.png")
 _SIGNATURE_ASPECT = 612 / 1092  # height / width of the source signature image
 _MAROON = (214, 28, 36)
+_RIVER_BLUE = (0, 125, 182)
 
 
 def s(text) -> str:
@@ -99,8 +102,9 @@ def resolve_offer_fields(payload: dict) -> dict:
 
 
 class ToyotaPDF(FPDF):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, brand: str = "NIPPON_TOYOTA", **kwargs):
         super().__init__(*args, **kwargs)
+        self.brand = normalize_brand(brand)
         self.add_font("Roboto", "", os.path.join(_FONT_DIR, "Roboto-Regular.ttf"))
         self.add_font("Roboto", "B", os.path.join(_FONT_DIR, "Roboto-Bold.ttf"))
         self.add_font("Roboto", "I", os.path.join(_FONT_DIR, "Roboto-Italic.ttf"))
@@ -108,17 +112,20 @@ class ToyotaPDF(FPDF):
         self.set_auto_page_break(auto=True, margin=54)
 
     def _maroon_line(self, y: float) -> None:
-        self.set_draw_color(*_MAROON)
+        self.set_draw_color(*(_RIVER_BLUE if brand_is_river(self.brand) else _MAROON))
         self.set_line_width(0.45)
         self.line(20, y, 190, y)
 
     def header(self):
-        if os.path.isfile(_LOGO_PATH):
-            self.image(_LOGO_PATH, x=20, y=6, w=52)
+        logo_path = _RIVER_LOGO_PATH if brand_is_river(self.brand) else _LOGO_PATH
+        if os.path.isfile(logo_path):
+            self.image(logo_path, x=20, y=6, w=52)
         self._maroon_line(34)
         self.set_y(40)
 
     def footer(self):
+        if brand_is_river(self.brand):
+            return
         self._maroon_line(246)
         self.set_y(248)
         self.set_text_color(0, 0, 0)
@@ -164,14 +171,17 @@ def generate_offer_letter_pdf(payload: dict) -> bytearray:
     others = _inr(fields["others"] or "0")
     gross = _inr(fields["gross_salary"] or "0")
     joining = fields["joining_date"] or "[joining date]"
+    brand = normalize_brand(payload.get("brand") or (payload.get("candidate") or {}).get("brand"))
+    brand_name = "River" if brand == RIVER else "Nippon Toyota"
+    company_name = "River Mobility" if brand == RIVER else "NIPPON MOTOR CORPORATION PVT LTD."
 
-    pdf = ToyotaPDF()
+    pdf = ToyotaPDF(brand=brand)
     pdf.add_page()
     pdf.set_text_color(0, 0, 0)
 
     _write_parts(pdf, [("Dear Mr. ", False), (name, True)])
     pdf.ln(2)
-    _write(pdf, "Greetings from Team Nippon.!!!", h=7)
+    _write(pdf, f"Greetings from Team {brand_name}.!!!", h=7)
     pdf.ln(3)
     _write_parts(
         pdf,
@@ -208,8 +218,8 @@ def generate_offer_letter_pdf(payload: dict) -> bytearray:
         "probation period as per your performance.",
     )
     pdf.ln(3)
-    _write(pdf, "We look forward to you joining our team. We are sure that you will have a bright career with our company.")
-    _write(pdf, "We take this opportunity to welcome you and your family into the folds of our company.")
+    _write(pdf, f"We look forward to you joining our team. We are sure that you will have a bright career with {brand_name}.")
+    _write(pdf, f"We take this opportunity to welcome you and your family into the folds of {brand_name}.")
     pdf.ln(3)
     _write(pdf, "Yours faithfully,", h=7)
     sig_w = 40
@@ -219,7 +229,7 @@ def generate_offer_letter_pdf(payload: dict) -> bytearray:
     pdf.set_y(sig_y + sig_w * _SIGNATURE_ASPECT + 2)
     _write(pdf, "JERRY JACOB MATHEW", bold=True, h=6)
     _write(pdf, "HUMAN RESOURCES MANAGER", bold=True, size=10, h=5)
-    _write(pdf, "NIPPON MOTOR CORPORATION PVT LTD.", bold=True, size=10, h=5)
+    _write(pdf, company_name, bold=True, size=10, h=5)
 
     return pdf.output()
 

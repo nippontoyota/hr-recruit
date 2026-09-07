@@ -14,6 +14,7 @@ from app.models.activity_log import ActivityLog
 from app.models.enums import PipelineStage, InterviewMode, InterviewStatus, ActivityType
 from app.schemas.candidate import WhatsAppInviteCreate
 from app.core.config import settings
+from app.core.branding import brand_setting
 from app.services.doubletick import (
     send_template,
     DoubleTickError,
@@ -99,7 +100,11 @@ def send_branch_interview_invite(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Interview is not scheduled yet")
 
     placeholders = hr_interview_placeholders(body.variables)
-    template_name = settings.whatsapp_hr_interview_template_name
+    template_name = brand_setting(
+        candidate.brand,
+        settings.whatsapp_hr_interview_template_name,
+        settings.whatsapp_river_hr_interview_template_name,
+    )
     try:
         res = send_template(
             to_phone=candidate.phone,

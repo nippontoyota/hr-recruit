@@ -1,5 +1,6 @@
 import type { Candidate } from '../../types';
 import { formatDate } from '../../lib/dateTime';
+import { getBrandConfig } from '../../lib/branding';
 
 interface SalaryProposalSheetDocumentProps {
   candidate: Candidate;
@@ -35,6 +36,7 @@ function getStr(sal: Record<string, unknown> | undefined, ...keys: string[]): st
 
 export function SalaryProposalSheetDocument({ candidate, className = '' }: SalaryProposalSheetDocumentProps) {
   const sal = (candidate.salary_data || {}) as Record<string, unknown>;
+  const brand = getBrandConfig(candidate.brand);
   const raw = (candidate.profile?.raw_data || {}) as Record<string, unknown>;
 
   // Metadata
@@ -45,7 +47,7 @@ export function SalaryProposalSheetDocument({ candidate, className = '' }: Salar
   const proposedDoj = rawDoj ? formatDate(rawDoj) : '—';
   const department = getStr(sal, 'department', 'Department') || candidate.department || '—';
   const designation = getStr(sal, 'designation', 'Designation') || candidate.position_applied_for || '—';
-  const branch = getStr(sal, 'branch', 'Branch') || candidate.branch_location || 'Kalamassery';
+  const branch = getStr(sal, 'branch', 'Branch') || candidate.branch_location || brand.name;
   const lastSalary = getNum(sal, 'last salary', 'last_salary', 'Last Salary') ?? (candidate.profile?.current_salary ? Number(candidate.profile.current_salary) : null);
   const expectedSalary = getStr(sal, 'candidate expected salary', 'candidate_expected_salary', 'Candidate Expected Salary') || (candidate.profile?.expected_salary ? String(candidate.profile.expected_salary) : '—');
   const totalExp = getStr(sal, 'total experience', 'total_experience', 'Total Experience ') || (raw.totalWorkExperience ? `${raw.totalWorkExperience} Year(s)` : '—');
@@ -102,13 +104,13 @@ export function SalaryProposalSheetDocument({ candidate, className = '' }: Salar
       {/* Main Header */}
       <div className="text-center mb-4">
         <h1 className="text-[13px] font-black tracking-wide uppercase text-[#1e3a5f]">
-          NIPPON MOTOR CORPORATION (P) LTD, {branch.toUpperCase()}
+          {brand.companyName.toUpperCase()}, {branch.toUpperCase()}
         </h1>
         <h2 className="text-[11px] font-bold tracking-wider uppercase text-slate-700 mt-0.5">
           HUMAN RESOURCES DEPARTMENT
         </h2>
         <div className="inline-block bg-[#1e3a5f] text-white font-extrabold text-[11.5px] tracking-widest uppercase px-4 py-0.5 mt-1.5 rounded-xs">
-          SALARY PROPOSAL - NIPPON
+          SALARY PROPOSAL - {brand.name.toUpperCase()}
         </div>
       </div>
 

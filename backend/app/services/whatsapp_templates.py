@@ -1,6 +1,6 @@
 """DoubleTick / Meta WhatsApp template copy. Placeholder {{n}} order must match `keys`."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 @dataclass(frozen=True)
@@ -306,4 +306,37 @@ ALL_SPECS = (
     INTERVIEW_SCHEDULE,
     ONLINE_INTERVIEW_SCHEDULE,
     OFFER_INTIMATION,
+)
+
+
+def _river_spec(spec: WhatsAppTemplateSpec, name: str) -> WhatsAppTemplateSpec:
+    """Create a separate River template copy; Toyota specs remain unchanged."""
+    return replace(
+        spec,
+        name=name,
+        body=(
+            spec.body
+            .replace("Nippon Toyota", "River")
+            .replace("Nippon HRD", "River HRD")
+            .replace("Nippon", "River")
+        ),
+        examples=tuple(
+            value
+            .replace("Nippon Toyota", "River")
+            .replace("Nippon", "River")
+            for value in spec.examples
+        ),
+    )
+
+
+RIVER_SPECS = (
+    _river_spec(CALL_LETTER, "river_interview_call_letter"),
+    _river_spec(CALL_LETTER_V2_ONE_TOUCHPOINT, "river_interview_call_letter_v2"),
+    _river_spec(CALL_LETTER_V2_TWO_TOUCHPOINTS, "river_interview_call_letter_v2_two_touchpoints"),
+    _river_spec(INTERVIEW_SCHEDULE, "river_interview_schedule"),
+    _river_spec(INTERVIEWER_INVITE, "river_interviewer_invite"),
+    _river_spec(TECHNICAL_TEST, "river_technical_test_invite"),
+    _river_spec(INTERVIEW_SCHEDULE, "river_head_office_interview_invite"),
+    _river_spec(ONLINE_INTERVIEW_SCHEDULE, "river_head_office_online_interview_invite"),
+    _river_spec(OFFER_INTIMATION, "river_offer_intimation"),
 )

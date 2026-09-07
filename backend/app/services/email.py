@@ -16,6 +16,7 @@ def send_email(
     body_html: str,
     cc_emails: list[str] | None = None,
     attachment: tuple[bytes, str, str] | None = None,
+    from_name: str | None = None,
 ):
     """
     Sends an HTML email using standard SMTP.
@@ -31,7 +32,7 @@ def send_email(
 
         msg = EmailMessage()
         msg['Subject'] = subject
-        msg['From'] = settings.smtp_from_email
+        msg['From'] = f"{from_name} <{settings.smtp_from_email}>" if from_name else settings.smtp_from_email
         msg['To'] = to_email
         if cc_emails:
             msg['Cc'] = ", ".join(cc_emails)
@@ -70,6 +71,7 @@ def send_email_with_pdf(
     pdf_bytes: bytes,
     pdf_filename: str,
     cc_emails: list[str] | None = None,
+    from_name: str | None = None,
 ):
     """Sends an HTML email with a PDF attachment using standard SMTP."""
     return send_email(
@@ -77,5 +79,6 @@ def send_email_with_pdf(
         subject=subject,
         body_html=body_html,
         cc_emails=cc_emails,
+        from_name=from_name,
         attachment=(pdf_bytes, 'application', pdf_filename),
     )

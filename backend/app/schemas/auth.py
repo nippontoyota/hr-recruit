@@ -75,6 +75,7 @@ class UserCreate(BaseModel):
     role: UserRole
     branch_location: str | None = None
     department: str | None = None
+    brand: str | None = None
 
 
 class UserUpdate(BaseModel):
@@ -83,6 +84,7 @@ class UserUpdate(BaseModel):
     role: UserRole | None = None
     branch_location: str | None = None
     department: str | None = None
+    brand: str | None = None
     password: str | None = None
 
 

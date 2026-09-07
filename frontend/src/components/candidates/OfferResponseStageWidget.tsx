@@ -6,6 +6,7 @@ import { extractError } from '../../lib/utils';
 import { defaultOfferFields, formatOfferJoinDate } from '../../lib/offerLetter';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { getBrandConfig } from '../../lib/branding';
 
 type OfferResponse = 'ACCEPTED' | 'DECLINED';
 
@@ -28,6 +29,7 @@ export function OfferResponseStageWidget({ candidate, onUpdate, isReadOnly = fal
   const candidateName = offerFields.candidate_name || candidate.full_name || 'Candidate';
   const role = offerFields.designation || candidate.position_applied_for || candidate.department || 'the offered position';
   const joiningDate = offerFields.joining_date ? formatOfferJoinDate(offerFields.joining_date) : '';
+  const brand = getBrandConfig(candidate.brand);
   const acceptanceEmailStatus = String(candidate.profile?.raw_data?.offerAcceptanceEmailStatus || '');
   const acceptanceEmailError = String(candidate.profile?.raw_data?.offerAcceptanceEmailError || '');
   const acceptanceEmailSent = acceptanceEmailStatus === 'SENT';
@@ -176,9 +178,9 @@ export function OfferResponseStageWidget({ candidate, onUpdate, isReadOnly = fal
             <p className="mt-1 font-semibold text-text-primary">Offer Acceptance Confirmation &amp; Documents Required for Joining</p>
             <div className="mt-4 space-y-3 border-t border-border pt-4 leading-6">
               <p>Dear {candidateName},</p>
-              <p>We are pleased to confirm your acceptance of the employment offer for the position of <strong>{role}</strong> at Nippon Toyota.</p>
-              <p>We look forward to welcoming you to our organization on your joining date, <strong>{joiningDate || 'joining date not set'}</strong>, at Nippon Toyota, Kalamassery.</p>
-              <p><strong>Location:</strong> Nippon Toyota, Kalamassery - Google Maps<br /><strong>Reporting Location:</strong> 3rd Floor - Sales Training Room / HR Department</p>
+              <p>We are pleased to confirm your acceptance of the employment offer for the position of <strong>{role}</strong> at {brand.name}.</p>
+              <p>We look forward to welcoming you to our organization on your joining date, <strong>{joiningDate || 'joining date not set'}</strong>, at {brand.name}, Kalamassery.</p>
+              <p><strong>Location:</strong> {brand.name}, Kalamassery - Google Maps<br /><strong>Reporting Location:</strong> 3rd Floor - Sales Training Room / HR Department</p>
               <p>Please carry the following documents and information with you on the day of joining:</p>
               <div>
                 <p className="font-semibold text-text-primary">Documents to be Carried</p>
@@ -196,7 +198,7 @@ export function OfferResponseStageWidget({ candidate, onUpdate, isReadOnly = fal
                 <ul className="ml-5 list-disc"><li>PF UAN Number</li><li>ESI Number, if available</li></ul>
               </div>
               <p>For further details or any queries, please feel free to contact us at 8606986060.</p>
-              <p>Best regards,<br />Mathew Paul<br />Talent Acquisition Team<br />Nippon Toyota<br />8606986060, 9544286099</p>
+              <p>Best regards,<br />Mathew Paul<br />Talent Acquisition Team<br />{brand.name}<br />8606986060, 9544286099</p>
             </div>
           </div>
 

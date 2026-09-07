@@ -5,6 +5,7 @@ import type { User } from '../types';
 import { toast } from 'sonner';
 import { Button, Modal, Input, LoadingSpinner, Select } from '../components/ui';
 import { isAbortError } from '../lib/utils';
+import { getBrandBranches } from '../lib/branding';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<User[]>([]);
@@ -23,6 +24,7 @@ export default function AdminUsers() {
     full_name: '',
     password: '',
     role: 'LOCAL_HR',
+    brand: 'NIPPON_TOYOTA',
     branch_location: '',
     department: ''
   });
@@ -90,6 +92,7 @@ export default function AdminUsers() {
         role: formData.role,
         branch_location: formData.branch_location || null,
         department: formData.department || null,
+        brand: formData.brand,
       };
       if (formData.password) {
         updateData.password = formData.password;
@@ -127,6 +130,7 @@ export default function AdminUsers() {
       full_name: user.full_name,
       password: '',
       role: user.role,
+      brand: user.brand || 'NIPPON_TOYOTA',
       branch_location: user.branch_location || '',
       department: user.department || ''
     });
@@ -145,6 +149,7 @@ export default function AdminUsers() {
       full_name: '',
       password: '',
       role: 'LOCAL_HR',
+      brand: 'NIPPON_TOYOTA',
       branch_location: '',
       department: ''
     });
@@ -345,6 +350,18 @@ export default function AdminUsers() {
             </div>
           </div>
 
+          <div>
+            <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Brand Workspace</label>
+            <Select
+              value={formData.brand}
+              onChange={(e: any) => setFormData({ ...formData, brand: e.target.value, branch_location: '' })}
+              className="bg-surface border-border shadow-sm rounded-md h-9 text-sm w-full"
+            >
+              <option value="NIPPON_TOYOTA">Nippon Toyota</option>
+              <option value="RIVER">River</option>
+            </Select>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Access Role</label>
@@ -391,6 +408,8 @@ export default function AdminUsers() {
                 className="bg-primary/5 border-primary/20 shadow-sm rounded-md h-9 text-sm w-full font-medium"
               >
                 <option value="">Select branch...</option>
+                {formData.brand === 'RIVER' && getBrandBranches(formData.brand).map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+                {formData.brand === 'NIPPON_TOYOTA' && <>
                 <option value="Enchakkal">Enchakkal</option>
                 <option value="Kazhakootam">Kazhakootam</option>
                 <option value="Kochuveli">Kochuveli</option>
@@ -407,6 +426,7 @@ export default function AdminUsers() {
                 <option value="Pathanamthitta">Pathanamthitta</option>
                 <option value="Thiruvalla">Thiruvalla</option>
                 <option value="Kayamkulam">Kayamkulam</option>
+                </>}
               </Select>
             </div>
           )}

@@ -16,6 +16,7 @@ export interface BrandConfig {
   companyName: string;
   documentAddress: string;
   documentContact: string;
+  branches: string[];
 }
 
 const configs: Record<BrandKey, BrandConfig> = {
@@ -33,6 +34,7 @@ const configs: Record<BrandKey, BrandConfig> = {
     companyName: 'Nippon Motor Corporation Pvt Ltd',
     documentAddress: 'Nippon Toyota, Kalamassery',
     documentContact: '8606986060, 9544286099',
+    branches: ['Trivandrum', 'Kollam', 'Pathanamthitta', 'Kayamkulam', 'Kottayam', 'Muvattupuzha', 'Kalamassery', 'Cochin', 'Thrissur'],
   },
   RIVER: {
     key: 'RIVER',
@@ -48,6 +50,7 @@ const configs: Record<BrandKey, BrandConfig> = {
     companyName: 'River Mobility',
     documentAddress: 'Electric mobility recruitment',
     documentContact: 'River recruitment team',
+    branches: ['River'],
   },
 };
 
@@ -57,6 +60,10 @@ export function normalizeBrand(value?: string | null): BrandKey {
 
 export function getBrandConfig(value?: string | null): BrandConfig {
   return configs[normalizeBrand(value)];
+}
+
+export function getBrandBranches(value?: string | null): string[] {
+  return getBrandConfig(value).branches;
 }
 
 export function brandThemeStyle(value?: string | null): CSSProperties {

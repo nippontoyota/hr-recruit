@@ -19,6 +19,7 @@ class JobOpening(Base):
     department: Mapped[str] = mapped_column(String(100), nullable=False)
     location: Mapped[str] = mapped_column(String(255), nullable=False)
     headcount: Mapped[int] = mapped_column(Integer, nullable=False)
+    brand: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id", ondelete="SET NULL"), nullable=True
     )

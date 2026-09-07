@@ -246,6 +246,7 @@ export function EvaluationStageWidget({
     openWhatsAppChat(
       candidate.phone,
       buildTechnicalTestWhatsAppMessage({
+        brand: candidate.brand,
         candidateName: candidate.full_name,
         position: designation || candidate.department || 'the role',
         link: waShareLink,

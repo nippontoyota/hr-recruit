@@ -1,10 +1,11 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import require_roles
+from app.core.branding import NIPPON_TOYOTA, RIVER, brand_is_river
 from app.models.enums import InterviewMode, UserRole
 from app.models.settings import HR_BRANCHES, InterviewerName, LocationTemplate, MessageTemplate, TouchpointTemplate
 from app.models.user import User
@@ -59,6 +60,20 @@ def _resolve_branch(user: User, override: str | None = None) -> str:
     return branch
 
 
+def _effective_brand(user: User, override: str | None = None) -> str | None:
+    if user.role == UserRole.LOCAL_HR:
+        return RIVER if brand_is_river(user.brand) else None
+    return RIVER if brand_is_river(override or user.brand) else None
+
+
+def _brand_clause(column, brand: str | None):
+    return column == RIVER if brand == RIVER else or_(column.is_(None), column == NIPPON_TOYOTA)
+
+
+def _local_brand_clause(model, user: User):
+    return _brand_clause(model.brand, _effective_brand(user))
+
+
 def _ensure_kalamassery_for_branch(db: Session, branch: str) -> None:
     if branch != "Kalamassery":
         return
@@ -93,7 +108,7 @@ def list_location_templates(
     return list(
         db.scalars(
             select(LocationTemplate)
-            .where(LocationTemplate.branch_location == branch_loc)
+            .where(LocationTemplate.branch_location == branch_loc, _local_brand_clause(LocationTemplate, user) if user.role == UserRole.LOCAL_HR else True)
             .order_by(LocationTemplate.name)
         ).all()
     )
@@ -106,12 +121,14 @@ def create_location_template(
     user: User = Depends(_HR),
 ):
     branch_loc = _resolve_branch(user, body.branch_location)
+    brand = _effective_brand(user, body.brand)
     name = body.name.strip()
     if not name or not body.location_or_link.strip():
         raise HTTPException(status_code=400, detail="Name and maps link are required.")
     existing = db.scalar(
         select(LocationTemplate).where(
             LocationTemplate.branch_location == branch_loc,
+            _brand_clause(LocationTemplate.brand, brand),
             func.lower(LocationTemplate.name) == name.lower(),
         )
     )
@@ -124,6 +141,7 @@ def create_location_template(
         return existing
     row = LocationTemplate(
         branch_location=branch_loc,
+        brand=brand,
         name=name,
         location_or_link=body.location_or_link.strip(),
         mode=body.mode or InterviewMode.PHYSICAL,
@@ -145,7 +163,7 @@ def update_location_template(
 ):
     branch_loc = _resolve_branch(user, branch)
     row = db.get(LocationTemplate, template_id)
-    if not row or row.branch_location != branch_loc:
+    if not row or row.branch_location != branch_loc or (user.role == UserRole.LOCAL_HR and brand_is_river(row.brand) != brand_is_river(user.brand)):
         raise HTTPException(status_code=404, detail="Location template not found")
     data = body.model_dump(exclude_unset=True)
     for field, value in data.items():
@@ -164,7 +182,7 @@ def delete_location_template(
 ):
     branch_loc = _resolve_branch(user, branch)
     row = db.get(LocationTemplate, template_id)
-    if not row or row.branch_location != branch_loc:
+    if not row or row.branch_location != branch_loc or (user.role == UserRole.LOCAL_HR and brand_is_river(row.brand) != brand_is_river(user.brand)):
         raise HTTPException(status_code=404, detail="Location template not found")
     db.delete(row)
     db.commit()
@@ -180,7 +198,7 @@ def list_touchpoint_templates(
     return list(
         db.scalars(
             select(TouchpointTemplate)
-            .where(TouchpointTemplate.branch_location == branch_loc)
+            .where(TouchpointTemplate.branch_location == branch_loc, _local_brand_clause(TouchpointTemplate, user) if user.role == UserRole.LOCAL_HR else True)
             .order_by(TouchpointTemplate.name)
         ).all()
     )
@@ -193,6 +211,7 @@ def create_touchpoint_template(
     user: User = Depends(_HR),
 ):
     branch_loc = _resolve_branch(user, body.branch_location)
+    brand = _effective_brand(user, body.brand)
     name = body.name.strip()
     meeting_point = body.meeting_point.strip()
     touch_point_1_label = body.touch_point_1_label.strip()
@@ -204,6 +223,7 @@ def create_touchpoint_template(
     existing = db.scalar(
         select(TouchpointTemplate).where(
             TouchpointTemplate.branch_location == branch_loc,
+            _brand_clause(TouchpointTemplate.brand, brand),
             func.lower(TouchpointTemplate.name) == name.lower(),
         )
     )
@@ -220,6 +240,7 @@ def create_touchpoint_template(
         return existing
     row = TouchpointTemplate(
         branch_location=branch_loc,
+        brand=brand,
         name=name,
         meeting_point=meeting_point,
         touch_point_1_label=touch_point_1_label,
@@ -243,7 +264,7 @@ def delete_touchpoint_template(
 ):
     branch_loc = _resolve_branch(user, branch)
     row = db.get(TouchpointTemplate, template_id)
-    if not row or row.branch_location != branch_loc:
+    if not row or row.branch_location != branch_loc or (user.role == UserRole.LOCAL_HR and brand_is_river(row.brand) != brand_is_river(user.brand)):
         raise HTTPException(status_code=404, detail="Touchpoint template not found")
     db.delete(row)
     db.commit()
@@ -252,18 +273,23 @@ def delete_touchpoint_template(
 @router.get("/messages", response_model=list[MessageTemplateResponse])
 def list_message_templates(
     db: Session = Depends(get_db),
-    _: User = Depends(_HR),
+    user: User = Depends(_HR),
 ):
-    return list(db.scalars(select(MessageTemplate).order_by(MessageTemplate.name)).all())
+    statement = select(MessageTemplate)
+    if user.role == UserRole.LOCAL_HR:
+        statement = statement.where(_local_brand_clause(MessageTemplate, user))
+    return list(db.scalars(statement.order_by(MessageTemplate.name)).all())
 
 
 @router.post("/messages", response_model=MessageTemplateResponse, status_code=status.HTTP_201_CREATED)
 def create_message_template(
     body: MessageTemplateCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(_HR),
+    user: User = Depends(_HR),
 ):
-    row = MessageTemplate(**body.model_dump())
+    values = body.model_dump()
+    values["brand"] = _effective_brand(user, body.brand)
+    row = MessageTemplate(**values)
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -275,10 +301,10 @@ def update_message_template(
     template_id: uuid.UUID,
     body: MessageTemplateUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(_HR),
+    user: User = Depends(_HR),
 ):
     row = db.get(MessageTemplate, template_id)
-    if not row:
+    if not row or (user.role == UserRole.LOCAL_HR and brand_is_river(row.brand) != brand_is_river(user.brand)):
         raise HTTPException(status_code=404, detail="Message template not found")
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(row, field, value)
@@ -291,10 +317,10 @@ def update_message_template(
 def delete_message_template(
     template_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(_HR),
+    user: User = Depends(_HR),
 ):
     row = db.get(MessageTemplate, template_id)
-    if not row:
+    if not row or (user.role == UserRole.LOCAL_HR and brand_is_river(row.brand) != brand_is_river(user.brand)):
         raise HTTPException(status_code=404, detail="Message template not found")
     db.delete(row)
     db.commit()
@@ -310,7 +336,7 @@ def list_interviewers(
     return list(
         db.scalars(
             select(InterviewerName)
-            .where(InterviewerName.branch_location == branch_loc)
+            .where(InterviewerName.branch_location == branch_loc, _local_brand_clause(InterviewerName, user) if user.role == UserRole.LOCAL_HR else True)
             .order_by(InterviewerName.name)
         ).all()
     )
@@ -323,6 +349,7 @@ def create_interviewer(
     user: User = Depends(_HR),
 ):
     branch_loc = _resolve_branch(user, body.branch_location)
+    brand = _effective_brand(user, body.brand)
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Interviewer name is required.")
@@ -335,6 +362,7 @@ def create_interviewer(
     existing = db.scalar(
         select(InterviewerName).where(
             InterviewerName.branch_location == branch_loc,
+            _brand_clause(InterviewerName.brand, brand),
             func.lower(InterviewerName.name) == name.lower(),
         )
     )
@@ -344,7 +372,7 @@ def create_interviewer(
             db.commit()
             db.refresh(existing)
         return existing
-    row = InterviewerName(branch_location=branch_loc, name=name, phone=phone)
+    row = InterviewerName(branch_location=branch_loc, brand=brand, name=name, phone=phone)
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -361,7 +389,7 @@ def update_interviewer(
 ):
     branch_loc = _resolve_branch(user, branch)
     row = db.get(InterviewerName, interviewer_id)
-    if not row or row.branch_location != branch_loc:
+    if not row or row.branch_location != branch_loc or (user.role == UserRole.LOCAL_HR and brand_is_river(row.brand) != brand_is_river(user.brand)):
         raise HTTPException(status_code=404, detail="Interviewer name not found")
     try:
         row.phone = validate_phone(body.phone, "Interviewer phone")
@@ -381,7 +409,7 @@ def delete_interviewer(
 ):
     branch_loc = _resolve_branch(user, branch)
     row = db.get(InterviewerName, interviewer_id)
-    if not row or row.branch_location != branch_loc:
+    if not row or row.branch_location != branch_loc or (user.role == UserRole.LOCAL_HR and brand_is_river(row.brand) != brand_is_river(user.brand)):
         raise HTTPException(status_code=404, detail="Interviewer name not found")
     db.delete(row)
     db.commit()

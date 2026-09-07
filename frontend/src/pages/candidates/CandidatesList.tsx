@@ -21,6 +21,7 @@ import { useCandidatesList } from '../../hooks/api/useCandidates';
 import { toast } from 'sonner';
 import { CandidateTableFilter } from '../../components/candidates/CandidateTableFilter';
 import { cycleSort, type CandidateSortField } from '../../lib/candidateListQuery';
+import { getBrandConfig } from '../../lib/branding';
 
 function CandidatesTableSkeleton() {
   return (
@@ -110,7 +111,7 @@ export default function CandidatesList() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'nippon-toyota-candidates.csv';
+      link.download = `${getBrandConfig(user?.brand).name.toLowerCase().replace(/\s+/g, '-')}-candidates.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();
