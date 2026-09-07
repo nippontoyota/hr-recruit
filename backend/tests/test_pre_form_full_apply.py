@@ -86,6 +86,7 @@ def test_public_apply_full_saves_resume_and_photo():
             )
         assert response.status_code == 200, response.text
         assert upload.call_count == 2, "expected both resume and photo to reach storage.upload_object"
+        assert response.json()["has_resume"] is True
     finally:
         app.dependency_overrides.clear()
 
@@ -122,6 +123,111 @@ def test_public_apply_full_updates_name_and_email_to_latest_submission():
         assert response.status_code == 200, response.text
         assert row.full_name == "Shiva Sajay"
         assert row.email == "shiva.sajay@example.com"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_public_upload_urls_batches_signed_uploads():
+    import json
+
+    row = _candidate()
+    db = MagicMock()
+    db.scalar.return_value = row
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        with patch(
+            "app.services.storage.create_signed_upload_url",
+            side_effect=lambda path: {"signed_url": f"https://signed.example/{path}"},
+        ) as sign:
+            response = client.post(
+                "/api/v1/candidates/public-upload-urls/live-token",
+                json={
+                    "files": [
+                        {
+                            "kind": "resume",
+                            "file_name": "resume.pdf",
+                            "content_type": "application/pdf",
+                            "file_size": 100,
+                        },
+                        {
+                            "kind": "photo",
+                            "file_name": "photo.jpg",
+                            "content_type": "image/jpeg",
+                            "file_size": 100,
+                        },
+                    ]
+                },
+            )
+        assert response.status_code == 200, response.text
+        assert {item["kind"] for item in response.json()["files"]} == {"resume", "photo"}
+        assert sign.call_count == 2
+        db.commit.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_public_upload_confirm_batches_storage_checks_and_one_commit():
+    row = _candidate()
+    db = MagicMock()
+    db.scalar.return_value = row
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        with (
+            patch("app.services.storage.object_exists", return_value=True) as exists,
+            patch("app.api.v1.candidates_public.get_resume_document", return_value=None),
+        ):
+            response = client.post(
+                "/api/v1/candidates/public-upload-confirms/live-token",
+                json={
+                    "files": [
+                        {
+                            "kind": "resume",
+                            "path": f"candidates/{row.id}/resume-upload.pdf",
+                            "file_name": "resume.pdf",
+                            "content_type": "application/pdf",
+                            "file_size": 100,
+                        },
+                        {
+                            "kind": "photo",
+                            "path": f"candidates/{row.id}/photo-upload.jpg",
+                            "file_name": "photo.jpg",
+                            "content_type": "image/jpeg",
+                            "file_size": 100,
+                        },
+                    ]
+                },
+            )
+        assert response.status_code == 200, response.text
+        assert response.json() == {"status": "ok"}
+        assert exists.call_count == 2
+        db.commit.assert_called_once()
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_public_upload_confirm_rejects_path_outside_candidate_prefix():
+    row = _candidate()
+    db = MagicMock()
+    db.scalar.return_value = row
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        with patch("app.services.storage.object_exists") as exists:
+            response = client.post(
+                "/api/v1/candidates/public-upload-confirms/live-token",
+                json={
+                    "files": [{
+                        "kind": "resume",
+                        "path": "candidates/other/resume.pdf",
+                        "file_name": "resume.pdf",
+                        "content_type": "application/pdf",
+                        "file_size": 100,
+                    }]
+                },
+            )
+        assert response.status_code == 400
+        exists.assert_not_called()
+        db.commit.assert_not_called()
+        assert row.pre_form_status == FormStatus.SENT
     finally:
         app.dependency_overrides.clear()
 

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -46,7 +47,13 @@ from app.services import storage
 from sqlalchemy import select
 
 
-def _public_out(row: Candidate, db: Session, *, token: str | None = None) -> PublicCandidateOut:
+def _public_out(
+    row: Candidate,
+    db: Session,
+    *,
+    token: str | None = None,
+    has_resume: bool | None = None,
+) -> PublicCandidateOut:
     return PublicCandidateOut(
         full_name=row.full_name,
         phone=row.phone,
@@ -55,7 +62,7 @@ def _public_out(row: Candidate, db: Session, *, token: str | None = None) -> Pub
         brand=normalize_brand(row.brand),
         position_applied_for=row.position_applied_for,
         experience=row.experience,
-        has_resume=row.id in resume_candidate_ids(db, [row.id]),
+        has_resume=has_resume if has_resume is not None else row.id in resume_candidate_ids(db, [row.id]),
         token=token,
     )
 
@@ -163,15 +170,26 @@ class PublicUploadConfirmRequest(BaseModel):
     file_size: int = Field(gt=0)
 
 
-@router.post("/public-upload-url/{token}", response_model=PublicUploadUrlOut)
-def public_upload_url(
-    token: str,
+class PublicUploadUrlsRequest(BaseModel):
+    files: list[PublicUploadUrlRequest] = Field(min_length=1, max_length=2)
+
+
+class PublicUploadUrlsOut(BaseModel):
+    files: list[PublicUploadUrlOut]
+
+
+class PublicUploadConfirmBatchRequest(BaseModel):
+    files: list[PublicUploadConfirmRequest] = Field(min_length=1, max_length=2)
+
+
+class PublicUploadConfirmBatchOut(BaseModel):
+    status: str = "ok"
+
+
+def _public_upload_metadata(
+    row: Candidate,
     body: PublicUploadUrlRequest,
-    db: Session = Depends(get_db),
-):
-    row = candidate_by_public_token(db, token, PURPOSE_PRE_FORM)
-    if not pre_form_fillable(row):
-        raise HTTPException(status_code=400, detail="This form is not open for uploads.")
+) -> tuple[str, str, str, str]:
     if body.file_size > settings.resume_max_bytes:
         raise HTTPException(status_code=413, detail="The selected file is too large.")
 
@@ -187,13 +205,58 @@ def public_upload_url(
         filename = safe_filename(body.file_name, Path(body.file_name).suffix.lower() or ".jpg")
         path = f"candidates/{row.id}/photo-{uuid4().hex}{Path(filename).suffix.lower()}"
 
+    return path, filename, content_type, body.kind
+
+
+@router.post("/public-upload-url/{token}", response_model=PublicUploadUrlOut)
+def public_upload_url(
+    token: str,
+    body: PublicUploadUrlRequest,
+    db: Session = Depends(get_db),
+):
+    row = candidate_by_public_token(db, token, PURPOSE_PRE_FORM)
+    if not pre_form_fillable(row):
+        raise HTTPException(status_code=400, detail="This form is not open for uploads.")
+    path, filename, content_type, kind = _public_upload_metadata(row, body)
+
     signed = storage.create_signed_upload_url(path)
     return PublicUploadUrlOut(
-        kind=body.kind,
+        kind=kind,
         path=path,
         file_name=filename,
         content_type=content_type,
         signed_url=signed["signed_url"],
+    )
+
+
+@router.post("/public-upload-urls/{token}", response_model=PublicUploadUrlsOut)
+async def public_upload_urls(
+    token: str,
+    body: PublicUploadUrlsRequest,
+    db: Session = Depends(get_db),
+):
+    row = candidate_by_public_token(db, token, PURPOSE_PRE_FORM)
+    if not pre_form_fillable(row):
+        raise HTTPException(status_code=400, detail="This form is not open for uploads.")
+    if len({item.kind for item in body.files}) != len(body.files):
+        raise HTTPException(status_code=400, detail="Only one file per kind may be uploaded.")
+
+    prepared = [_public_upload_metadata(row, item) for item in body.files]
+    signed_urls = await asyncio.gather(*(
+        asyncio.to_thread(storage.create_signed_upload_url, path)
+        for path, _filename, _content_type, _kind in prepared
+    ))
+    return PublicUploadUrlsOut(
+        files=[
+            PublicUploadUrlOut(
+                kind=kind,
+                path=path,
+                file_name=filename,
+                content_type=content_type,
+                signed_url=signed["signed_url"],
+            )
+            for (path, filename, content_type, kind), signed in zip(prepared, signed_urls)
+        ]
     )
 
 
@@ -249,6 +312,79 @@ def public_upload_confirm(
     db.commit()
     return PublicUploadOut(status="ok", photo_url=body.path)
 
+
+@router.post("/public-upload-confirms/{token}", response_model=PublicUploadConfirmBatchOut)
+async def public_upload_confirm_batch(
+    token: str,
+    body: PublicUploadConfirmBatchRequest,
+    db: Session = Depends(get_db),
+):
+    row = candidate_by_public_token(db, token, PURPOSE_PRE_FORM)
+    if not pre_form_accepts_uploads(row):
+        raise HTTPException(status_code=400, detail="This form is not open for uploads.")
+    if len({item.kind for item in body.files}) != len(body.files):
+        raise HTTPException(status_code=400, detail="Only one file per kind may be confirmed.")
+
+    prefix = f"candidates/{row.id}/"
+    for item in body.files:
+        if not item.path.startswith(prefix) or not item.path.startswith(f"{prefix}{item.kind}-"):
+            raise HTTPException(status_code=400, detail="Invalid upload path.")
+        if item.file_size > settings.resume_max_bytes:
+            raise HTTPException(status_code=413, detail="The selected file is too large.")
+        if item.kind == "resume":
+            resume_extension(item.file_name)
+        elif item.content_type.lower() not in {"image/jpeg", "image/png", "image/webp"}:
+            raise HTTPException(status_code=400, detail="Photo must be a JPEG, PNG, or WEBP image.")
+
+    exists = await asyncio.gather(*(
+        asyncio.to_thread(storage.object_exists, item.path)
+        for item in body.files
+    ))
+    if not all(exists):
+        raise HTTPException(status_code=400, detail="The file upload did not finish. Please retry.")
+
+    old_storage_paths: list[str] = []
+    for item in body.files:
+        if item.kind == "resume":
+            extension = resume_extension(item.file_name)
+            content_type = resolve_resume_content_type(item.content_type, extension)
+            document = get_resume_document(db, row.id)
+            old_storage_path = document.storage_path if document else None
+            if document is None:
+                document = Document(
+                    candidate_id=row.id,
+                    doc_type=DocumentType.RESUME,
+                    file_name=safe_filename(item.file_name, extension),
+                    content_type=content_type,
+                    storage_path=item.path,
+                    file_size_bytes=item.file_size,
+                    uploaded_by_user_id=None,
+                )
+                db.add(document)
+            else:
+                document.file_name = safe_filename(item.file_name, extension)
+                document.content_type = content_type
+                document.storage_path = item.path
+                document.file_size_bytes = item.file_size
+                document.uploaded_by_user_id = None
+            if old_storage_path and old_storage_path != item.path:
+                old_storage_paths.append(old_storage_path)
+            continue
+
+        profile = row.profile
+        if profile is None:
+            profile = CandidateProfile(candidate_id=row.id)
+            row.profile = profile
+            db.add(profile)
+        if profile.photo_url and profile.photo_url != item.path and not profile.photo_url.startswith(("http://", "https://", "data:")):
+            old_storage_paths.append(profile.photo_url)
+        profile.photo_url = item.path
+
+    db.commit()
+    if old_storage_paths:
+        storage.delete_objects(old_storage_paths)
+    return PublicUploadConfirmBatchOut(status="ok")
+
 @router.post("/public-apply-full/{token}", response_model=PublicCandidateOut)
 async def public_apply_full(
     token: str,
@@ -295,7 +431,8 @@ async def public_apply_full(
     # The text form is never allowed to become SUBMITTED on its own. Public
     # clients upload the files first, but enforce the invariant here too so a
     # stale/alternate client cannot create a text-only application.
-    if not get_resume_document(db, row.id) or not getattr(profile, "photo_url", None):
+    resume_document = get_resume_document(db, row.id)
+    if not resume_document or not getattr(profile, "photo_url", None):
         raise HTTPException(
             status_code=400,
             detail="Please upload both your resume and candidate photo before submitting.",
@@ -346,8 +483,7 @@ async def public_apply_full(
     row.pre_form_submitted_at = datetime.now(UTC)
     log_public_change(db, row, "Pre Form Submitted", "Candidate submitted the pre-interview form.")
     db.commit()
-    db.refresh(row)
-    return _public_out(row, db)
+    return _public_out(row, db, token=token, has_resume=True)
 
 
 @router.post("/public-resume/{token}", response_model=PublicUploadOut, status_code=201)

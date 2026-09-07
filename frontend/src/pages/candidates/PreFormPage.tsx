@@ -43,6 +43,7 @@ export default function PreFormPage() {
   const [errors, setErrors] = useState<PreFormFieldErrors>({});
   const photoRef = useRef<File | null>(null);
   const resumeRef = useRef<File | null>(null);
+  const submitInFlightRef = useRef(false);
   const formDataRef = useRef(formData);
   formDataRef.current = formData;
 
@@ -138,7 +139,7 @@ export default function PreFormPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!token || submitInFlightRef.current) return;
 
     const todayStr = new Date().toISOString().split('T')[0];
     const merged: CandidateFormData = {
@@ -168,6 +169,7 @@ export default function PreFormPage() {
       return;
     }
 
+    submitInFlightRef.current = true;
     setIsSubmitting(true);
     setErrorText('');
     setUploadError(null);
@@ -185,6 +187,7 @@ export default function PreFormPage() {
     } catch (err: any) {
       setErrorText(err?.response?.data?.detail || err.message || 'Failed to submit application details.');
     } finally {
+      submitInFlightRef.current = false;
       setIsSubmitting(false);
     }
   };

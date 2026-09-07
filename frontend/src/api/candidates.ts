@@ -294,16 +294,17 @@ export const publicApplyFullCandidate = async (
   data: any,
   files?: { resume?: File | null; photo?: File | null }
 ): Promise<PublicCandidateBasic> => {
-  // Files are deliberately uploaded before the form data. Vercel rejects a
-  // combined multipart request once the total payload is too large, and the
-  // text must never be marked submitted without its selected files reaching
-  // storage successfully.
-  // Upload both attachments concurrently. The final JSON request still waits
-  // for both confirmations, preserving the all-or-nothing submission gate.
-  await Promise.all([
-    files?.photo ? uploadPublicCandidatePhoto(token, files.photo) : Promise.resolve(),
-    files?.resume ? uploadPublicCandidateResume(token, files.resume) : Promise.resolve(),
-  ]);
+  // Keep attachments separate from the final JSON payload because Vercel can
+  // reject a combined multipart request once the total payload is too large.
+  // The batch manifest preserves the file-before-text gate while reducing the
+  // authorization and confirmation round trips to one each.
+  const uploadFiles = [
+    files?.photo ? { kind: 'photo' as const, file: files.photo } : null,
+    files?.resume ? { kind: 'resume' as const, file: files.resume } : null,
+  ].filter((entry): entry is { kind: 'photo' | 'resume'; file: File } => Boolean(entry));
+  if (uploadFiles.length > 0) {
+    await uploadPublicCandidateFiles(token, uploadFiles);
+  }
   const response = await request('POST', `/candidates/public-apply-full/${token}`, data, {
     timeoutMs: 120_000,
   });
@@ -522,48 +523,73 @@ export const uploadCandidateResume = async (candidateId: string, file: File): Pr
 };
 
 export const uploadPublicCandidatePhoto = async (token: string, file: File): Promise<{ status: string, photo_url: string }> => {
-  return uploadPublicCandidateFile(token, 'photo', file);
+  const [manifest] = await uploadPublicCandidateFiles(token, [{ kind: 'photo', file }]);
+  return { status: 'ok', photo_url: manifest.path };
 };
 
 export const uploadPublicCandidateResume = async (token: string, file: File): Promise<{ status: string, file_name: string }> => {
-  return uploadPublicCandidateFile(token, 'resume', file);
+  const [manifest] = await uploadPublicCandidateFiles(token, [{ kind: 'resume', file }]);
+  return { status: 'ok', file_name: manifest.file_name };
 };
 
-async function uploadPublicCandidateFile<T extends 'photo' | 'resume'>(token: string, kind: T, file: File) {
-  const signed = await request('POST', `/candidates/public-upload-url/${token}`, {
-    kind,
-    file_name: file.name,
-    content_type: file.type || 'application/octet-stream',
-    file_size: file.size,
-  }, { timeoutMs: 30_000 });
+type PublicUploadKind = 'photo' | 'resume';
+type PublicUploadFile = { kind: PublicUploadKind; file: File };
+type PublicUploadManifest = {
+  kind: PublicUploadKind;
+  path: string;
+  file_name: string;
+  content_type: string;
+  signed_url: string;
+};
 
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const uploadResponse = await fetch(signed.data.signed_url, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': signed.data.content_type,
-        },
-        body: file,
-      });
-      if (!uploadResponse.ok) {
-        throw new Error(`Storage upload failed (${uploadResponse.status}).`);
-      }
-      const confirmed = await request('POST', `/candidates/public-upload-confirm/${token}`, {
-        kind,
-        path: signed.data.path,
-        file_name: signed.data.file_name,
-        content_type: signed.data.content_type,
-        file_size: file.size,
-      }, { timeoutMs: 30_000 });
-      return confirmed.data as T extends 'photo'
-        ? { status: string; photo_url: string }
-        : { status: string; file_name: string };
-    } catch (error) {
-      lastError = error;
-      if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 1000 * (attempt + 1)));
-    }
+async function uploadPublicCandidateFiles(
+  token: string,
+  files: PublicUploadFile[],
+): Promise<PublicUploadManifest[]> {
+  const signed = await request('POST', `/candidates/public-upload-urls/${token}`, {
+    files: files.map(({ kind, file }) => ({
+      kind,
+      file_name: file.name,
+      content_type: file.type || 'application/octet-stream',
+      file_size: file.size,
+    })),
+  }, { timeoutMs: 30_000 });
+  const manifests = signed.data.files as PublicUploadManifest[];
+  const byKind = new Map(files.map((entry) => [entry.kind, entry.file]));
+  if (manifests.length !== files.length || manifests.some((manifest) => !byKind.has(manifest.kind))) {
+    throw new Error('The upload manifest was incomplete. Please retry.');
   }
-  throw lastError;
+
+  await Promise.all(manifests.map(async (manifest) => {
+    const file = byKind.get(manifest.kind);
+    if (!file) throw new Error(`Missing ${manifest.kind} file.`);
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const uploadResponse = await fetch(manifest.signed_url, {
+          method: 'PUT',
+          headers: { 'Content-Type': manifest.content_type },
+          body: file,
+        });
+        if (!uploadResponse.ok) {
+          throw new Error(`Storage upload failed (${uploadResponse.status}).`);
+        }
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  }));
+
+  await request('POST', `/candidates/public-upload-confirms/${token}`, {
+    files: manifests.map((manifest) => ({
+      kind: manifest.kind,
+      path: manifest.path,
+      file_name: manifest.file_name,
+      content_type: manifest.content_type,
+      file_size: byKind.get(manifest.kind)?.size || 0,
+    })),
+  }, { timeoutMs: 30_000 });
+  return manifests;
 }

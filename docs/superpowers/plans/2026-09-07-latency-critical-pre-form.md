@@ -26,7 +26,7 @@
 
 **Interfaces:**
 - Consumes: existing `PublicUploadUrlRequest`, `PublicUploadConfirmRequest`, storage signing, storage existence checks, and pre-form token guards.
-- Produces: `POST /candidates/public-upload-urls/{token}` returning `{ files: PublicUploadUrlOut[] }`; `POST /candidates/public-upload-confirm/{token}` accepting `{ files: PublicUploadConfirmRequest[] }` and returning `{ status: "ok" }`.
+- Produces: `POST /candidates/public-upload-urls/{token}` returning `{ files: PublicUploadUrlOut[] }`; `POST /candidates/public-upload-confirms/{token}` accepting `{ files: PublicUploadConfirmRequest[] }` and returning `{ status: "ok" }`.
 
 - [ ] **Step 1: Write failing endpoint tests**
 
