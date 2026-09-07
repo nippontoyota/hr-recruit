@@ -21,7 +21,12 @@ export interface JobOpeningInput {
 
 export async function listOpenings(): Promise<JobOpening[]> {
   const res = await request('GET', '/openings');
-  return res.data;
+  // Older deployments have returned a wrapped payload here. Keep the UI
+  // read-only and resilient instead of allowing a non-array response to
+  // reach RecentOpeningsCard's array operations.
+  if (Array.isArray(res.data)) return res.data as JobOpening[];
+  if (res.data && Array.isArray(res.data.data)) return res.data.data as JobOpening[];
+  return [];
 }
 
 export async function createOpening(body: JobOpeningInput): Promise<JobOpening> {

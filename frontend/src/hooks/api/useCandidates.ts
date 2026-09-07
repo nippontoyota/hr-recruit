@@ -101,20 +101,22 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
     try {
       const res = await getCandidates(page, limit, requestQuery, signal, false);
       if (signal?.aborted) return;
-      setCandidates(res.data);
-      setTotalCount(res.total_count);
+      const candidateRows = Array.isArray(res.data) ? res.data : [];
+      const candidateTotal = typeof res.total_count === 'number' ? res.total_count : candidateRows.length;
+      setCandidates(candidateRows);
+      setTotalCount(candidateTotal);
       setLoadError(null);
-      writeCandidateListCache(cacheKey, res.data, res.total_count);
+      writeCandidateListCache(cacheKey, candidateRows, candidateTotal);
       loadedRef.current = true;
-      void getCandidateWorkStates(res.data.map((candidate) => candidate.id), signal)
+      void getCandidateWorkStates(candidateRows.map((candidate) => candidate.id), signal)
         .then((workStates) => {
           if (signal?.aborted) return;
-          const merged = res.data.map((candidate) => ({
+          const merged = candidateRows.map((candidate) => ({
             ...candidate,
             work_state: workStates[candidate.id] ?? candidate.work_state,
           }));
           setCandidates(merged);
-          writeCandidateListCache(cacheKey, merged, res.total_count);
+          writeCandidateListCache(cacheKey, merged, candidateTotal);
         })
         .catch((err) => {
           if (!signal?.aborted && !isAbortError(err)) {
