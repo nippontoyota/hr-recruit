@@ -191,7 +191,7 @@ export function InterviewApplicationFormDocument({
           PAGE 1 OF 2: Personal Data, Education, Family & Employment Record
          ══════════════════════════════════════════════════════════════════ */}
       <div className="iaf-page-wrap">
-        <div className="no-print mb-2.5 flex items-center justify-between px-3.5 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-300 shadow-xs">
+        <div className="no-print mb-2 flex items-center justify-between px-3.5 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-300 shadow-xs">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1e3a5f] text-white text-[10px] font-black">1</span>
             <span className="text-[#1e3a5f] tracking-wide">PAGE 1 OF 2 (A4)</span>
@@ -199,7 +199,7 @@ export function InterviewApplicationFormDocument({
           <span className="text-[11px] text-slate-600 font-medium hidden sm:inline">Personal Data · Education · Family Details · Employment Record</span>
         </div>
 
-        <section className={`iaf-sheet iaf-form ${riverClass} font-sans text-[11px] leading-[1.38] antialiased`}>
+        <section className={`iaf-sheet iaf-form ${riverClass} font-sans text-[11px] leading-[1.28] antialiased`}>
           <div>
             {/* Header Block */}
             <div className="flex items-start gap-3 mb-2">
@@ -225,41 +225,41 @@ export function InterviewApplicationFormDocument({
               </div>
             </div>
             <div className="iaf-rule border-t-2 mb-0" />
-            <div className="iaf-title font-bold text-[13px] uppercase tracking-[0.12em] text-center py-1.5 mb-2.5 border-x border-b">
+            <div className="iaf-title font-bold text-[13px] uppercase tracking-[0.12em] text-center py-1.5 mb-2 border-x border-b">
               Interview Application Form
             </div>
 
             {/* Opening & Basic Metadata */}
-            <table className="w-full border-collapse border border-black mb-2.5">
+            <table className="w-full border-collapse border border-black mb-2">
               <tbody>
                 <tr>
-                  <Td colSpan={2} className="py-1.5 px-2">
+                  <Td colSpan={2} className="py-1 px-2">
                     Type of opening
                     {' '}New Opening <span className="iaf-tick inline-block w-3.5 h-3.5 border text-[11px] leading-[12px] text-center align-middle mx-1">{openingType === 'New opening' ? '✓' : ''}</span>
                     {' '}Replacement <span className="iaf-tick inline-block w-3.5 h-3.5 border text-[11px] leading-[12px] text-center align-middle mx-1">{openingType === 'Replacement' ? '✓' : ''}</span>
                   </Td>
                 </tr>
                 <tr>
-                  <Td className="w-[42%] py-1.5 px-2">Mobile Number <Line className="min-w-[8.5rem]">{val(mobile)}</Line></Td>
-                  <Td className="py-1.5 px-2">Date of Application <Line className="min-w-[7rem]">{fmtDate(applied)}</Line></Td>
+                  <Td className="w-[42%] py-1 px-2">Mobile Number <Line className="min-w-[8.5rem]">{val(mobile)}</Line></Td>
+                  <Td className="py-1 px-2">Date of Application <Line className="min-w-[7rem]">{fmtDate(applied)}</Line></Td>
                 </tr>
                 <tr>
-                  <Td className="py-1.5 px-2">
+                  <Td className="py-1 px-2">
                     Position Applied For <Line className="min-w-[7.5rem]">{val(position)}</Line>
                     {val(d.branchName) ? (
                       <span> · Branch <Line>{val(d.branchName)}</Line></span>
                     ) : null}
                   </Td>
-                  <Td className="py-1.5 px-2">Position Suitable <Line className="min-w-[7.5rem]">{val(d.positionSuitable)}</Line></Td>
+                  <Td className="py-1 px-2">Position Suitable <Line className="min-w-[7.5rem]">{val(d.positionSuitable)}</Line></Td>
                 </tr>
               </tbody>
             </table>
 
             {/* 1. Personal Data */}
-            <table className="w-full border-collapse border border-black mb-2.5">
+            <table className="w-full border-collapse border border-black mb-2">
               <tbody>
                 <tr>
-                  <Th colSpan={2} className="py-1.5 px-2">1. Personal Data</Th>
+                  <Th colSpan={2} className="py-1 px-2">1. Personal Data</Th>
                 </tr>
                 <tr>
                   <td className="border p-2 align-top w-[78%]">
@@ -327,61 +327,61 @@ export function InterviewApplicationFormDocument({
             </table>
 
             {/* Educational Qualification */}
-            <table className="w-full border-collapse border border-black mb-2.5">
+            <table className="w-full border-collapse border border-black mb-2">
               <thead>
-                <tr><Th colSpan={6} className="py-1.5 px-2">Educational Qualification</Th></tr>
+                <tr><Th colSpan={6} className="py-1 px-2">Educational Qualification</Th></tr>
                 <tr>
-                  <Td className="font-semibold text-center w-[18%] py-1.5 px-2">Qualification</Td>
-                  <Td className="font-semibold text-center py-1.5 px-2">School / College</Td>
-                  <Td className="font-semibold text-center w-[16%] py-1.5 px-2">Course</Td>
-                  <Td className="font-semibold text-center w-[10%] py-1.5 px-2">Marks</Td>
-                  <Td className="font-semibold text-center w-[12%] py-1.5 px-2">Passing Year</Td>
-                  <Td className="font-semibold text-center w-[12%] py-1.5 px-2">Mode</Td>
+                  <Td className="font-semibold text-center w-[18%] py-1 px-2">Qualification</Td>
+                  <Td className="font-semibold text-center py-1 px-2">School / College</Td>
+                  <Td className="font-semibold text-center w-[16%] py-1 px-2">Course</Td>
+                  <Td className="font-semibold text-center w-[10%] py-1 px-2">Marks</Td>
+                  <Td className="font-semibold text-center w-[12%] py-1 px-2">Passing Year</Td>
+                  <Td className="font-semibold text-center w-[12%] py-1 px-2">Mode</Td>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <Td className="py-1.5 px-2">10th</Td>
-                  <Td className="py-1.5 px-2">{val(d.class10School)}</Td>
-                  <Td className="py-1.5 px-2">{val(d.class10Board)}</Td>
-                  <Td className="text-center py-1.5 px-2">{val(d.class10Percentage)}</Td>
-                  <Td className="text-center py-1.5 px-2">{val(d.class10PassingYear)}</Td>
-                  <Td className="text-center py-1.5 px-2">{val(d.class10Mode)}</Td>
+                  <Td className="py-1 px-2">10th</Td>
+                  <Td className="py-1 px-2">{val(d.class10School)}</Td>
+                  <Td className="py-1 px-2">{val(d.class10Board)}</Td>
+                  <Td className="text-center py-1 px-2">{val(d.class10Percentage)}</Td>
+                  <Td className="text-center py-1 px-2">{val(d.class10PassingYear)}</Td>
+                  <Td className="text-center py-1 px-2">{val(d.class10Mode)}</Td>
                 </tr>
                 <tr>
-                  <Td className="py-1.5 px-2">12th</Td>
-                  <Td className="py-1.5 px-2">{val(d.class12School)}</Td>
-                  <Td className="py-1.5 px-2">{val(d.class12Stream)}</Td>
-                  <Td className="text-center py-1.5 px-2">{val(d.class12Percentage)}</Td>
-                  <Td className="text-center py-1.5 px-2">{val(d.class12PassingYear)}</Td>
-                  <Td className="text-center py-1.5 px-2">{val(d.class12Mode)}</Td>
+                  <Td className="py-1 px-2">12th</Td>
+                  <Td className="py-1 px-2">{val(d.class12School)}</Td>
+                  <Td className="py-1 px-2">{val(d.class12Stream)}</Td>
+                  <Td className="text-center py-1 px-2">{val(d.class12Percentage)}</Td>
+                  <Td className="text-center py-1 px-2">{val(d.class12PassingYear)}</Td>
+                  <Td className="text-center py-1 px-2">{val(d.class12Mode)}</Td>
                 </tr>
                 {hasGrad && (
                   <tr>
-                    <Td className="py-1.5 px-2">Graduation / Diploma</Td>
-                    <Td className="py-1.5 px-2">{val(d.gradCollege)}</Td>
-                    <Td className="py-1.5 px-2">{[val(d.gradCourse), val(d.gradStream)].filter(Boolean).join(' - ')}</Td>
-                    <Td className="text-center py-1.5 px-2">{val(d.gradPercentage)}</Td>
-                    <Td className="text-center py-1.5 px-2">{val(d.gradPassingYear)}</Td>
-                    <Td className="text-center py-1.5 px-2">{val(d.gradMode)}</Td>
+                    <Td className="py-1 px-2">Graduation / Diploma</Td>
+                    <Td className="py-1 px-2">{val(d.gradCollege)}</Td>
+                    <Td className="py-1 px-2">{[val(d.gradCourse), val(d.gradStream)].filter(Boolean).join(' - ')}</Td>
+                    <Td className="text-center py-1 px-2">{val(d.gradPercentage)}</Td>
+                    <Td className="text-center py-1 px-2">{val(d.gradPassingYear)}</Td>
+                    <Td className="text-center py-1 px-2">{val(d.gradMode)}</Td>
                   </tr>
                 )}
                 {hasPg && (
                   <tr>
-                    <Td className="py-1.5 px-2">Post-Graduation / Diploma</Td>
-                    <Td className="py-1.5 px-2">{val(d.postGradCollege)}</Td>
-                    <Td className="py-1.5 px-2">{[val(d.postGradCourse), val(d.postGradStream)].filter(Boolean).join(' - ')}</Td>
-                    <Td className="text-center py-1.5 px-2">{val(d.postGradPercentage)}</Td>
-                    <Td className="text-center py-1.5 px-2">{val(d.postGradPassingYear)}</Td>
-                    <Td className="text-center py-1.5 px-2">{val(d.postGradMode)}</Td>
+                    <Td className="py-1 px-2">Post-Graduation / Diploma</Td>
+                    <Td className="py-1 px-2">{val(d.postGradCollege)}</Td>
+                    <Td className="py-1 px-2">{[val(d.postGradCourse), val(d.postGradStream)].filter(Boolean).join(' - ')}</Td>
+                    <Td className="text-center py-1 px-2">{val(d.postGradPercentage)}</Td>
+                    <Td className="text-center py-1 px-2">{val(d.postGradPassingYear)}</Td>
+                    <Td className="text-center py-1 px-2">{val(d.postGradMode)}</Td>
                   </tr>
                 )}
                 <tr>
-                  <Td colSpan={6} className="py-1.5 px-2">Computer Knowledge <Line className="min-w-[70%]">{computer}</Line></Td>
+                  <Td colSpan={6} className="py-1 px-2">Computer Knowledge <Line className="min-w-[70%]">{computer}</Line></Td>
                 </tr>
                 {val(d.softwareCerts) ? (
                   <tr>
-                    <Td colSpan={6} className="py-1.5 px-2">Other Software / Certifications <Line className="min-w-[55%]">{val(d.softwareCerts)}</Line></Td>
+                    <Td colSpan={6} className="py-1 px-2">Other Software / Certifications <Line className="min-w-[55%]">{val(d.softwareCerts)}</Line></Td>
                   </tr>
                 ) : null}
               </tbody>
@@ -389,27 +389,27 @@ export function InterviewApplicationFormDocument({
 
             {/* Family Details */}
             {family.length > 0 && (
-              <table className="w-full border-collapse border border-black mb-2.5">
+              <table className="w-full border-collapse border border-black mb-2">
                 <thead>
-                  <tr><Th colSpan={6} className="py-1.5 px-2">Family Details</Th></tr>
+                  <tr><Th colSpan={6} className="py-1 px-2">Family Details</Th></tr>
                   <tr>
-                    <Td className="font-semibold text-center w-[16%] py-1.5 px-2">Relationship</Td>
-                    <Td className="font-semibold text-center py-1.5 px-2">Name</Td>
-                    <Td className="font-semibold text-center w-[8%] py-1.5 px-2">Age</Td>
-                    <Td className="font-semibold text-center w-[16%] py-1.5 px-2">Occupation</Td>
-                    <Td className="font-semibold text-center py-1.5 px-2">Company / School Name</Td>
-                    <Td className="font-semibold text-center w-[16%] py-1.5 px-2">Mobile Number</Td>
+                    <Td className="font-semibold text-center w-[16%] py-1 px-2">Relationship</Td>
+                    <Td className="font-semibold text-center py-1 px-2">Name</Td>
+                    <Td className="font-semibold text-center w-[8%] py-1 px-2">Age</Td>
+                    <Td className="font-semibold text-center w-[16%] py-1 px-2">Occupation</Td>
+                    <Td className="font-semibold text-center py-1 px-2">Company / School Name</Td>
+                    <Td className="font-semibold text-center w-[16%] py-1 px-2">Mobile Number</Td>
                   </tr>
                 </thead>
                 <tbody>
                   {family.map((row) => (
                     <tr key={row.rel + val(row.name)}>
-                      <Td className="py-1.5 px-2">{row.rel}</Td>
-                      <Td className="py-1.5 px-2">{val(row.name)}</Td>
-                      <Td className="text-center py-1.5 px-2">{val(row.age)}</Td>
-                      <Td className="py-1.5 px-2">{val(row.occ)}</Td>
-                      <Td className="py-1.5 px-2">{val(row.co)}</Td>
-                      <Td className="py-1.5 px-2">{val(row.ph)}</Td>
+                      <Td className="py-1 px-2">{row.rel}</Td>
+                      <Td className="py-1 px-2">{val(row.name)}</Td>
+                      <Td className="text-center py-1 px-2">{val(row.age)}</Td>
+                      <Td className="py-1 px-2">{val(row.occ)}</Td>
+                      <Td className="py-1 px-2">{val(row.co)}</Td>
+                      <Td className="py-1 px-2">{val(row.ph)}</Td>
                     </tr>
                   ))}
                 </tbody>
@@ -419,59 +419,59 @@ export function InterviewApplicationFormDocument({
             {/* 2. Employment Record */}
             <table className="w-full border-collapse border border-black">
               <thead>
-                <tr><Th colSpan={8} className="py-1.5 px-2">2. Employment Record</Th></tr>
+                <tr><Th colSpan={8} className="py-1 px-2">2. Employment Record</Th></tr>
                 <tr>
-                  <Td colSpan={3} className="py-1.5 px-2">
+                  <Td colSpan={3} className="py-1 px-2">
                     Do you have any experience before? <Tick on={asBool(d.previousExperience)} />
                   </Td>
-                  <Td colSpan={3} className="py-1.5 px-2">Total Experience <Line>{val(d.totalExperience)}</Line></Td>
-                  <Td colSpan={2} className="py-1.5 px-2">Expected Salary <Line>{val(d.expectedSalary)}</Line></Td>
+                  <Td colSpan={3} className="py-1 px-2">Total Experience <Line>{val(d.totalExperience)}</Line></Td>
+                  <Td colSpan={2} className="py-1 px-2">Expected Salary <Line>{val(d.expectedSalary)}</Line></Td>
                 </tr>
                 {jobs.length > 0 && (
                   <tr>
-                    <Td className="font-semibold text-center w-[6%] py-1.5 px-2">Sl. No.</Td>
-                    <Td className="font-semibold text-center w-[22%] py-1.5 px-2">Previous Company Name &amp; Address</Td>
-                    <Td className="font-semibold text-center w-[12%] py-1.5 px-2">Position Held</Td>
-                    <Td className="font-semibold text-center w-[16%] py-1.5 px-2">Reporting Person</Td>
-                    <Td className="font-semibold text-center w-[12%] whitespace-nowrap py-1.5 px-2">From</Td>
-                    <Td className="font-semibold text-center w-[12%] whitespace-nowrap py-1.5 px-2">To</Td>
-                    <Td className="font-semibold text-center w-[12%] py-1.5 px-2">Last Drawn Salary</Td>
-                    <Td className="font-semibold text-center py-1.5 px-2">Reason for Leaving</Td>
+                    <Td className="font-semibold text-center w-[6%] py-1 px-2">Sl. No.</Td>
+                    <Td className="font-semibold text-center w-[22%] py-1 px-2">Previous Company Name &amp; Address</Td>
+                    <Td className="font-semibold text-center w-[12%] py-1 px-2">Position Held</Td>
+                    <Td className="font-semibold text-center w-[16%] py-1 px-2">Reporting Person</Td>
+                    <Td className="font-semibold text-center w-[12%] whitespace-nowrap py-1 px-2">From</Td>
+                    <Td className="font-semibold text-center w-[12%] whitespace-nowrap py-1 px-2">To</Td>
+                    <Td className="font-semibold text-center w-[12%] py-1 px-2">Last Drawn Salary</Td>
+                    <Td className="font-semibold text-center py-1 px-2">Reason for Leaving</Td>
                   </tr>
                 )}
               </thead>
               <tbody>
                 {jobs.map((job, i) => (
                   <tr key={i}>
-                    <Td className="text-center py-1.5 px-2">{i + 1}</Td>
-                    <Td className="py-1.5 px-2">{val(job.co)}</Td>
-                    <Td className="py-1.5 px-2">{val(job.pos)}</Td>
-                    <Td className="py-1.5 px-2">
+                    <Td className="text-center py-1 px-2">{i + 1}</Td>
+                    <Td className="py-1 px-2">{val(job.co)}</Td>
+                    <Td className="py-1 px-2">{val(job.pos)}</Td>
+                    <Td className="py-1 px-2">
                       <div>{val(job.rep)}</div>
                       {val(job.repDesignation) ? <div className="text-[10px]">{val(job.repDesignation)}</div> : null}
                       {val(job.repPhone) ? <div className="text-[10px]">Phone: {val(job.repPhone)}</div> : null}
                     </Td>
-                    <Td className="text-center whitespace-nowrap py-1.5 px-2">{fmtDate(job.from)}</Td>
-                    <Td className="text-center whitespace-nowrap py-1.5 px-2">{fmtDate(job.to)}</Td>
-                    <Td className="text-center py-1.5 px-2">{val(job.sal)}</Td>
-                    <Td className="py-1.5 px-2">{val(job.reason)}</Td>
+                    <Td className="text-center whitespace-nowrap py-1 px-2">{fmtDate(job.from)}</Td>
+                    <Td className="text-center whitespace-nowrap py-1 px-2">{fmtDate(job.to)}</Td>
+                    <Td className="text-center py-1 px-2">{val(job.sal)}</Td>
+                    <Td className="py-1 px-2">{val(job.reason)}</Td>
                   </tr>
                 ))}
                 <tr>
-                  <Td colSpan={8} className="py-1.5 px-2">
+                  <Td colSpan={8} className="py-1 px-2">
                     How did you learn about the opening? <Line className="min-w-[65%]">{val(d.sourceOfOpening) || val(d.source)}</Line>
                   </Td>
                 </tr>
                 {val(d.referredBy) ? (
                   <tr>
-                    <Td colSpan={8} className="py-1.5 px-2">Referred by / Friend / Relative working at {brand.name} <Line className="min-w-[45%]">{val(d.referredBy)}</Line></Td>
+                    <Td colSpan={8} className="py-1 px-2">Referred by / Friend / Relative working at {brand.name} <Line className="min-w-[45%]">{val(d.referredBy)}</Line></Td>
                   </tr>
                 ) : null}
                 <tr>
-                  <Td colSpan={8} className="py-1.5 px-2">Ready to work in below-mentioned branches <Line className="min-w-[50%]">{val(d.preferredRegion)}</Line></Td>
+                  <Td colSpan={8} className="py-1 px-2">Ready to work in below-mentioned branches <Line className="min-w-[50%]">{val(d.preferredRegion)}</Line></Td>
                 </tr>
                 <tr>
-                  <Td colSpan={8} className="py-1.5 px-2">If selected, when can you join? <Line className="min-w-[55%]">{fmtDate(d.expectedJoiningDate) || val(d.expectedJoiningDate)}</Line></Td>
+                  <Td colSpan={8} className="py-1 px-2">If selected, when can you join? <Line className="min-w-[55%]">{fmtDate(d.expectedJoiningDate) || val(d.expectedJoiningDate)}</Line></Td>
                 </tr>
               </tbody>
             </table>
@@ -489,7 +489,7 @@ export function InterviewApplicationFormDocument({
           PAGE 2 OF 2: General Info, References, Emergency Contacts & Declaration
          ══════════════════════════════════════════════════════════════════ */}
       <div className="iaf-page-wrap iaf-break">
-        <div className="no-print mb-2.5 flex items-center justify-between px-3.5 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-300 shadow-xs">
+        <div className="no-print mb-2 flex items-center justify-between px-3.5 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-300 shadow-xs">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1e3a5f] text-white text-[10px] font-black">2</span>
             <span className="text-[#1e3a5f] tracking-wide">PAGE 2 OF 2 (A4)</span>
@@ -521,19 +521,19 @@ export function InterviewApplicationFormDocument({
             {hasExtra && (
               <table className="w-full border-collapse border border-black mb-3">
                 <thead>
-                  <tr><Th colSpan={2} className="py-1.5 px-2">Additional Information</Th></tr>
+                  <tr><Th colSpan={2} className="py-1 px-2">Additional Information</Th></tr>
                 </thead>
                 <tbody>
                   {val(d.achievements) ? (
                     <tr>
-                      <Td className="w-[18%] font-semibold py-1.5 px-2">Achievements</Td>
-                      <Td className="py-1.5 px-2">{val(d.achievements)}</Td>
+                      <Td className="w-[18%] font-semibold py-1 px-2">Achievements</Td>
+                      <Td className="py-1 px-2">{val(d.achievements)}</Td>
                     </tr>
                   ) : null}
                   {val(d.hobbies) ? (
                     <tr>
-                      <Td className="font-semibold py-1.5 px-2">Hobbies</Td>
-                      <Td className="py-1.5 px-2">{val(d.hobbies)}</Td>
+                      <Td className="font-semibold py-1 px-2">Hobbies</Td>
+                      <Td className="py-1 px-2">{val(d.hobbies)}</Td>
                     </tr>
                   ) : null}
                 </tbody>
@@ -543,20 +543,20 @@ export function InterviewApplicationFormDocument({
             {/* 3. General Information */}
             <table className="w-full border-collapse border border-black mb-3">
               <thead>
-                <tr><Th colSpan={2} className="py-1.5 px-2">3. General Information</Th></tr>
+                <tr><Th colSpan={2} className="py-1 px-2">3. General Information</Th></tr>
               </thead>
               <tbody>
                 {general.map(([letter, label, value]) => (
                   <tr key={letter}>
-                    <Td className="py-1.5 px-2">{letter}. {label}</Td>
-                    <Td className="w-[26%] text-center py-1.5 px-2">
+                    <Td className="py-1 px-2">{letter}. {label}</Td>
+                    <Td className="w-[26%] text-center py-1 px-2">
                       <Tick on={asBool(value)} />
                     </Td>
                   </tr>
                 ))}
                 {val(d.medicalRemarks) ? (
                   <tr>
-                    <Td colSpan={2} className="py-1.5 px-2">Medical remarks <Line className="min-w-[70%]">{val(d.medicalRemarks)}</Line></Td>
+                    <Td colSpan={2} className="py-1 px-2">Medical remarks <Line className="min-w-[70%]">{val(d.medicalRemarks)}</Line></Td>
                   </tr>
                 ) : null}
               </tbody>
@@ -566,14 +566,14 @@ export function InterviewApplicationFormDocument({
             {(val(d.refName) || val(d.refContactNumber) || d.hasReference) ? (
               <table className="w-full border-collapse border border-black mb-3">
                 <thead>
-                  <tr><Th colSpan={4} className="py-1.5 px-2">Reference Details</Th></tr>
+                  <tr><Th colSpan={4} className="py-1 px-2">Reference Details</Th></tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <Td className="py-1.5 px-2">Name <Line>{val(d.refName)}</Line></Td>
-                    <Td className="py-1.5 px-2">Role <Line>{val(d.refRole)}</Line></Td>
-                    <Td className="py-1.5 px-2">Panchayat <Line>{val(d.refPanchayat)}</Line></Td>
-                    <Td className="py-1.5 px-2">Contact <Line>{val(d.refContactNumber)}</Line></Td>
+                    <Td className="py-1 px-2">Name <Line>{val(d.refName)}</Line></Td>
+                    <Td className="py-1 px-2">Role <Line>{val(d.refRole)}</Line></Td>
+                    <Td className="py-1 px-2">Panchayat <Line>{val(d.refPanchayat)}</Line></Td>
+                    <Td className="py-1 px-2">Contact <Line>{val(d.refContactNumber)}</Line></Td>
                   </tr>
                 </tbody>
               </table>
@@ -582,30 +582,30 @@ export function InterviewApplicationFormDocument({
             {/* 4. Emergency Contact Details */}
             <table className="w-full border-collapse border border-black mb-3">
               <thead>
-                <tr><Th colSpan={5} className="py-1.5 px-2">4. Emergency Contact Details</Th></tr>
+                <tr><Th colSpan={5} className="py-1 px-2">4. Emergency Contact Details</Th></tr>
                 <tr>
-                  <Td className="font-semibold text-center w-[8%] py-1.5 px-2">Sl. No.</Td>
-                  <Td className="font-semibold text-center w-[16%] py-1.5 px-2">Relation</Td>
-                  <Td className="font-semibold text-center w-[22%] py-1.5 px-2">Name</Td>
-                  <Td className="font-semibold text-center py-1.5 px-2">Address</Td>
-                  <Td className="font-semibold text-center w-[18%] py-1.5 px-2">Contact Details</Td>
+                  <Td className="font-semibold text-center w-[8%] py-1 px-2">Sl. No.</Td>
+                  <Td className="font-semibold text-center w-[16%] py-1 px-2">Relation</Td>
+                  <Td className="font-semibold text-center w-[22%] py-1 px-2">Name</Td>
+                  <Td className="font-semibold text-center py-1 px-2">Address</Td>
+                  <Td className="font-semibold text-center w-[18%] py-1 px-2">Contact Details</Td>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <Td className="text-center py-1.5 px-2">1</Td>
-                  <Td className="py-1.5 px-2">{val(d.emergency1Relation)}</Td>
-                  <Td className="py-1.5 px-2">{val(d.emergency1Name)}</Td>
-                  <Td className="py-1.5 px-2">{val(d.emergency1Address)}</Td>
-                  <Td className="py-1.5 px-2">{val(d.emergency1Contact)}</Td>
+                  <Td className="text-center py-1 px-2">1</Td>
+                  <Td className="py-1 px-2">{val(d.emergency1Relation)}</Td>
+                  <Td className="py-1 px-2">{val(d.emergency1Name)}</Td>
+                  <Td className="py-1 px-2">{val(d.emergency1Address)}</Td>
+                  <Td className="py-1 px-2">{val(d.emergency1Contact)}</Td>
                 </tr>
                 {hasEmergency2 && (
                   <tr>
-                    <Td className="text-center py-1.5 px-2">2</Td>
-                    <Td className="py-1.5 px-2">{val(d.emergency2Relation)}</Td>
-                    <Td className="py-1.5 px-2">{val(d.emergency2Name)}</Td>
-                    <Td className="py-1.5 px-2">{val(d.emergency2Address)}</Td>
-                    <Td className="py-1.5 px-2">{val(d.emergency2Contact)}</Td>
+                    <Td className="text-center py-1 px-2">2</Td>
+                    <Td className="py-1 px-2">{val(d.emergency2Relation)}</Td>
+                    <Td className="py-1 px-2">{val(d.emergency2Name)}</Td>
+                    <Td className="py-1 px-2">{val(d.emergency2Address)}</Td>
+                    <Td className="py-1 px-2">{val(d.emergency2Contact)}</Td>
                   </tr>
                 )}
               </tbody>
@@ -614,14 +614,14 @@ export function InterviewApplicationFormDocument({
             {/* 5. Social Media & 6. Email */}
             <table className="w-full border-collapse border border-black mb-3.5">
               <thead>
-                <tr><Th colSpan={4} className="py-1.5 px-2">5. Social Media Details &nbsp;|&nbsp; 6. E-Mail ID</Th></tr>
+                <tr><Th colSpan={4} className="py-1 px-2">5. Social Media Details &nbsp;|&nbsp; 6. E-Mail ID</Th></tr>
               </thead>
               <tbody>
                 <tr>
-                  <Td className="py-1.5 px-2">Facebook <Line className="min-w-[50%]">{val(d.facebookUrl)}</Line></Td>
-                  <Td className="py-1.5 px-2">Instagram <Line className="min-w-[50%]">{val(d.instagramUrl)}</Line></Td>
-                  <Td className="py-1.5 px-2">Twitter <Line className="min-w-[50%]">{val(d.twitterUrl)}</Line></Td>
-                  <Td className="py-1.5 px-2">E-Mail ID <Line className="min-w-[50%]">{val(email)}</Line></Td>
+                  <Td className="py-1 px-2">Facebook <Line className="min-w-[50%]">{val(d.facebookUrl)}</Line></Td>
+                  <Td className="py-1 px-2">Instagram <Line className="min-w-[50%]">{val(d.instagramUrl)}</Line></Td>
+                  <Td className="py-1 px-2">Twitter <Line className="min-w-[50%]">{val(d.twitterUrl)}</Line></Td>
+                  <Td className="py-1 px-2">E-Mail ID <Line className="min-w-[50%]">{val(email)}</Line></Td>
                 </tr>
               </tbody>
             </table>
@@ -664,7 +664,7 @@ export function InterviewApplicationFormDocument({
          ══════════════════════════════════════════════════════════════════ */}
       {!hideResume && resumeData && (
         <div className="iaf-page-wrap iaf-break">
-          <div className="no-print mb-2.5 flex items-center justify-between px-3.5 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-300 shadow-xs">
+          <div className="no-print mb-2 flex items-center justify-between px-3.5 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-300 shadow-xs">
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1e3a5f] text-white text-[10px] font-black">
                 📎
