@@ -103,7 +103,16 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
       if (signal?.aborted) return;
       const candidateRows = Array.isArray(res.data) ? res.data : [];
       const candidateTotal = typeof res.total_count === 'number' ? res.total_count : candidateRows.length;
-      setCandidates(candidateRows);
+      // The fast list response intentionally omits workflow metadata. Keep
+      // metadata already painted for the same candidates while the parallel
+      // work-state request catches up, so a sort never flashes "Unknown".
+      setCandidates((previous) => {
+        const previousWorkStates = new Map(previous.map((candidate) => [candidate.id, candidate.work_state]));
+        return candidateRows.map((candidate) => ({
+          ...candidate,
+          work_state: candidate.work_state ?? previousWorkStates.get(candidate.id),
+        }));
+      });
       setTotalCount(candidateTotal);
       setLoadError(null);
       writeCandidateListCache(cacheKey, candidateRows, candidateTotal);
