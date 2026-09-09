@@ -144,8 +144,18 @@ export default function CandidatesList() {
 
   // The backend filters and paginates; queue filtering is derived from the loaded page.
   const filteredCandidates = useMemo(
-    () => selectedQueue ? candidates.filter((candidate) => matchesQueue(candidate, selectedQueue)) : candidates,
-    [candidates, selectedQueue]
+    () => {
+      const queueCandidates = selectedQueue ? candidates.filter((candidate) => matchesQueue(candidate, selectedQueue)) : candidates;
+      if (advancedQuery.nextActions.length === 0) return queueCandidates;
+      return queueCandidates.filter((candidate) => {
+        // The list request omits workflow metadata for faster first paint.
+        // Keep rows visible until that metadata arrives, then apply the
+        // selected action locally while the server result is refreshing.
+        if (!candidate.work_state) return true;
+        return advancedQuery.nextActions.includes(getCandidateWorkState(candidate).next_action);
+      });
+    },
+    [candidates, selectedQueue, advancedQuery.nextActions]
   );
 
   // Select-all derived state
