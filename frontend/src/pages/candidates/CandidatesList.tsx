@@ -428,7 +428,12 @@ export default function CandidatesList() {
                           <div className="flex flex-col">
                             <a
                               href={`/candidates/${candidate.id}`}
-                              onClick={(event) => { event.preventDefault(); event.stopPropagation(); navigate(`/candidates/${candidate.id}`); }}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+                                event.preventDefault();
+                                navigate(`/candidates/${candidate.id}`);
+                              }}
                               className="font-semibold text-text-primary underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-primary/30"
                             >
                               {candidate.full_name}
