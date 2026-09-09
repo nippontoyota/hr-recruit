@@ -393,7 +393,20 @@ export default function CandidatesList() {
                     return (
                       <tr
                         key={candidate.id}
-                        onClick={() => navigate(`/candidates/${candidate.id}`)}
+                        onClick={(event) => {
+                          if (event.button !== 0) return;
+                          const href = `/candidates/${candidate.id}`;
+                          if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+                            window.open(href, '_blank', 'noopener,noreferrer');
+                            return;
+                          }
+                          navigate(href);
+                        }}
+                        onAuxClick={(event) => {
+                          if (event.button === 1) {
+                            window.open(`/candidates/${candidate.id}`, '_blank', 'noopener,noreferrer');
+                          }
+                        }}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault();
