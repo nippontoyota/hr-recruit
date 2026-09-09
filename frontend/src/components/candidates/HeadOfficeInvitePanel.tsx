@@ -11,6 +11,7 @@ import { buildHeadOfficeInterviewWhatsAppMessage, openWhatsAppChat } from '../..
 import { extractError } from '../../lib/utils';
 import { formatDate, formatTime } from '../../lib/dateTime';
 import { useAuth } from '../../auth';
+import { riverLogo, toyotaHrProfile } from '../../assets';
 
 interface HeadOfficeInvitePanelProps {
   candidate: Candidate;
@@ -215,7 +216,7 @@ export function HeadOfficeInvitePanel({ candidate, evaluation, onUpdate, onSent,
 
         <div className="overflow-hidden rounded-[22px] border-[5px] border-[#18181b] bg-[#efeae2] shadow-[0_12px_28px_rgba(17,24,39,0.16)]">
           <div className="flex h-12 items-center gap-2 bg-[#075E54] px-3 text-white">
-            <div className="h-7 w-7 overflow-hidden rounded-full bg-white"><img src={candidate.brand === 'RIVER' ? '/river-logo.jpg' : '/toyota-HR-profile.jpeg'} alt="" className="h-full w-full object-cover" /></div>
+            <div className="h-7 w-7 overflow-hidden rounded-full bg-white"><img src={candidate.brand === 'RIVER' ? riverLogo : toyotaHrProfile} alt="" className="h-full w-full object-cover" /></div>
             <div><p className="text-xs font-semibold leading-tight">{candidate.brand === 'RIVER' ? 'River HR' : 'Nippon Toyota HR'}</p><p className="text-[10px] text-white/80">Official Business Account</p></div>
           </div>
           <div className="min-h-[240px] bg-[#efeae2] p-3">

@@ -25,6 +25,7 @@ import { useAuth } from '../../auth';
 import { digitsOnly, validatePhone } from '../../lib/validation';
 import { formatDate, formatTime } from '../../lib/dateTime';
 import { downloadInterviewCommentSheetPdf } from '../../lib/generateInterviewCommentSheetPdf';
+import { whatsappLogo } from '../../assets';
 
 const PREDEFINED_REMARKS = [
   'Excellent candidate, highly recommended.',
@@ -471,7 +472,7 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
                 aria-label="Send interview form on WhatsApp"
                 className="flex min-h-11 items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded-lg shadow-sm transition-colors disabled:opacity-50"
               >
-                <img src="/whatsapp.webp" alt="" className="w-3.5 h-3.5 object-contain" />
+                <img src={whatsappLogo} alt="" className="w-3.5 h-3.5 object-contain" />
                 WhatsApp
               </button>
             </div>

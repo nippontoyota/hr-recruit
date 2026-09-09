@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { nipponToyotaLogo, riverLogo } from '../assets';
 
 export type BrandKey = 'NIPPON_TOYOTA' | 'RIVER';
 
@@ -23,7 +24,7 @@ const configs: Record<BrandKey, BrandConfig> = {
   NIPPON_TOYOTA: {
     key: 'NIPPON_TOYOTA',
     name: 'Nippon Toyota',
-    logo: '/nippon-toyota-logo.png',
+    logo: nipponToyotaLogo,
     subtitle: 'Recruitment',
     primary: '#D61C24',
     primaryHover: '#B5161D',
@@ -39,7 +40,7 @@ const configs: Record<BrandKey, BrandConfig> = {
   RIVER: {
     key: 'RIVER',
     name: 'River',
-    logo: '/river-logo.jpg',
+    logo: riverLogo,
     subtitle: 'Electric mobility recruitment',
     primary: '#007DB6',
     primaryHover: '#006A9B',

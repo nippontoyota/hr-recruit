@@ -22,6 +22,7 @@ import { useAuth } from '../../auth';
 import { buildTechnicalTestWhatsAppMessage, evalScheduleLabels, openWhatsAppChat } from '../../lib/whatsappTemplate';
 import { WhatsAppShareModal } from './WhatsAppSendChoices';
 import { downloadInterviewCommentSheetPdf } from '../../lib/generateInterviewCommentSheetPdf';
+import { whatsappLogo } from '../../assets';
 
 const SINGLE_CARD_TYPES = new Set(['BRANCH_HR', 'HQ_INTERVIEW_1']);
 
@@ -455,7 +456,7 @@ function TechnicalTestPaperWidget({ ev, candidate, designation, onDesignationCha
                 onClick={() => handleInstantWhatsAppShare(ev)}
                 className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded-sm shadow-md transition-colors whitespace-nowrap"
               >
-                <img src="/whatsapp.webp" alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> Send Link
+                <img src={whatsappLogo} alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> Send Link
               </button>
             </>
           )}

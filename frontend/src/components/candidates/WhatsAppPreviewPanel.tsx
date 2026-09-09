@@ -21,6 +21,7 @@ import {
 import { WhatsAppSendChoices } from './WhatsAppSendChoices';
 import { useAuth } from '../../auth';
 import { getBrandConfig } from '../../lib/branding';
+import { linkIcon, toyotaHrProfile } from '../../assets';
 import { toast } from 'sonner';
 import { cn, extractError, isAbortError, copyTextToClipboard } from '../../lib/utils';
 import { sendPreForm, sendWhatsAppInvite, saveWhatsAppTemplate, confirmWhatsAppInvite } from '../../api/candidates';
@@ -519,7 +520,7 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
                   <ArrowLeft className="h-5 w-5 shrink-0" aria-hidden="true" />
                 </div>
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ml-0.5 border border-white/20">
-                  <img src={brand.key === 'RIVER' ? brand.logo : '/toyota-HR-profile.jpeg'} alt="" className="h-full w-full object-cover" />
+                  <img src={brand.key === 'RIVER' ? brand.logo : toyotaHrProfile} alt="" className="h-full w-full object-cover" />
                 </div>
                 <div className="min-w-0 text-left ml-2">
                   <p className="truncate text-[15px] font-medium leading-tight">{brand.name} HR</p>
@@ -844,7 +845,7 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
 
             <div className="sm:col-span-2">
               <label className="form-label flex items-center gap-1.5">
-                <img src="/link-icon.png" alt="Link" className="w-4 h-4 object-contain" />
+                <img src={linkIcon} alt="Link" className="w-4 h-4 object-contain" />
                 Job application form link
               </label>
               <div className="flex flex-col sm:flex-row gap-2">

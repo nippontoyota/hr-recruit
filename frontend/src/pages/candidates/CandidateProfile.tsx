@@ -34,6 +34,7 @@ import { SalarySheetUpload } from '../../components/candidates/SalarySheetUpload
 import { CandidateHeader } from '../../components/candidates/CandidateHeader';
 import { CandidateRecordSections } from '../../components/candidates/CandidateRecordSections';
 import { getCandidateWorkState } from '../../lib/candidateWork';
+import { gmailLogo } from '../../assets';
 
 
 import { useAuth } from '../../auth';
@@ -854,7 +855,7 @@ export default function CandidateProfile() {
                         href={`mailto:${candidate.email}`}
                         className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-md border border-border bg-background hover:bg-muted transition-colors text-foreground shadow-xs"
                       >
-                        <img src="/gmail.webp" className="w-3.5 h-3.5 object-contain" alt="Email" /> Email
+                        <img src={gmailLogo} className="w-3.5 h-3.5 object-contain" alt="Email" /> Email
                       </a>
                     )}
                     {candidate.has_resume && (
