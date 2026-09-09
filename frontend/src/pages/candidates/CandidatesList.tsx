@@ -75,6 +75,7 @@ export default function CandidatesList() {
     setStageFilter,
     advancedQuery,
     setAdvancedQuery,
+    sortVisibleCandidates,
     activeFilterCount,
     limit,
     refetch: fetchCandidatesList
@@ -101,7 +102,9 @@ export default function CandidatesList() {
   };
 
   const handleSort = (field: CandidateSortField) => {
-    setAdvancedQuery((previous) => cycleSort(previous, field));
+    const nextQuery = cycleSort(advancedQuery, field);
+    sortVisibleCandidates(nextQuery.sortBy, nextQuery.sortDirection);
+    setAdvancedQuery(nextQuery);
     setPage(1);
   };
 
@@ -332,7 +335,7 @@ export default function CandidatesList() {
               />
             </div>
           ) : (
-          <div className={cn('page-card overflow-hidden', refreshing && 'opacity-60 pointer-events-none')}>
+          <div className="page-card overflow-hidden" aria-busy={refreshing}>
             <div className="overflow-x-auto">
               <table className="data-table w-full min-w-245 text-left border-collapse whitespace-nowrap">
                 <thead>

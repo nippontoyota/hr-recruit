@@ -1,4 +1,6 @@
 import type { PipelineStage } from '../types';
+import type { Candidate } from '../types';
+import { getCandidateWorkState } from './candidateWork';
 
 export type CandidateSortField =
   | 'full_name'
@@ -47,4 +49,30 @@ export function candidateQueryParams(query: CandidateListQueryState, page: numbe
 export function cycleSort(query: CandidateListQueryState, field: CandidateSortField): CandidateListQueryState {
   if (query.sortBy !== field) return { ...query, sortBy: field, sortDirection: 'asc' };
   return { ...query, sortDirection: query.sortDirection === 'asc' ? 'desc' : 'asc' };
+}
+
+function candidateSortValue(candidate: Candidate, field: CandidateSortField): string {
+  if (field === 'next_action') return getCandidateWorkState(candidate).next_action;
+  const value = candidate[field as keyof Candidate];
+  return value == null ? '' : String(value);
+}
+
+/** Sort the currently visible page immediately while the server confirms the order. */
+export function sortCandidateRows(
+  candidates: Candidate[],
+  field: CandidateSortField,
+  direction: 'asc' | 'desc',
+): Candidate[] {
+  const multiplier = direction === 'asc' ? 1 : -1;
+  return [...candidates].sort((left, right) => {
+    const leftValue = candidateSortValue(left, field).trim();
+    const rightValue = candidateSortValue(right, field).trim();
+    const leftBlank = leftValue.length === 0;
+    const rightBlank = rightValue.length === 0;
+    if (leftBlank !== rightBlank) return leftBlank ? 1 : -1;
+
+    const comparison = leftValue.localeCompare(rightValue, undefined, { numeric: true, sensitivity: 'base' });
+    if (comparison !== 0) return comparison * multiplier;
+    return left.candidate_id.localeCompare(right.candidate_id, undefined, { numeric: true, sensitivity: 'base' });
+  });
 }

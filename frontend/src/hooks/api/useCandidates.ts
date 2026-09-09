@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { getCandidates, getCandidateWorkStates } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { extractError, isAbortError } from '../../lib/utils';
-import { emptyCandidateListQuery, type CandidateListQueryState } from '../../lib/candidateListQuery';
+import { emptyCandidateListQuery, sortCandidateRows, type CandidateListQueryState, type CandidateSortField } from '../../lib/candidateListQuery';
 
 const CANDIDATE_LIST_CACHE_TTL_MS = 60_000;
 const CANDIDATE_LIST_CACHE_PREFIX = 'candidate-list-cache:v1:';
@@ -141,6 +141,10 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
     }
   }, [page, limit, debouncedSearch, stageFilter, advancedQuery]);
 
+  const sortVisibleCandidates = useCallback((field: CandidateSortField, direction: 'asc' | 'desc') => {
+    setCandidates((previous) => sortCandidateRows(previous, field, direction));
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     void refetch(controller.signal);
@@ -161,6 +165,7 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
     setStageFilter,
     advancedQuery,
     setAdvancedQuery,
+    sortVisibleCandidates,
     activeFilterCount: [searchQuery, stageFilter, advancedQuery.stages.length, advancedQuery.offerStatuses.length, advancedQuery.branches.length, advancedQuery.sources.length, advancedQuery.position, advancedQuery.nextActions.length, advancedQuery.createdDate, advancedQuery.sentDate].filter(Boolean).length,
     limit,
     refetch,
