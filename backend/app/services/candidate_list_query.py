@@ -93,16 +93,20 @@ def build_candidate_list_query(user: User, query: CandidateListQuery) -> Select:
         if end:
             statement = statement.where(column < end)
 
-    sort_column = {
-        CandidateSortField.CANDIDATE: Candidate.full_name,
-        CandidateSortField.POSITION: Candidate.position_applied_for,
-        CandidateSortField.STAGE: Candidate.current_stage,
-        CandidateSortField.OFFER_RESPONSE: Candidate.offer_status,
-        CandidateSortField.BRANCH: Candidate.branch_location,
-        CandidateSortField.SOURCE: Candidate.source,
-        CandidateSortField.DATE_ADDED: Candidate.created_at,
-        CandidateSortField.FORM_SENT: Candidate.pre_form_sent_at,
-    }[query.sort_by]
+    sort_column = (
+        _next_action_expression()
+        if query.sort_by == CandidateSortField.NEXT_ACTION
+        else {
+            CandidateSortField.CANDIDATE: Candidate.full_name,
+            CandidateSortField.POSITION: Candidate.position_applied_for,
+            CandidateSortField.STAGE: Candidate.current_stage,
+            CandidateSortField.OFFER_RESPONSE: Candidate.offer_status,
+            CandidateSortField.BRANCH: Candidate.branch_location,
+            CandidateSortField.SOURCE: Candidate.source,
+            CandidateSortField.DATE_ADDED: Candidate.created_at,
+            CandidateSortField.FORM_SENT: Candidate.pre_form_sent_at,
+        }[query.sort_by]
+    )
     order = sort_column.asc() if query.sort_direction == SortDirection.ASC else sort_column.desc()
     return statement.order_by(order.nulls_last(), Candidate.candidate_id.asc())
 

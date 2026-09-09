@@ -4,6 +4,7 @@ export type CandidateSortField =
   | 'full_name'
   | 'position_applied_for'
   | 'current_stage'
+  | 'next_action'
   | 'offer_status'
   | 'branch_location'
   | 'source'

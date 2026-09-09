@@ -79,6 +79,7 @@ export function InterviewApplicationFormDocument({
   const d = (candidate.profile?.raw_data ?? {}) as Record<string, unknown>;
   const brand = getBrandConfig(candidate.brand);
   const riverClass = brand.key === 'RIVER' ? 'iaf-form-river' : '';
+  const riverDocClass = brand.key === 'RIVER' ? 'iaf-doc-river' : '';
   const photoUrl = candidate.profile?.photo_url;
   const applied = d.appliedDate || candidate.pre_form_submitted_at || candidate.applied_at || candidate.created_at;
   const rawPos = candidate.position_applied_for || d.positionAppliedFor;
@@ -186,7 +187,7 @@ export function InterviewApplicationFormDocument({
   const hasExtra = !!(val(d.achievements) || val(d.hobbies));
 
   return (
-    <div className="iaf-doc">
+    <div className={`iaf-doc ${riverDocClass}`}>
       {/* ══════════════════════════════════════════════════════════════════
           PAGE 1 OF 2: Personal Data, Education, Family & Employment Record
          ══════════════════════════════════════════════════════════════════ */}

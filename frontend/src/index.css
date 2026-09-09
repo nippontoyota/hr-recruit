@@ -694,6 +694,7 @@
     margin: 0 !important;
   }
   .iaf-doc {
+    display: block !important;
     gap: 0 !important;
     width: 210mm !important;
     margin: 0 auto !important;
@@ -701,13 +702,13 @@
   }
   .iaf-page-wrap {
     width: 210mm !important;
-    min-height: 297mm !important;
+    min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
-    page-break-after: always !important;
-    break-after: page !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
     page-break-inside: auto !important;
     break-inside: auto !important;
     overflow: visible !important;
@@ -717,7 +718,7 @@
   .iaf-sheet,
   .iaf-page {
     width: 210mm !important;
-    min-height: 297mm !important;
+    min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
     padding: 6mm 8mm !important;
@@ -728,8 +729,8 @@
     overflow: visible !important;
     page-break-inside: auto !important;
     break-inside: auto !important;
-    page-break-after: always !important;
-    break-after: page !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
   .iaf-block,
   .iaf-form tr,
@@ -742,7 +743,19 @@
     break-inside: auto;
   }
   .iaf-break {
-    break-before: page !important;
-    page-break-before: always !important;
+    break-before: auto !important;
+    page-break-before: auto !important;
+  }
+  .iaf-doc-river .iaf-form {
+    font-size: 10.5px !important;
+    line-height: 1.2 !important;
+  }
+  .iaf-doc-river .iaf-form table {
+    margin-bottom: 5px !important;
+  }
+  .iaf-doc-river .iaf-form td,
+  .iaf-doc-river .iaf-form th {
+    padding-top: 2.5px !important;
+    padding-bottom: 2.5px !important;
   }
 }
