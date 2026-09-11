@@ -76,6 +76,11 @@ change.
 
 ## Success Criteria
 
+- For normal authenticated and public JSON operations, target p95 end-to-end
+  completion below one second under the production capacity baseline. File
+  transfers, third-party email/WhatsApp delivery, and cold-instance wake-ups are
+  excluded because their latency is controlled outside this application; their
+  API endpoints must still perform local persistence and respond promptly.
 - Initial protected-page JavaScript excludes document-viewer code unless that
   capability is opened.
 - Repeated concurrent reads result in one network request per cache key.
