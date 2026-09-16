@@ -8,7 +8,7 @@ from app.api.v1.candidates_core import (
     _issue_pre_form,
     _mark_call_letter_sent,
 )
-from app.models.enums import FormStatus
+from app.models.enums import ActivityType, FormStatus
 
 
 def test_parse_visit_date_iso_and_display():
@@ -116,3 +116,21 @@ def test_mark_call_letter_sent_does_not_downgrade_viewed():
     )
     _mark_call_letter_sent(db, candidate, user)
     assert candidate.pre_form_status == FormStatus.VIEWED
+
+
+def test_mark_call_letter_sent_manually_records_form_activity():
+    db = MagicMock()
+    user = SimpleNamespace(id=uuid4())
+    candidate = _form_candidate(pre_form_token="existing", pre_form_token_purpose="PRE_FORM")
+    _mark_call_letter_sent(
+        db,
+        candidate,
+        user,
+        activity_type=ActivityType.FORM,
+        title="Form link sent manually",
+        description="HR confirmed the form link was sent to the candidate manually. Waiting for candidate response.",
+    )
+    assert candidate.pre_form_status == FormStatus.SENT
+    logged = db.add.call_args.args[0]
+    assert logged.activity_type == ActivityType.FORM
+    assert logged.title == "Form link sent manually"

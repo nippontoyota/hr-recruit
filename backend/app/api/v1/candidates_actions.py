@@ -375,6 +375,28 @@ def send_pre_form(
     db.refresh(row)
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
 
+
+@router.post("/{id}/pre-form/mark-sent", response_model=CandidateOut)
+def mark_pre_form_sent_manually(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    """HR confirms the form link was handed to the candidate outside the app."""
+    row = get_candidate_for_user(db, id, user, write=True)
+    _mark_call_letter_sent(
+        db,
+        row,
+        user,
+        activity_type=ActivityType.FORM,
+        title="Form link sent manually",
+        description="HR confirmed the form link was sent to the candidate manually. Waiting for candidate response.",
+    )
+    db.commit()
+    db.refresh(row)
+    return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
+
+
 @router.post("/{id}/whatsapp-invite")
 def send_whatsapp_invite(
     id: UUID,

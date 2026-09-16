@@ -456,6 +456,11 @@ export const sendPreForm = async (candidateId: string): Promise<any> => {
   return response.data;
 };
 
+export const markPreFormSentManually = async (candidateId: string): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/pre-form/mark-sent`);
+  return response.data;
+};
+
 export const sendWhatsAppInvite = async (
   candidateId: string,
   variables: Record<string, string>

@@ -1,10 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { usePrint } from '../../hooks/usePrint';
 import { Button, Modal } from '../ui';
-import { CheckCircle2, Pencil, Printer, RefreshCw, Link } from 'lucide-react';
+import { CheckCircle2, Loader2, Pencil, Printer, RefreshCw, Link } from 'lucide-react';
 import type { Candidate } from '../../types';
 import { toast } from 'sonner';
-import { updateCandidateRawData, sendPreForm, uploadCandidatePhoto, uploadCandidateResume } from '../../api/candidates';
+import {
+  updateCandidateRawData,
+  sendPreForm,
+  markPreFormSentManually,
+  uploadCandidatePhoto,
+  uploadCandidateResume,
+} from '../../api/candidates';
 import { WhatsAppPreviewPanel } from './WhatsAppPreviewPanel';
 import { InterviewApplicationFormDocument } from './InterviewApplicationFormDocument';
 import { EditableApplicationFormDocument } from './EditableApplicationFormDocument';
@@ -22,7 +28,7 @@ export function PreFormStatus({ candidate, onUpdate, isReadOnly = false }: PreFo
   const handlePrint = usePrint({
     contentRef: componentRef,
     documentTitle: `ApplicationForm_${candidate.full_name}`,
-    pageStyle: `@page { size: A4 portrait; margin: 0; } html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .iaf-page-wrap { height: auto !important; max-height: none !important; overflow: visible !important; page-break-inside: auto !important; break-inside: auto !important; } .css-sheet, .iaf-sheet, .iaf-page { width: 210mm !important; min-height: 297mm !important; height: auto !important; max-height: none !important; overflow: visible !important; box-sizing: border-box !important; margin: 0 !important; padding: 6mm 8mm !important; box-shadow: none !important; border: none !important; }`,
+    pageStyle: `@page { size: A4 portrait; margin: 0; } html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .iaf-doc { display: block !important; } .iaf-page-wrap { min-height: 0 !important; height: auto !important; max-height: none !important; overflow: visible !important; page-break-after: auto !important; break-after: auto !important; page-break-inside: auto !important; break-inside: auto !important; } .iaf-break { page-break-before: auto !important; break-before: auto !important; } .css-sheet, .iaf-sheet, .iaf-page { width: 210mm !important; min-height: 0 !important; height: auto !important; max-height: none !important; overflow: visible !important; box-sizing: border-box !important; margin: 0 !important; padding: 6mm 8mm !important; box-shadow: none !important; border: none !important; page-break-after: auto !important; break-after: auto !important; } .iaf-doc-river .iaf-form { font-size: 10.5px !important; line-height: 1.2 !important; } .iaf-doc-river .iaf-form table { margin-bottom: 5px !important; } .iaf-doc-river .iaf-form td, .iaf-doc-river .iaf-form th { padding-top: 2.5px !important; padding-bottom: 2.5px !important; }`,
   });
 
   const [copied, setCopied] = useState(false);
@@ -30,6 +36,7 @@ export function PreFormStatus({ candidate, onUpdate, isReadOnly = false }: PreFo
   const [isSaving, setIsSaving] = useState(false);
   const [showResendModal, setShowResendModal] = useState(false);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [isConfirmingManualSend, setIsConfirmingManualSend] = useState(false);
 
   const status = candidate.pre_form_status || 'NOT_SENT';
   const [localRawData, setLocalRawData] = useState<Record<string, unknown>>(candidate.profile?.raw_data ?? {});
@@ -40,6 +47,19 @@ export function PreFormStatus({ candidate, onUpdate, isReadOnly = false }: PreFo
 
   const handleEditToggle = () => {
     setIsEditing(!isEditing);
+  };
+
+  const handleConfirmManualSend = async () => {
+    try {
+      setIsConfirmingManualSend(true);
+      const updated = await markPreFormSentManually(candidate.id);
+      toast.success('Marked as sent. Waiting for the candidate to fill the form.');
+      onUpdate?.(updated);
+    } catch (err: unknown) {
+      toast.error(extractError(err, 'Failed to update status'));
+    } finally {
+      setIsConfirmingManualSend(false);
+    }
   };
 
   const handleSave = async (
@@ -202,6 +222,21 @@ export function PreFormStatus({ candidate, onUpdate, isReadOnly = false }: PreFo
               >
                 <RefreshCw className="w-3.5 h-3.5" /> {status === 'EXPIRED' ? 'Resend form' : 'Resend Link'}
               </Button>
+            )}
+            {!isReadOnly && status === 'NOT_SENT' && (
+              <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer w-fit">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-border accent-[var(--color-primary)]"
+                  checked={false}
+                  disabled={isConfirmingManualSend}
+                  onChange={(event) => {
+                    if (event.target.checked) void handleConfirmManualSend();
+                  }}
+                />
+                <span>I sent this link to the candidate manually</span>
+                {isConfirmingManualSend && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+              </label>
             )}
           </div>
         ) : (

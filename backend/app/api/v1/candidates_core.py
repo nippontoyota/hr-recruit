@@ -94,7 +94,15 @@ def _ensure_head_office_interviews(db: Session, candidate: Candidate) -> None:
         db.commit()
 
 
-def _mark_call_letter_sent(db: Session, candidate: Candidate, user: User) -> None:
+def _mark_call_letter_sent(
+    db: Session,
+    candidate: Candidate,
+    user: User,
+    *,
+    activity_type: ActivityType = ActivityType.WHATSAPP,
+    title: str = "Call letter issued",
+    description: str = "Call letter sent. Waiting for candidate response.",
+) -> None:
     """Record that HR sent the call letter. Does not mint a new form link."""
     if not candidate.pre_form_token or candidate.pre_form_token_purpose != PURPOSE_PRE_FORM:
         issue_public_token(candidate, PURPOSE_PRE_FORM)
@@ -105,9 +113,9 @@ def _mark_call_letter_sent(db: Session, candidate: Candidate, user: User) -> Non
     db.add(
         ActivityLog(
             candidate_id=candidate.id,
-            activity_type=ActivityType.WHATSAPP,
-            title="Call letter issued",
-            description="Call letter sent. Waiting for candidate response.",
+            activity_type=activity_type,
+            title=title,
+            description=description,
             created_by_user_id=user.id,
         )
     )
