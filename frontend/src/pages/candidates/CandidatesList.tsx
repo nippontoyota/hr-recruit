@@ -75,6 +75,7 @@ export default function CandidatesList() {
     setStageFilter,
     advancedQuery,
     setAdvancedQuery,
+    sortVisibleCandidates,
     activeFilterCount,
     limit,
     refetch: fetchCandidatesList
@@ -97,6 +98,13 @@ export default function CandidatesList() {
 
   const setAdvanced = (update: Partial<typeof advancedQuery>) => {
     setAdvancedQuery((previous) => ({ ...previous, ...update }));
+    setPage(1);
+  };
+
+  const handleSort = (field: CandidateSortField) => {
+    const nextQuery = cycleSort(advancedQuery, field);
+    sortVisibleCandidates(nextQuery.sortBy, nextQuery.sortDirection);
+    setAdvancedQuery(nextQuery);
     setPage(1);
   };
 
@@ -136,8 +144,18 @@ export default function CandidatesList() {
 
   // The backend filters and paginates; queue filtering is derived from the loaded page.
   const filteredCandidates = useMemo(
-    () => selectedQueue ? candidates.filter((candidate) => matchesQueue(candidate, selectedQueue)) : candidates,
-    [candidates, selectedQueue]
+    () => {
+      const queueCandidates = selectedQueue ? candidates.filter((candidate) => matchesQueue(candidate, selectedQueue)) : candidates;
+      if (advancedQuery.nextActions.length === 0) return queueCandidates;
+      return queueCandidates.filter((candidate) => {
+        // The list request omits workflow metadata for faster first paint.
+        // Keep rows visible until that metadata arrives, then apply the
+        // selected action locally while the server result is refreshing.
+        if (!candidate.work_state) return true;
+        return advancedQuery.nextActions.includes(getCandidateWorkState(candidate).next_action);
+      });
+    },
+    [candidates, selectedQueue, advancedQuery.nextActions]
   );
 
   // Select-all derived state
@@ -327,7 +345,7 @@ export default function CandidatesList() {
               />
             </div>
           ) : (
-          <div className={cn('page-card overflow-hidden', refreshing && 'opacity-60 pointer-events-none')}>
+          <div className="page-card overflow-hidden" aria-busy={refreshing}>
             <div className="overflow-x-auto">
               <table className="data-table w-full min-w-245 text-left border-collapse whitespace-nowrap">
                 <thead>
@@ -350,14 +368,14 @@ export default function CandidatesList() {
                         )}
                       </button>
                     </th>
-                    <th><HeaderSort label="Candidate" field="full_name" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'full_name'))} /><CandidateTableFilter label="Candidate" values={[]} textValue={advancedQuery.search} onChange={() => undefined} onTextChange={(value) => { setSearchQuery(value); setPage(1); }} /></th>
-                    <th><HeaderSort label="Position" field="position_applied_for" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'position_applied_for'))} /><CandidateTableFilter label="Position" values={[]} onChange={() => undefined} textValue={advancedQuery.position} onTextChange={(value) => setAdvanced({ position: value })} /></th>
-                    <th><HeaderSort label="Stage" field="current_stage" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'current_stage'))} /><CandidateTableFilter label="Stage" values={advancedQuery.stages} onChange={(values) => { setStageFilter(''); setAdvanced({ stages: values as typeof advancedQuery.stages }); }} options={PIPELINE_STAGES.map((value) => ({ value, label: stageLabel(value) }))} /></th>
-                    <th><HeaderSort label="Offer response" field="offer_status" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'offer_status'))} /><CandidateTableFilter label="Offer response" values={advancedQuery.offerStatuses} onChange={(values) => setAdvanced({ offerStatuses: values })} options={[{ value: 'SENT', label: 'Pending' }, { value: 'ACCEPTED', label: 'Accepted' }, { value: 'DECLINED', label: 'Rejected' }]} /></th>
-                    <th><HeaderSort label="Branch" field="branch_location" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'branch_location'))} /><CandidateTableFilter label="Branch" values={advancedQuery.branches} onChange={(values) => setAdvanced({ branches: values })} options={['Trivandrum', 'Kollam', 'Pathanamthitta', 'Kayamkulam', 'Kottayam', 'Muvattupuzha', 'Kalamassery', 'Cochin', 'Thrissur'].map((value) => ({ value, label: value }))} /></th>
-                    <th><HeaderSort label="Next action" field="current_stage" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'current_stage'))} /><CandidateTableFilter label="Next action" values={advancedQuery.nextActions} onChange={(values) => setAdvanced({ nextActions: values })} options={['Call letter to be sent', 'Call letter issued, waiting for candidate response', 'Review application & schedule interview', 'Review hold', 'Offer sent. Awaiting candidate response', 'Offer accepted. Complete onboarding', 'Offer declined. No further action', 'Continue to offer letter', 'Prepare offer', 'Send to Head Office', 'Complete Head Office interview', 'Complete interviews', 'Complete technical test', 'Complete background verification', 'Advance candidate'].map((value) => ({ value, label: value }))} /></th>
-                    <th><HeaderSort label="Source" field="source" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'source'))} /><CandidateTableFilter label="Source" values={advancedQuery.sources} onChange={(values) => setAdvanced({ sources: values })} options={['WALK_IN', 'INDEED', 'NAUKRI', 'REFERRAL', 'CAMPUS', 'LINKEDIN', 'OTHER'].map((value) => ({ value, label: formatSource(value) }))} /></th>
-                    <th><HeaderSort label="Date added" field="created_at" query={advancedQuery} onSort={() => setAdvancedQuery(cycleSort(advancedQuery, 'created_at'))} /><CandidateTableFilter label="Date added" values={[]} onChange={() => undefined} dateValue={advancedQuery.createdDate} onDateChange={(value) => setAdvanced({ createdDate: value })} /><CandidateTableFilter label="Application form sent" values={[]} onChange={() => undefined} dateValue={advancedQuery.sentDate} onDateChange={(value) => setAdvanced({ sentDate: value })} /></th>
+                    <th><HeaderSort label="Candidate" field="full_name" query={advancedQuery} onSort={() => handleSort('full_name')} /><CandidateTableFilter label="Candidate" values={[]} textValue={advancedQuery.search} onChange={() => undefined} onTextChange={(value) => { setSearchQuery(value); setPage(1); }} /></th>
+                    <th><HeaderSort label="Position" field="position_applied_for" query={advancedQuery} onSort={() => handleSort('position_applied_for')} /><CandidateTableFilter label="Position" values={[]} onChange={() => undefined} textValue={advancedQuery.position} onTextChange={(value) => setAdvanced({ position: value })} /></th>
+                    <th><HeaderSort label="Stage" field="current_stage" query={advancedQuery} onSort={() => handleSort('current_stage')} /><CandidateTableFilter label="Stage" values={advancedQuery.stages} onChange={(values) => { setStageFilter(''); setAdvanced({ stages: values as typeof advancedQuery.stages }); }} options={PIPELINE_STAGES.map((value) => ({ value, label: stageLabel(value) }))} /></th>
+                    <th><HeaderSort label="Offer response" field="offer_status" query={advancedQuery} onSort={() => handleSort('offer_status')} /><CandidateTableFilter label="Offer response" values={advancedQuery.offerStatuses} onChange={(values) => setAdvanced({ offerStatuses: values })} options={[{ value: 'SENT', label: 'Pending' }, { value: 'ACCEPTED', label: 'Accepted' }, { value: 'DECLINED', label: 'Rejected' }]} /></th>
+                    <th><HeaderSort label="Branch" field="branch_location" query={advancedQuery} onSort={() => handleSort('branch_location')} /><CandidateTableFilter label="Branch" values={advancedQuery.branches} onChange={(values) => setAdvanced({ branches: values })} options={['River', 'Trivandrum', 'Kollam', 'Pathanamthitta', 'Kayamkulam', 'Kottayam', 'Muvattupuzha', 'Kalamassery', 'Cochin', 'Thrissur'].map((value) => ({ value, label: value }))} /></th>
+                    <th><HeaderSort label="Next action" field="next_action" query={advancedQuery} onSort={() => handleSort('next_action')} /><CandidateTableFilter label="Next action" values={advancedQuery.nextActions} onChange={(values) => setAdvanced({ nextActions: values })} options={['Call letter to be sent', 'Call letter issued, waiting for candidate response', 'Review application & schedule interview', 'Review hold', 'Offer sent. Awaiting candidate response', 'Offer accepted. Complete onboarding', 'Offer declined. No further action', 'Continue to offer letter', 'Prepare offer', 'Send to Head Office', 'Complete Head Office interview', 'Complete interviews', 'Complete technical test', 'Complete background verification', 'Advance candidate'].map((value) => ({ value, label: value }))} /></th>
+                    <th><HeaderSort label="Source" field="source" query={advancedQuery} onSort={() => handleSort('source')} /><CandidateTableFilter label="Source" values={advancedQuery.sources} onChange={(values) => setAdvanced({ sources: values })} options={['WALK_IN', 'INDEED', 'NAUKRI', 'REFERRAL', 'CAMPUS', 'LINKEDIN', 'OTHER'].map((value) => ({ value, label: formatSource(value) }))} /></th>
+                    <th><HeaderSort label="Date added" field="created_at" query={advancedQuery} onSort={() => handleSort('created_at')} /><CandidateTableFilter label="Date added" values={[]} onChange={() => undefined} dateValue={advancedQuery.createdDate} onDateChange={(value) => setAdvanced({ createdDate: value })} /><CandidateTableFilter label="Application form sent" values={[]} onChange={() => undefined} dateValue={advancedQuery.sentDate} onDateChange={(value) => setAdvanced({ sentDate: value })} /></th>
                     <th className="text-right">Actions</th>
                   </tr>
                 </thead>
@@ -375,7 +393,20 @@ export default function CandidatesList() {
                     return (
                       <tr
                         key={candidate.id}
-                        onClick={() => navigate(`/candidates/${candidate.id}`)}
+                        onClick={(event) => {
+                          if (event.button !== 0) return;
+                          const href = `/candidates/${candidate.id}`;
+                          if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+                            window.open(href, '_blank', 'noopener,noreferrer');
+                            return;
+                          }
+                          navigate(href);
+                        }}
+                        onAuxClick={(event) => {
+                          if (event.button === 1) {
+                            window.open(`/candidates/${candidate.id}`, '_blank', 'noopener,noreferrer');
+                          }
+                        }}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault();
@@ -410,7 +441,12 @@ export default function CandidatesList() {
                           <div className="flex flex-col">
                             <a
                               href={`/candidates/${candidate.id}`}
-                              onClick={(event) => { event.preventDefault(); event.stopPropagation(); navigate(`/candidates/${candidate.id}`); }}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+                                event.preventDefault();
+                                navigate(`/candidates/${candidate.id}`);
+                              }}
                               className="font-semibold text-text-primary underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-primary/30"
                             >
                               {candidate.full_name}

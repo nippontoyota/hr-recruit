@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from typing import Dict, List
+from sqlalchemy import func, select
 from collections import defaultdict
 
 from app.core.database import get_db
@@ -18,12 +17,13 @@ def get_dashboard_stats(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN))
 ):
-    # 1. Total candidates
-    total_candidates = db.query(func.count(Candidate.id)).scalar() or 0
-    
-    # 2. Stage breakdown
-    stage_counts = db.query(Candidate.current_stage, func.count(Candidate.id)).group_by(Candidate.current_stage).all()
+    # The grouped stage count is enough to derive the total, so this avoids a
+    # second full-table aggregate on every dashboard visit.
+    stage_counts = db.execute(
+        select(Candidate.current_stage, func.count(Candidate.id)).group_by(Candidate.current_stage)
+    ).all()
     stage_breakdown = {stage.value: count for stage, count in stage_counts}
+    total_candidates = sum(stage_breakdown.values())
     
     # 3. Bottlenecks
     bottlenecks = {"on_hold": stage_breakdown.get(PipelineStage.ON_HOLD.value, 0), "pending_interviews": 0}
@@ -40,32 +40,52 @@ def get_dashboard_stats(
     if (hired + rejected) > 0:
         conversion_rate = (hired / (hired + rejected)) * 100
         
-    # 5. Branch Map
-    # To keep it optimal and prevent massive payload, we fetch candidates grouped by branch.
-    # We only include candidates that are not hired or rejected (Active Pipeline) for the dashboard preview,
-    # and we limit to 10 per branch to keep the UI snappy.
+    # Fetch at most ten active candidates per branch in the database. The prior
+    # implementation loaded every active candidate into Python before trimming
+    # each branch, causing dashboard latency and memory use to grow with the
+    # entire pipeline.
     active_stages = [s for s in PipelineStage if s not in (PipelineStage.HIRED, PipelineStage.REJECTED)]
-    
+    branch_name = func.coalesce(Candidate.branch_location, "Head Office").label("branch_name")
+    ranked_candidates = (
+        select(
+            Candidate.id,
+            Candidate.full_name,
+            Candidate.department,
+            Candidate.current_stage,
+            Candidate.created_at,
+            branch_name,
+            func.row_number().over(
+                partition_by=branch_name,
+                order_by=Candidate.created_at.desc(),
+            ).label("branch_rank"),
+        )
+        .where(Candidate.current_stage.in_(active_stages))
+        .subquery()
+    )
     branch_map = defaultdict(list)
-    # Fetch all branches active candidates (ordered by latest)
-    # Note: In production with millions of rows, a window function (ROW_NUMBER over partition) is better,
-    # but for typical ATS sizes, fetching active candidates and grouping in python is extremely fast.
-    active_candidates = db.query(Candidate).filter(Candidate.current_stage.in_(active_stages)).order_by(Candidate.created_at.desc()).all()
-    
-    for c in active_candidates:
-        branch_name = c.branch_location or "Head Office"
-        # Only take top 10 most recent active candidates per branch to prevent UI lag
-        if len(branch_map[branch_name]) < 10:
-            branch_map[branch_name].append(
+    active_candidates = db.execute(
+        select(
+            ranked_candidates.c.id,
+            ranked_candidates.c.full_name,
+            ranked_candidates.c.department,
+            ranked_candidates.c.current_stage,
+            ranked_candidates.c.created_at,
+            ranked_candidates.c.branch_name,
+        )
+        .where(ranked_candidates.c.branch_rank <= 10)
+        .order_by(ranked_candidates.c.branch_name.asc(), ranked_candidates.c.created_at.desc())
+    ).all()
+
+    for candidate_id, full_name, department, current_stage, created_at, candidate_branch in active_candidates:
+        branch_map[candidate_branch].append(
                 CandidateDetail(
-                    id=c.id,
-                    full_name=c.full_name,
-                    department=c.department,
-                    current_stage=c.current_stage,
-                    created_at=c.created_at.isoformat()
+                    id=candidate_id,
+                    full_name=full_name,
+                    department=department,
+                    current_stage=current_stage,
+                    created_at=created_at.isoformat(),
                 )
-            )
-        
+        )
     branch_data = [
         BranchCandidateData(branch_name=k, candidates=v)
         for k, v in branch_map.items()

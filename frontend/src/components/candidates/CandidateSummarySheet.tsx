@@ -192,11 +192,11 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
     rawGet(raw, 'appliedDate') || candidate.pre_form_submitted_at || candidate.applied_at,
   );
   const sourceValue =
-    (candidate.source && candidate.source !== 'Unknown' ? candidate.source : '') ||
-    rawGet(raw, 'sourceOfOpening', 'source');
+    rawGet(raw, 'source', 'sourceOfOpening') ||
+    (candidate.source && candidate.source !== 'Unknown' ? candidate.source : '');
   const source = sourceValue ? formatSource(sourceValue) : '';
-  const specifySource = txt(candidate.source_reference) || rawGet(raw, 'referredBy');
-  const phones = [candidate.phone, rawGet(raw, 'mobileNumber')]
+  const specifySource = rawGet(raw, 'specifySource', 'referredBy') || txt(candidate.source_reference);
+  const phones = [candidate.phone || rawGet(raw, 'mobileNumber'), rawGet(raw, 'phone2', 'contactNumber2')]
     .map((p) => p.replace(/\s/g, ''))
     .filter((p, i, arr) => p && arr.indexOf(p) === i);
   const addrPrefix = rawGet(raw, 'presHouseName') && raw.sameAsPermanent !== true ? 'pres' : 'perm';
@@ -219,7 +219,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
     '';
   const expectedSalary =
     rawGet(raw, 'expectedSalary') || txt(candidate.profile?.expected_salary) || '';
-  const joiningDays = rawGet(raw, 'noticePeriod');
+  const joiningDays = rawGet(raw, 'joiningDays', 'noticePeriod');
   const doj = fmtDate(rawGet(raw, 'expectedJoiningDate') || candidate.profile?.joining_date);
   const pgCourse = [rawGet(raw, 'postGradCourse'), rawGet(raw, 'postGradStream')].filter(Boolean).join(' - ');
   const pg = eduValue(
@@ -243,9 +243,9 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
     rawGet(raw, 'class10School'),
     rawGet(raw, 'class10Percentage'),
   );
-  const degreeLevel = pg ? 'PG' : degree ? 'Degree' : sslc && !plusTwo ? 'SSLC' : 'Degree';
-  const degreeSpec = pg || degree || (!plusTwo ? sslc : '');
-  const plusTwoSpec = plusTwo || (pg || degree ? sslc : '');
+  const degreeLevel = rawGet(raw, 'degreeLevel') || (pg ? 'PG' : degree ? 'Degree' : sslc && !plusTwo ? 'SSLC' : 'Degree');
+  const degreeSpec = rawGet(raw, 'degreeSpec') || pg || degree || (!plusTwo ? sslc : '');
+  const plusTwoSpec = rawGet(raw, 'plusTwoSpec') || plusTwo || (pg || degree ? sslc : '');
 
   const tech = evaluations.find((e) => e.type === 'TECHNICAL_TEST' && e.status === 'EVALUATED');
   const techPct = tech?.scores?.percentage;
@@ -259,11 +259,22 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
   const interviews: Array<Evaluation | null> = [...ranked];
   while (interviews.length < 4) interviews.push(null);
 
-  const scored = ranked
-    .map((e) => Number(e.scores?.total_score))
-    .filter((n) => Number.isFinite(n) && n > 0);
+  const ivInterviewer = [1, 2, 3, 4].map((n) => rawGet(raw, `iv${n}Interviewer`) || txt(interviews[n - 1]?.scores?.interviewer_name));
+  const ivRemarks = [1, 2, 3, 4].map((n) => rawGet(raw, `iv${n}Remarks`) || interviews[n - 1]?.remarks || '');
+  const ivScore = [1, 2, 3, 4].map((n) => {
+    const override = num(rawGet(raw, `iv${n}Score`));
+    if (override != null) return override;
+    const evalScore = Number(interviews[n - 1]?.scores?.total_score);
+    return Number.isFinite(evalScore) && evalScore > 0 ? evalScore : null;
+  });
+  const ivDate = [1, 2, 3, 4].map((n) =>
+    rawGet(raw, `iv${n}Date`) || fmtDate(interviews[n - 1]?.scheduled_time || interviews[n - 1]?.updated_at),
+  );
+
+  const scored = ivScore.filter((n): n is number => n !== null && n > 0);
   const marks100 = scored.map((n) => Math.round(n * 10));
-  const avg100 = marks100.length ? Math.round(marks100.reduce((a, b) => a + b, 0) / marks100.length) : '';
+  const totalAverageOverride = rawGet(raw, 'totalAverage');
+  const avg100 = totalAverageOverride || (marks100.length ? String(Math.round(marks100.reduce((a, b) => a + b, 0) / marks100.length)) : '');
   const totalMarks10 = scored.length ? scored.reduce((a, b) => a + b, 0) : '';
 
   const cur = num(currentSalary);
@@ -317,7 +328,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           <tr>
             <Cell colSpan={10} className="font-bold text-[11px]">Candidate Summary Sheet</Cell>
             <Cell label>Department</Cell>
-            <Cell>{candidate.department || ''}</Cell>
+            <Cell>{rawGet(raw, 'department') || candidate.department || ''}</Cell>
           </tr>
 
           <tr>
@@ -326,7 +337,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={4}>Application Submitted on:</Cell>
             <Cell>{appliedOn}</Cell>
             <Cell label>Location</Cell>
-            <Cell>{candidate.branch_location || ''}</Cell>
+            <Cell>{rawGet(raw, 'branchLocation') || candidate.branch_location || ''}</Cell>
           </tr>
           <tr>
             <Cell label>Post Applied</Cell>
@@ -408,9 +419,9 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           </tr>
           <tr>
             <Cell label>Computer Knowledge</Cell>
-            <Cell colSpan={2}>{computerKnowledge(raw)}</Cell>
+            <Cell colSpan={2}>{rawGet(raw, 'computerKnowledge') || computerKnowledge(raw)}</Cell>
             <Cell colSpan={2} className="font-bold">Driving Licence</Cell>
-            <Cell colSpan={3}>{drivingLicence(raw)}</Cell>
+            <Cell colSpan={3}>{rawGet(raw, 'drivingLicence') || drivingLicence(raw)}</Cell>
             <Cell label>Spouse Occupation</Cell>
             <Cell>{occupation(rawGet(raw, 'spouseOccupation'), rawGet(raw, 'spouseCompany'))}</Cell>
             <Cell label>Siblings 3 Occupation</Cell>
@@ -422,29 +433,29 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           </tr>
           <tr>
             <Cell colSpan={2}>Psychometry test Result</Cell>
-            <Cell></Cell>
+            <Cell>{rawGet(raw, 'psychometryResult')}</Cell>
             <Cell rowSpan={4} colSpan={3} className="text-center font-bold">TOTAL AVERAGE</Cell>
             <Cell rowSpan={4} colSpan={3} className="text-center text-[16px] font-bold">{avg100}</Cell>
             <Cell colSpan={2}>1st Interview</Cell>
-            <Cell>{interviews[0] ? fmtDate(interviews[0].scheduled_time || interviews[0].updated_at) : ''}</Cell>
+            <Cell>{ivDate[0]}</Cell>
           </tr>
           <tr>
             <Cell colSpan={2}>Analytical Test Result</Cell>
-            <Cell></Cell>
+            <Cell>{rawGet(raw, 'analyticalResult')}</Cell>
             <Cell colSpan={2}>2nd Interview</Cell>
-            <Cell>{interviews[1] ? fmtDate(interviews[1].scheduled_time || interviews[1].updated_at) : ''}</Cell>
+            <Cell>{ivDate[1]}</Cell>
           </tr>
           <tr>
             <Cell colSpan={2}>Technical Test Result</Cell>
-            <Cell>{techPct != null && techPct !== '' ? Number(techPct).toFixed(2) : ''}</Cell>
+            <Cell>{rawGet(raw, 'technicalResult') || (techPct != null && techPct !== '' ? Number(techPct).toFixed(2) : '')}</Cell>
             <Cell colSpan={2}>3rd Interview</Cell>
-            <Cell>{interviews[2] ? fmtDate(interviews[2].scheduled_time || interviews[2].updated_at) : ''}</Cell>
+            <Cell>{ivDate[2]}</Cell>
           </tr>
           <tr>
             <Cell colSpan={2}>Department Test Result</Cell>
-            <Cell></Cell>
+            <Cell>{rawGet(raw, 'departmentResult')}</Cell>
             <Cell colSpan={2}>4th Interview</Cell>
-            <Cell>{interviews[3] ? fmtDate(interviews[3].scheduled_time || interviews[3].updated_at) : ''}</Cell>
+            <Cell>{ivDate[3]}</Cell>
           </tr>
 
           <tr>
@@ -489,13 +500,13 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={2}>{inc != null ? String(inc) : ''}</Cell>
             <Cell rowSpan={3} colSpan={3}></Cell>
             <Cell colSpan={3}>Incentive</Cell>
-            <Cell colSpan={2}></Cell>
+            <Cell colSpan={2}>{rawGet(raw, 'expectedIncentive')}</Cell>
           </tr>
           <tr>
             <Cell label>Others</Cell>
             <Cell colSpan={2}>{oth != null ? String(oth) : ''}</Cell>
             <Cell colSpan={3}>Others</Cell>
-            <Cell colSpan={2}></Cell>
+            <Cell colSpan={2}>{rawGet(raw, 'expectedOthers')}</Cell>
           </tr>
           <tr>
             <Cell label>Total</Cell>
@@ -513,14 +524,13 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell label>Marks (Maximum 10)</Cell>
           </tr>
           {([0, 1, 2, 3] as const).map((i) => {
-            const ev = interviews[i];
-            const score = ev ? Number(ev.scores?.total_score) : NaN;
-            const has = Number.isFinite(score) && score > 0;
+            const score = ivScore[i];
+            const has = score !== null && score > 0;
             return (
               <tr key={`iv-${i}`} className="h-[11mm]">
                 {i === 0 ? <Cell label rowSpan={4}>Interview Comments</Cell> : null}
-                <Cell>{ev ? txt(ev.scores?.interviewer_name) : ''}</Cell>
-                <Cell colSpan={8}>{ev?.remarks || ''}</Cell>
+                <Cell>{ivInterviewer[i]}</Cell>
+                <Cell colSpan={8}>{ivRemarks[i]}</Cell>
                 <Cell className="text-center">{has ? gradeFromTen(score) : ''}</Cell>
                 <Cell className="text-center font-bold">{has ? String(score) : ''}</Cell>
               </tr>

@@ -52,8 +52,10 @@ from app.services.candidate_work import build_candidate_work_state, build_candid
 from app.services.candidate_export import build_candidates_workbook, iter_candidates_csv
 from app.services.candidate_list_query import (
     build_candidate_list_query,
+    candidate_list_load_options,
+    candidate_work_state_load_options,
     candidate_csv_rows,
-    candidate_list_rows_with_count,
+    candidate_list_rows_with_metadata,
 )
 from app.services.document_service import (
     document_out as _document_out,
@@ -402,33 +404,23 @@ def list_candidates(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
-    q = build_candidate_list_query(user, query)
-    rows, total_count = candidate_list_rows_with_count(db, q, query.page, query.limit)
-    cand_ids = [row.id for row in rows]
-    with_resume = resume_candidate_ids(db, cand_ids)
+    q = build_candidate_list_query(user, query).options(candidate_list_load_options())
+    rows_with_metadata, total_count = candidate_list_rows_with_metadata(db, q, query.page, query.limit)
+    rows = [row for row, _, _, _ in rows_with_metadata]
+    with_resume = {row.id for row, _, has_resume, _ in rows_with_metadata if has_resume}
     work_states = build_candidate_work_states(db, rows, resume_ids=with_resume) if include_work_state else {}
-
-    ho_history_ids = set(
-        db.scalars(
-            select(StageHistory.candidate_id)
-            .where(
-                StageHistory.candidate_id.in_(cand_ids),
-                StageHistory.to_stage.in_(HO_HANDOVER_STAGES),
-            )
-            .distinct()
-        ).all()
-    ) if cand_ids else set()
 
     data = [
         to_candidate_list_out(
             row,
-            row.id in with_resume,
+            has_resume,
             db=None,
-            handed_over=(stage_value(row.current_stage) in HO_HANDOVER_STAGE_VALUES or row.id in ho_history_ids),
+            handed_over=handed_over,
+            email_override=email,
         ).model_copy(
             update={"work_state": work_states.get(row.id)}
         )
-        for row in rows
+        for row, email, has_resume, handed_over in rows_with_metadata
     ]
     
     return CandidatePaginatedOut(
@@ -450,7 +442,10 @@ def candidate_work_states(
         return {}
     rows = list(
         db.scalars(
-            build_candidate_list_query(user, CandidateListQuery()).where(Candidate.id.in_(candidate_id))
+            build_candidate_list_query(user, CandidateListQuery())
+            .where(Candidate.id.in_(candidate_id))
+            .order_by(None)
+            .options(candidate_work_state_load_options())
         ).all()
     )
     resume_ids = resume_candidate_ids(db, [row.id for row in rows])
@@ -496,8 +491,42 @@ def get_candidate(
             .order_by(Evaluation.created_at.asc(), Evaluation.type.asc())
         ).all()
     )
-    return to_candidate_out(row, has_resume, db, viewer=user, evaluations=evaluations).model_copy(
-        update={"work_state": build_candidate_work_state(db, row, has_resume=has_resume, evaluations=evaluations)}
+    stage_history = list(
+        db.scalars(
+            select(StageHistory)
+            .where(StageHistory.candidate_id == id)
+            .order_by(StageHistory.created_at.desc())
+        ).all()
+    )
+    latest_activity = db.scalar(
+        select(ActivityLog)
+        .where(ActivityLog.candidate_id == id)
+        .order_by(ActivityLog.created_at.desc())
+        .limit(1)
+    )
+    handed_over = (
+        stage_value(row.current_stage) in HO_HANDOVER_STAGE_VALUES
+        or any(history.to_stage in HO_HANDOVER_STAGES for history in stage_history)
+    )
+    activities = [latest_activity] if latest_activity else []
+    return to_candidate_out(
+        row,
+        has_resume,
+        db,
+        viewer=user,
+        evaluations=evaluations,
+        handed_over=handed_over,
+    ).model_copy(
+        update={
+            "work_state": build_candidate_work_state(
+                None,
+                row,
+                has_resume=has_resume,
+                stage_history=stage_history,
+                activities=activities,
+                evaluations=evaluations,
+            )
+        }
     )
 
 
@@ -534,6 +563,24 @@ def update_profile_raw_data(
     row.profile.expected_salary = str(submitted_raw.get("expectedSalary") or "").strip() or None
     joining_date = submitted_raw.get("expectedJoiningDate") or submitted_raw.get("dateOfJoining")
     row.profile.joining_date = str(joining_date or "").strip() or None
+
+    # Keep canonical candidate fields in sync with Summary Sheet edits.
+    if "department" in submitted_raw:
+        row.department = str(submitted_raw.get("department") or "").strip() or None
+    if "branchLocation" in submitted_raw:
+        row.branch_location = str(submitted_raw.get("branchLocation") or "").strip() or None
+    if "source" in submitted_raw or "sourceOfOpening" in submitted_raw:
+        source = submitted_raw["source"] if "source" in submitted_raw else submitted_raw["sourceOfOpening"]
+        row.source = str(source or "").strip() or "Unknown"
+    if any(key in submitted_raw for key in ("specifySource", "sourceReference", "referredBy")):
+        source_reference = (
+            submitted_raw["specifySource"]
+            if "specifySource" in submitted_raw
+            else submitted_raw["sourceReference"]
+            if "sourceReference" in submitted_raw
+            else submitted_raw["referredBy"]
+        )
+        row.source_reference = str(source_reference or "").strip() or None
 
     pos = str(submitted_raw.get("positionAppliedFor") or "").strip()
     if pos and pos.lower() != "unknown":

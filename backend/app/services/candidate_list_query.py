@@ -4,18 +4,78 @@ from datetime import datetime, time
 from typing import Iterator
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Select, and_, case, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import Select, and_, case, exists, func, or_, select
+from sqlalchemy.orm import Session, load_only
 
-from app.core.ho_pipeline import HO_HR_PIPELINE_STAGES
+from app.core.ho_pipeline import HO_HANDOVER_STAGES, HO_HR_PIPELINE_STAGES
 from app.core.branding import NIPPON_TOYOTA, RIVER, brand_is_river
 from app.models.candidate import Candidate
-from app.models.enums import PipelineStage, UserRole
+from app.models.candidate_profile import CandidateProfile
+from app.models.document import Document
+from app.models.enums import DocumentType, PipelineStage, UserRole
+from app.models.stage_history import StageHistory
 from app.models.user import User
 from app.schemas.candidate_query import CandidateListQuery, CandidateSortField, SortDirection
 
 
 _IST = ZoneInfo("Asia/Kolkata")
+
+
+def candidate_list_load_options():
+    """Load only columns needed to render the paginated candidate table.
+
+    Candidate rows also contain workflow JSONB blobs that are not part of the
+    list response. Deferring them keeps the common list query and its count
+    window from transferring unnecessary data over the database connection.
+    """
+    return load_only(
+        Candidate.id,
+        Candidate.candidate_id,
+        Candidate.full_name,
+        Candidate.phone,
+        Candidate.email,
+        Candidate.source,
+        Candidate.source_reference,
+        Candidate.brand,
+        Candidate.position_applied_for,
+        Candidate.experience,
+        Candidate.department,
+        Candidate.pre_form_token,
+        Candidate.pre_form_token_purpose,
+        Candidate.pre_form_token_revoked,
+        Candidate.pre_form_status,
+        Candidate.pre_form_sent_at,
+        Candidate.pre_form_expires_at,
+        Candidate.pre_form_submitted_at,
+        Candidate.current_stage,
+        Candidate.branch_location,
+        Candidate.visit_branch,
+        Candidate.visit_date,
+        Candidate.visit_time,
+        Candidate.visit_maps_link,
+        Candidate.visit_instructions,
+        Candidate.is_duplicate_flagged,
+        Candidate.duplicate_of_candidate_id,
+        Candidate.assigned_hr_user_id,
+        Candidate.assigned_manager_id,
+        Candidate.assigned_gm_id,
+        Candidate.offer_status,
+        Candidate.applied_at,
+        Candidate.created_at,
+        Candidate.updated_at,
+    )
+
+
+def candidate_work_state_load_options():
+    """Load only columns used to derive queue metadata for a candidate."""
+    return load_only(
+        Candidate.id,
+        Candidate.current_stage,
+        Candidate.pre_form_status,
+        Candidate.offer_status,
+        Candidate.salary_data,
+        Candidate.created_at,
+    )
 
 
 def _role_predicate(user: User):
@@ -93,16 +153,20 @@ def build_candidate_list_query(user: User, query: CandidateListQuery) -> Select:
         if end:
             statement = statement.where(column < end)
 
-    sort_column = {
-        CandidateSortField.CANDIDATE: Candidate.full_name,
-        CandidateSortField.POSITION: Candidate.position_applied_for,
-        CandidateSortField.STAGE: Candidate.current_stage,
-        CandidateSortField.OFFER_RESPONSE: Candidate.offer_status,
-        CandidateSortField.BRANCH: Candidate.branch_location,
-        CandidateSortField.SOURCE: Candidate.source,
-        CandidateSortField.DATE_ADDED: Candidate.created_at,
-        CandidateSortField.FORM_SENT: Candidate.pre_form_sent_at,
-    }[query.sort_by]
+    sort_column = (
+        _next_action_expression()
+        if query.sort_by == CandidateSortField.NEXT_ACTION
+        else {
+            CandidateSortField.CANDIDATE: Candidate.full_name,
+            CandidateSortField.POSITION: Candidate.position_applied_for,
+            CandidateSortField.STAGE: Candidate.current_stage,
+            CandidateSortField.OFFER_RESPONSE: Candidate.offer_status,
+            CandidateSortField.BRANCH: Candidate.branch_location,
+            CandidateSortField.SOURCE: Candidate.source,
+            CandidateSortField.DATE_ADDED: Candidate.created_at,
+            CandidateSortField.FORM_SENT: Candidate.pre_form_sent_at,
+        }[query.sort_by]
+    )
     order = sort_column.asc() if query.sort_direction == SortDirection.ASC else sort_column.desc()
     return statement.order_by(order.nulls_last(), Candidate.candidate_id.asc())
 
@@ -128,6 +192,61 @@ def candidate_list_rows_with_count(
     total_count = 0
     for candidate, row_count in result.all():
         rows.append(candidate)
+        total_count = int(row_count or 0)
+    return rows, total_count
+
+
+def build_candidate_list_metadata_query(statement: Select) -> Select:
+    """Attach list-only metadata without issuing per-page follow-up queries."""
+    resolved_email = func.coalesce(
+        Candidate.email,
+        CandidateProfile.email,
+        CandidateProfile.raw_data["emailId"].astext,
+    ).label("_resolved_email")
+    has_resume = exists(
+        select(Document.id).where(
+            Document.candidate_id == Candidate.id,
+            Document.doc_type == DocumentType.RESUME,
+        )
+    ).label("_has_resume")
+    reached_head_office = exists(
+        select(StageHistory.id).where(
+            StageHistory.candidate_id == Candidate.id,
+            StageHistory.to_stage.in_(HO_HANDOVER_STAGES),
+        )
+    )
+    handed_over = or_(
+        Candidate.current_stage.in_(HO_HANDOVER_STAGES),
+        reached_head_office,
+    ).label("_handed_over")
+
+    return (
+        statement.outerjoin(CandidateProfile, CandidateProfile.candidate_id == Candidate.id)
+        .add_columns(
+            func.count().over().label("_total_count"),
+            resolved_email,
+            has_resume,
+            handed_over,
+        )
+    )
+
+
+def candidate_list_rows_with_metadata(
+    db: Session,
+    statement: Select,
+    page: int,
+    limit: int,
+) -> tuple[list[tuple[Candidate, str | None, bool, bool]], int]:
+    """Fetch the page, total, email, resume and handover flags in one query."""
+    result = db.execute(
+        build_candidate_list_metadata_query(statement)
+        .offset((page - 1) * limit)
+        .limit(limit)
+    )
+    rows: list[tuple[Candidate, str | None, bool, bool]] = []
+    total_count = 0
+    for candidate, row_count, email, has_resume, handed_over in result.all():
+        rows.append((candidate, email, bool(has_resume), bool(handed_over)))
         total_count = int(row_count or 0)
     return rows, total_count
 

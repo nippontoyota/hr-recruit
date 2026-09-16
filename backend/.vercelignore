@@ -1,0 +1,12 @@
+# Local credentials and diagnostic artifacts must never be part of a deployment.
+.env
+.env.*
+*.log
+*.db
+.pytest_cache
+.ruff_cache
+__pycache__
+**/__pycache__
+tests
+alembic
+scripts

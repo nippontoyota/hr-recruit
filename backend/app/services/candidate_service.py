@@ -41,6 +41,27 @@ SYSTEM_MANAGED_RAW_DATA_KEYS = frozenset(
     }
 )
 
+_EMAIL_NOT_PRELOADED = object()
+
+
+def candidate_profile_email_map(db: Session, candidates: list[Candidate]) -> dict[UUID, str]:
+    """Resolve missing list emails in one query instead of one query per row."""
+    candidate_ids = [candidate.id for candidate in candidates if not candidate.email]
+    if not candidate_ids:
+        return {}
+
+    rows = db.execute(
+        select(CandidateProfile.candidate_id, CandidateProfile.email, CandidateProfile.raw_data).where(
+            CandidateProfile.candidate_id.in_(candidate_ids)
+        )
+    ).all()
+    resolved: dict[UUID, str] = {}
+    for candidate_id, email, raw_data in rows:
+        fallback = email or (raw_data or {}).get("emailId") if isinstance(raw_data, dict) else email
+        if fallback:
+            resolved[candidate_id] = str(fallback).strip()
+    return resolved
+
 
 def _row_value(row: dict, canonical: str, *aliases: str) -> str:
     for key in (canonical, *aliases):
@@ -120,6 +141,7 @@ def to_candidate_out(
     db: Session | None = None,
     viewer: User | None = None,
     evaluations: list[Evaluation] | None = None,
+    handed_over: bool | None = None,
 ) -> CandidateOut:
     expire_pre_form_if_needed(candidate)
     if evaluations is None and db is not None:
@@ -142,9 +164,14 @@ def to_candidate_out(
             "share_url": _share_url(candidate),
             "has_resume": has_resume,
             "is_rejoining": False,
-            "handed_over_to_ho": handed_over_to_ho(candidate, db),
+            "handed_over_to_ho": handed_over if handed_over is not None else handed_over_to_ho(candidate, db),
             "ho_handover_blockers": transition_prerequisites(candidate, PipelineStage.SENT_TO_HO),
-            "offer_blockers": offer_blockers(candidate, has_resume=has_resume, db=db) if db is not None else [],
+            "offer_blockers": offer_blockers(
+                candidate,
+                has_resume=has_resume,
+                evaluations=evaluations,
+                db=db if evaluations is None else None,
+            ) if db is not None else [],
             "salary_data": candidate.salary_data if can_view_salary(viewer) else None,
             "evaluations": [EvaluationOut.model_validate(e) for e in (evaluations or [])],
         }
@@ -165,10 +192,11 @@ def to_candidate_list_out(
     has_resume: bool,
     db: Session | None = None,
     handed_over: bool | None = None,
+    email_override: str | None | object = _EMAIL_NOT_PRELOADED,
 ) -> CandidateListOut:
     expire_pre_form_if_needed(candidate)
-    resolved_email = candidate.email
-    if not resolved_email and getattr(candidate, "profile", None):
+    resolved_email = candidate.email if email_override is _EMAIL_NOT_PRELOADED else email_override
+    if email_override is _EMAIL_NOT_PRELOADED and not resolved_email and getattr(candidate, "profile", None):
         prof = candidate.profile
         resolved_email = prof.email or (prof.raw_data or {}).get("emailId")
 

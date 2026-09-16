@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Printer, CheckCircle2, Circle, ShieldAlert } from 'lucide-react';
+import { Send, Printer, Pencil, CheckCircle2, Circle, ShieldAlert } from 'lucide-react';
 import { usePrint } from '../../hooks/usePrint';
 import { toast } from 'sonner';
 import { Button, Modal } from '../ui';
 import {
   updateCandidateStage,
+  updateCandidateRawData,
+  uploadCandidatePhoto,
+  uploadCandidateResume,
   completeTechnicalTestVerification,
   completeBackgroundVerification,
 } from '../../api/candidates';
@@ -12,11 +15,12 @@ import type { Candidate, PipelineStage, Evaluation } from '../../types';
 import { extractError } from '../../lib/utils';
 import { useAuth } from '../../auth';
 import { HoReviewPacket } from './HoReviewPacket';
+import { EditableApplicationFormDocument } from './EditableApplicationFormDocument';
 
 interface ApplicationStageWidgetProps {
   candidate: Candidate;
   evaluations: Evaluation[];
-  onUpdate: () => void;
+  onUpdate: (candidate?: Candidate) => void;
   isReadOnly?: boolean;
 }
 
@@ -110,10 +114,39 @@ export function ApplicationStageWidget({ candidate, evaluations, onUpdate, isRea
   const [isSending, setIsSending] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [evals, setEvals] = useState<Evaluation[]>(evaluations);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setEvals(evaluations);
   }, [evaluations]);
+
+  const handleSaveApplication = async (
+    updatedRawData: Record<string, unknown>,
+    newPhotoFile?: File,
+    newResumeFile?: File
+  ) => {
+    try {
+      setIsSaving(true);
+      if (newPhotoFile) {
+        toast.loading('Uploading candidate photo...', { id: 'save-application' });
+        await uploadCandidatePhoto(candidate.id, newPhotoFile);
+      }
+      if (newResumeFile) {
+        toast.loading('Uploading candidate resume...', { id: 'save-application' });
+        await uploadCandidateResume(candidate.id, newResumeFile);
+      }
+      toast.loading('Saving application form details...', { id: 'save-application' });
+      const updatedCandidate = await updateCandidateRawData(candidate.id, updatedRawData);
+      toast.success('Application form updated successfully!', { id: 'save-application' });
+      setIsEditing(false);
+      onUpdate(updatedCandidate);
+    } catch (err: unknown) {
+      toast.error(extractError(err, 'Failed to update application form'), { id: 'save-application' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handoverReady = Boolean(candidate.technical_test_verified) && Boolean(candidate.background_verification_completed);
 
@@ -134,7 +167,7 @@ export function ApplicationStageWidget({ candidate, evaluations, onUpdate, isRea
   const handlePrint = usePrint({
     contentRef: printRef,
     documentTitle: `Application_${candidate.full_name.replace(/\s+/g, '_')}`,
-    pageStyle: `@page { size: A4 portrait; margin: 0; } html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .iaf-page-wrap { height: auto !important; max-height: none !important; overflow: visible !important; page-break-inside: auto !important; break-inside: auto !important; } .css-sheet, .iaf-sheet, .iaf-page { width: 210mm !important; min-height: 297mm !important; height: auto !important; max-height: none !important; overflow: visible !important; box-sizing: border-box !important; margin: 0 !important; padding: 6mm 8mm !important; box-shadow: none !important; border: none !important; }`,
+    pageStyle: `@page { size: A4 portrait; margin: 0; } html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .iaf-doc { display: block !important; } .iaf-page-wrap { min-height: 0 !important; height: auto !important; max-height: none !important; overflow: visible !important; page-break-after: auto !important; break-after: auto !important; page-break-inside: auto !important; break-inside: auto !important; } .iaf-break { page-break-before: auto !important; break-before: auto !important; } .css-sheet, .iaf-sheet, .iaf-page { width: 210mm !important; min-height: 0 !important; height: auto !important; max-height: none !important; overflow: visible !important; box-sizing: border-box !important; margin: 0 !important; padding: 6mm 8mm !important; box-shadow: none !important; border: none !important; page-break-after: auto !important; break-after: auto !important; } .iaf-doc-river .iaf-form { font-size: 10.5px !important; line-height: 1.2 !important; } .iaf-doc-river .iaf-form table { margin-bottom: 5px !important; } .iaf-doc-river .iaf-form td, .iaf-doc-river .iaf-form th { padding-top: 2.5px !important; padding-bottom: 2.5px !important; }`,
   });
 
   const canSendToHO = !['REJECTED', 'HIRED', 'ON_HOLD'].includes(candidate.current_stage);
@@ -147,53 +180,78 @@ export function ApplicationStageWidget({ candidate, evaluations, onUpdate, isRea
       )}
 
       {/* Top Action Bar */}
-      <div className="flex flex-col items-center gap-2 mb-8">
-        <div className="flex justify-center items-center gap-4">
-          <Button
-            variant="secondary"
-            onClick={() => handlePrint()}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-sm rounded-sm shadow-sm transition-all duration-200"
-          >
-            <Printer className="w-4 h-4" /> Print Application
-          </Button>
-
-          {user?.role === 'LOCAL_HR' && !isReadOnly && canSendToHO && (
+      {!isEditing && (
+        <div className="flex flex-col items-center gap-2 mb-8">
+          <div className="flex justify-center items-center gap-4">
             <Button
-              id="send-to-ho"
-              variant="primary"
-              onClick={() => setShowConfirmModal(true)}
-              disabled={!handoverReady}
-              title={handoverReady ? undefined : 'Complete both handover checks above first'}
-              className="flex items-center gap-2 px-5 py-2 font-semibold text-sm rounded-sm shadow-sm"
+              variant="secondary"
+              onClick={() => handlePrint()}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-sm rounded-sm shadow-sm transition-all duration-200"
             >
-              <Send className="w-4 h-4" /> Send to Head Office
+              <Printer className="w-4 h-4" /> Print Application
             </Button>
-          )}
-          {user?.role === 'LOCAL_HR' && isReadOnly && (
-            <span className="inline-flex items-center gap-2 rounded-lg border border-info/20 bg-info/5 px-3 py-2 text-sm font-medium text-info">
-              <Send className="w-4 h-4" /> Already sent to Head Office
-            </span>
-          )}
-        </div>
-        {user?.role === 'LOCAL_HR' && !isReadOnly && canSendToHO && !handoverReady && (
-          <p className="flex items-center gap-1.5 text-xs font-medium text-warning">
-            <ShieldAlert className="w-3.5 h-3.5" />
-            Cannot send to Head Office until both checklist items above are marked complete.
-          </p>
-        )}
-      </div>
 
-      <div className="iaf-screen-wrap">
-        <div ref={printRef} className="w-[210mm] mx-auto">
-          <HoReviewPacket
-            key={candidate.id}
-            candidate={candidate}
-            evaluations={evals}
-            includeCss={false}
-            includeSalaryProposal={false}
-          />
+            {!isReadOnly && (
+              <Button
+                variant="secondary"
+                onClick={() => setIsEditing(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 font-bold text-sm rounded-sm shadow-sm transition-all duration-200"
+              >
+                <Pencil className="w-4 h-4" /> Edit Application
+              </Button>
+            )}
+
+            {user?.role === 'LOCAL_HR' && !isReadOnly && canSendToHO && (
+              <Button
+                id="send-to-ho"
+                variant="primary"
+                onClick={() => setShowConfirmModal(true)}
+                disabled={!handoverReady}
+                title={handoverReady ? undefined : 'Complete both handover checks above first'}
+                className="flex items-center gap-2 px-5 py-2 font-semibold text-sm rounded-sm shadow-sm"
+              >
+                <Send className="w-4 h-4" /> Send to Head Office
+              </Button>
+            )}
+            {user?.role === 'LOCAL_HR' && isReadOnly && (
+              <span className="inline-flex items-center gap-2 rounded-lg border border-info/20 bg-info/5 px-3 py-2 text-sm font-medium text-info">
+                <Send className="w-4 h-4" /> Already sent to Head Office
+              </span>
+            )}
+          </div>
+          {user?.role === 'LOCAL_HR' && !isReadOnly && canSendToHO && !handoverReady && (
+            <p className="flex items-center gap-1.5 text-xs font-medium text-warning">
+              <ShieldAlert className="w-3.5 h-3.5" />
+              Cannot send to Head Office until both checklist items above are marked complete.
+            </p>
+          )}
         </div>
-      </div>
+      )}
+
+      {isEditing ? (
+        <div className="iaf-screen-wrap">
+          <div className="w-[210mm] mx-auto">
+            <EditableApplicationFormDocument
+              candidate={candidate}
+              onSave={handleSaveApplication}
+              onCancel={() => setIsEditing(false)}
+              isSaving={isSaving}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="iaf-screen-wrap">
+          <div ref={printRef} className="w-[210mm] mx-auto">
+            <HoReviewPacket
+              key={candidate.id}
+              candidate={candidate}
+              evaluations={evals}
+              includeCss={false}
+              includeSalaryProposal={false}
+            />
+          </div>
+        </div>
+      )}
 
       <Modal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} title="Send to Head Office HR" size="md">
         <div className="p-6">

@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { getCandidates, getCandidateWorkStates } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { extractError, isAbortError } from '../../lib/utils';
-import { emptyCandidateListQuery, type CandidateListQueryState } from '../../lib/candidateListQuery';
+import { emptyCandidateListQuery, sortCandidateRows, type CandidateListQueryState, type CandidateSortField } from '../../lib/candidateListQuery';
 
 const CANDIDATE_LIST_CACHE_TTL_MS = 60_000;
 const CANDIDATE_LIST_CACHE_PREFIX = 'candidate-list-cache:v1:';
@@ -103,7 +103,16 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
       if (signal?.aborted) return;
       const candidateRows = Array.isArray(res.data) ? res.data : [];
       const candidateTotal = typeof res.total_count === 'number' ? res.total_count : candidateRows.length;
-      setCandidates(candidateRows);
+      // The fast list response intentionally omits workflow metadata. Keep
+      // metadata already painted for the same candidates while the parallel
+      // work-state request catches up, so a sort never flashes "Unknown".
+      setCandidates((previous) => {
+        const previousWorkStates = new Map(previous.map((candidate) => [candidate.id, candidate.work_state]));
+        return candidateRows.map((candidate) => ({
+          ...candidate,
+          work_state: candidate.work_state ?? previousWorkStates.get(candidate.id),
+        }));
+      });
       setTotalCount(candidateTotal);
       setLoadError(null);
       writeCandidateListCache(cacheKey, candidateRows, candidateTotal);
@@ -141,6 +150,10 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
     }
   }, [page, limit, debouncedSearch, stageFilter, advancedQuery]);
 
+  const sortVisibleCandidates = useCallback((field: CandidateSortField, direction: 'asc' | 'desc') => {
+    setCandidates((previous) => sortCandidateRows(previous, field, direction));
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     void refetch(controller.signal);
@@ -161,6 +174,7 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
     setStageFilter,
     advancedQuery,
     setAdvancedQuery,
+    sortVisibleCandidates,
     activeFilterCount: [searchQuery, stageFilter, advancedQuery.stages.length, advancedQuery.offerStatuses.length, advancedQuery.branches.length, advancedQuery.sources.length, advancedQuery.position, advancedQuery.nextActions.length, advancedQuery.createdDate, advancedQuery.sentDate].filter(Boolean).length,
     limit,
     refetch,

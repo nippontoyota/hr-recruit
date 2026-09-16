@@ -17,6 +17,7 @@ class CandidateSortField(str, Enum):
     CANDIDATE = "full_name"
     POSITION = "position_applied_for"
     STAGE = "current_stage"
+    NEXT_ACTION = "next_action"
     OFFER_RESPONSE = "offer_status"
     BRANCH = "branch_location"
     SOURCE = "source"

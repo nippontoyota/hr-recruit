@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal, engine
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.middleware.server_timing import ServerTimingMiddleware
 
 
 @asynccontextmanager
@@ -36,6 +37,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(ServerTimingMiddleware)
 app.add_middleware(
     RateLimitMiddleware,
     limit=settings.rate_limit_per_minute,

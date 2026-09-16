@@ -11,7 +11,10 @@ if "supabase" in settings.database_url.lower():
 
 _engine_kwargs: dict = {
     "connect_args": connect_args,
-    "pool_pre_ping": True,
+    # pool_pre_ping adds a remote `SELECT 1` before every checkout. With the
+    # Supabase pooler this doubles database round trips on ordinary requests;
+    # recycle connections proactively instead of paying that cost per request.
+    "pool_pre_ping": False,
     "pool_recycle": 300,
     "pool_size": 10,
     "max_overflow": 10,

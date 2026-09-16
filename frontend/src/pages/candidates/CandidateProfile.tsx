@@ -581,6 +581,7 @@ export default function CandidateProfile() {
     candidate.pre_form_status !== 'SUBMITTED';
   const hasBeenSentToHO = HO_POST_SEND_STAGES.includes(candidate.current_stage) || !!candidate.handed_over_to_ho;
   const isReadOnly = (isLocalHR && hasBeenSentToHO) || isAdmin;
+  const canEditApplication = isHO || (isLocalHR && !hasBeenSentToHO);
   const followsHoPipeline = isHO || isAdmin;
   const effectiveStages = followsHoPipeline
     ? HO_LINEAR_STAGES
@@ -966,7 +967,7 @@ export default function CandidateProfile() {
                 candidate={candidate}
                 evaluations={evaluations}
                 onUpdate={handleUpdate}
-                isReadOnly={isReadOnly}
+                isReadOnly={!canEditApplication}
               />
             )}
 
@@ -975,7 +976,7 @@ export default function CandidateProfile() {
                 candidate={candidate}
                 evaluations={evaluations}
                 onUpdate={handleUpdate}
-                isReadOnly={isReadOnly}
+                isReadOnly={!canEditApplication}
               />
             )}
 

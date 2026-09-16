@@ -112,6 +112,9 @@ def test_application_edit_endpoint_returns_committed_canonical_candidate():
         email="old@example.com",
         position_applied_for="Old Role",
         experience="Fresher",
+        department="Old Department",
+        source="Walk-in",
+        source_reference="Old Source",
         branch_location="Kochi",
     )
     refreshed = SimpleNamespace(id=candidate_id, profile=SimpleNamespace(raw_data={"fullName": "New Name"}))
@@ -122,6 +125,10 @@ def test_application_edit_endpoint_returns_committed_canonical_candidate():
             "fullName": " New Name ",
             "mobileNumber": " 9123456789 ",
             "emailId": "new@example.com",
+            "department": "Administration",
+            "branchLocation": "Kalamassery",
+            "source": "Walk-in",
+            "specifySource": "Jose",
             "positionAppliedFor": " Senior Advisor ",
             "familyMembers": [{"name": "Parent"}],
             "previousJobs": [{"company": "Toyota"}],
@@ -143,6 +150,10 @@ def test_application_edit_endpoint_returns_committed_canonical_candidate():
     assert row.full_name == "New Name"
     assert row.phone == "9123456789"
     assert row.email == "new@example.com"
+    assert row.department == "Administration"
+    assert row.branch_location == "Kalamassery"
+    assert row.source == "Walk-in"
+    assert row.source_reference == "Jose"
     assert row.position_applied_for == "Senior Advisor"
     assert row.profile.raw_data["whatsapp_template"] == {"formLink": "keep"}
     assert row.profile.raw_data["familyMembers"] == [{"name": "Parent"}]

@@ -133,6 +133,7 @@ export function EditableApplicationFormDocument({
 }: EditableApplicationFormDocumentProps) {
   const brand = getBrandConfig(candidate.brand);
   const riverClass = brand.key === 'RIVER' ? 'iaf-form-river' : '';
+  const riverDocClass = brand.key === 'RIVER' ? 'iaf-doc-river' : '';
   const initialRaw = (candidate.profile?.raw_data ?? {}) as Record<string, unknown>;
   const rawApplied = initialRaw.appliedDate || candidate.pre_form_submitted_at || candidate.applied_at || candidate.created_at;
 
@@ -318,7 +319,7 @@ export function EditableApplicationFormDocument({
         </div>
       </div>
 
-      <div className="iaf-doc space-y-6">
+      <div className={`iaf-doc ${riverDocClass} space-y-6`}>
         {/* ══════════════════════════════════════════════════════════════════
             PAGE 1 OF 2 (EDITABLE)
            ══════════════════════════════════════════════════════════════════ */}

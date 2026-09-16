@@ -17,6 +17,7 @@ from app.models.user import User
 from app.models.candidate import Candidate
 from app.schemas.auth import TokenResponse, UserOut
 from app.schemas.candidate import CandidateCreate, CandidateOut
+from app.services.candidate_service import to_candidate_out
 
 client = TestClient(app)
 
@@ -96,6 +97,48 @@ def test_candidate_out_includes_is_rejoining():
     )
     assert out.is_rejoining is False
     assert out.model_dump()["is_rejoining"] is False
+
+
+def test_candidate_out_uses_prefetched_evaluations_without_another_database_query():
+    now = datetime.now(timezone.utc)
+    candidate = Candidate(
+        id=uuid4(),
+        candidate_id="NT-100",
+        full_name="Rahul",
+        phone="9876543210",
+        email="r@example.com",
+        source="OTHER",
+        source_reference=None,
+        position_applied_for="Sales",
+        experience="Fresher",
+        pre_form_status=FormStatus.NOT_SENT,
+        pre_form_sent_at=None,
+        pre_form_submitted_at=None,
+        current_stage=PipelineStage.SCREENING,
+        branch_location="Kalamassery",
+        is_duplicate_flagged=False,
+        duplicate_of_candidate_id=None,
+        assigned_hr_user_id=None,
+        assigned_manager_id=None,
+        assigned_gm_id=None,
+        applied_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+    db = MagicMock()
+
+    with patch("app.services.candidate_service.offer_blockers", return_value=[]) as blockers:
+        result = to_candidate_out(
+            candidate,
+            False,
+            db,
+            evaluations=[],
+            handed_over=False,
+        )
+
+    assert result.evaluations == []
+    assert blockers.call_args.kwargs["evaluations"] == []
+    db.scalars.assert_not_called()
 
 
 def test_user_out_maps_role():
