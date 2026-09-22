@@ -162,7 +162,7 @@ function Cell({
     <td
       colSpan={colSpan}
       rowSpan={rowSpan}
-      className={`border border-black px-[3px] py-px align-middle ${
+      className={`border border-black px-[4px] py-[4px] align-middle ${
         section ? 'font-bold text-center bg-neutral-200' : label ? 'font-bold' : ''
       } ${className}`}
     >
@@ -286,7 +286,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
   const age = rawGet(raw, 'age') || ageFromDob(dob);
 
   return (
-    <div className={`css-sheet ${riverClass} box-border bg-white text-[8.5px] leading-[1.2] text-black font-sans w-[210mm] min-h-[297mm] p-[6mm_8mm] shadow-lg print:shadow-none print:border-none`}>
+    <div className={`css-sheet ${riverClass} box-border bg-white text-[10px] leading-[1.5] text-black font-sans w-[210mm] min-h-[297mm] p-[12mm_12mm] shadow-lg print:shadow-none print:border-none`}>
       <div className="css-brand-section mb-2 flex items-center justify-between border-b-2 border-black px-2 py-1.5">
         <div className="flex items-center gap-2">
           <img src={brand.logo} alt={`${brand.name} logo`} className="h-[9mm] w-auto object-contain" />

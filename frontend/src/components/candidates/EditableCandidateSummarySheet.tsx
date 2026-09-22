@@ -102,7 +102,7 @@ function Cell({
     <td
       colSpan={colSpan}
       rowSpan={rowSpan}
-      className={`border border-black px-[3px] py-px align-middle ${
+      className={`border border-black px-[4px] py-[4px] align-middle ${
         section ? 'font-bold text-center bg-neutral-200' : label ? 'font-bold' : ''
       } ${className}`}
     >
@@ -362,7 +362,7 @@ export function EditableCandidateSummarySheet({
       </div>
 
       {/* Sheet Container */}
-      <div className="css-sheet box-border bg-white text-[8.5px] leading-[1.2] text-black font-sans w-[210mm] min-h-[297mm] p-[6mm_8mm] shadow-lg border border-slate-300 mx-auto print:shadow-none print:border-none">
+      <div className="css-sheet box-border bg-white text-[10px] leading-[1.5] text-black font-sans w-[210mm] min-h-[297mm] p-[12mm_12mm] shadow-lg border border-slate-300 mx-auto print:shadow-none print:border-none">
         <table className="w-full border-collapse border border-black table-fixed">
           <colgroup>
             <col className="w-[16%]" />
