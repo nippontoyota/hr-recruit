@@ -49,8 +49,6 @@ def offer_blockers(candidate, *, has_resume: bool, evaluations=None, db=None) ->
     else:
         if validate_package(salary):
             missing.append("valid salary data")
-        if stage not in OFFER_STAGES:
-            missing.append("Salary approval")
 
     if not has_resume:
         missing.append("required documents")
