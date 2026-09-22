@@ -743,8 +743,8 @@
     break-inside: auto;
   }
   .iaf-break {
-    break-before: auto !important;
-    page-break-before: auto !important;
+    break-before: page !important;
+    page-break-before: always !important;
   }
   .iaf-doc-river .iaf-form {
     font-size: 10.5px !important;

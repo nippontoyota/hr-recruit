@@ -191,7 +191,7 @@ export function InterviewApplicationFormDocument({
       {/* ══════════════════════════════════════════════════════════════════
           PAGE 1 OF 2: Personal Data, Education, Family & Employment Record
          ══════════════════════════════════════════════════════════════════ */}
-      <div className="iaf-page-wrap">
+      <div className="iaf-page-wrap iaf-break">
         <div className="no-print mb-2 flex items-center justify-between px-3.5 py-1.5 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-300 shadow-xs">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#1e3a5f] text-white text-[10px] font-black">1</span>
