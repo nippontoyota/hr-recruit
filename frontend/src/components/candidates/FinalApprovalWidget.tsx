@@ -296,11 +296,18 @@ export function FinalApprovalWidget({ candidate, onUpdate }: FinalApprovalWidget
           </div>
         </div>
       )}
-      {user?.role !== 'LOCAL_HR' && !alreadyOffered && blockers.length > 0 && (
-        <div className="text-sm text-amber-950 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-          <p className="font-semibold">Offer cannot be sent yet</p>
-          <p>Missing: {blockers.join(', ')}</p>
-        </div>
+      {user?.role !== 'LOCAL_HR' && !alreadyOffered && (
+        blockers.length > 0 ? (
+          <div className="text-sm text-amber-950 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className="font-semibold">Offer cannot be sent yet</p>
+            <p>Missing: {blockers.join(', ')}</p>
+          </div>
+        ) : !ready ? (
+          <div className="text-sm text-amber-950 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className="font-semibold">Offer cannot be sent yet</p>
+            <p>Missing offer fields: {Object.keys(offerFieldErrors(fields)).map(k => FIELD_LABELS.find(f => f.key === k)?.label || k).join(', ')}</p>
+          </div>
+        ) : null
       )}
 
       <div className="relative min-h-[85vh]">

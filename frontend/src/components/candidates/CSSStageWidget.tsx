@@ -5,7 +5,8 @@ import { Button } from '../ui';
 import type { Candidate, Evaluation } from '../../types';
 import { HoReviewPacket } from './HoReviewPacket';
 import { EditableCandidateSummarySheet } from './EditableCandidateSummarySheet';
-import { updateCandidateRawData, uploadCandidatePhoto } from '../../api/candidates';
+import { EditableApplicationFormDocument } from './EditableApplicationFormDocument';
+import { updateCandidateRawData, uploadCandidatePhoto, uploadCandidateResume } from '../../api/candidates';
 import { extractError } from '../../lib/utils';
 import { toast } from 'sonner';
 
@@ -19,12 +20,14 @@ interface CSSStageWidgetProps {
 export function CSSStageWidget({ candidate, evaluations, onUpdate, isReadOnly = false }: CSSStageWidgetProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditingApp, setIsEditingApp] = useState(false);
+  const [isSavingApp, setIsSavingApp] = useState(false);
 
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = usePrint({
     contentRef: printRef,
     documentTitle: `Candidate_Dossier_${candidate.full_name.replace(/\s+/g, '_')}`,
-    pageStyle: `@page { size: A4 portrait; margin: 0; } html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .iaf-page-wrap { height: auto !important; max-height: none !important; overflow: visible !important; page-break-inside: auto !important; break-inside: auto !important; } .css-sheet, .iaf-sheet, .iaf-page { width: 210mm !important; min-height: 297mm !important; height: auto !important; max-height: none !important; overflow: visible !important; box-sizing: border-box !important; margin: 0 !important; padding: 12mm 12mm !important; box-shadow: none !important; border: none !important; }`,
+    pageStyle: `@page { size: A4 portrait; margin: 0; } html, body { margin: 0; padding: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; } .iaf-page-wrap { height: auto !important; max-height: none !important; overflow: visible !important; page-break-after: always !important; break-after: page !important; page-break-inside: auto !important; break-inside: auto !important; } .css-sheet, .iaf-sheet, .iaf-page { width: 210mm !important; min-height: 297mm !important; height: auto !important; max-height: none !important; overflow: visible !important; box-sizing: border-box !important; margin: 0 !important; padding: 12mm 12mm !important; box-shadow: none !important; border: none !important; }`,
   });
 
   const handleSave = async (updatedRawData: Record<string, unknown>, newPhotoFile?: File) => {
@@ -46,10 +49,37 @@ export function CSSStageWidget({ candidate, evaluations, onUpdate, isReadOnly = 
     }
   };
 
+  const handleSaveApp = async (
+    updatedRawData: Record<string, unknown>,
+    newPhotoFile?: File,
+    newResumeFile?: File
+  ) => {
+    setIsSavingApp(true);
+    try {
+      if (newPhotoFile) {
+        toast.loading('Uploading photo...', { id: 'save-app' });
+        await uploadCandidatePhoto(candidate.id, newPhotoFile);
+      }
+      if (newResumeFile) {
+        toast.loading('Uploading resume...', { id: 'save-app' });
+        await uploadCandidateResume(candidate.id, newResumeFile);
+      }
+      toast.loading('Saving application...', { id: 'save-app' });
+      const updatedCandidate = await updateCandidateRawData(candidate.id, updatedRawData);
+      toast.success('Application updated successfully!', { id: 'save-app' });
+      setIsEditingApp(false);
+      onUpdate(updatedCandidate);
+    } catch (err: unknown) {
+      toast.error(extractError(err, 'Failed to update application'), { id: 'save-app' });
+    } finally {
+      setIsSavingApp(false);
+    }
+  };
+
   return (
     <div className="space-y-6 mt-2">
       {/* Top Action Bar */}
-      {!isEditing && (
+      {!isEditing && !isEditingApp && (
         <div className="flex justify-center items-center gap-3 mb-4 no-print">
           <Button 
             variant="outline" 
@@ -60,19 +90,40 @@ export function CSSStageWidget({ candidate, evaluations, onUpdate, isReadOnly = 
           </Button>
 
           {!isReadOnly && (
-            <Button
-              variant="secondary"
-              onClick={() => setIsEditing(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 font-bold text-sm rounded-sm shadow-xs transition-all duration-200"
-            >
-              <Pencil className="w-4 h-4" /> Edit Summary Sheet
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => setIsEditingApp(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 border border-blue-300 hover:bg-blue-100 font-bold text-sm rounded-sm shadow-xs transition-all duration-200"
+              >
+                <Pencil className="w-4 h-4" /> Edit Application
+              </Button>
+
+              <Button
+                variant="secondary"
+                onClick={() => setIsEditing(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 font-bold text-sm rounded-sm shadow-xs transition-all duration-200"
+              >
+                <Pencil className="w-4 h-4" /> Edit Summary Sheet
+              </Button>
+            </>
           )}
         </div>
       )}
 
       {/* Sheet Display */}
-      {isEditing ? (
+      {isEditingApp ? (
+        <div className="iaf-screen-wrap">
+          <div className="w-[210mm] mx-auto">
+            <EditableApplicationFormDocument
+              candidate={candidate}
+              onSave={handleSaveApp}
+              onCancel={() => setIsEditingApp(false)}
+              isSaving={isSavingApp}
+            />
+          </div>
+        </div>
+      ) : isEditing ? (
         <div className="iaf-screen-wrap">
           <EditableCandidateSummarySheet
             candidate={candidate}

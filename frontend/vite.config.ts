@@ -16,6 +16,7 @@ export default defineConfig({
     // every visitor.
     legacy({
       targets: ['Chrome >= 60', 'Edge >= 79', 'Firefox >= 60', 'Safari >= 12'],
+      modernPolyfills: true,
     }),
   ],
   resolve: {

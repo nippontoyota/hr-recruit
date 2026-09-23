@@ -104,7 +104,16 @@ export function formatVisitDate(input: Date | string): string {
 export function toDateInputValue(visitDate: string): string {
   if (!visitDate.trim()) return '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(visitDate)) return visitDate;
-  const d = new Date(visitDate);
+  
+  let parseStr = visitDate;
+  // Handle DD-MM-YYYY, DD/MM/YYYY, or DD.MM.YYYY
+  const match = visitDate.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (match) {
+    // Convert to YYYY-MM-DD for Date parsing
+    parseStr = `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+  }
+
+  const d = new Date(parseStr);
   if (Number.isNaN(d.getTime())) return '';
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
