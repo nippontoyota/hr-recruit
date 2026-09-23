@@ -40,8 +40,6 @@ def offer_blockers(candidate, *, has_resume: bool, evaluations=None, db=None) ->
             verdicts[kind] = getattr(ev, "verdict", None)
 
     missing: list[str] = []
-    if verdicts.get(EvaluationType.HQ_INTERVIEW_1) != EvaluationVerdict.SELECTED:
-        missing.append("HR interview verdict")
 
     salary = getattr(candidate, "salary_data", None)
     if not salary:
@@ -49,9 +47,6 @@ def offer_blockers(candidate, *, has_resume: bool, evaluations=None, db=None) ->
     else:
         if validate_package(salary):
             missing.append("valid salary data")
-
-    if not has_resume:
-        missing.append("required documents")
 
     candidate_email = getattr(candidate, "email", None)
     if not candidate_email and getattr(candidate, "profile", None):
