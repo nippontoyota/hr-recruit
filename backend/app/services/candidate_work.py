@@ -118,12 +118,8 @@ def _derive(
     offer_status = str(getattr(candidate, "offer_status", "") or "").upper()
 
     if current_stage in _OFFER_STAGES and offer_status not in {"SENT", "ACCEPTED"}:
-        if verdicts.get(EvaluationType.HQ_INTERVIEW_1) != EvaluationVerdict.SELECTED:
-            blockers.append("HR interview")
         if not getattr(candidate, "salary_data", None):
             blockers.append("Salary sheet")
-        if not has_resume:
-            blockers.append("Resume")
 
     if current_stage == PipelineStage.REJECTED:
         next_action, action_key = "No further action", "NONE"
