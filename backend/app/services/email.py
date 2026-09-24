@@ -50,7 +50,12 @@ def send_email(
                 filename=filename,
             )
         
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as server:
+        with smtplib.SMTP(
+            settings.smtp_host,
+            settings.smtp_port,
+            timeout=20,
+            source_address=('0.0.0.0', 0)
+        ) as server:
             server.starttls()
             server.login(settings.smtp_user, settings.smtp_password)
             server.send_message(msg, from_addr=settings.smtp_from_email, to_addrs=to_addrs)
