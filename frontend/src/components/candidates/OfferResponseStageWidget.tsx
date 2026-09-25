@@ -1,10 +1,10 @@
-import { AlertCircle, CheckCircle2, Clock3, Mail, Send, XCircle } from 'lucide-react';
-import { Button } from '../ui';
+import { AlertCircle, CheckCircle2, Clock3, Mail, Send, XCircle, Edit2, Loader2 } from 'lucide-react';
+import { Button, Input, RichTextEditor } from '../ui';
 import type { Candidate } from '../../types';
-import { sendOfferAcceptanceEmail, updateOfferResponse } from '../../api/candidates';
+import { sendOfferAcceptanceEmail, updateOfferResponse, getOfferAcceptanceEmailPreview } from '../../api/candidates';
 import { extractError } from '../../lib/utils';
 import { defaultOfferFields, formatOfferJoinDate } from '../../lib/offerLetter';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { getBrandConfig } from '../../lib/branding';
 
@@ -34,6 +34,26 @@ export function OfferResponseStageWidget({ candidate, onUpdate, isReadOnly = fal
   const acceptanceEmailError = String(candidate.profile?.raw_data?.offerAcceptanceEmailError || '');
   const acceptanceEmailSent = acceptanceEmailStatus === 'SENT';
 
+  const [isEditingEmail, setIsEditingEmail] = useState(false);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [hasFetchedPreview, setHasFetchedPreview] = useState(false);
+
+  useEffect(() => {
+    if (candidate.offer_status === 'ACCEPTED' && joiningDate && !hasFetchedPreview) {
+      setPreviewLoading(true);
+      getOfferAcceptanceEmailPreview(candidate.id)
+        .then((preview) => {
+          setEmailSubject(preview.subject);
+          setEmailBody(preview.body_html);
+          setHasFetchedPreview(true);
+        })
+        .catch((err) => console.error('Failed to load email preview', err))
+        .finally(() => setPreviewLoading(false));
+    }
+  }, [candidate.id, candidate.offer_status, joiningDate, hasFetchedPreview]);
+
   const sendAcceptanceEmail = async () => {
     if (!candidate.email) {
       toast.error('Candidate does not have an email address on file.');
@@ -46,8 +66,10 @@ export function OfferResponseStageWidget({ candidate, onUpdate, isReadOnly = fal
 
     setSendingEmail(true);
     try {
-      await sendOfferAcceptanceEmail(candidate.id);
+      const payload = isEditingEmail ? { subject: emailSubject, body_html: emailBody } : undefined;
+      await sendOfferAcceptanceEmail(candidate.id, payload);
       toast.success('Joining instructions sent to the candidate.');
+      setIsEditingEmail(false);
       onUpdate?.();
     } catch (error) {
       toast.error(extractError(error, 'Could not send the joining instructions email.'));
@@ -174,42 +196,59 @@ export function OfferResponseStageWidget({ candidate, onUpdate, isReadOnly = fal
           <div className="mt-5 rounded-lg border border-border bg-surface p-4 text-sm text-text-secondary">
             <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">To</p>
             <p className="mt-1 font-medium text-text-primary">{candidate.email || 'Candidate email missing'}</p>
+            
             <p className="mt-4 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Subject</p>
-            <p className="mt-1 font-semibold text-text-primary">Offer Acceptance Confirmation &amp; Documents Required for Joining</p>
-            <div className="mt-4 space-y-3 border-t border-border pt-4 leading-6">
-              <p>Dear {candidateName},</p>
-              <p>We are pleased to confirm your acceptance of the employment offer for the position of <strong>{role}</strong> at {brand.name}.</p>
-              <p>We look forward to welcoming you to our organization on your joining date, <strong>{joiningDate || 'joining date not set'}</strong>, at {brand.name}, Kalamassery.</p>
-              <p><strong>Location:</strong> {brand.name}, Kalamassery - Google Maps<br /><strong>Reporting Location:</strong> 3rd Floor - Sales Training Room / HR Department</p>
-              <p>Please carry the following documents and information with you on the day of joining:</p>
-              <div>
-                <p className="font-semibold text-text-primary">Documents to be Carried</p>
-                <ul className="ml-5 list-disc">
-                  <li>Passport-size photographs - 5 Nos. (white background; coat/blazer preferred)</li>
-                  <li>Educational Certificate Copies - 1 Set</li>
-                  <li>Experience Certificates - 1 Copy Each, if applicable</li>
-                  <li>ID Proof Copies - 4 Sets Each: Voter ID, Driving Licence, Passport, PAN Card, Aadhaar Card</li>
-                </ul>
-                <p className="mt-3 font-semibold text-text-primary">Family Member Details</p>
-                <ul className="ml-5 list-disc"><li>Date of Birth of family members</li><li>Aadhaar Number of family members</li></ul>
-                <p className="mt-3 font-semibold text-text-primary">Family Documents</p>
-                <ul className="ml-5 list-disc"><li>Family photograph</li><li>Ration Card copy</li></ul>
-                <p className="mt-3 font-semibold text-text-primary">PF &amp; ESI Details</p>
-                <ul className="ml-5 list-disc"><li>PF UAN Number</li><li>ESI Number, if available</li></ul>
-              </div>
-              <p>For further details or any queries, please feel free to contact us at 8606986060.</p>
-              <p>Best regards,<br />Mathew Paul<br />Talent Acquisition Team<br />{brand.name}<br />8606986060, 9544286099</p>
+            {isEditingEmail ? (
+              <Input
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                className="mt-1"
+                placeholder="Email subject"
+              />
+            ) : (
+              <p className="mt-1 font-semibold text-text-primary">{emailSubject || 'Loading subject...'}</p>
+            )}
+
+            <div className="mt-4 border-t border-border pt-4">
+              {isEditingEmail ? (
+                <RichTextEditor value={emailBody} onChange={setEmailBody} className="mt-2" />
+              ) : previewLoading ? (
+                <div className="flex h-32 items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-text-secondary opacity-50" />
+                </div>
+              ) : (
+                <div 
+                  className="prose prose-sm max-w-none text-text-secondary leading-6 prose-ul:list-disc prose-ul:ml-4 prose-ol:list-decimal prose-ol:ml-4 prose-strong:text-text-primary"
+                  dangerouslySetInnerHTML={{ __html: emailBody || '<p>Loading preview...</p>' }} 
+                />
+              )}
             </div>
           </div>
 
           {isReadOnly ? (
             <p className="mt-4 text-xs font-medium text-text-secondary">Head Office HR sends this acceptance email.</p>
           ) : (
-            <div className="mt-5 flex justify-end border-t border-success/15 pt-4">
-              <Button onClick={() => void sendAcceptanceEmail()} isLoading={sendingEmail} disabled={!candidate.email || !joiningDate}>
-                <Send className="mr-2 h-4 w-4" />
-                {acceptanceEmailSent ? 'Send again' : 'Send joining instructions'}
-              </Button>
+            <div className="mt-5 flex items-center justify-between border-t border-success/15 pt-4">
+              {!isEditingEmail && !acceptanceEmailSent && (
+                <Button variant="outline" onClick={() => setIsEditingEmail(true)} disabled={!hasFetchedPreview}>
+                  <Edit2 className="mr-2 h-4 w-4" />
+                  Edit email
+                </Button>
+              )}
+              {isEditingEmail ? (
+                <div className="flex gap-3 ml-auto">
+                  <Button variant="outline" onClick={() => setIsEditingEmail(false)}>Cancel</Button>
+                  <Button onClick={() => void sendAcceptanceEmail()} isLoading={sendingEmail} disabled={!candidate.email || !joiningDate}>
+                    <Send className="mr-2 h-4 w-4" />
+                    Save & Send
+                  </Button>
+                </div>
+              ) : (
+                <Button onClick={() => void sendAcceptanceEmail()} isLoading={sendingEmail} disabled={!candidate.email || !joiningDate} className={acceptanceEmailSent ? 'ml-auto' : ''}>
+                  <Send className="mr-2 h-4 w-4" />
+                  {acceptanceEmailSent ? 'Send again' : 'Send joining instructions'}
+                </Button>
+              )}
             </div>
           )}
         </div>

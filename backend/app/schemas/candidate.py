@@ -1030,3 +1030,11 @@ class CandidatePaginatedOut(BaseModel):
     total_count: int
     page: int
     limit: int
+
+class OfferAcceptanceEmailPreview(BaseModel):
+    subject: str
+    body_html: str
+
+class SendOfferAcceptanceEmailRequest(BaseModel):
+    subject: str | None = None
+    body_html: str | None = None

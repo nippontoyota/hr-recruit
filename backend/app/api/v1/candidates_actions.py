@@ -35,7 +35,7 @@ from app.models.enums import (
     EvaluationVerdict,
     InterviewStatus,
 )
-from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, VisitScheduleUpdate, WhatsAppInviteCreate, WhatsAppTemplateSave, CandidateDepartmentUpdate, CandidateIdentityUpdate
+from app.schemas.candidate import CandidateOut, DocumentOut, StageChange, StageHistoryOut, ActivityLogOut, VisitScheduleUpdate, WhatsAppInviteCreate, WhatsAppTemplateSave, CandidateDepartmentUpdate, CandidateIdentityUpdate, OfferAcceptanceEmailPreview, SendOfferAcceptanceEmailRequest
 from app.services.workflow import transition, transition_prerequisites
 from app.services.doubletick import (
     send_template,
@@ -995,9 +995,21 @@ def update_offer_response(
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
 
 
+@router.get("/{id}/offer-acceptance-email/preview", response_model=OfferAcceptanceEmailPreview)
+def get_offer_acceptance_email_preview(
+    id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.MANAGER)),
+):
+    row = get_candidate_for_user(db, id, user)
+    subject, body_html, _ = _offer_acceptance_email_content(row)
+    return OfferAcceptanceEmailPreview(subject=subject, body_html=body_html)
+
+
 @router.post("/{id}/offer-acceptance-email/send", response_model=CandidateOut)
 def send_offer_acceptance_email(
     id: UUID,
+    payload: SendOfferAcceptanceEmailRequest | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
 ):
@@ -1007,7 +1019,12 @@ def send_offer_acceptance_email(
     if not row.email:
         raise HTTPException(status_code=400, detail="Candidate does not have an email address on file.")
 
-    subject, body_html, preview = _offer_acceptance_email_content(row)
+    if payload and payload.subject and payload.body_html:
+        subject = payload.subject
+        body_html = payload.body_html
+        preview = "Custom joining instructions sent by HR."
+    else:
+        subject, body_html, preview = _offer_acceptance_email_content(row)
     try:
         send_email(
             to_email=row.email,

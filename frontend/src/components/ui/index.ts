@@ -11,3 +11,4 @@ export const PdfViewer = lazy(() => import('./PdfViewer').then((module) => ({ de
 export * from './Badge';
 export * from './LoadingSpinner';
 export const DocxViewer = lazy(() => import('./DocxViewer').then((module) => ({ default: module.DocxViewer })));
+export * from './RichTextEditor';

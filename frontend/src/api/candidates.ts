@@ -365,8 +365,13 @@ export const updateOfferResponse = async (
   return response.data;
 };
 
-export const sendOfferAcceptanceEmail = async (candidateId: string): Promise<Candidate> => {
-  const response = await request('POST', `/candidates/${candidateId}/offer-acceptance-email/send`);
+export const getOfferAcceptanceEmailPreview = async (candidateId: string): Promise<{ subject: string; body_html: string }> => {
+  const response = await request('GET', `/candidates/${candidateId}/offer-acceptance-email/preview`);
+  return response.data;
+};
+
+export const sendOfferAcceptanceEmail = async (candidateId: string, payload?: { subject?: string; body_html?: string }): Promise<Candidate> => {
+  const response = await request('POST', `/candidates/${candidateId}/offer-acceptance-email/send`, payload);
   return response.data;
 };
 
