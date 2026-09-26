@@ -176,10 +176,18 @@ export function OfferResponseStageWidget({ candidate, onUpdate, isReadOnly = fal
               <h3 id="acceptance-email-title" className="mt-1 text-lg font-bold text-text-primary">Joining instructions</h3>
               <p className="mt-1 text-sm text-text-secondary">Send the document checklist from the approved acceptance template.</p>
             </div>
-            <span className={`inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-xs font-semibold ${acceptanceEmailSent ? 'border-success/30 bg-success/10 text-success' : acceptanceEmailStatus === 'FAILED' ? 'border-danger/30 bg-danger/10 text-danger' : 'border-border bg-surface text-text-secondary'}`}>
-              {acceptanceEmailSent ? <CheckCircle2 className="h-3.5 w-3.5" /> : acceptanceEmailStatus === 'FAILED' ? <AlertCircle className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
-              {acceptanceEmailSent ? 'Email sent' : acceptanceEmailStatus === 'FAILED' ? 'Send failed' : 'Ready to send'}
-            </span>
+            <div className="flex items-center gap-3 self-start">
+              {!isReadOnly && !isEditingEmail && (
+                <Button variant="outline" size="sm" onClick={() => setIsEditingEmail(true)} disabled={!hasFetchedPreview} className="h-8">
+                  <Edit2 className="mr-1.5 h-3.5 w-3.5" />
+                  Edit email
+                </Button>
+              )}
+              <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${acceptanceEmailSent ? 'border-success/30 bg-success/10 text-success' : acceptanceEmailStatus === 'FAILED' ? 'border-danger/30 bg-danger/10 text-danger' : 'border-border bg-surface text-text-secondary'}`}>
+                {acceptanceEmailSent ? <CheckCircle2 className="h-3.5 w-3.5" /> : acceptanceEmailStatus === 'FAILED' ? <AlertCircle className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
+                {acceptanceEmailSent ? 'Email sent' : acceptanceEmailStatus === 'FAILED' ? 'Send failed' : 'Ready to send'}
+              </span>
+            </div>
           </div>
 
           {acceptanceEmailStatus === 'FAILED' && acceptanceEmailError && (
@@ -229,12 +237,7 @@ export function OfferResponseStageWidget({ candidate, onUpdate, isReadOnly = fal
             <p className="mt-4 text-xs font-medium text-text-secondary">Head Office HR sends this acceptance email.</p>
           ) : (
             <div className="mt-5 flex items-center justify-between border-t border-success/15 pt-4">
-              {!isEditingEmail && !acceptanceEmailSent && (
-                <Button variant="outline" onClick={() => setIsEditingEmail(true)} disabled={!hasFetchedPreview}>
-                  <Edit2 className="mr-2 h-4 w-4" />
-                  Edit email
-                </Button>
-              )}
+
               {isEditingEmail ? (
                 <div className="flex gap-3 ml-auto">
                   <Button variant="outline" onClick={() => setIsEditingEmail(false)}>Cancel</Button>

@@ -622,34 +622,39 @@ def _offer_acceptance_email_content(candidate: Candidate) -> tuple[str, str, str
     brand_name = _candidate_brand_label(candidate)
     display_joining_date = format_date_dmy(joining_date)
     safe_date = escape(display_joining_date)
+    meeting_point = "River HR desk" if brand_is_river(candidate.brand) else "Nippon Toyota, Kalamassery (Floor 3rd – Sales Taining Room / HR Department)"
+    location_link = "https://maps.app.goo.gl/river" if brand_is_river(candidate.brand) else "https://www.google.com/maps/dir/10.0517264,76.3289828/Nippon+Toyota+Kalamassery/@10.0532732,76.320385,16z/data=!3m1!4b1!4m9!4m8!1m1!4e1!1m5!1m1!1s0x3b080c2db1f58613:0x58a056812a3dd924!2m2!1d76.3213193!2d10.054305"
+    touch_point = "HR Team" if brand_is_river(candidate.brand) else "Sreehari (HRD) 8606986060"
+    
     body_html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.55;">
         <p>Dear {safe_name},</p>
         <p>We are pleased to confirm your acceptance of the employment offer for the position of <strong>{safe_role}</strong> at {brand_name}.</p>
-        <p>We look forward to welcoming you to our organization on your joining date, <strong>{safe_date}</strong>, at {brand_name}.</p>
-        <p><strong>Location:</strong> {brand_name} recruitment office</p>
-        <p><strong>Reporting Location:</strong> {"River HR desk" if brand_is_river(candidate.brand) else "3rd Floor - Sales Training Room / HR Department"}</p>
-        <p>Please carry the following documents and information with you on the day of joining for verification and completion of the joining formalities:</p>
-        <h3>Documents to be Carried</h3>
-        <ul>
-          <li>Passport-size photographs - 5 Nos.<ul><li>White background</li><li>Coat/blazer preferred</li></ul></li>
-          <li>Educational Certificate Copies - 1 Set</li>
-          <li>Experience Certificates - 1 Copy Each, if applicable</li>
-          <li>ID Proof Copies - 4 Sets Each. Please carry copies of the following ID proofs, as applicable:<ul>
-            <li>Voter ID</li><li>Driving Licence</li><li>Passport</li><li>PAN Card</li><li>Aadhaar Card</li>
-          </ul></li>
-        </ul>
-        <h3>Family Member Details</h3>
-        <ul><li>Date of Birth of family members</li><li>Aadhaar Number of family members</li></ul>
-        <h3>Family Documents</h3>
-        <ul><li>Family photograph</li><li>Ration Card copy</li></ul>
-        <h3>PF &amp; ESI Details</h3>
-        <ul><li>PF UAN Number</li><li>ESI Number, if available</li></ul>
+        <p>We look forward to welcoming you to our organization on your joining date, <strong>{safe_date}</strong>.</p>
+        
+        <p><strong>Arrival time</strong> - 9.15 AM to 10.00 AM</p>
+        <p><strong>Meeting Point</strong> – {meeting_point}</p>
+        <p><strong>Dress Code</strong> – Formal Wear with Proper Grooming (Mandatory)</p>
+        
+        <h3>Document to be carried</h3>
+        <ol>
+          <li>Passport size photo - 5 (White background, coat inserted)</li>
+          <li>Education certificate copies (1 set)</li>
+          <li>Experience certificates (1 copy each)</li>
+          <li>ID proof copies [voters id, driving license, passport, pan card, aadhar card (4 SET COPIES EACH ID PROOF)].</li>
+          <li>Collect Family Member's Date of Birth and Aadhar Number</li>
+          <li>Collect Family photo plus ration card copy</li>
+          <li>Also Carry PF UAN Number &amp; ESI Number if you have</li>
+        </ol>
+        
+        <p><strong>Location Link</strong> - <a href="{location_link}">{location_link}</a></p>
+        <p><strong>Touch Point</strong> – {touch_point}</p>
+        
         <p>Please ensure that all the required documents are arranged and carried with you on the joining date to avoid any delay in completing the joining formalities.</p>
         <p>We look forward to welcoming you to the team and wish you a successful career with us.</p>
         <p>For further details or any queries, please contact the {brand_name} recruitment team.</p>
-        <p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>{brand_name}</p>
+        <p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>{brand_name}<br>9544286099</p>
       </body>
     </html>
     """
