@@ -292,6 +292,7 @@ export default function CandidatesList() {
             candidates={candidates}
             selectedQueue={selectedQueue}
             onQueueChange={setQueue}
+            isLoading={loading}
           />
           <CandidateFilters
             searchQuery={searchQuery}

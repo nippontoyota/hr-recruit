@@ -108,7 +108,7 @@ export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () =>
 
           <FormField field="refName" error={errors.refName}>
             <label className="block text-sm font-medium text-text-primary mb-1">
-              Representative&apos;s Name <span className="text-danger">*</span>
+              Ward Member&apos;s Name <span className="text-danger">*</span>
             </label>
             <Input
               value={data.refName}
@@ -134,7 +134,7 @@ export const RecruitmentForm = ({ data, update, errors = {}, onBlurField = () =>
 
           <FormField field="refContactNumber" error={errors.refContactNumber}>
             <label className="block text-sm font-medium text-text-primary mb-1">
-              Representative&apos;s Contact Number <span className="text-danger">*</span>
+              Ward Member&apos;s Contact Number <span className="text-danger">*</span>
             </label>
             <Input
               type="tel"

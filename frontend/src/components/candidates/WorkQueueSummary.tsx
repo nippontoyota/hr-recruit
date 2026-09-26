@@ -8,6 +8,7 @@ interface WorkQueueSummaryProps {
   candidates: Candidate[];
   selectedQueue: CandidateQueue | '';
   onQueueChange: (queue: CandidateQueue | '') => void;
+  isLoading?: boolean;
 }
 
 const icons = {
@@ -26,6 +27,7 @@ const tones = {
     label: 'text-red-900',
     count: 'text-red-950',
     icon: 'text-red-700',
+    skeleton: 'bg-red-300/60',
   },
   NEEDS_ACTION: {
     idle: 'border-orange-400 bg-orange-100 hover:bg-orange-200',
@@ -33,6 +35,7 @@ const tones = {
     label: 'text-orange-900',
     count: 'text-orange-950',
     icon: 'text-orange-700',
+    skeleton: 'bg-orange-300/60',
   },
   WAITING_FOR_CANDIDATE: {
     idle: 'border-sky-400 bg-sky-100 hover:bg-sky-200',
@@ -40,6 +43,7 @@ const tones = {
     label: 'text-sky-900',
     count: 'text-sky-950',
     icon: 'text-sky-700',
+    skeleton: 'bg-sky-300/60',
   },
   WAITING_FOR_HO: {
     idle: 'border-violet-400 bg-violet-100 hover:bg-violet-200',
@@ -47,6 +51,7 @@ const tones = {
     label: 'text-violet-900',
     count: 'text-violet-950',
     icon: 'text-violet-700',
+    skeleton: 'bg-violet-300/60',
   },
   READY_FOR_OFFER: {
     idle: 'border-emerald-400 bg-emerald-100 hover:bg-emerald-200',
@@ -54,6 +59,7 @@ const tones = {
     label: 'text-emerald-900',
     count: 'text-emerald-950',
     icon: 'text-emerald-700',
+    skeleton: 'bg-emerald-300/60',
   },
   ON_HOLD: {
     idle: 'border-amber-400 bg-amber-100 hover:bg-amber-200',
@@ -61,6 +67,7 @@ const tones = {
     label: 'text-amber-900',
     count: 'text-amber-950',
     icon: 'text-amber-700',
+    skeleton: 'bg-amber-300/60',
   },
   STALLED: {
     idle: 'border-rose-400 bg-rose-100 hover:bg-rose-200',
@@ -68,10 +75,17 @@ const tones = {
     label: 'text-rose-900',
     count: 'text-rose-950',
     icon: 'text-rose-700',
+    skeleton: 'bg-rose-300/60',
   },
 } as const;
 
-export function WorkQueueSummary({ candidates, selectedQueue, onQueueChange }: WorkQueueSummaryProps) {
+function CountSkeleton({ skeletonClass }: { skeletonClass: string }) {
+  return (
+    <span className={cn('h-5 w-8 rounded animate-pulse', skeletonClass)} aria-hidden="true" />
+  );
+}
+
+export function WorkQueueSummary({ candidates, selectedQueue, onQueueChange, isLoading = false }: WorkQueueSummaryProps) {
   const knownStateCount = candidates.filter((candidate) => candidate.work_state != null).length;
   const overviewSelected = selectedQueue === '';
   const overviewTone = tones.OVERVIEW;
@@ -104,8 +118,10 @@ export function WorkQueueSummary({ candidates, selectedQueue, onQueueChange }: W
             Candidate Overview
           </span>
           <span className={cn('flex items-center gap-1 text-xl font-bold tabular-nums', overviewTone.count)}>
-            {candidates.length}
-            {overviewSelected && <CheckCircle2 className={cn('h-3.5 w-3.5', overviewTone.icon)} aria-hidden="true" />}
+            {isLoading && candidates.length === 0
+              ? <CountSkeleton skeletonClass={overviewTone.skeleton} />
+              : candidates.length}
+            {overviewSelected && !isLoading && <CheckCircle2 className={cn('h-3.5 w-3.5', overviewTone.icon)} aria-hidden="true" />}
           </span>
         </button>
         {QUEUE_DEFINITIONS.map(({ key, label }) => {
@@ -130,8 +146,10 @@ export function WorkQueueSummary({ candidates, selectedQueue, onQueueChange }: W
                 {label}
               </span>
               <span className={cn('flex items-center gap-1 text-xl font-bold tabular-nums', tone.count)}>
-                {count}
-                {selected && <CheckCircle2 className={cn('h-3.5 w-3.5', tone.icon)} aria-hidden="true" />}
+                {isLoading && candidates.length === 0
+                  ? <CountSkeleton skeletonClass={tone.skeleton} />
+                  : count}
+                {selected && !isLoading && <CheckCircle2 className={cn('h-3.5 w-3.5', tone.icon)} aria-hidden="true" />}
               </span>
             </button>
           );
