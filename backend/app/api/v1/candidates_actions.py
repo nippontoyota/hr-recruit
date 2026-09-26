@@ -999,7 +999,7 @@ def update_offer_response(
 def get_offer_acceptance_email_preview(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.MANAGER)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
     row = get_candidate_for_user(db, id, user)
     subject, body_html, _ = _offer_acceptance_email_content(row)
