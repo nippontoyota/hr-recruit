@@ -55,6 +55,9 @@ function normalizeFetchAbort(err: unknown, callerSignal?: AbortSignal): never {
   if (isAbortError(err)) {
     throw new FetchError(408, { detail: 'Request timed out. Try again.' });
   }
+  if (err instanceof TypeError && err.message === 'Failed to fetch') {
+    throw new Error('Network Error: The server is unreachable. Please check your internet connection or disable any strict ad blockers.');
+  }
   throw err;
 }
 

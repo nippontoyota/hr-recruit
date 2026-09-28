@@ -585,8 +585,12 @@ async function uploadPublicCandidateFiles(
           throw new Error(`Storage upload failed (${uploadResponse.status}).`);
         }
         return;
-      } catch (error) {
-        lastError = error;
+      } catch (error: any) {
+        if (error?.message === 'Failed to fetch' || error instanceof TypeError) {
+          lastError = new Error(`Network Error: We couldn't upload your ${manifest.kind}. This is usually caused by an Ad Blocker, a VPN, a restricted network, or a server configuration issue. Please turn off Ad Blockers and VPNs, or try a different browser.`);
+        } else {
+          lastError = error;
+        }
       }
     }
     throw lastError;
