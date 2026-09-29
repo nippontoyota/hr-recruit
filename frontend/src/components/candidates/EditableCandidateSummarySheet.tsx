@@ -599,7 +599,12 @@ export function EditableCandidateSummarySheet({
               </Cell>
               <Cell rowSpan={4} colSpan={3} className="text-center font-bold">TOTAL AVERAGE</Cell>
               <Cell rowSpan={4} colSpan={3} className="text-center text-[16px] font-bold">
-                {form.totalAverage ? String(form.totalAverage) : avgScore}
+                <InlineInput 
+                  value={form.totalAverage as string} 
+                  placeholder={String(avgScore)} 
+                  onChange={(v) => update('totalAverage', v)}
+                  className="text-center text-[16px] py-2"
+                />
               </Cell>
               <Cell colSpan={2}>1st Interview</Cell>
               <Cell>
