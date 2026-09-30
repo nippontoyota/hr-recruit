@@ -4,6 +4,10 @@ import { previousJobsFromForm, type CandidateFormData, type PreviousJob } from '
 import { formatSource } from '../../lib/stages';
 import { formatDate } from '../../lib/dateTime';
 import { getBrandConfig } from '../../lib/branding';
+import { updateCandidateRawData } from '../../api/candidates';
+import { toast } from 'sonner';
+import { Edit2 } from 'lucide-react';
+
 
 interface CandidateSummarySheetProps {
   candidate: Candidate;
@@ -158,6 +162,19 @@ function Cell({
   section?: boolean;
   className?: string;
 }) {
+    const handleUpdateAverage = async () => {
+    const current = totalAverageOverride || avg100;
+    const val = window.prompt("Enter new Total Average (or leave blank to auto-calculate):", current);
+    if (val === null) return;
+    try {
+      await updateCandidateRawData(candidate.id, { totalAverage: val });
+      toast.success("Total Average updated");
+      window.location.reload();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update");
+    }
+  };
+
   return (
     <td
       colSpan={colSpan}
@@ -284,6 +301,19 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
     ? (cur || 0) + (inc || 0) + (oth || 0)
     : '';
   const age = rawGet(raw, 'age') || ageFromDob(dob);
+
+    const handleUpdateAverage = async () => {
+    const current = totalAverageOverride || avg100;
+    const val = window.prompt("Enter new Total Average (or leave blank to auto-calculate):", current);
+    if (val === null) return;
+    try {
+      await updateCandidateRawData(candidate.id, { totalAverage: val });
+      toast.success("Total Average updated");
+      window.location.reload();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update");
+    }
+  };
 
   return (
     <div className={`css-sheet ${riverClass} box-border bg-white text-[10px] leading-[1.5] text-black font-sans w-[210mm] min-h-[297mm] p-[12mm_12mm] shadow-lg print:shadow-none print:border-none`}>
@@ -435,7 +465,14 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={2}>Psychometry test Result</Cell>
             <Cell>{rawGet(raw, 'psychometryResult')}</Cell>
             <Cell rowSpan={4} colSpan={3} className="text-center font-bold">TOTAL AVERAGE</Cell>
-            <Cell rowSpan={4} colSpan={3} className="text-center text-[16px] font-bold">{avg100}</Cell>
+            <Cell rowSpan={4} colSpan={3} className="text-center text-[16px] font-bold relative group">
+              <div className="flex items-center justify-center gap-2">
+                <span>{avg100}</span>
+                <button onClick={handleUpdateAverage} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 rounded-sm print:hidden transition-opacity">
+                  <Edit2 className="w-3.5 h-3.5 text-blue-600" />
+                </button>
+              </div>
+            </Cell>
             <Cell colSpan={2}>1st Interview</Cell>
             <Cell>{ivDate[0]}</Cell>
           </tr>
@@ -526,7 +563,20 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           {([0, 1, 2, 3] as const).map((i) => {
             const score = ivScore[i];
             const has = score !== null && score > 0;
-            return (
+              const handleUpdateAverage = async () => {
+    const current = totalAverageOverride || avg100;
+    const val = window.prompt("Enter new Total Average (or leave blank to auto-calculate):", current);
+    if (val === null) return;
+    try {
+      await updateCandidateRawData(candidate.id, { totalAverage: val });
+      toast.success("Total Average updated");
+      window.location.reload();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to update");
+    }
+  };
+
+  return (
               <tr key={`iv-${i}`} className="h-[11mm]">
                 {i === 0 ? <Cell label rowSpan={4}>Interview Comments</Cell> : null}
                 <Cell>{ivInterviewer[i]}</Cell>
