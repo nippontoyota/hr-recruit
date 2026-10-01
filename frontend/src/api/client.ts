@@ -8,9 +8,15 @@ const fallbackBaseURL = import.meta.env.DEV
   : 'https://hr-recruit-api.vercel.app/api/v1';
 // A relative API URL is useful with the Vite dev proxy, but production is a
 // separate static deployment and must use the backend origin explicitly.
-const baseURL = configuredBaseURL && (import.meta.env.DEV || /^https?:\/\//i.test(configuredBaseURL))
-  ? configuredBaseURL
-  : fallbackBaseURL;
+// Force HTTPS for production
+const forceHttps = (url: string) => {
+  if (import.meta.env.DEV) return url;
+  if (url.startsWith('http://')) return url.replace('http://', 'https://');
+  if (!url.startsWith('https://')) return 'https://' + url;
+  return url;
+};
+
+const baseURL = forceHttps(configuredBaseURL ? configuredBaseURL : fallbackBaseURL);
 
 export function getApiBaseUrl(): string {
   return baseURL;
@@ -55,7 +61,7 @@ function normalizeFetchAbort(err: unknown, callerSignal?: AbortSignal): never {
   if (isAbortError(err)) {
     throw new FetchError(408, { detail: 'Request timed out. Try again.' });
   }
-  if (err instanceof TypeError && err.message === 'Failed to fetch') {
+  if (err instanceof TypeError && (err.message === 'Failed to fetch' || err.message.includes('NetworkError'))) {
     throw new Error('Network Error: The server is unreachable. Please check your internet connection or disable any strict ad blockers.');
   }
   throw err;

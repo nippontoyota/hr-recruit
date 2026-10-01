@@ -397,7 +397,7 @@ def mark_pre_form_sent_manually(
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
 
 
-@router.post("/{id}/whatsapp-invite")
+@router.post("/{id}/wa-invite")
 def send_whatsapp_invite(
     id: UUID,
     body: WhatsAppInviteCreate,
@@ -541,7 +541,7 @@ def send_whatsapp_invite(
     return {"status": "success", "message_id": external_message_id}
 
 
-@router.post("/{id}/whatsapp-invite/confirm", response_model=CandidateOut)
+@router.post("/{id}/wa-invite/confirm", response_model=CandidateOut)
 def confirm_whatsapp_invite(
     id: UUID,
     body: WhatsAppTemplateSave | None = None,
@@ -557,7 +557,7 @@ def confirm_whatsapp_invite(
     return to_candidate_out(candidate, id in resume_candidate_ids(db, [id]), viewer=user)
 
 
-@router.patch("/{id}/whatsapp-template", response_model=CandidateOut)
+@router.patch("/{id}/wa-template", response_model=CandidateOut)
 def save_whatsapp_template(
     id: UUID,
     body: WhatsAppTemplateSave,
@@ -1103,7 +1103,7 @@ def send_offer_acceptance_email(
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
 
 
-@router.post("/{id}/offer-whatsapp/resend", response_model=CandidateOut)
+@router.post("/{id}/offer-wa/resend", response_model=CandidateOut)
 def resend_offer_whatsapp(
     id: UUID,
     db: Session = Depends(get_db),
@@ -1148,7 +1148,7 @@ def resend_offer_whatsapp(
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]), viewer=user)
 
 
-@router.post("/{id}/offer-whatsapp/confirm", response_model=CandidateOut)
+@router.post("/{id}/offer-wa/confirm", response_model=CandidateOut)
 def confirm_offer_whatsapp(
     id: UUID,
     db: Session = Depends(get_db),

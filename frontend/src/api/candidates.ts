@@ -470,7 +470,7 @@ export const sendWhatsAppInvite = async (
   candidateId: string,
   variables: Record<string, string>
 ): Promise<any> => {
-  const response = await request('POST', `/candidates/${candidateId}/whatsapp-invite`, { variables });
+  const response = await request('POST', `/candidates/${candidateId}/wa-invite`, { variables });
   return response.data;
 };
 
@@ -478,7 +478,7 @@ export const saveWhatsAppTemplate = async (
   candidateId: string,
   variables: Record<string, string>
 ): Promise<Candidate> => {
-  const response = await request('PATCH', `/candidates/${candidateId}/whatsapp-template`, variables);
+  const response = await request('PATCH', `/candidates/${candidateId}/wa-template`, variables);
   return response.data;
 };
 
@@ -486,17 +486,17 @@ export const confirmWhatsAppInvite = async (
   candidateId: string,
   variables?: Record<string, string>
 ): Promise<Candidate> => {
-  const response = await request('POST', `/candidates/${candidateId}/whatsapp-invite/confirm`, variables);
+  const response = await request('POST', `/candidates/${candidateId}/wa-invite/confirm`, variables);
   return response.data;
 };
 
 export const confirmOfferWhatsApp = async (candidateId: string): Promise<Candidate> => {
-  const response = await request('POST', `/candidates/${candidateId}/offer-whatsapp/confirm`);
+  const response = await request('POST', `/candidates/${candidateId}/offer-wa/confirm`);
   return response.data;
 };
 
 export const resendOfferWhatsApp = async (candidateId: string): Promise<Candidate> => {
-  const response = await request('POST', `/candidates/${candidateId}/offer-whatsapp/resend`);
+  const response = await request('POST', `/candidates/${candidateId}/offer-wa/resend`);
   return response.data;
 };
 
