@@ -366,12 +366,12 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           <col className="w-[6%]" />
           <col className="w-[4%]" />
           <col className="w-[9%]" />
+          <col className="w-[5%]" />
           <col className="w-[6%]" />
-          <col className="w-[4%]" />
           <col className="w-[10%]" />
           <col className="w-[10%]" />
           <col className="w-[10%]" />
-          <col className="w-[11%]" />
+          <col className="w-[10%]" />
         </colgroup>
         <tbody>
           {/* ── Row 1: Brand name + score band + SI No ── */}
@@ -384,7 +384,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             </Cell>
             <Cell className="text-center font-bold text-[13px]">{avg100}</Cell>
             <Cell className="text-center text-[8px] font-semibold">{scoreBandLabel}</Cell>
-            <Cell label>Sl No</Cell>
+            <Cell label className="whitespace-nowrap">Sl No</Cell>
             <Cell colSpan={4}>{candidate.candidate_id}</Cell>
           </tr>
           {/* ── Row 2: Company address + Date ── */}
@@ -392,7 +392,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={7} className="text-[9px] font-bold">
               {brand.companyName.toUpperCase()}, {brand.documentAddress.toUpperCase()}
             </Cell>
-            <Cell label>Date :</Cell>
+            <Cell label className="whitespace-nowrap">Date :</Cell>
             <Cell colSpan={4}>{appliedOn}</Cell>
           </tr>
           {/* ── Row 3: Department banner ── */}
@@ -410,8 +410,8 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           <tr>
             <Cell label>Name</Cell>
             <Cell colSpan={4}>{candidate.full_name}</Cell>
-            <Cell colSpan={4}>Application Submitted on:</Cell>
-            <Cell>{appliedOn}</Cell>
+            <Cell colSpan={4} className="text-right">Application Submitted on:</Cell>
+            <Cell className="text-center font-bold">{shortDate(appliedOn) || appliedOn}</Cell>
             <Cell label>Location</Cell>
             <Cell>{rawGet(raw, 'branchLocation') || candidate.branch_location || ''}</Cell>
           </tr>
@@ -419,7 +419,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell label>Post Applied</Cell>
             <Cell colSpan={4}>{candidate.position_applied_for && candidate.position_applied_for.toLowerCase() !== 'unknown' ? candidate.position_applied_for : ''}</Cell>
             <Cell label>Source</Cell>
-            <Cell colSpan={3}>{source}</Cell>
+            <Cell colSpan={3} className="text-center">{source}</Cell>
             <Cell>Specify Source</Cell>
             <Cell rowSpan={2} colSpan={2}>{specifySource}</Cell>
           </tr>
@@ -427,14 +427,14 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell label>Post Suitable</Cell>
             <Cell colSpan={4}>{rawGet(raw, 'positionSuitable')}</Cell>
             <Cell label>Age</Cell>
-            <Cell colSpan={4}>{age}</Cell>
+            <Cell colSpan={4} className="text-center">{age}</Cell>
           </tr>
 
           {/* ── Personal Details ── */}
           <tr>
             <Cell section colSpan={5}>Personal Details</Cell>
-            <Cell label rowSpan={2}>Date of Birth</Cell>
-            <Cell rowSpan={2} colSpan={4}>{fmtDate(dob)}</Cell>
+            <Cell label>Date of Birth</Cell>
+            <Cell colSpan={4} className="text-center">{shortDate(dob) || dob}</Cell>
             <Cell rowSpan={8} colSpan={2} className="text-center align-middle p-0.5">
               {photo ? (
                 <img src={photo} alt="" className="h-[28mm] w-[22mm] object-cover mx-auto border border-black" />
@@ -446,26 +446,25 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           <tr>
             <Cell label rowSpan={2}>Contact No:</Cell>
             <Cell colSpan={4}>{phones[0] || ''}</Cell>
+            <Cell label colSpan={2} className="bg-neutral-200 text-center">Experience</Cell>
+            <Cell colSpan={3} className="bg-neutral-200 text-center font-bold">Years</Cell>
           </tr>
           <tr>
             <Cell colSpan={4}>{phones[1] || ''}</Cell>
-            <Cell label colSpan={2}>Experience</Cell>
-            <Cell colSpan={3}>Years</Cell>
+            <Cell label colSpan={2} rowSpan={2}>Total Work Experience</Cell>
+            <Cell colSpan={3} rowSpan={2} className="text-center align-middle">{totalExp}</Cell>
           </tr>
           <tr>
             <Cell label rowSpan={5}>Contact Address</Cell>
             <Cell colSpan={4}>{addr[0]}</Cell>
-            <Cell colSpan={2}>Total Work Experience</Cell>
-            <Cell colSpan={3} rowSpan={2}>{totalExp}</Cell>
           </tr>
           <tr>
             <Cell colSpan={4}>{addr[1]}</Cell>
-            <Cell colSpan={2}></Cell>
+            <Cell label colSpan={2} rowSpan={4} className="bg-neutral-200 italic">Relevant Experience</Cell>
+            <Cell colSpan={3} rowSpan={4} className="text-center align-middle">{relevantExp}</Cell>
           </tr>
           <tr>
             <Cell colSpan={4}>{addr[2]}</Cell>
-            <Cell label colSpan={2} className="italic">Relevant Experience</Cell>
-            <Cell colSpan={3} rowSpan={3}>{relevantExp}</Cell>
           </tr>
           <tr>
             <Cell colSpan={4}>{addr[3]}</Cell>
@@ -510,10 +509,10 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           <tr>
             <Cell section colSpan={12}>SCORE BOARD / TEST RESULTS (% Wise)</Cell>
           </tr>
-          {/* Row 1: Technical — 1st Interview */}
+          {/* Row 1: Technical (spans 2) — 1st Interview */}
           <tr>
-            <Cell colSpan={2}>Technical Test Result</Cell>
-            <Cell className="text-right">{rawGet(raw, 'technicalResult') || (techPct != null && techPct !== '' ? Number(techPct).toFixed(2) : '0.00')}</Cell>
+            <Cell colSpan={2} rowSpan={2}>Technical Test Result</Cell>
+            <Cell className="text-right" rowSpan={2}>{rawGet(raw, 'technicalResult') || (techPct != null && techPct !== '' ? Number(techPct).toFixed(2) : '0.00')}</Cell>
             <Cell rowSpan={4} colSpan={3} className="text-center font-bold">TOTAL AVERAGE</Cell>
             <Cell rowSpan={4} colSpan={3} className="text-center text-[16px] font-bold relative group">
               <div className="flex items-center justify-center gap-2">
@@ -526,22 +525,20 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={2}>1st Interview</Cell>
             <Cell>{ivDate[0]}</Cell>
           </tr>
-          {/* Row 2: Department — 2nd Interview */}
+          {/* Row 2: 2nd Interview (Technical left side spans into here) */}
           <tr>
-            <Cell colSpan={2}>Department Test Result</Cell>
-            <Cell className="text-right">{rawGet(raw, 'departmentResult') || '0.00'}</Cell>
             <Cell colSpan={2}>2nd Interview</Cell>
             <Cell>{ivDate[1]}</Cell>
           </tr>
-          {/* Row 3: empty left — 3rd Interview */}
+          {/* Row 3: Department (spans 2) — 3rd Interview */}
           <tr>
-            <Cell colSpan={3}></Cell>
+            <Cell colSpan={2} rowSpan={2}>Department Test Result</Cell>
+            <Cell className="text-right" rowSpan={2}>{rawGet(raw, 'departmentResult') || '0.00'}</Cell>
             <Cell colSpan={2}>3rd Interview</Cell>
             <Cell>{ivDate[2]}</Cell>
           </tr>
-          {/* Row 4: empty left — 4th Interview */}
+          {/* Row 4: 4th Interview (Department left side spans into here) */}
           <tr>
-            <Cell colSpan={3}></Cell>
             <Cell colSpan={2}>4th Interview</Cell>
             <Cell>{ivDate[3]}</Cell>
           </tr>
