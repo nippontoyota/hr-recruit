@@ -35,6 +35,8 @@ const INTERVIEW_ORDER = [
   'HQ_INTERVIEW',
 ] as const;
 
+const MIN_JOB_ROWS = 6;
+
 function txt(value: unknown): string {
   if (value == null || value === false) return '';
   if (value === true) return 'Yes';
@@ -104,6 +106,15 @@ function gradeFromTen(score: number): string {
   return 'D';
 }
 
+/** Grade band label shown in the top-right header, based on avg score out of 100 */
+function gradeBand(avg: number): string {
+  if (avg >= 80) return 'Excellent';
+  if (avg >= 65) return 'Above Average';
+  if (avg >= 50) return 'Average';
+  if (avg >= 35) return 'Below Average';
+  return 'Poor';
+}
+
 function siblingOcc(raw: Record<string, unknown>, n: 1 | 2 | 3): string {
   const relation = rawGet(raw, `sibling${n}Relation`);
   const occupationText = rawGet(raw, `sibling${n}Occupation`);
@@ -162,19 +173,6 @@ function Cell({
   section?: boolean;
   className?: string;
 }) {
-    const handleUpdateAverage = async () => {
-    const current = totalAverageOverride || avg100;
-    const val = window.prompt("Enter new Total Average (or leave blank to auto-calculate):", current);
-    if (val === null) return;
-    try {
-      await updateCandidateRawData(candidate.id, { totalAverage: val });
-      toast.success("Total Average updated");
-      window.location.reload();
-    } catch (e: any) {
-      toast.error(e.message || "Failed to update");
-    }
-  };
-
   return (
     <td
       colSpan={colSpan}
@@ -202,6 +200,8 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
       salary: rawGet(raw, 'currentSalary', 'prev1Salary'),
     });
   }
+  // Pad to minimum 6 rows so the form always looks like the physical sheet
+  while (jobs.length < MIN_JOB_ROWS) jobs.push({ ...EMPTY_JOB });
 
   const photo = candidate.profile?.photo_url;
   const dob = rawGet(raw, 'dateOfBirth');
@@ -237,7 +237,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
   const expectedSalary =
     rawGet(raw, 'expectedSalary') || txt(candidate.profile?.expected_salary) || '';
   const joiningDays = rawGet(raw, 'joiningDays', 'noticePeriod');
-  const doj = fmtDate(rawGet(raw, 'expectedJoiningDate') || candidate.profile?.joining_date);
+  const doj = fmtDate(rawGet(raw, 'expectedJoiningDate') || rawGet(raw, 'dateOfJoining') || candidate.profile?.joining_date);
   const pgCourse = [rawGet(raw, 'postGradCourse'), rawGet(raw, 'postGradStream')].filter(Boolean).join(' - ');
   const pg = eduValue(
     pgCourse,
@@ -291,8 +291,13 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
   const scored = ivScore.filter((n): n is number => n !== null && n > 0);
   const marks100 = scored.map((n) => Math.round(n * 10));
   const totalAverageOverride = rawGet(raw, 'totalAverage');
-  const avg100 = totalAverageOverride || (marks100.length ? String(Math.round(marks100.reduce((a, b) => a + b, 0) / marks100.length)) : '');
+  const avg100Num = marks100.length ? Math.round(marks100.reduce((a, b) => a + b, 0) / marks100.length) : null;
+  const avg100 = totalAverageOverride || (avg100Num != null ? String(avg100Num) : '');
   const totalMarks10 = scored.length ? scored.reduce((a, b) => a + b, 0) : '';
+
+  // Score band for top-right header
+  const scoreForBand = num(avg100);
+  const scoreBandLabel = scoreForBand != null ? gradeBand(scoreForBand) : '';
 
   const cur = num(currentSalary);
   const inc = num(rawGet(raw, 'incentive') || txt(salarySheet.incentive) || txt(salarySheet.Incentive));
@@ -302,28 +307,48 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
     : '';
   const age = rawGet(raw, 'age') || ageFromDob(dob);
 
-    const handleUpdateAverage = async () => {
+  // Offer milestones
+  const offerLetterIssued = Boolean(
+    candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED' ||
+    candidate.offer_status === 'DECLINED' || raw.offerLetterIssued === true ||
+    raw.offerLetterIssued === 'true' || raw.offerLetterIssued === 'Yes' ||
+    candidate.current_stage === 'OFFER_RESPONSE' || candidate.current_stage === 'HIRED'
+  );
+  const offerCommMessage = Boolean(
+    candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED' ||
+    candidate.offer_status === 'DECLINED' || raw.offerCommMessage === true ||
+    raw.offerCommMessage === 'true' || raw.offerCommMessage === 'Yes' ||
+    candidate.current_stage === 'OFFER_RESPONSE'
+  );
+  const offerCommCallAccepted = Boolean(
+    raw.offerCommCall === true || raw.offerCommCall === 'true' || raw.offerCommCall === 'Yes' ||
+    raw.offerCommCallAccepted === true || raw.offerCommCallAccepted === 'Yes'
+  );
+  const offerCommCallRejected = Boolean(
+    raw.offerCommCallRejected === true || raw.offerCommCallRejected === 'Yes'
+  );
+  const docCarryMessage = Boolean(
+    raw.docCarryMessage === true || raw.docCarryMessage === 'true' || raw.docCarryMessage === 'Yes'
+  );
+  const followUpCall = Boolean(
+    raw.followUpCall === true || raw.followUpCall === 'true' || raw.followUpCall === 'Yes'
+  );
+
+  const handleUpdateAverage = async () => {
     const current = totalAverageOverride || avg100;
-    const val = window.prompt("Enter new Total Average (or leave blank to auto-calculate):", current);
+    const val = window.prompt('Enter new Total Average (or leave blank to auto-calculate):', current);
     if (val === null) return;
     try {
       await updateCandidateRawData(candidate.id, { totalAverage: val });
-      toast.success("Total Average updated");
+      toast.success('Total Average updated');
       window.location.reload();
     } catch (e: any) {
-      toast.error(e.message || "Failed to update");
+      toast.error(e.message || 'Failed to update');
     }
   };
 
   return (
     <div className={`css-sheet ${riverClass} box-border bg-white text-[10px] leading-[1.5] text-black font-sans w-[210mm] min-h-[297mm] p-[12mm_12mm] shadow-lg print:shadow-none print:border-none`}>
-      <div className="css-brand-section mb-2 flex items-center justify-between border-b-2 border-black px-2 py-1.5">
-        <div className="flex items-center gap-2">
-          <img src={brand.logo} alt={`${brand.name} logo`} className="h-[9mm] w-auto object-contain" />
-          <span className="text-[12px] font-black uppercase tracking-wide">{brand.name} candidate summary</span>
-        </div>
-        <span className="text-[8px] font-semibold">{brand.companyName}</span>
-      </div>
       <table className="w-full border-collapse border border-black table-fixed">
         <colgroup>
           <col className="w-[16%]" />
@@ -340,27 +365,39 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           <col className="w-[11%]" />
         </colgroup>
         <tbody>
+          {/* ── Row 1: Brand name + score band + SI No ── */}
           <tr>
-          <Cell colSpan={7} className="text-[15px] font-bold tracking-wide h-8">{brand.name.toUpperCase()}</Cell>
+            <Cell colSpan={5} className="text-[15px] font-bold tracking-wide h-8">
+              <div className="flex items-center gap-2">
+                <img src={brand.logo} alt={`${brand.name} logo`} className="h-[7mm] w-auto object-contain" />
+                <span>{brand.name.toUpperCase()}</span>
+              </div>
+            </Cell>
+            <Cell className="text-center font-bold text-[13px]">{avg100}</Cell>
+            <Cell className="text-center text-[8px] font-semibold">{scoreBandLabel}</Cell>
             <Cell label>Sl No</Cell>
             <Cell colSpan={4}>{candidate.candidate_id}</Cell>
           </tr>
+          {/* ── Row 2: Company address + Date ── */}
           <tr>
-            <Cell colSpan={7} className="text-[10px] font-bold">
+            <Cell colSpan={7} className="text-[9px] font-bold">
               {brand.companyName.toUpperCase()}, {brand.documentAddress.toUpperCase()}
             </Cell>
             <Cell label>Date :</Cell>
             <Cell colSpan={4}>{appliedOn}</Cell>
           </tr>
+          {/* ── Row 3: Department banner ── */}
           <tr>
             <Cell section colSpan={12} className="text-[11px] h-6">Human Resource Department</Cell>
           </tr>
+          {/* ── Row 4: CSS title + Department ── */}
           <tr>
-            <Cell colSpan={10} className="font-bold text-[11px]">Candidate Summary Sheet</Cell>
+            <Cell colSpan={10} className="font-bold text-[11px] text-center">Candidate Summary Sheet</Cell>
             <Cell label>Department</Cell>
             <Cell>{rawGet(raw, 'department') || candidate.department || ''}</Cell>
           </tr>
 
+          {/* ── Name / Applied on / Location ── */}
           <tr>
             <Cell label>Name</Cell>
             <Cell colSpan={4}>{candidate.full_name}</Cell>
@@ -384,6 +421,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={4}>{age}</Cell>
           </tr>
 
+          {/* ── Personal Details ── */}
           <tr>
             <Cell section colSpan={5}>Personal Details</Cell>
             <Cell label rowSpan={2}>Date of Birth</Cell>
@@ -427,6 +465,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={4}>{addr[4]}</Cell>
           </tr>
 
+          {/* ── Education & Family ── */}
           <tr>
             <Cell label>Educational Qualification</Cell>
             <Cell colSpan={2}>{degreeLevel}</Cell>
@@ -458,12 +497,13 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell>{siblingOcc(raw, 3)}</Cell>
           </tr>
 
+          {/* ── Score Board ── */}
           <tr>
             <Cell section colSpan={12}>SCORE BOARD / TEST RESULTS (% Wise)</Cell>
           </tr>
           <tr>
             <Cell colSpan={2}>Psychometry test Result</Cell>
-            <Cell>{rawGet(raw, 'psychometryResult')}</Cell>
+            <Cell className="text-right">{rawGet(raw, 'psychometryResult') || '0.00'}</Cell>
             <Cell rowSpan={4} colSpan={3} className="text-center font-bold">TOTAL AVERAGE</Cell>
             <Cell rowSpan={4} colSpan={3} className="text-center text-[16px] font-bold relative group">
               <div className="flex items-center justify-center gap-2">
@@ -478,23 +518,24 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           </tr>
           <tr>
             <Cell colSpan={2}>Analytical Test Result</Cell>
-            <Cell>{rawGet(raw, 'analyticalResult')}</Cell>
+            <Cell className="text-right">{rawGet(raw, 'analyticalResult') || '0.00'}</Cell>
             <Cell colSpan={2}>2nd Interview</Cell>
             <Cell>{ivDate[1]}</Cell>
           </tr>
           <tr>
             <Cell colSpan={2}>Technical Test Result</Cell>
-            <Cell>{rawGet(raw, 'technicalResult') || (techPct != null && techPct !== '' ? Number(techPct).toFixed(2) : '')}</Cell>
+            <Cell className="text-right">{rawGet(raw, 'technicalResult') || (techPct != null && techPct !== '' ? Number(techPct).toFixed(2) : '0.00')}</Cell>
             <Cell colSpan={2}>3rd Interview</Cell>
             <Cell>{ivDate[2]}</Cell>
           </tr>
           <tr>
             <Cell colSpan={2}>Department Test Result</Cell>
-            <Cell>{rawGet(raw, 'departmentResult')}</Cell>
+            <Cell className="text-right">{rawGet(raw, 'departmentResult') || '0.00'}</Cell>
             <Cell colSpan={2}>4th Interview</Cell>
             <Cell>{ivDate[3]}</Cell>
           </tr>
 
+          {/* ── Employment Record ── */}
           <tr>
             <Cell section colSpan={12}>Employment Record</Cell>
           </tr>
@@ -516,7 +557,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
               <Cell>{job.company}</Cell>
               <Cell>{fmtDate(job.fromDate) || job.fromDate}</Cell>
               <Cell>{fmtDate(job.toDate) || job.toDate}</Cell>
-              <Cell>{yearsBetween(job.fromDate, job.toDate)}</Cell>
+              <Cell>{job.company ? yearsBetween(job.fromDate, job.toDate) : ''}</Cell>
               <Cell colSpan={2}>{job.position}</Cell>
               <Cell colSpan={3}>{job.reason}</Cell>
               <Cell colSpan={2}>{job.salary}</Cell>
@@ -524,6 +565,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             </tr>
           ))}
 
+          {/* ── Salary Summary ── */}
           <tr>
             <Cell label>Current Salary</Cell>
             <Cell colSpan={2}>{currentSalary}</Cell>
@@ -534,16 +576,16 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           </tr>
           <tr>
             <Cell label>Incentive</Cell>
-            <Cell colSpan={2}>{inc != null ? String(inc) : ''}</Cell>
+            <Cell colSpan={2}>{inc != null ? String(inc) : '0'}</Cell>
             <Cell rowSpan={3} colSpan={3}></Cell>
             <Cell colSpan={3}>Incentive</Cell>
-            <Cell colSpan={2}>{rawGet(raw, 'expectedIncentive')}</Cell>
+            <Cell colSpan={2}>{rawGet(raw, 'expectedIncentive') || '0'}</Cell>
           </tr>
           <tr>
             <Cell label>Others</Cell>
-            <Cell colSpan={2}>{oth != null ? String(oth) : ''}</Cell>
+            <Cell colSpan={2}>{oth != null ? String(oth) : '0'}</Cell>
             <Cell colSpan={3}>Others</Cell>
-            <Cell colSpan={2}>{rawGet(raw, 'expectedOthers')}</Cell>
+            <Cell colSpan={2}>{rawGet(raw, 'expectedOthers') || '0'}</Cell>
           </tr>
           <tr>
             <Cell label>Total</Cell>
@@ -552,6 +594,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={2} className="font-bold">{expectedSalary}</Cell>
           </tr>
 
+          {/* ── Interview Comments header ── */}
           <tr>
             <Cell label>Joining Time</Cell>
             <Cell>{joiningDays}</Cell>
@@ -560,25 +603,14 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell label>Grade</Cell>
             <Cell label>Marks (Maximum 10)</Cell>
           </tr>
+
+          {/* 4 scored interview rows */}
           {([0, 1, 2, 3] as const).map((i) => {
             const score = ivScore[i];
             const has = score !== null && score > 0;
-              const handleUpdateAverage = async () => {
-    const current = totalAverageOverride || avg100;
-    const val = window.prompt("Enter new Total Average (or leave blank to auto-calculate):", current);
-    if (val === null) return;
-    try {
-      await updateCandidateRawData(candidate.id, { totalAverage: val });
-      toast.success("Total Average updated");
-      window.location.reload();
-    } catch (e: any) {
-      toast.error(e.message || "Failed to update");
-    }
-  };
-
-  return (
+            return (
               <tr key={`iv-${i}`} className="h-[11mm]">
-                {i === 0 ? <Cell label rowSpan={4}>Interview Comments</Cell> : null}
+                {i === 0 ? <Cell label rowSpan={5}>Interview Comments</Cell> : null}
                 <Cell>{ivInterviewer[i]}</Cell>
                 <Cell colSpan={8}>{ivRemarks[i]}</Cell>
                 <Cell className="text-center">{has ? gradeFromTen(score) : ''}</Cell>
@@ -586,63 +618,81 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
               </tr>
             );
           })}
+
+          {/* 5th blank interview row (matches physical form) */}
+          <tr className="h-[11mm]">
+            <Cell></Cell>
+            <Cell colSpan={8}></Cell>
+            <Cell className="text-center"></Cell>
+            <Cell className="text-center font-bold"></Cell>
+          </tr>
+
+          {/* Total Marks */}
           <tr>
             <Cell colSpan={10}></Cell>
             <Cell>Total Marks</Cell>
             <Cell className="font-bold text-center">{totalMarks10}</Cell>
           </tr>
+
+          {/* CMD */}
           <tr className="h-[14mm]">
             <Cell label colSpan={2} className="align-top">CMD</Cell>
             <Cell colSpan={10}>{rawGet(raw, 'cmdComments')}</Cell>
           </tr>
-            {/* Offer Milestones Row */}
-            <tr className="h-[10mm]">
-              <Cell label className="text-center align-middle p-1">
-                <div className="flex flex-col items-center justify-center gap-0.5">
-                  <span className="font-bold text-[8px] leading-tight">Offer Letter Issued</span>
-                  <span className="text-[12px] font-bold leading-none text-slate-800">
-                    {Boolean(candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED' || candidate.offer_status === 'DECLINED' || raw.offerLetterIssued === true || raw.offerLetterIssued === 'true' || raw.offerLetterIssued === 'Yes' || candidate.current_stage === 'OFFER_RESPONSE' || candidate.current_stage === 'HIRED') ? '☑' : '☐'}
-                  </span>
-                </div>
-              </Cell>
-              <Cell label colSpan={3} className="text-center align-middle p-1">
-                <div className="flex flex-col items-center justify-center gap-0.5">
-                  <span className="font-bold text-[8px] leading-tight">Offer Communication Message</span>
-                  <span className="text-[12px] font-bold leading-none text-slate-800">
-                    {Boolean(candidate.offer_status === 'SENT' || candidate.offer_status === 'ACCEPTED' || candidate.offer_status === 'DECLINED' || raw.offerCommMessage === true || raw.offerCommMessage === 'true' || raw.offerCommMessage === 'Yes' || candidate.current_stage === 'OFFER_RESPONSE') ? '☑' : '☐'}
-                  </span>
-                </div>
-              </Cell>
-            <Cell label colSpan={4} className="text-center align-middle p-1">
+
+          {/* ── Offer Milestones ── */}
+          <tr className="h-[12mm]">
+            {/* Offer Letter Issued */}
+            <Cell label className="text-center align-middle p-1">
               <div className="flex flex-col items-center justify-center gap-0.5">
-                <span className="font-bold text-[8px] leading-tight">Offer Communicated Call</span>
-                <span className="text-[12px] font-bold leading-none text-slate-800">
-                  {Boolean(raw.offerCommCall === true || raw.offerCommCall === 'true' || raw.offerCommCall === 'Yes') ? '☑' : '☐'}
-                </span>
+                <span className="font-bold text-[8px] leading-tight">Offer Letter Issued</span>
+                <span className="text-[14px] font-bold leading-none">{offerLetterIssued ? '☑' : '☐'}</span>
               </div>
             </Cell>
+            {/* Offer Communication Message */}
+            <Cell label colSpan={3} className="text-center align-middle p-1">
+              <div className="flex flex-col items-center justify-center gap-0.5">
+                <span className="font-bold text-[8px] leading-tight">Offer Communication Message</span>
+                <span className="text-[14px] font-bold leading-none">{offerCommMessage ? '☑' : '☐'}</span>
+              </div>
+            </Cell>
+            {/* Offer Communicated Call — Accepted / Rejected sub-cells */}
+            <Cell label colSpan={4} className="p-0">
+              <div className="flex flex-col h-full">
+                <div className="text-center font-bold text-[8px] border-b border-black py-0.5 px-1">
+                  Offer Communicated Call
+                </div>
+                <div className="flex flex-1">
+                  <div className="flex-1 flex flex-col items-center justify-center border-r border-black py-0.5 px-1">
+                    <span className="text-[7.5px] font-semibold">Accepted</span>
+                    <span className="text-[13px] font-bold leading-none">{offerCommCallAccepted ? '☑' : '☐'}</span>
+                  </div>
+                  <div className="flex-1 flex flex-col items-center justify-center py-0.5 px-1">
+                    <span className="text-[7.5px] font-semibold">Rejected</span>
+                    <span className="text-[13px] font-bold leading-none">{offerCommCallRejected ? '☑' : '☐'}</span>
+                  </div>
+                </div>
+              </div>
+            </Cell>
+            {/* Document Carry Message */}
             <Cell label colSpan={2} className="text-center align-middle p-1">
               <div className="flex flex-col items-center justify-center gap-0.5">
                 <span className="font-bold text-[8px] leading-tight">Document Carry Message</span>
-                <span className="text-[12px] font-bold leading-none text-slate-800">
-                  {Boolean(raw.docCarryMessage === true || raw.docCarryMessage === 'true' || raw.docCarryMessage === 'Yes') ? '☑' : '☐'}
-                </span>
+                <span className="text-[14px] font-bold leading-none">{docCarryMessage ? '☑' : '☐'}</span>
               </div>
             </Cell>
+            {/* Follow Up Call */}
             <Cell label className="text-center align-middle p-1">
               <div className="flex flex-col items-center justify-center gap-0.5">
                 <span className="font-bold text-[8px] leading-tight">Follow Up Call (N-1)</span>
-                <span className="text-[12px] font-bold leading-none text-slate-800">
-                  {Boolean(raw.followUpCall === true || raw.followUpCall === 'true' || raw.followUpCall === 'Yes') ? '☑' : '☐'}
-                </span>
+                <span className="text-[14px] font-bold leading-none">{followUpCall ? '☑' : '☐'}</span>
               </div>
             </Cell>
+            {/* Date Of Joining */}
             <Cell label className="text-center align-middle p-1">
               <div className="flex flex-col items-center justify-center gap-0.5">
                 <span className="font-bold text-[8px] leading-tight">Date Of Joining</span>
-                <span className="font-bold text-[8.5px] text-black">
-                  {doj || '—'}
-                </span>
+                <span className="font-bold text-[9px] text-black">{doj || '—'}</span>
               </div>
             </Cell>
           </tr>
