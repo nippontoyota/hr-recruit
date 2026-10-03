@@ -357,7 +357,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
   };
 
   return (
-    <div className={`css-sheet ${riverClass} box-border bg-white text-[10px] leading-[1.5] text-black font-sans w-[210mm] min-h-[297mm] p-[12mm_12mm] shadow-lg print:shadow-none print:border-none`}>
+    <div className={`css-sheet ${riverClass} box-border bg-white text-[10px] leading-[1.5] text-black font-sans w-[210mm] min-h-[297mm] p-[12mm_12mm] shadow-lg print:shadow-none print:border-none print:w-full print:min-h-0 print:p-[2mm_0]`}>
       <table className="w-full border-collapse border border-black table-fixed">
         <colgroup>
           <col className="w-[16%]" />
@@ -564,7 +564,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell label>To</Cell>
           </tr>
           {jobs.map((job, i) => (
-            <tr key={`job-${i}`} className="h-[9mm]">
+            <tr key={`job-${i}`} className="h-[8mm]">
               <Cell>{job.company}</Cell>
               <Cell>{shortDate(job.fromDate) || job.fromDate}</Cell>
               <Cell>{shortDate(job.toDate) || job.toDate}</Cell>
@@ -620,7 +620,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             const score = ivScore[i];
             const has = score !== null && score > 0;
             return (
-              <tr key={`iv-${i}`} className="h-[11mm]">
+              <tr key={`iv-${i}`} className="h-[10mm]">
                 {i === 0 ? <Cell label rowSpan={5}>Interview Comments</Cell> : null}
                 <Cell>{ivInterviewer[i]}</Cell>
                 <Cell colSpan={8}>{ivRemarks[i]}</Cell>
@@ -631,7 +631,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           })}
 
           {/* 5th blank interview row (matches physical form) */}
-          <tr className="h-[11mm]">
+          <tr className="h-[10mm]">
             <Cell></Cell>
             <Cell colSpan={8}></Cell>
             <Cell className="text-center"></Cell>
@@ -646,13 +646,13 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           </tr>
 
           {/* CMD */}
-          <tr className="h-[14mm]">
+          <tr className="h-[12mm]">
             <Cell label colSpan={2} className="align-top">CMD</Cell>
             <Cell colSpan={10}>{rawGet(raw, 'cmdComments')}</Cell>
           </tr>
 
           {/* ── Offer Milestones ── */}
-          <tr className="h-[12mm]">
+          <tr className="h-[10mm]">
             {/* Offer Letter Issued */}
             <Cell label className="text-center align-middle p-1">
               <div className="flex flex-col items-center justify-center gap-0.5">
