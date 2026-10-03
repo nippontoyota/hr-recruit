@@ -70,6 +70,15 @@ function fmtDate(value?: string | null): string {
   return formatDate(d);
 }
 
+/** Compact date format for narrow employment-record columns: "1-Jun-23" */
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function shortDate(value?: string | null): string {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return `${d.getDate()}-${MONTH_SHORT[d.getMonth()]}-${String(d.getFullYear()).slice(2)}`;
+}
+
 function ageFromDob(dob: string): string {
   if (!dob) return '';
   const d = new Date(dob);
@@ -352,16 +361,16 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
       <table className="w-full border-collapse border border-black table-fixed">
         <colgroup>
           <col className="w-[16%]" />
-          <col className="w-[8%]" />
-          <col className="w-[8%]" />
+          <col className="w-[7%]" />
+          <col className="w-[7%]" />
           <col className="w-[6%]" />
           <col className="w-[4%]" />
           <col className="w-[9%]" />
           <col className="w-[6%]" />
           <col className="w-[4%]" />
-          <col className="w-[8%]" />
-          <col className="w-[12%]" />
-          <col className="w-[8%]" />
+          <col className="w-[10%]" />
+          <col className="w-[10%]" />
+          <col className="w-[10%]" />
           <col className="w-[11%]" />
         </colgroup>
         <tbody>
@@ -393,7 +402,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           {/* ── Row 4: CSS title + Department ── */}
           <tr>
             <Cell colSpan={10} className="font-bold text-[11px] text-center">Candidate Summary Sheet</Cell>
-            <Cell label>Department</Cell>
+            <Cell label className="text-[9px] whitespace-nowrap">Department</Cell>
             <Cell>{rawGet(raw, 'department') || candidate.department || ''}</Cell>
           </tr>
 
@@ -471,9 +480,9 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={2}>{degreeLevel}</Cell>
             <Cell colSpan={2} className="font-bold">Specialization</Cell>
             <Cell colSpan={3}>{degreeSpec}</Cell>
-            <Cell label>Father's Occupation</Cell>
+            <Cell label className="text-[8.5px] leading-tight">Father's Occupation</Cell>
             <Cell>{occupation(rawGet(raw, 'fatherOccupation'), rawGet(raw, 'fatherCompany'))}</Cell>
-            <Cell label>Siblings 1 Occupation</Cell>
+            <Cell label className="text-[8.5px] leading-tight">Siblings 1 Occupation</Cell>
             <Cell>{siblingOcc(raw, 1)}</Cell>
           </tr>
           <tr>
@@ -481,9 +490,9 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={2}>Plus Two</Cell>
             <Cell colSpan={2} className="font-bold">Specialization</Cell>
             <Cell colSpan={3}>{plusTwoSpec}</Cell>
-            <Cell label>Mother's Occupation</Cell>
+            <Cell label className="text-[8.5px] leading-tight">Mother's Occupation</Cell>
             <Cell>{occupation(rawGet(raw, 'motherOccupation'), rawGet(raw, 'motherCompany'))}</Cell>
-            <Cell label>Siblings 2 Occupation</Cell>
+            <Cell label className="text-[8.5px] leading-tight">Siblings 2 Occupation</Cell>
             <Cell>{siblingOcc(raw, 2)}</Cell>
           </tr>
           <tr>
@@ -491,9 +500,9 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={2}>{rawGet(raw, 'computerKnowledge') || computerKnowledge(raw)}</Cell>
             <Cell colSpan={2} className="font-bold">Driving Licence</Cell>
             <Cell colSpan={3}>{rawGet(raw, 'drivingLicence') || drivingLicence(raw)}</Cell>
-            <Cell label>Spouse Occupation</Cell>
+            <Cell label className="text-[8.5px] leading-tight">Spouse Occupation</Cell>
             <Cell>{occupation(rawGet(raw, 'spouseOccupation'), rawGet(raw, 'spouseCompany'))}</Cell>
-            <Cell label>Siblings 3 Occupation</Cell>
+            <Cell label className="text-[8.5px] leading-tight">Siblings 3 Occupation</Cell>
             <Cell>{siblingOcc(raw, 3)}</Cell>
           </tr>
 
@@ -501,9 +510,10 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           <tr>
             <Cell section colSpan={12}>SCORE BOARD / TEST RESULTS (% Wise)</Cell>
           </tr>
+          {/* Row 1: Technical — 1st Interview */}
           <tr>
-            <Cell colSpan={2}>Psychometry test Result</Cell>
-            <Cell className="text-right">{rawGet(raw, 'psychometryResult') || '0.00'}</Cell>
+            <Cell colSpan={2}>Technical Test Result</Cell>
+            <Cell className="text-right">{rawGet(raw, 'technicalResult') || (techPct != null && techPct !== '' ? Number(techPct).toFixed(2) : '0.00')}</Cell>
             <Cell rowSpan={4} colSpan={3} className="text-center font-bold">TOTAL AVERAGE</Cell>
             <Cell rowSpan={4} colSpan={3} className="text-center text-[16px] font-bold relative group">
               <div className="flex items-center justify-center gap-2">
@@ -516,21 +526,22 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={2}>1st Interview</Cell>
             <Cell>{ivDate[0]}</Cell>
           </tr>
-          <tr>
-            <Cell colSpan={2}>Analytical Test Result</Cell>
-            <Cell className="text-right">{rawGet(raw, 'analyticalResult') || '0.00'}</Cell>
-            <Cell colSpan={2}>2nd Interview</Cell>
-            <Cell>{ivDate[1]}</Cell>
-          </tr>
-          <tr>
-            <Cell colSpan={2}>Technical Test Result</Cell>
-            <Cell className="text-right">{rawGet(raw, 'technicalResult') || (techPct != null && techPct !== '' ? Number(techPct).toFixed(2) : '0.00')}</Cell>
-            <Cell colSpan={2}>3rd Interview</Cell>
-            <Cell>{ivDate[2]}</Cell>
-          </tr>
+          {/* Row 2: Department — 2nd Interview */}
           <tr>
             <Cell colSpan={2}>Department Test Result</Cell>
             <Cell className="text-right">{rawGet(raw, 'departmentResult') || '0.00'}</Cell>
+            <Cell colSpan={2}>2nd Interview</Cell>
+            <Cell>{ivDate[1]}</Cell>
+          </tr>
+          {/* Row 3: empty left — 3rd Interview */}
+          <tr>
+            <Cell colSpan={3}></Cell>
+            <Cell colSpan={2}>3rd Interview</Cell>
+            <Cell>{ivDate[2]}</Cell>
+          </tr>
+          {/* Row 4: empty left — 4th Interview */}
+          <tr>
+            <Cell colSpan={3}></Cell>
             <Cell colSpan={2}>4th Interview</Cell>
             <Cell>{ivDate[3]}</Cell>
           </tr>
@@ -555,8 +566,8 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           {jobs.map((job, i) => (
             <tr key={`job-${i}`} className="h-[9mm]">
               <Cell>{job.company}</Cell>
-              <Cell>{fmtDate(job.fromDate) || job.fromDate}</Cell>
-              <Cell>{fmtDate(job.toDate) || job.toDate}</Cell>
+              <Cell>{shortDate(job.fromDate) || job.fromDate}</Cell>
+              <Cell>{shortDate(job.toDate) || job.toDate}</Cell>
               <Cell>{job.company ? yearsBetween(job.fromDate, job.toDate) : ''}</Cell>
               <Cell colSpan={2}>{job.position}</Cell>
               <Cell colSpan={3}>{job.reason}</Cell>
