@@ -445,13 +445,13 @@ def send_whatsapp_invite(
                 template_name = v2_spec.name
                 placeholders = call_letter_v2_placeholders(vars_map, touch_point_2)
 
+    external_message_id = None
     try:
         res = send_template(
             to_phone=candidate.phone,
             template_name=template_name,
             placeholders=placeholders,
         )
-        external_message_id = None
         messages = res.get("messages", [])
         if messages:
             external_message_id = messages[0].get("id")
