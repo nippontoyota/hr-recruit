@@ -515,25 +515,25 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
                 </button>
               </div>
             </Cell>
-            <Cell colSpan={2}>1st Interview</Cell>
-            <Cell>{ivDate[0]}</Cell>
+            <Cell>1st Interview</Cell>
+            <Cell colSpan={2} className="whitespace-nowrap">{ivDate[0]}</Cell>
           </tr>
           {/* Row 2: 2nd Interview (Technical left side spans into here) */}
           <tr>
-            <Cell colSpan={2}>2nd Interview</Cell>
-            <Cell>{ivDate[1]}</Cell>
+            <Cell>2nd Interview</Cell>
+            <Cell colSpan={2} className="whitespace-nowrap">{ivDate[1]}</Cell>
           </tr>
           {/* Row 3: Department (spans 2) — 3rd Interview */}
           <tr>
             <Cell colSpan={2} rowSpan={2}>Department Test Result</Cell>
             <Cell className="text-right" rowSpan={2}>{rawGet(raw, 'departmentResult') || '0.00'}</Cell>
-            <Cell colSpan={2}>3rd Interview</Cell>
-            <Cell>{ivDate[2]}</Cell>
+            <Cell>3rd Interview</Cell>
+            <Cell colSpan={2} className="whitespace-nowrap">{ivDate[2]}</Cell>
           </tr>
           {/* Row 4: 4th Interview (Department left side spans into here) */}
           <tr>
-            <Cell colSpan={2}>4th Interview</Cell>
-            <Cell>{ivDate[3]}</Cell>
+            <Cell>4th Interview</Cell>
+            <Cell colSpan={2} className="whitespace-nowrap">{ivDate[3]}</Cell>
           </tr>
 
           {/* ── Employment Record ── */}
@@ -546,8 +546,8 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell label rowSpan={2}>No: of Years</Cell>
             <Cell label rowSpan={2} colSpan={2}>Designation</Cell>
             <Cell label rowSpan={2} colSpan={3}>Reason for Resignation</Cell>
-            <Cell label rowSpan={2} colSpan={2}>Total Salary</Cell>
-            <Cell label rowSpan={2}>Category</Cell>
+            <Cell label rowSpan={2}>Total Salary</Cell>
+            <Cell label rowSpan={2} colSpan={2}>Category</Cell>
           </tr>
           <tr>
             <Cell label>From</Cell>
@@ -561,8 +561,8 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
               <Cell>{job.company ? yearsBetween(job.fromDate, job.toDate) : ''}</Cell>
               <Cell colSpan={2}>{job.position}</Cell>
               <Cell colSpan={3}>{job.reason}</Cell>
-              <Cell colSpan={2}>{job.salary}</Cell>
-              <Cell></Cell>
+              <Cell>{job.salary}</Cell>
+              <Cell colSpan={2}></Cell>
             </tr>
           ))}
 
@@ -572,27 +572,27 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={2}>{currentSalary}</Cell>
             <Cell colSpan={3}>Remarks</Cell>
             <Cell colSpan={3}>Expected Salary</Cell>
-            <Cell colSpan={2}>{expectedSalary}</Cell>
-            <Cell rowSpan={4}></Cell>
+            <Cell>{expectedSalary}</Cell>
+            <Cell rowSpan={4} colSpan={2}></Cell>
           </tr>
           <tr>
             <Cell label>Incentive</Cell>
             <Cell colSpan={2}>{inc != null ? String(inc) : '0'}</Cell>
             <Cell rowSpan={3} colSpan={3}></Cell>
             <Cell colSpan={3}>Incentive</Cell>
-            <Cell colSpan={2}>{rawGet(raw, 'expectedIncentive') || '0'}</Cell>
+            <Cell>{rawGet(raw, 'expectedIncentive') || '0'}</Cell>
           </tr>
           <tr>
             <Cell label>Others</Cell>
             <Cell colSpan={2}>{oth != null ? String(oth) : '0'}</Cell>
             <Cell colSpan={3}>Others</Cell>
-            <Cell colSpan={2}>{rawGet(raw, 'expectedOthers') || '0'}</Cell>
+            <Cell>{rawGet(raw, 'expectedOthers') || '0'}</Cell>
           </tr>
           <tr>
             <Cell label>Total</Cell>
             <Cell colSpan={2} className="font-bold">{currentTotal === '' ? '' : String(currentTotal)}</Cell>
             <Cell colSpan={3}>Total</Cell>
-            <Cell colSpan={2} className="font-bold">{expectedSalary}</Cell>
+            <Cell className="font-bold">{expectedSalary}</Cell>
           </tr>
 
           {/* ── Interview Comments header ── */}
@@ -623,7 +623,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           {/* Total Marks */}
           <tr>
             <Cell colSpan={10}></Cell>
-            <Cell>Total Marks</Cell>
+            <Cell>Total</Cell>
             <Cell className="font-bold text-center">{totalMarks10}</Cell>
           </tr>
 
