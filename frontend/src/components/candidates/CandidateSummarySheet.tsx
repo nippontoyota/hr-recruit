@@ -201,6 +201,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
   const raw = (candidate.profile?.raw_data || {}) as Record<string, unknown>;
   const salarySheet = (candidate.salary_data || {}) as Record<string, unknown>;
   const jobs = [...previousJobsFromForm(raw as unknown as CandidateFormData)];
+  const MAX_JOB_ROWS = 3;
   if (!jobs.length && candidate.profile?.current_company) {
     jobs.push({
       ...EMPTY_JOB,
@@ -209,8 +210,11 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
       salary: rawGet(raw, 'currentSalary', 'prev1Salary'),
     });
   }
-  // Pad to minimum 6 rows so the form always looks like the physical sheet
-  while (jobs.length < MIN_JOB_ROWS) jobs.push({ ...EMPTY_JOB });
+  
+  // Slice to strictly max 3 rows to prevent page spill
+  const finalJobs = jobs.slice(0, MAX_JOB_ROWS);
+  // Pad if less than 3
+  while (finalJobs.length < MAX_JOB_ROWS) finalJobs.push({ ...EMPTY_JOB });
 
   const photo = candidate.profile?.photo_url;
   const dob = rawGet(raw, 'dateOfBirth');
@@ -560,7 +564,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell label>From</Cell>
             <Cell label>To</Cell>
           </tr>
-          {jobs.map((job, i) => (
+          {finalJobs.map((job, i) => (
             <tr key={`job-${i}`} className="h-[8mm]">
               <Cell>{job.company}</Cell>
               <Cell>{shortDate(job.fromDate) || job.fromDate}</Cell>
