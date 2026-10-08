@@ -508,8 +508,8 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           <tr>
             <Cell colSpan={2} rowSpan={2} className="text-center font-bold">Technical Test Result</Cell>
             <Cell className="text-right py-0" rowSpan={2}>{rawGet(raw, 'technicalResult') || (techPct != null && techPct !== '' ? Number(techPct).toFixed(2) : '0.00')}</Cell>
-            <Cell rowSpan={4} colSpan={3} className="text-center font-bold">TOTAL AVERAGE</Cell>
-            <Cell rowSpan={4} colSpan={3} className="text-center text-[16px] font-bold relative group">
+            <Cell rowSpan={3} colSpan={3} className="text-center font-bold">TOTAL AVERAGE</Cell>
+            <Cell rowSpan={3} colSpan={3} className="text-center text-[16px] font-bold relative group">
               <div className="flex items-center justify-center gap-2">
                 <span>{avg100}</span>
                 <button onClick={handleUpdateAverage} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-slate-200 rounded-sm print:hidden transition-opacity">
@@ -525,17 +525,12 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell className="py-0">2nd Interview</Cell>
             <Cell colSpan={2} className="whitespace-nowrap py-0">{ivDate[1]}</Cell>
           </tr>
-          {/* Row 3: Department (spans 2) — 3rd Interview */}
+          {/* Row 3: Department (spans 1) — 3rd Interview */}
           <tr>
-            <Cell colSpan={2} rowSpan={2} className="text-center font-bold">Department Test Result</Cell>
-            <Cell className="text-right py-0" rowSpan={2}>{rawGet(raw, 'departmentResult') || '0.00'}</Cell>
+            <Cell colSpan={2} className="text-center font-bold">Department Test Result</Cell>
+            <Cell className="text-right py-0">{rawGet(raw, 'departmentResult') || '0.00'}</Cell>
             <Cell className="py-0">3rd Interview</Cell>
             <Cell colSpan={2} className="whitespace-nowrap py-0">{ivDate[2]}</Cell>
-          </tr>
-          {/* Row 4: 4th Interview (Department left side spans into here) */}
-          <tr>
-            <Cell className="py-0">4th Interview</Cell>
-            <Cell colSpan={2} className="whitespace-nowrap py-0">{ivDate[3]}</Cell>
           </tr>
 
           {/* ── Employment Record ── */}
