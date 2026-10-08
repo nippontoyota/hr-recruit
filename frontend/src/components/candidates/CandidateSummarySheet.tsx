@@ -439,11 +439,11 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell section colSpan={5}>Personal Details</Cell>
             <Cell label>D.O.B</Cell>
             <Cell colSpan={4} className="text-center">{shortDate(dob) || dob}</Cell>
-            <Cell rowSpan={4} colSpan={2} className="text-center align-middle p-0.5">
+            <Cell rowSpan={4} colSpan={2} className="text-center align-middle p-0">
               {photo ? (
-                <img src={photo} alt="" className="h-[22mm] w-[24mm] object-cover mx-auto border border-black" />
+                <img src={photo} alt="" className="max-w-[24mm] max-h-[28mm] w-auto h-auto mx-auto border border-black" />
               ) : (
-                <div className="h-[22mm] w-[24mm] mx-auto border border-black text-[8px] text-neutral-500 flex items-center justify-center">Photo</div>
+                <div className="h-[26mm] w-[22mm] mx-auto border border-black text-[8px] text-neutral-500 flex items-center justify-center">Photo</div>
               )}
             </Cell>
           </tr>
