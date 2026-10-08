@@ -373,9 +373,9 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           <col className="w-[5%]" />
           <col className="w-[6%]" />
           <col className="w-[10%]" />
-          <col className="w-[10%]" />
-          <col className="w-[10%]" />
-          <col className="w-[10%]" />
+          <col className="w-[18%]" />
+          <col className="w-[5%]" />
+          <col className="w-[7%]" />
         </colgroup>
         <tbody>
           {/* ── Row 1: Brand name + score band + SI No ── */}
@@ -439,11 +439,11 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell section colSpan={5}>Personal Details</Cell>
             <Cell label>Date of Birth</Cell>
             <Cell colSpan={4} className="text-center">{shortDate(dob) || dob}</Cell>
-            <Cell rowSpan={8} colSpan={2} className="text-center align-middle p-0.5">
+            <Cell rowSpan={4} colSpan={2} className="text-center align-middle p-0.5">
               {photo ? (
-                <img src={photo} alt="" className="h-[28mm] w-[22mm] object-cover mx-auto border border-black" />
+                <img src={photo} alt="" className="h-[20mm] w-[16mm] object-cover mx-auto border border-black" />
               ) : (
-                <div className="h-[28mm] w-[22mm] mx-auto border border-black text-[8px] text-neutral-500 flex items-center justify-center">Photo</div>
+                <div className="h-[20mm] w-[16mm] mx-auto border border-black text-[8px] text-neutral-500 flex items-center justify-center">Photo</div>
               )}
             </Cell>
           </tr>
@@ -455,26 +455,16 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           </tr>
           <tr>
             <Cell colSpan={4}>{phones[1] || ''}</Cell>
-            <Cell label colSpan={2} rowSpan={2}>Total Work Experience</Cell>
-            <Cell colSpan={3} rowSpan={2} className="text-center align-middle">{totalExp}</Cell>
+            <Cell label colSpan={2}>Total Work Experience</Cell>
+            <Cell colSpan={3} className="text-center align-middle">{totalExp}</Cell>
           </tr>
           <tr>
-            <Cell label rowSpan={5}>Contact Address</Cell>
-            <Cell colSpan={4}>{addr[0]}</Cell>
-          </tr>
-          <tr>
-            <Cell colSpan={4}>{addr[1]}</Cell>
-            <Cell label colSpan={2} rowSpan={4} className="bg-neutral-200 italic">Relevant Experience</Cell>
-            <Cell colSpan={3} rowSpan={4} className="text-center align-middle">{relevantExp}</Cell>
-          </tr>
-          <tr>
-            <Cell colSpan={4}>{addr[2]}</Cell>
-          </tr>
-          <tr>
-            <Cell colSpan={4}>{addr[3]}</Cell>
-          </tr>
-          <tr>
-            <Cell colSpan={4}>{addr[4]}</Cell>
+            <Cell label>Contact Address</Cell>
+            <Cell colSpan={4} className="whitespace-normal leading-tight text-[9px] py-1">
+              {addr.filter(Boolean).join(', ')}
+            </Cell>
+            <Cell label colSpan={2} className="bg-neutral-200 italic">Relevant Experience</Cell>
+            <Cell colSpan={3} className="text-center align-middle">{relevantExp}</Cell>
           </tr>
 
           {/* ── Education & Family ── */}
@@ -485,7 +475,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={3}>{degreeSpec}</Cell>
             <Cell label className="text-[8.5px] leading-tight">Father's Occupation</Cell>
             <Cell>{occupation(rawGet(raw, 'fatherOccupation'), rawGet(raw, 'fatherCompany'))}</Cell>
-            <Cell label className="text-[8.5px] leading-tight">Siblings 1 Occupation</Cell>
+            <Cell label className="text-[8.5px] leading-tight">Sibling 1</Cell>
             <Cell>{siblingOcc(raw, 1)}</Cell>
           </tr>
           <tr>
@@ -495,7 +485,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={3}>{plusTwoSpec}</Cell>
             <Cell label className="text-[8.5px] leading-tight">Mother's Occupation</Cell>
             <Cell>{occupation(rawGet(raw, 'motherOccupation'), rawGet(raw, 'motherCompany'))}</Cell>
-            <Cell label className="text-[8.5px] leading-tight">Siblings 2 Occupation</Cell>
+            <Cell label className="text-[8.5px] leading-tight">Sibling 2</Cell>
             <Cell>{siblingOcc(raw, 2)}</Cell>
           </tr>
           <tr>
@@ -505,7 +495,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={3}>{rawGet(raw, 'drivingLicence') || drivingLicence(raw)}</Cell>
             <Cell label className="text-[8.5px] leading-tight">Spouse Occupation</Cell>
             <Cell>{occupation(rawGet(raw, 'spouseOccupation'), rawGet(raw, 'spouseCompany'))}</Cell>
-            <Cell label className="text-[8.5px] leading-tight">Siblings 3 Occupation</Cell>
+            <Cell label className="text-[8.5px] leading-tight">Sibling 3</Cell>
             <Cell>{siblingOcc(raw, 3)}</Cell>
           </tr>
 
@@ -622,7 +612,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             const has = score !== null && score > 0;
             return (
               <tr key={`iv-${i}`} className="h-[10mm]">
-                {i === 0 ? <Cell label rowSpan={5}>Interview Comments</Cell> : null}
+                {i === 0 ? <Cell label rowSpan={4}>Interview Comments</Cell> : null}
                 <Cell>{ivInterviewer[i]}</Cell>
                 <Cell colSpan={8}>{ivRemarks[i]}</Cell>
                 <Cell className="text-center">{has ? gradeFromTen(score) : ''}</Cell>
@@ -631,14 +621,6 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             );
           })}
 
-          {/* 5th blank interview row (matches physical form) */}
-          <tr className="h-[10mm]">
-            <Cell></Cell>
-            <Cell colSpan={8}></Cell>
-            <Cell className="text-center"></Cell>
-            <Cell className="text-center font-bold"></Cell>
-          </tr>
-
           {/* Total Marks */}
           <tr>
             <Cell colSpan={10}></Cell>
@@ -646,11 +628,6 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell className="font-bold text-center">{totalMarks10}</Cell>
           </tr>
 
-          {/* CMD */}
-          <tr className="h-[12mm]">
-            <Cell label colSpan={2} className="align-top">CMD</Cell>
-            <Cell colSpan={10}>{rawGet(raw, 'cmdComments')}</Cell>
-          </tr>
 
           {/* ── Offer Milestones ── */}
           <tr className="h-[10mm]">
