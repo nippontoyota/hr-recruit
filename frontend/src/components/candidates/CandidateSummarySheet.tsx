@@ -405,26 +405,26 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           </tr>
           {/* ── Row 4: CSS title + Department ── */}
           <tr>
-            <Cell colSpan={10} className="font-bold text-[11px] text-center">Candidate Summary Sheet</Cell>
+            <Cell colSpan={9} className="font-bold text-[11px] text-center">Candidate Summary Sheet</Cell>
             <Cell label className="text-[9px] whitespace-nowrap">Department</Cell>
-            <Cell>{rawGet(raw, 'department') || candidate.department || ''}</Cell>
+            <Cell colSpan={2}>{rawGet(raw, 'department') || candidate.department || ''}</Cell>
           </tr>
 
           {/* ── Name / Applied on / Location ── */}
           <tr>
             <Cell label>Name</Cell>
             <Cell colSpan={4}>{candidate.full_name}</Cell>
-            <Cell colSpan={4} className="text-right">Application Submitted on:</Cell>
+            <Cell colSpan={3} className="text-right leading-tight">Application Submitted on:</Cell>
             <Cell className="text-center font-bold">{shortDate(appliedOn) || appliedOn}</Cell>
             <Cell label>Location</Cell>
-            <Cell>{rawGet(raw, 'branchLocation') || candidate.branch_location || ''}</Cell>
+            <Cell colSpan={2}>{rawGet(raw, 'branchLocation') || candidate.branch_location || ''}</Cell>
           </tr>
           <tr>
             <Cell label>Post Applied</Cell>
             <Cell colSpan={4}>{candidate.position_applied_for && candidate.position_applied_for.toLowerCase() !== 'unknown' ? candidate.position_applied_for : ''}</Cell>
             <Cell label>Source</Cell>
             <Cell colSpan={3} className="text-center">{source}</Cell>
-            <Cell>Specify Source</Cell>
+            <Cell label className="text-[9px] leading-tight">Specify Source</Cell>
             <Cell rowSpan={2} colSpan={2}>{specifySource}</Cell>
           </tr>
           <tr>
@@ -437,34 +437,33 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           {/* ── Personal Details ── */}
           <tr>
             <Cell section colSpan={5}>Personal Details</Cell>
-            <Cell label>Date of Birth</Cell>
+            <Cell label>D.O.B</Cell>
             <Cell colSpan={4} className="text-center">{shortDate(dob) || dob}</Cell>
             <Cell rowSpan={4} colSpan={2} className="text-center align-middle p-0.5">
               {photo ? (
-                <img src={photo} alt="" className="h-[20mm] w-[16mm] object-cover mx-auto border border-black" />
+                <img src={photo} alt="" className="h-[22mm] w-[24mm] object-cover mx-auto border border-black" />
               ) : (
-                <div className="h-[20mm] w-[16mm] mx-auto border border-black text-[8px] text-neutral-500 flex items-center justify-center">Photo</div>
+                <div className="h-[22mm] w-[24mm] mx-auto border border-black text-[8px] text-neutral-500 flex items-center justify-center">Photo</div>
               )}
             </Cell>
           </tr>
           <tr>
             <Cell label rowSpan={2}>Contact No:</Cell>
-            <Cell colSpan={4}>{phones[0] || ''}</Cell>
-            <Cell label colSpan={2} className="bg-neutral-200 text-center">Experience</Cell>
-            <Cell colSpan={3} className="bg-neutral-200 text-center font-bold">Years</Cell>
+            <Cell colSpan={4} rowSpan={2} className="align-middle">{phones.filter(Boolean).join(', ')}</Cell>
+            <Cell label colSpan={3} className="bg-neutral-200 text-center whitespace-nowrap">Experience</Cell>
+            <Cell colSpan={2} className="bg-neutral-200 text-center font-bold">Years</Cell>
           </tr>
           <tr>
-            <Cell colSpan={4}>{phones[1] || ''}</Cell>
-            <Cell label colSpan={2}>Total Work Experience</Cell>
-            <Cell colSpan={3} className="text-center align-middle">{totalExp}</Cell>
+            <Cell label colSpan={3} className="whitespace-nowrap">Total Work Experience</Cell>
+            <Cell colSpan={2} className="text-center align-middle">{totalExp}</Cell>
           </tr>
           <tr>
             <Cell label>Contact Address</Cell>
             <Cell colSpan={4} className="whitespace-normal leading-tight text-[9px] py-1">
               {addr.filter(Boolean).join(', ')}
             </Cell>
-            <Cell label colSpan={2} className="bg-neutral-200 italic">Relevant Experience</Cell>
-            <Cell colSpan={3} className="text-center align-middle">{relevantExp}</Cell>
+            <Cell label colSpan={3} className="bg-neutral-200 italic whitespace-nowrap">Relevant Experience</Cell>
+            <Cell colSpan={2} className="text-center align-middle">{relevantExp}</Cell>
           </tr>
 
           {/* ── Education & Family ── */}
@@ -597,13 +596,13 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           </tr>
 
           {/* ── Interview Comments header ── */}
-          <tr>
-            <Cell label>Joining Time</Cell>
-            <Cell>{joiningDays}</Cell>
-            <Cell label>Days</Cell>
-            <Cell colSpan={7}></Cell>
-            <Cell label>Grade</Cell>
-            <Cell label>Marks (Maximum 10)</Cell>
+          <tr className="h-[6mm]">
+            <Cell label className="py-0.5">Joining Time</Cell>
+            <Cell className="py-0.5">{joiningDays}</Cell>
+            <Cell label className="py-0.5">Days</Cell>
+            <Cell colSpan={7} className="py-0.5"></Cell>
+            <Cell label className="py-0.5">Grade</Cell>
+            <Cell label className="py-0.5 leading-tight">Marks</Cell>
           </tr>
 
           {/* 4 scored interview rows */}
