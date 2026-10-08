@@ -27,9 +27,10 @@ export function WorkQueue({ candidate, evaluations, className }: WorkQueueProps)
   if (!isHOStage) return null;
 
   const hoHrEval = evaluations.find(e => e.type === 'HQ_INTERVIEW_1');
-
-  const hrSelected = hoHrEval?.verdict === 'SELECTED';
-  const hrDone = !!hoHrEval?.verdict;
+  
+  const bypassed = ['CSS', 'FINAL_APPROVAL', 'SALARY_DETAILS', 'OFFER_RESPONSE', 'HIRED'].includes(stage);
+  const hrSelected = hoHrEval?.verdict === 'SELECTED' || (!hoHrEval?.verdict && bypassed);
+  const hrDone = !!hoHrEval?.verdict || bypassed;
   const hrOnHold = hoHrEval?.verdict === 'ON_HOLD';
 
   const salaryUploaded = !!(candidate.salary_data && Object.keys(candidate.salary_data).length > 0);

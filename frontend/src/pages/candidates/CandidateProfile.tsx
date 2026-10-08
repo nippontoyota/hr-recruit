@@ -635,12 +635,15 @@ export default function CandidateProfile() {
       completedStages.push('BACKGROUND_VERIFICATION');
     }
 
-    // HO interview completion markers (HO HR is mandatory, HO Dept is optional)
+    // HO interview completion markers (HO interviews are now optional)
     const hoHrEval = evaluations.find(e => e.type === 'HQ_INTERVIEW_1');
     const hoDeptEval = evaluations.find(e => e.type === 'HQ_INTERVIEW_2');
     if (hoHrEval?.verdict === 'ON_HOLD' || hoDeptEval?.verdict === 'ON_HOLD') {
       heldStages.push('HO_INTERVIEWS');
-    } else if (hoHrEval?.verdict && (!hoDeptEval || !!hoDeptEval?.verdict)) {
+    } else if (
+      (hoHrEval?.verdict && (!hoDeptEval || !!hoDeptEval?.verdict)) ||
+      ['CSS', 'SALARY_DETAILS', 'FINAL_APPROVAL', 'OFFER_RESPONSE', 'HIRED'].includes(candidate.current_stage)
+    ) {
       completedStages.push('HO_INTERVIEWS');
     }
 
@@ -988,24 +991,74 @@ export default function CandidateProfile() {
             )}
 
             {!isAdmin && stageToView === 'HO_INTERVIEW_INTIMATION' && evaluations.find((e) => e.type === 'HQ_INTERVIEW_1') && (
-              <HeadOfficeInvitePanel
-                candidate={candidate}
-                evaluation={evaluations.find((e) => e.type === 'HQ_INTERVIEW_1')!}
-                onUpdate={handleUpdate}
-                onSent={() => navigateToStage('HO_INTERVIEWS')}
-                isReadOnly={isReadOnly}
-              />
+              <div className="space-y-4">
+                <HeadOfficeInvitePanel
+                  candidate={candidate}
+                  evaluation={evaluations.find((e) => e.type === 'HQ_INTERVIEW_1')!}
+                  onUpdate={handleUpdate}
+                  onSent={() => navigateToStage('HO_INTERVIEWS')}
+                  isReadOnly={isReadOnly}
+                />
+                {!isReadOnly && ['SENT_TO_HO', 'HO_INTERVIEW_INTIMATION'].includes(candidate.current_stage) && (
+                  <div className="flex justify-center mt-6">
+                    <Button 
+                      variant="outline"
+                      onClick={async () => {
+                        setIsUpdating(true);
+                        try {
+                          await updateCandidateStage(candidate.id, 'CSS', 'HO Interviews bypassed. Advanced directly to CSS.');
+                          navigateToStage('CSS');
+                          handleUpdate();
+                          toast.success('Advanced to CSS');
+                        } catch (err: any) {
+                          toast.error(extractError(err, 'Failed to advance to CSS.'));
+                        } finally {
+                          setIsUpdating(false);
+                        }
+                      }}
+                      className="text-muted-foreground border-border hover:bg-muted/50"
+                    >
+                      Skip Interviews & Advance to CSS →
+                    </Button>
+                  </div>
+                )}
+              </div>
             )}
 
             {!isAdmin && (stageToView === 'HO_INTERVIEWS' ||
               stageToView === 'HO_HR_INTERVIEW' ||
               stageToView === 'HO_DEPT_INTERVIEW') && (
-              <EvaluationStageWidget
-                candidate={candidate}
-                evalTypes={['HQ_INTERVIEW_1', 'HQ_INTERVIEW_2']}
-                onUpdate={handleUpdate}
-                isReadOnly={isReadOnly}
-              />
+              <div className="space-y-4">
+                <EvaluationStageWidget
+                  candidate={candidate}
+                  evalTypes={['HQ_INTERVIEW_1', 'HQ_INTERVIEW_2']}
+                  onUpdate={handleUpdate}
+                  isReadOnly={isReadOnly}
+                />
+                {!isReadOnly && ['SENT_TO_HO', 'HO_INTERVIEW_INTIMATION', 'HO_INTERVIEWS', 'HO_HR_INTERVIEW', 'HO_DEPT_INTERVIEW'].includes(candidate.current_stage) && (
+                  <div className="flex justify-center mt-6">
+                    <Button 
+                      variant="outline"
+                      onClick={async () => {
+                        setIsUpdating(true);
+                        try {
+                          await updateCandidateStage(candidate.id, 'CSS', 'HO Interviews bypassed. Advanced directly to CSS.');
+                          navigateToStage('CSS');
+                          handleUpdate();
+                          toast.success('Advanced to CSS');
+                        } catch (err: any) {
+                          toast.error(extractError(err, 'Failed to advance to CSS.'));
+                        } finally {
+                          setIsUpdating(false);
+                        }
+                      }}
+                      className="text-muted-foreground border-border hover:bg-muted/50"
+                    >
+                      Skip Interviews & Advance to CSS →
+                    </Button>
+                  </div>
+                )}
+              </div>
             )}
 
             {!isAdmin && stageToView === 'CSS' && (
