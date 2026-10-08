@@ -607,13 +607,13 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell label className="py-0.5 leading-tight">Marks</Cell>
           </tr>
 
-          {/* 4 scored interview rows */}
-          {([0, 1, 2, 3] as const).map((i) => {
+          {/* 3 scored interview rows */}
+          {([0, 1, 2] as const).map((i) => {
             const score = ivScore[i];
             const has = score !== null && score > 0;
             return (
               <tr key={`iv-${i}`} className="h-[10mm]">
-                {i === 0 ? <Cell label rowSpan={4}>Interview Comments</Cell> : null}
+                {i === 0 ? <Cell label rowSpan={3}>Interview Comments</Cell> : null}
                 <Cell>{ivInterviewer[i]}</Cell>
                 <Cell colSpan={8}>{ivRemarks[i]}</Cell>
                 <Cell className="text-center">{has ? gradeFromTen(score) : ''}</Cell>
