@@ -122,10 +122,7 @@ export function InterviewFormCard({ ev, index, onUpdate, isReadOnly, candidate }
 
   const requireInterviewer =
     ev.type === 'BRANCH_HR' ||
-    ev.type === 'DEPT_HEAD' ||
-    ev.type === 'HQ_INTERVIEW_1' ||
-    ev.type === 'HQ_INTERVIEW_2' ||
-    ev.type === 'HQ_INTERVIEW';
+    ev.type === 'DEPT_HEAD';
 
   const showForm = !isCompleted || isEditing;
 
