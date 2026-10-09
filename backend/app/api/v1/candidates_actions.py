@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.core.database import get_db
 from app.core.deps import require_roles
 from app.core.access import get_candidate_for_user
@@ -1254,7 +1254,7 @@ async def upload_bulk_salary(
     candidate_id: UUID | None = Query(None),
     preview: bool = Query(True),
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.HO_HR)),
+    user: User = Depends(require_roles(UserRole.HO_HR, UserRole.ADMIN)),
 ):
     filename = (file.filename or "").lower()
     if not filename.endswith(".xlsx"):
@@ -1275,7 +1275,7 @@ async def upload_bulk_salary(
         ) from e
 
     selected_ids = _selected_after_ho_interviews(db)
-    pool = list(db.scalars(select(Candidate).where(Candidate.current_stage != PipelineStage.REJECTED)))
+    pool = list(db.scalars(select(Candidate).options(joinedload(Candidate.profile)).where(Candidate.current_stage != PipelineStage.REJECTED)))
     pin = None
     if candidate_id is not None:
         pin = db.get(Candidate, candidate_id)
