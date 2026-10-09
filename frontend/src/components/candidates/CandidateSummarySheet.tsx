@@ -365,9 +365,9 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
       <table className="w-full border-collapse border border-black table-fixed">
         <colgroup>
           <col className="w-[16%]" />
-          <col className="w-[8%]" />
-          <col className="w-[8%]" />
-          <col className="w-[4%]" />
+          <col className="w-[7%]" />
+          <col className="w-[7%]" />
+          <col className="w-[6%]" />
           <col className="w-[4%]" />
           <col className="w-[9%]" />
           <col className="w-[5%]" />
@@ -540,7 +540,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           <tr>
             <Cell label rowSpan={2}>Organisation</Cell>
             <Cell label colSpan={2}>Period</Cell>
-            <Cell label rowSpan={2}>Yrs</Cell>
+            <Cell label rowSpan={2}>No: of Years</Cell>
             <Cell label rowSpan={2} colSpan={2}>Designation</Cell>
             <Cell label rowSpan={2} colSpan={3}>Reason for Resignation</Cell>
             <Cell label rowSpan={2}>Total Salary</Cell>
@@ -551,7 +551,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell label>To</Cell>
           </tr>
           {finalJobs.map((job, i) => (
-            <tr key={`job-${i}`} className="h-[6.5mm]">
+            <tr key={`job-${i}`} className="h-[8mm]">
               <Cell>{job.company}</Cell>
               <Cell>{shortDate(job.fromDate) || job.fromDate}</Cell>
               <Cell>{shortDate(job.toDate) || job.toDate}</Cell>
@@ -594,12 +594,11 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
 
           {/* ── Interview Comments header ── */}
           <tr className="h-[6mm]">
-            <Cell label className="py-0.5">Joining Time</Cell>
-            <Cell className="py-0.5">{joiningDays}</Cell>
-            <Cell label className="py-0.5">Days</Cell>
-            <Cell colSpan={7} className="py-0.5"></Cell>
-            <Cell label className="py-0.5">Grade</Cell>
-            <Cell label className="py-0.5 leading-tight">Marks</Cell>
+            <Cell label className="py-0.5"></Cell>
+            <Cell label className="py-0.5 text-center">Name</Cell>
+            <Cell label colSpan={8} className="py-0.5 text-center">Remarks</Cell>
+            <Cell label className="py-0.5 text-center">Grade</Cell>
+            <Cell label className="py-0.5 text-center leading-tight">Marks</Cell>
           </tr>
 
           {/* 3 scored interview rows */}
@@ -617,9 +616,12 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             );
           })}
 
-          {/* Total Marks */}
+          {/* Total Marks & Joining Time */}
           <tr>
-            <Cell colSpan={10}></Cell>
+            <Cell label>Joining Time</Cell>
+            <Cell colSpan={2} className="font-bold text-center">{joiningDays}</Cell>
+            <Cell label>Days</Cell>
+            <Cell colSpan={6}></Cell>
             <Cell>Total</Cell>
             <Cell className="font-bold text-center">{totalMarks10}</Cell>
           </tr>
