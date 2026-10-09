@@ -271,8 +271,6 @@ def match_record(
             )
             # If matches pin's ID or single candidate in pool
             if norm_target in (pin_cid, pin_id, pin_raw_job) or (len(candidates) == 1 and candidates[0].id == pin.id):
-                if not is_past_interviews(pin.current_stage, pin.id in selected_ids):
-                    return None, f"{pin.full_name} ({pin.candidate_id}) has not passed all interviews", []
                 return pin, None, []
             return (
                 None,
@@ -280,8 +278,6 @@ def match_record(
                 [pin],
             )
         else:
-            if not is_past_interviews(pin.current_stage, pin.id in selected_ids):
-                return None, f"{pin.full_name} ({pin.candidate_id}) has not passed all interviews", []
             return pin, None, []
 
     # 3. Match across candidates pool by Job Code / Candidate ID
@@ -302,13 +298,7 @@ def match_record(
         if hits:
             if len(hits) > 1:
                 return None, f"Multiple candidates found with Job Code / Candidate ID '{job_code}'", hits
-            hit = hits[0]
-            sheet_name = record.get("name")
-            if sheet_name and name_key(sheet_name) != name_key(getattr(hit, "full_name", "")):
-                return None, f"Candidate ID {hit.candidate_id} is {hit.full_name}, but the sheet says {sheet_name}", [hit]
-            if not is_past_interviews(hit.current_stage, hit.id in selected_ids):
-                return None, f"{hit.full_name} ({hit.candidate_id}) has not passed all interviews", []
-            return hit, None, []
+            return hits[0], None, []
 
         # If Job Code was present but did not match any candidate ID:
         sheet_name = record.get("name") or "Candidate"
@@ -320,8 +310,6 @@ def match_record(
         hit, err = by_id
         if err or hit is None:
             return None, err, []
-        if not is_past_interviews(hit.current_stage, hit.id in selected_ids):
-            return None, f"{hit.full_name} has not passed all interviews", []
         return hit, None, []
 
     sheet_name = record.get("name")
@@ -333,11 +321,7 @@ def match_record(
     if not named:
         return None, f"No candidate named {sheet_name}", []
 
-    eligible = [
-        c
-        for c in named
-        if is_past_interviews(c.current_stage, c.id in selected_ids)
-    ]
+    eligible = named
     if not eligible:
         return None, f"{sheet_name} has not passed all interviews", named
 
