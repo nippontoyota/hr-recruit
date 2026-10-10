@@ -62,7 +62,7 @@ def parse_salary_bytes(data: bytes) -> tuple[str, list[dict[str, Any]]]:
         records.extend(_parse_master(sheet))
     if not records:
         raise ValueError(
-            "Not a MASTER salary sheet. First row must include Name and Gross Salary (or Total Salary)."
+            "Not a MASTER salary sheet. First row must include Name or ID, and salary details (like Basic+DA or Gross Salary)."
         )
     return "master", records
 
@@ -144,9 +144,25 @@ def money(value: Any) -> float | None:
 
 def package_fields(record: dict[str, Any]) -> tuple[float | None, float, float, float | None]:
     total = money(record.get("total salary"))
+    if total is None:
+        total = (
+            (money(record.get("basic da")) or 0.0) +
+            (money(record.get("hra")) or 0.0) +
+            (money(record.get("travel")) or 0.0) +
+            (money(record.get("hostel")) or 0.0) +
+            (money(record.get("children education")) or 0.0)
+        )
+        if total == 0.0:
+            total = None
+
     allowance = money(record.get("total allowance"))
     if allowance is None:
-        allowance = 0.0
+        allowance = (
+            (money(record.get("conveyance")) or money(record.get("conveyance performance allowance")) or 0.0) +
+            (money(record.get("branch allowance")) or 0.0) +
+            (money(record.get("mobile")) or 0.0)
+        )
+
     others = money(record.get("fixed incentive"))
     if others is None:
         others = money(record.get("total incentive"))
@@ -154,7 +170,11 @@ def package_fields(record: dict[str, Any]) -> tuple[float | None, float, float, 
         others = money(record.get("others"))
     if others is None:
         others = 0.0
+
     gross = money(record.get("gross salary"))
+    if gross is None and total is not None:
+        gross = total + allowance + others
+
     return total, allowance, others, gross
 
 
