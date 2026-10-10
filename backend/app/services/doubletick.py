@@ -138,7 +138,7 @@ def friendly_doubletick_error(raw: str) -> str:
             "Top up the DoubleTick account, then try sending again."
         )
 
-    if any(k in text for k in ("unauthorized", "invalid public api", "invalid api", "api key")):
+    if any(k in text for k in ("unauthorized", "invalid public api", "invalid api", "api key", "forbidden", "403")):
         return "DoubleTick API key is invalid or unauthorized. Check server DoubleTick credentials."
 
     if any(
