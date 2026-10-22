@@ -55,3 +55,25 @@ def test_head_office_forwarding_cc_includes_internal_recipients():
         "naveen@nippontoyota.com",
         "jerry@nippontoyota.com",
     ]
+
+
+def test_offer_cc_uses_fixed_irinjalakuda_hr_address():
+    db = MagicMock()
+    for branch_name in ("Irinjalakuda", "Vellangallur (Irinjalakuda)", "iranjalakuda"):
+        assert offer_cc_emails(db, _candidate(branch_name)) == [
+            "jerry@nippontoyota.com",
+            "naveen@nippontoyota.com",
+            "hrirj@nippontoyota.com",
+        ]
+
+
+def test_offer_cc_detects_irinjalakuda_from_profile_raw_data():
+    db = MagicMock()
+    cand = SimpleNamespace(
+        id="cand-1",
+        branch_location="Thrissur",
+        assigned_hr_user_id=None,
+        profile=SimpleNamespace(raw_data={"branchName": "Vellangallur (Irinjalakuda)"}),
+    )
+    emails = offer_cc_emails(db, cand)
+    assert "hrirj@nippontoyota.com" in emails

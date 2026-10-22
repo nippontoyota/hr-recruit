@@ -79,7 +79,7 @@ function InlineCellInput({
       value={value !== null && value !== undefined ? String(value) : ''}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className={`w-full bg-[#f4f8fd] hover:bg-[#e7f1fc] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#1e3a5f] border-0 text-[#1e3a5f] font-semibold px-1.5 py-1 text-[11px] rounded-xs transition-colors ${className}`}
+      className={`w-full bg-[#f4f8fd] hover:bg-[#e7f1fc] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#1e3a5f] border-0 text-[#1e3a5f] font-semibold px-1 py-0.5 text-[10.5px] rounded-xs transition-colors ${className}`}
     />
   );
 }
