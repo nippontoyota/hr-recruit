@@ -346,8 +346,13 @@ export const sendOfferLetter = async (candidateId: string, fields?: Record<strin
   return response.data;
 };
 
-export const downloadCandidatesExcel = async (): Promise<Blob> => {
-  const response = await request('GET', '/candidates/export.xlsx', undefined, {
+export const downloadCandidatesExcel = async (queryState?: CandidateListQueryState): Promise<Blob> => {
+  const query = queryState ? candidateQueryParams(queryState, 1, 200) : new URLSearchParams();
+  query.delete('page');
+  query.delete('limit');
+  const qs = query.toString();
+  const path = qs ? `/candidates/export.xlsx?${qs}` : '/candidates/export.xlsx';
+  const response = await request('GET', path, undefined, {
     headers: {
       Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     },

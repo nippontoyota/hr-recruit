@@ -4,7 +4,7 @@ import { PageHeader } from '../../components/layout/PageHeader';
 import { Button, Modal, LoadingSpinner, EmptyState, Badge } from '../../components/ui';
 import { Plus, RefreshCw, Trash, CheckSquare, Square, Minus, Play, Users, Download, ArrowDown, ArrowUp } from 'lucide-react';
 import { useAuth } from '../../auth';
-import { deleteCandidate, bulkDeleteCandidates, unholdCandidate, downloadCandidatesCsv } from '../../api/candidates';
+import { deleteCandidate, bulkDeleteCandidates, unholdCandidate, downloadCandidatesCsv, downloadCandidatesExcel } from '../../api/candidates';
 import { getStageBadgeVariant, stageLabel, formatSource, isCandidateQueue, matchesQueue, type CandidateQueue } from '../../lib/stages';
 import type { Candidate } from '../../types';
 import { PIPELINE_STAGES, HO_PIPELINE_STAGES, HO_POST_SEND_STAGES } from '../../types';
@@ -106,6 +106,30 @@ export default function CandidatesList() {
     sortVisibleCandidates(nextQuery.sortBy, nextQuery.sortDirection);
     setAdvancedQuery(nextQuery);
     setPage(1);
+  };
+
+  const handleExcelExport = async () => {
+    setIsExporting(true);
+    try {
+      const blob = await downloadCandidatesExcel({
+        ...advancedQuery,
+        search: searchQuery,
+        stages: stageFilter ? [stageFilter] : advancedQuery.stages,
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${getBrandConfig(user?.brand).name.toLowerCase().replace(/\s+/g, '-')}-candidates.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Candidate Excel downloaded');
+    } catch (error) {
+      toast.error(extractError(error, 'Could not download candidates Excel'));
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleCsvExport = async () => {
@@ -263,10 +287,16 @@ export default function CandidatesList() {
         action={
           <>
             {canExport && (
-              <Button variant="secondary" onClick={() => void handleCsvExport()} disabled={isExporting}>
-                <Download className="w-4 h-4 mr-2" />
-                {isExporting ? 'Preparing CSV…' : 'Download CSV'}
-              </Button>
+              <>
+                <Button variant="secondary" onClick={() => void handleExcelExport()} disabled={isExporting}>
+                  <Download className="w-4 h-4 mr-2 text-emerald-600" />
+                  {isExporting ? 'Preparing…' : 'Download Excel'}
+                </Button>
+                <Button variant="secondary" onClick={() => void handleCsvExport()} disabled={isExporting}>
+                  <Download className="w-4 h-4 mr-2" />
+                  {isExporting ? 'Preparing…' : 'Download CSV'}
+                </Button>
+              </>
             )}
             {canRegister && (
               <Button onClick={() => setIsAddOpen(true)}>

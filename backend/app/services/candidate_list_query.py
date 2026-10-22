@@ -5,7 +5,7 @@ from typing import Iterator
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import Select, and_, case, exists, func, or_, select
-from sqlalchemy.orm import Session, load_only
+from sqlalchemy.orm import Session, joinedload, load_only
 
 from app.core.ho_pipeline import HO_HANDOVER_STAGES, HO_HR_PIPELINE_STAGES
 from app.core.branding import NIPPON_TOYOTA, RIVER, brand_is_river
@@ -252,5 +252,9 @@ def candidate_list_rows_with_metadata(
 
 
 def candidate_csv_rows(db: Session, statement: Select, batch_size: int = 200) -> Iterator[Candidate]:
-    result = db.scalars(statement.execution_options(yield_per=batch_size))
-    yield from result
+    statement_with_profile = statement.options(joinedload(Candidate.profile))
+    result = db.scalars(statement_with_profile.execution_options(yield_per=batch_size))
+    if hasattr(result, "__iter__"):
+        yield from result
+    elif hasattr(result, "all"):
+        yield from result.all()

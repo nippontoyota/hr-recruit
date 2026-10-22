@@ -358,15 +358,13 @@ def _candidate_list_query(
 
 @router.get("/export.xlsx")
 def export_candidates(
+    query: CandidateListQuery = Depends(),
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
 ):
-    """Download every candidate currently visible to Head Office."""
-    rows = list(
-        db.scalars(
-            _candidate_list_query(user).order_by(Candidate.created_at.desc())
-        ).all()
-    )
+    """Download candidates currently visible to Head Office matching the query filters."""
+    statement = build_candidate_list_query(user, query)
+    rows = list(candidate_csv_rows(db, statement))
     workbook = build_candidates_workbook(rows)
     return StreamingResponse(
         workbook,
