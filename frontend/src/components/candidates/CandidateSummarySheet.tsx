@@ -285,21 +285,31 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
     .filter((e): e is Evaluation => !!e)
     .filter((e, i, arr) => arr.findIndex((x) => x.id === e.id) === i)
     .filter((e) => e.status === 'EVALUATED' || txt(e.remarks) || Number(e.scores?.total_score) > 0)
-    .slice(0, 4);
+    .slice(0, 5);
   const interviews: Array<Evaluation | null> = [...ranked];
-  while (interviews.length < 4) interviews.push(null);
+  while (interviews.length < 5) interviews.push(null);
 
-  const ivInterviewer = [1, 2, 3, 4].map((n) => rawGet(raw, `iv${n}Interviewer`) || txt(interviews[n - 1]?.scores?.interviewer_name));
-  const ivRemarks = [1, 2, 3, 4].map((n) => rawGet(raw, `iv${n}Remarks`) || interviews[n - 1]?.remarks || '');
-  const ivScore = [1, 2, 3, 4].map((n) => {
+  const ivInterviewer = [1, 2, 3, 4, 5].map((n) => rawGet(raw, `iv${n}Interviewer`) || txt(interviews[n - 1]?.scores?.interviewer_name));
+  const ivRemarks = [1, 2, 3, 4, 5].map((n) => rawGet(raw, `iv${n}Remarks`) || interviews[n - 1]?.remarks || '');
+  const ivScore = [1, 2, 3, 4, 5].map((n) => {
     const override = num(rawGet(raw, `iv${n}Score`));
     if (override != null) return override;
     const evalScore = Number(interviews[n - 1]?.scores?.total_score);
     return Number.isFinite(evalScore) && evalScore > 0 ? evalScore : null;
   });
-  const ivDate = [1, 2, 3, 4].map((n) =>
+  const ivDate = [1, 2, 3, 4, 5].map((n) =>
     rawGet(raw, `iv${n}Date`) || fmtDate(interviews[n - 1]?.scheduled_time || interviews[n - 1]?.updated_at),
   );
+
+  // Dynamically determine how many interview rows to render (minimum 3 for standard balance, up to max 5)
+  let maxActiveIndex = 2; // minimum 3 rows (indices 0, 1, 2)
+  for (let i = 4; i >= 3; i--) {
+    if (txt(ivInterviewer[i]) || txt(ivRemarks[i]) || (ivScore[i] !== null && ivScore[i] > 0)) {
+      maxActiveIndex = i;
+      break;
+    }
+  }
+  const visibleRounds = Array.from({ length: maxActiveIndex + 1 }, (_, i) => i);
 
   const scored = ivScore.filter((n): n is number => n !== null && n > 0);
   const marks100 = scored.map((n) => Math.round(n * 10));
@@ -601,13 +611,13 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell label className="py-0.5 text-center leading-tight">Marks</Cell>
           </tr>
 
-          {/* 3 scored interview rows */}
-          {([0, 1, 2] as const).map((i) => {
+          {/* Scored interview rows (reflects whatever is entered, min 3, max 5) */}
+          {visibleRounds.map((i) => {
             const score = ivScore[i];
             const has = score !== null && score > 0;
             return (
-              <tr key={`iv-${i}`} className="h-[10mm]">
-                {i === 0 ? <Cell label rowSpan={3}>Interview Comments</Cell> : null}
+              <tr key={`iv-${i}`} className={visibleRounds.length > 3 ? "h-[8.5mm]" : "h-[10mm]"}>
+                {i === 0 ? <Cell label rowSpan={visibleRounds.length}>Interview Comments</Cell> : null}
                 <Cell>{ivInterviewer[i]}</Cell>
                 <Cell colSpan={8}>{ivRemarks[i]}</Cell>
                 <Cell className="text-center">{has ? gradeFromTen(score) : ''}</Cell>

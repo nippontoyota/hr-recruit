@@ -170,10 +170,10 @@ export function EditableCandidateSummarySheet({
     .concat(evaluations.filter((e) => e.type !== 'TECHNICAL_TEST'))
     .filter((e): e is Evaluation => !!e)
     .filter((e, i, arr) => arr.findIndex((x) => x.id === e.id) === i)
-    .slice(0, 4);
+    .slice(0, 5);
 
   const initialInterviews = [...ranked];
-  while (initialInterviews.length < 4) initialInterviews.push(null as any);
+  while (initialInterviews.length < 5) initialInterviews.push(null as any);
 
   // Editable Form State
   const [form, setForm] = useState<Record<string, unknown>>(() => ({
@@ -235,6 +235,7 @@ export function EditableCandidateSummarySheet({
     iv2Date: rawGet(initialRaw, 'iv2Date') || fmtDate(initialInterviews[1]?.scheduled_time || initialInterviews[1]?.updated_at),
     iv3Date: rawGet(initialRaw, 'iv3Date') || fmtDate(initialInterviews[2]?.scheduled_time || initialInterviews[2]?.updated_at),
     iv4Date: rawGet(initialRaw, 'iv4Date') || fmtDate(initialInterviews[3]?.scheduled_time || initialInterviews[3]?.updated_at),
+    iv5Date: rawGet(initialRaw, 'iv5Date') || fmtDate(initialInterviews[4]?.scheduled_time || initialInterviews[4]?.updated_at),
     // Salary
     currentSalary: rawGet(initialRaw, 'currentSalary') || '',
     incentive: rawGet(initialRaw, 'incentive') || txt(salarySheet.incentive) || '',
@@ -256,6 +257,9 @@ export function EditableCandidateSummarySheet({
     iv4Interviewer: rawGet(initialRaw, 'iv4Interviewer') || txt(initialInterviews[3]?.scores?.interviewer_name),
     iv4Remarks: rawGet(initialRaw, 'iv4Remarks') || initialInterviews[3]?.remarks || '',
     iv4Score: rawGet(initialRaw, 'iv4Score') || (initialInterviews[3]?.scores?.total_score != null ? String(initialInterviews[3]?.scores?.total_score) : ''),
+    iv5Interviewer: rawGet(initialRaw, 'iv5Interviewer') || txt(initialInterviews[4]?.scores?.interviewer_name),
+    iv5Remarks: rawGet(initialRaw, 'iv5Remarks') || initialInterviews[4]?.remarks || '',
+    iv5Score: rawGet(initialRaw, 'iv5Score') || (initialInterviews[4]?.scores?.total_score != null ? String(initialInterviews[4]?.scores?.total_score) : ''),
     // CMD
     cmdComments: rawGet(initialRaw, 'cmdComments') || '',
     // Offer Milestones (Checkable)
@@ -324,7 +328,7 @@ export function EditableCandidateSummarySheet({
     ? (curVal || 0) + (incVal || 0) + (othVal || 0)
     : '';
 
-  const scores = [num(form.iv1Score), num(form.iv2Score), num(form.iv3Score), num(form.iv4Score)].filter((n): n is number => n !== null && n > 0);
+  const scores = [num(form.iv1Score), num(form.iv2Score), num(form.iv3Score), num(form.iv4Score), num(form.iv5Score)].filter((n): n is number => n !== null && n > 0);
   const totalScoreSum = scores.length ? scores.reduce((a, b) => a + b, 0) : '';
   const avgScore = scores.length ? Math.round((totalScoreSum as number / scores.length) * 10) : '';
 
@@ -743,13 +747,13 @@ export function EditableCandidateSummarySheet({
               <Cell label>Marks (Maximum 10)</Cell>
             </tr>
 
-            {/* 4 Interview Rounds */}
-            {[1, 2, 3, 4].map((n, idx) => {
+            {/* 5 Interview Rounds */}
+            {[1, 2, 3, 4, 5].map((n, idx) => {
               const sc = num(form[`iv${n}Score`]);
               const has = sc !== null && sc > 0;
               return (
-                <tr key={`iv-${n}`} className="h-[11mm]">
-                  {idx === 0 ? <Cell label rowSpan={4}>Interview Comments</Cell> : null}
+                <tr key={`iv-${n}`} className="h-[9.5mm]">
+                  {idx === 0 ? <Cell label rowSpan={5}>Interview Comments</Cell> : null}
                   <Cell>
                     <InlineInput value={form[`iv${n}Interviewer`] as string} onChange={(v) => update(`iv${n}Interviewer`, v)} placeholder={`Interviewer ${n}`} />
                   </Cell>
