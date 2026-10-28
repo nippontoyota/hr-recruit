@@ -11,8 +11,8 @@ class BottleneckStats(BaseModel):
 class CandidateDetail(BaseModel):
     id: UUID
     full_name: str
-    department: str | None
-    current_stage: PipelineStage
+    department: str | None = None
+    current_stage: PipelineStage | str
     created_at: str
 
 class BranchCandidateData(BaseModel):

@@ -9,18 +9,24 @@ import { Link } from 'react-router-dom';
 export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+
+  const loadStats = async () => {
+    try {
+      setLoading(true);
+      setHasError(false);
+      const data = await getAdminDashboardStats();
+      setStats(data);
+    } catch (err: any) {
+      console.error('Failed to load admin dashboard stats:', err);
+      setHasError(true);
+      toast.error(err?.response?.data?.detail || 'Failed to load admin dashboard stats');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadStats() {
-      try {
-        const data = await getAdminDashboardStats();
-        setStats(data);
-      } catch (err) {
-        toast.error('Failed to load admin dashboard stats');
-      } finally {
-        setLoading(false);
-      }
-    }
     loadStats();
   }, []);
 
@@ -32,7 +38,15 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!stats) return null;
+  const fallbackStats: AdminDashboardStats = {
+    total_candidates: 0,
+    conversion_rate: 0,
+    stage_breakdown: {},
+    bottlenecks: { on_hold: 0, pending_interviews: 0 },
+    branch_data: []
+  };
+
+  const currentStats = stats || fallbackStats;
 
   return (
     <div className="p-6 w-full space-y-8 font-sans">
@@ -41,6 +55,18 @@ export default function AdminDashboard() {
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Admin Workspace</h1>
         </div>
       </div>
+
+      {hasError && (
+        <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+          <span>Failed to load live pipeline stats. You can still access Team Management and Candidate sections.</span>
+          <button 
+            onClick={loadStats} 
+            className="font-bold underline ml-4 hover:text-amber-950 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* 4 Deep Shiny Managerial Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -54,7 +80,7 @@ export default function AdminDashboard() {
           <div className="relative z-10 flex flex-col h-full justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-orange-100 mb-1 drop-shadow-sm">Active Pipeline</p>
-              <h3 className="text-5xl font-black text-white mt-1 drop-shadow-md">{stats.total_candidates}</h3>
+              <h3 className="text-5xl font-black text-white mt-1 drop-shadow-md">{currentStats.total_candidates}</h3>
             </div>
             <div className="mt-6 flex items-center font-medium text-sm text-orange-50 group-hover:text-white transition-colors">
               View All Candidates <ChevronRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
@@ -72,7 +98,7 @@ export default function AdminDashboard() {
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-rose-100 mb-1 drop-shadow-sm">Needs Attention</p>
               <h3 className="text-5xl font-black text-white mt-1 drop-shadow-md">
-                {stats.bottlenecks.on_hold + stats.bottlenecks.pending_interviews}
+                {currentStats.bottlenecks.on_hold + currentStats.bottlenecks.pending_interviews}
               </h3>
             </div>
             <div className="mt-6 flex items-center font-medium text-sm text-rose-50 group-hover:text-white transition-colors">
@@ -90,7 +116,7 @@ export default function AdminDashboard() {
           <div className="relative z-10 flex flex-col h-full justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-emerald-100 mb-1 drop-shadow-sm">Hiring Success</p>
-              <h3 className="text-5xl font-black text-white mt-1 drop-shadow-md">{stats.conversion_rate.toFixed(1)}%</h3>
+              <h3 className="text-5xl font-black text-white mt-1 drop-shadow-md">{currentStats.conversion_rate.toFixed(1)}%</h3>
             </div>
             <div className="mt-6 flex items-center font-medium text-sm text-emerald-50 group-hover:text-white transition-colors drop-shadow-sm">
               View Analytics <ChevronRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
@@ -124,7 +150,7 @@ export default function AdminDashboard() {
           <h2 className="text-xl font-bold text-gray-900 mb-4">Pipeline Breakdown</h2>
           <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
             {ALL_PIPELINE_STAGES.map(stage => {
-              const count = stats.stage_breakdown[stage] || 0;
+              const count = currentStats.stage_breakdown[stage] || 0;
               if (count === 0) return null;
               
               return (
@@ -138,7 +164,7 @@ export default function AdminDashboard() {
                 </div>
               );
             })}
-            {Object.keys(stats.stage_breakdown).length === 0 && (
+            {Object.keys(currentStats.stage_breakdown).length === 0 && (
               <div className="text-center text-gray-500 text-sm py-8">No active candidates in pipeline</div>
             )}
           </div>
@@ -149,12 +175,12 @@ export default function AdminDashboard() {
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">Branch Directory Overview</h2>
             <span className="text-xs font-medium text-gray-600 bg-gray-100 px-3 py-1.5 rounded-md border border-gray-200">
-              {stats.branch_data.length} Branches Active
+              {currentStats.branch_data.length} Branches Active
             </span>
           </div>
           
           <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-            {stats.branch_data.map(branch => (
+            {currentStats.branch_data.map(branch => (
               <div key={branch.branch_name} className="border border-gray-100 rounded-xl overflow-hidden bg-gray-50/50 hover:bg-gray-50 transition-colors">
                 <div className="px-5 py-4 bg-white border-b border-gray-100 flex justify-between items-center">
                   <h3 className="font-bold text-gray-900">{branch.branch_name}</h3>
@@ -195,7 +221,7 @@ export default function AdminDashboard() {
                 )}
               </div>
             ))}
-            {stats.branch_data.length === 0 && (
+            {currentStats.branch_data.length === 0 && (
               <div className="text-center text-gray-500 text-sm py-8">No branches found</div>
             )}
           </div>

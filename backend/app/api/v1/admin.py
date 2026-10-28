@@ -22,7 +22,10 @@ def get_dashboard_stats(
     stage_counts = db.execute(
         select(Candidate.current_stage, func.count(Candidate.id)).group_by(Candidate.current_stage)
     ).all()
-    stage_breakdown = {stage.value: count for stage, count in stage_counts}
+    stage_breakdown = {}
+    for stage, count in stage_counts:
+        key = stage.value if hasattr(stage, "value") else str(stage) if stage is not None else "UNKNOWN"
+        stage_breakdown[key] = count
     total_candidates = sum(stage_breakdown.values())
     
     # 3. Bottlenecks
@@ -77,14 +80,19 @@ def get_dashboard_stats(
     ).all()
 
     for candidate_id, full_name, department, current_stage, created_at, candidate_branch in active_candidates:
+        created_at_str = (
+            created_at.isoformat()
+            if hasattr(created_at, "isoformat")
+            else str(created_at or "")
+        )
         branch_map[candidate_branch].append(
-                CandidateDetail(
-                    id=candidate_id,
-                    full_name=full_name,
-                    department=department,
-                    current_stage=current_stage,
-                    created_at=created_at.isoformat(),
-                )
+            CandidateDetail(
+                id=candidate_id,
+                full_name=full_name or "Unknown",
+                department=department,
+                current_stage=current_stage,
+                created_at=created_at_str,
+            )
         )
     branch_data = [
         BranchCandidateData(branch_name=k, candidates=v)
