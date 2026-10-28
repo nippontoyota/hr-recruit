@@ -5,7 +5,7 @@ from uuid import uuid4
 from openpyxl import Workbook
 from pytest import raises
 
-from app.core.salary_sheet import match_record, name_key, parse_salary_bytes
+from app.core.salary_sheet import match_record, name_key, parse_salary_bytes, package_fields
 
 
 def _xlsx(build) -> bytes:
@@ -16,7 +16,7 @@ def _xlsx(build) -> bytes:
     return buf.getvalue()
 
 
-def _master(rows: list[dict]):
+def _master(rows: list[dict], extra_headers: list[str] | None = None):
     headers = [
         "Job Code ",
         "Name",
@@ -28,7 +28,7 @@ def _master(rows: list[dict]):
         "Total Allowance",
         "Fixed Incentive",
         "Gross Salary",
-    ]
+    ] + (extra_headers or [])
 
     def build(ws):
         for i, h in enumerate(headers, 1):
@@ -67,6 +67,31 @@ def test_parse_master_and_name_punctuation():
     assert fmt == "master"
     assert records[0]["gross salary"] == 15000
     assert name_key("K.S. Mohasin") == name_key("K S Mohasin")
+
+
+def test_parse_master_conveyance_and_perf_allowance():
+    data = _master(
+        [
+            {
+                "Name": "K.S. Mohasin",
+                "Branch": "Kalamassery",
+                "Total Salary": 15000,
+                "Conveyance/Performance Allowance": 2500,
+                "Mobile": 500,
+                "Gross Salary": 18000,
+            }
+        ],
+        extra_headers=["Conveyance/Performance Allowance", "Mobile"],
+    )
+    fmt, records = parse_salary_bytes(data)
+    assert fmt == "master"
+    rec = records[0]
+    assert rec["conveyance"] == 2500
+    total, allowance, others, gross = package_fields(rec)
+    assert total == 15000
+    assert allowance == 3000
+    assert gross == 18000
+
 
 
 def test_match_unique_name_and_ambiguous_branch():

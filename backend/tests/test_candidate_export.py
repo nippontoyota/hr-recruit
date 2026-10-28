@@ -227,3 +227,21 @@ def test_candidate_export_maps_all_37_fields_and_salary_and_raw_data():
     assert "SL No,Name,Branch " in csv_chunks[0]
     assert "Rahul Nair" in csv_chunks[1]
     assert "First Auto Ltd" in csv_chunks[1]
+
+
+def test_candidate_export_handles_conveyance_and_perf_allowance_variations():
+    c1 = Candidate(
+        id=uuid4(),
+        full_name="Candidate One",
+        salary_data={"Conveyance/Performance Allowance": 2400},
+    )
+    c2 = Candidate(
+        id=uuid4(),
+        full_name="Candidate Two",
+        salary_data={"conveyance performance allowance": 3100},
+    )
+    row1 = extract_candidate_row(c1, 1)
+    row2 = extract_candidate_row(c2, 2)
+    assert row1[11] == 2400
+    assert row2[11] == 3100
+

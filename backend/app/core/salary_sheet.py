@@ -15,6 +15,15 @@ _NT_ID = re.compile(r"^NT-\d+(?:-\d+)?$", re.I)
 _ID_KEYS = ("candidate id", "candidateid", "nt id", "portal id")
 _EMAIL_KEYS = ("email", "e mail")
 _PHONE_KEYS = ("phone", "phone number", "mobile number", "contact")
+_CONVEYANCE_KEYS = (
+    "conveyance",
+    "conveyance allowance",
+    "conveyance performance allowance",
+    "conveyance/performance allowance",
+    "conveyance_performance_allowance",
+    "conveyance and perf allowance",
+    "conveyance & perf allowance",
+)
 
 PAST_INTERVIEW_STAGES = frozenset(
     {"CSS", "SALARY_DETAILS", "FINAL_APPROVAL", "HIRED"}
@@ -23,7 +32,8 @@ BLOCKED_STAGES = frozenset({"REJECTED", "ON_HOLD"})
 
 
 def fold_key(value: Any) -> str:
-    text = str(value or "").strip().lower().replace("_", " ").replace("+", " ").replace(".", " ").replace("-", " ")
+    text = str(value or "").strip().lower().replace("_", " ").replace("+", " ").replace(".", " ").replace("-", " ").replace("/", " ")
+    text = text.replace("&", " and ")
     text = text.replace(".", " ")
     return _SPACE.sub(" ", text).strip()
 
@@ -113,6 +123,10 @@ def _parse_master(sheet) -> list[dict[str, Any]]:
             if "candidate_id" not in rec:
                 rec["candidate_id"] = first_val
 
+        conv_val = get_conveyance(rec)
+        if conv_val is not None and "conveyance" not in rec:
+            rec["conveyance"] = int(conv_val) if conv_val.is_integer() else conv_val
+
         if rec.get("name") or rec.get("job code") or rec.get("candidate_id") or rec.get("gross salary"):
             out.append(rec)
     return out
@@ -142,6 +156,19 @@ def money(value: Any) -> float | None:
         return None
 
 
+def get_conveyance(record: dict[str, Any]) -> float | None:
+    for k in _CONVEYANCE_KEYS:
+        val = money(record.get(k))
+        if val is not None:
+            return val
+    for k, v in record.items():
+        if "conveyance" in str(k).lower():
+            val = money(v)
+            if val is not None:
+                return val
+    return None
+
+
 def package_fields(record: dict[str, Any]) -> tuple[float | None, float, float, float | None]:
     total = money(record.get("total salary"))
     if total is None:
@@ -158,7 +185,7 @@ def package_fields(record: dict[str, Any]) -> tuple[float | None, float, float, 
     allowance = money(record.get("total allowance"))
     if allowance is None:
         allowance = (
-            (money(record.get("conveyance")) or money(record.get("conveyance performance allowance")) or 0.0) +
+            (get_conveyance(record) or 0.0) +
             (money(record.get("branch allowance")) or 0.0) +
             (money(record.get("mobile")) or 0.0)
         )
@@ -207,6 +234,9 @@ def normalize_package(record: dict[str, Any]) -> dict[str, Any]:
         out["gross salary"] = int(total + allowance + others) if (total + allowance + others).is_integer() else (total + allowance + others)
     if "others" not in out and others:
         out["others"] = int(others) if float(others).is_integer() else others
+    conv_val = get_conveyance(record)
+    if conv_val is not None and "conveyance" not in out:
+        out["conveyance"] = int(conv_val) if conv_val.is_integer() else conv_val
     return out
 
 

@@ -15,10 +15,21 @@ function fmtMoney(val: number | null | undefined): string {
 
 function getNum(sal: Record<string, unknown> | undefined, ...keys: string[]): number | null {
   if (!sal) return null;
+  // 1. Exact key match
   for (const k of keys) {
     const v = sal[k];
     if (v != null && v !== '') {
       const num = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.-]+/g, ''));
+      if (!Number.isNaN(num)) return num;
+    }
+  }
+  // 2. Case-insensitive & normalized key match
+  const normalizedKeys = keys.map((k) => k.toLowerCase().replace(/[_\s+&.-]+/g, ' ').trim());
+  for (const [rawK, val] of Object.entries(sal)) {
+    if (val == null || val === '') continue;
+    const normK = rawK.toLowerCase().replace(/[_\s+&.-]+/g, ' ').trim();
+    if (normalizedKeys.includes(normK)) {
+      const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]+/g, ''));
       if (!Number.isNaN(num)) return num;
     }
   }
@@ -30,6 +41,12 @@ function getStr(sal: Record<string, unknown> | undefined, ...keys: string[]): st
   for (const k of keys) {
     const v = sal[k];
     if (v != null && v !== '') return String(v).trim();
+  }
+  const normalizedKeys = keys.map((k) => k.toLowerCase().replace(/[_\s+&.-]+/g, ' ').trim());
+  for (const [rawK, val] of Object.entries(sal)) {
+    if (val == null || val === '') continue;
+    const normK = rawK.toLowerCase().replace(/[_\s+&.-]+/g, ' ').trim();
+    if (normalizedKeys.includes(normK)) return String(val).trim();
   }
   return '';
 }
@@ -61,8 +78,27 @@ export function SalaryProposalSheetDocument({ candidate, className = '' }: Salar
   const childrenEducation = getNum(sal, 'children education', 'children_education', 'Children Education') ?? 0;
   const totalSalary = getNum(sal, 'total salary', 'total_salary', 'Total Salary') ?? (basicDa + hra + travel + hostel + childrenEducation);
 
-  const conveyance = getNum(sal, 'conveyance', 'Conveyance') ?? 0;
-  const mobile = getNum(sal, 'mobile', 'Mobile') ?? 0;
+  const conveyance = getNum(
+    sal,
+    'conveyance',
+    'Conveyance',
+    'Conveyance/Performance Allowance',
+    'conveyance/performance allowance',
+    'conveyance performance allowance',
+    'conveyance_performance_allowance',
+    'Conveyance Allowance',
+    'conveyance allowance',
+  ) ?? (() => {
+    if (!sal) return 0;
+    for (const [k, v] of Object.entries(sal)) {
+      if (k.toLowerCase().includes('conveyance') && v != null && v !== '') {
+        const num = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.-]+/g, ''));
+        if (!Number.isNaN(num)) return num;
+      }
+    }
+    return 0;
+  })();
+  const mobile = getNum(sal, 'mobile', 'Mobile', 'mobile allowance', 'mobile_allowance', 'Mobile Allowance') ?? 0;
   const branchAllowance = getNum(sal, 'branch allowance', 'branch_allowance', 'Branch Allowance') ?? 0;
   const totalAllowance = getNum(sal, 'total allowance', 'total_allowance', 'Total Allowance') ?? (conveyance + mobile + branchAllowance);
 
@@ -193,7 +229,7 @@ export function SalaryProposalSheetDocument({ candidate, className = '' }: Salar
 
           {/* Allowances */}
           <tr>
-            <td className="border border-black px-2 py-0.5">CONVEYANCE</td>
+            <td className="border border-black px-2 py-0.5">CONVEYANCE / PERFORMANCE ALLOWANCE</td>
             <td className="border border-black px-2 py-0.5 text-right font-medium">{fmtMoney(conveyance)}</td>
             <td className="border border-black px-2 py-0.5 text-right font-medium">{fmtMoney(conveyance * 12)}</td>
           </tr>

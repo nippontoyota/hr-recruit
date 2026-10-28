@@ -288,8 +288,21 @@ def extract_candidate_row(candidate: Candidate, sl_no: int) -> list[Any]:
 
     # 12. Conveyance
     col_12_conveyance = _find_salary_value(
-        salary, "conveyance", "conveyance allowance", "Conveyance", "conveyance_allowance"
+        salary,
+        "conveyance",
+        "conveyance allowance",
+        "Conveyance",
+        "conveyance_allowance",
+        "Conveyance/Performance Allowance",
+        "conveyance/performance allowance",
+        "conveyance performance allowance",
+        "conveyance_performance_allowance",
     )
+    if col_12_conveyance is None or col_12_conveyance == "":
+        for k, v in salary.items():
+            if "conveyance" in str(k).lower() and v is not None and str(v).strip() != "":
+                col_12_conveyance = _parse_number_or_str(v)
+                break
 
     # 13. Mobile
     col_13_mobile = _find_salary_value(salary, "mobile", "mobile allowance", "Mobile", "mobile_allowance")
