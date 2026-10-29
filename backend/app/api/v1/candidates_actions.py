@@ -1342,15 +1342,25 @@ def complete_technical_test_verification(
     return to_candidate_out(row, id in resume_candidate_ids(db, [id]), db, viewer=user)
 
 
+from app.services.workflow import transition_prerequisites, transition, has_bg_verification_details
+
+
 @router.post("/{id}/background-verification/complete", response_model=CandidateOut)
 def complete_background_verification(
     id: UUID,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.LOCAL_HR, UserRole.ADMIN)),
 ):
-    """Local HR marks background verification as completed. Completion only — the outcome
-    of the verification is tracked separately and is not required here."""
+    """Local HR or Admin marks background verification as completed.
+    Verification form details must be recorded before completion."""
     row = get_candidate_for_user(db, id, user, write=True)
+
+    if user.role == UserRole.LOCAL_HR and row.profile and not has_bg_verification_details(row):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot complete background verification: please fill out the background verification form details first.",
+        )
+
     if not row.background_verification_completed:
         row.background_verification_completed = True
         row.background_verification_completed_at = datetime.now(timezone.utc)

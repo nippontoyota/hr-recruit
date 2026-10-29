@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Input, LoadingSpinner, EmptyState, Modal, PipelineStepper, Select } from '../../components/ui';
-import { ArrowLeft, Home, X, XCircle, MapPin, Phone, Mail, Trophy, Pause, Play, History, Edit2, Check } from 'lucide-react';
+import { ArrowLeft, Home, X, XCircle, MapPin, Phone, Mail, Trophy, Pause, Play, History, Edit2, Check, ShieldAlert } from 'lucide-react';
 import { getCandidateById, updateCandidateStage, unholdCandidate, resolveDuplicateCandidate, updateCandidateDepartment, setCachedCandidate } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { HO_LINEAR_STAGES, HO_POST_SEND_STAGES } from '../../types';
@@ -957,12 +957,32 @@ export default function CandidateProfile() {
             )}
 
             {!isAdmin && stageToView === 'BACKGROUND_VERIFICATION' && (
-              <BackgroundVerificationWidget
-                candidate={candidate}
-                onUpdate={handleUpdate}
-                navigateToStage={navigateToStage}
-                isReadOnly={isReadOnly}
-              />
+              <>
+                {isHO && (
+                  <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-foreground">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-primary shrink-0" />
+                      <span>
+                        Viewing Background Verification (Branch Section) as <strong>Head Office HR</strong>. You can review or edit verification details directly.
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigateToStage(actualStage)}
+                      className="text-xs shrink-0"
+                    >
+                      Return to {stageLabel(actualStage)} →
+                    </Button>
+                  </div>
+                )}
+                <BackgroundVerificationWidget
+                  candidate={candidate}
+                  onUpdate={handleUpdate}
+                  navigateToStage={navigateToStage}
+                  isReadOnly={isReadOnly}
+                />
+              </>
             )}
 
             {!isAdmin && stageToView === 'APPLICATION' && (
@@ -970,6 +990,7 @@ export default function CandidateProfile() {
                 candidate={candidate}
                 evaluations={evaluations}
                 onUpdate={handleUpdate}
+                navigateToStage={navigateToStage}
                 isReadOnly={!canEditApplication}
               />
             )}
@@ -979,6 +1000,7 @@ export default function CandidateProfile() {
                 candidate={candidate}
                 evaluations={evaluations}
                 onUpdate={handleUpdate}
+                navigateToStage={navigateToStage}
                 isReadOnly={!canEditApplication}
               />
             )}

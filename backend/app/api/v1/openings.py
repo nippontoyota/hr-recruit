@@ -14,8 +14,8 @@ from app.schemas.job_opening import JobOpeningCreate, JobOpeningOut, JobOpeningU
 
 router = APIRouter(prefix="/openings", tags=["openings"])
 
-_READ = require_roles(UserRole.HO_HR, UserRole.LOCAL_HR)
-_WRITE = require_roles(UserRole.HO_HR)
+_READ = require_roles(UserRole.HO_HR, UserRole.LOCAL_HR, UserRole.ADMIN)
+_WRITE = require_roles(UserRole.HO_HR, UserRole.ADMIN)
 
 
 def _get_opening(db: Session, opening_id: uuid.UUID) -> JobOpening:

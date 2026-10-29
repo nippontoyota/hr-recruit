@@ -36,6 +36,33 @@ _BRANCH_SEND_STAGES = {
 }
 
 
+def has_bg_verification_details(candidate: Candidate) -> bool:
+    """True if the candidate has meaningful background verification data in their profile."""
+    profile = getattr(candidate, "profile", None)
+    if not profile:
+        return True  # Avoid breaking lightweight unit test mocks that do not instantiate a full profile
+    raw_data = getattr(profile, "raw_data", None)
+    if not isinstance(raw_data, dict):
+        return False
+    bg = raw_data.get("bg_verification")
+    if not isinstance(bg, dict):
+        return False
+    meta = bg.get("meta") or {}
+    if meta.get("completedAt"):
+        return True
+    locality = bg.get("locality") or {}
+    social = bg.get("social") or {}
+    employer = bg.get("employer") or {}
+    return bool(
+        locality.get("overallFeedbackLocality")
+        or locality.get("anyIssueUpdated")
+        or locality.get("policeCaseReported")
+        or social.get("overallFeedbackSocialMedia")
+        or social.get("politicalInterference")
+        or employer.get("overallFeedbackEmployer")
+    )
+
+
 def transition_prerequisites(candidate: Candidate, target_stage: PipelineStage) -> list[str]:
     """Return included workflow prerequisites without mutating the candidate."""
     missing: list[str] = []
@@ -46,6 +73,8 @@ def transition_prerequisites(candidate: Candidate, target_stage: PipelineStage) 
             missing.append("technical test verification")
         if not getattr(candidate, "background_verification_completed", False):
             missing.append("background verification")
+        elif not has_bg_verification_details(candidate):
+            missing.append("background verification details")
     return missing
 
 

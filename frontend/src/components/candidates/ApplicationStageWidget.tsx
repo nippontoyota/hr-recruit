@@ -21,6 +21,7 @@ interface ApplicationStageWidgetProps {
   candidate: Candidate;
   evaluations: Evaluation[];
   onUpdate: (candidate?: Candidate) => void;
+  navigateToStage?: (stage: PipelineStage) => void;
   isReadOnly?: boolean;
 }
 
@@ -28,14 +29,28 @@ function HandoverChecklist({
   candidate,
   onUpdate,
   disabled,
+  navigateToStage,
 }: {
   candidate: Candidate;
   onUpdate: () => void;
   disabled: boolean;
+  navigateToStage?: (stage: PipelineStage) => void;
 }) {
   const [pending, setPending] = useState<'technical' | 'background' | null>(null);
   const technicalDone = Boolean(candidate.technical_test_verified);
   const backgroundDone = Boolean(candidate.background_verification_completed);
+
+  const bgRaw = candidate.profile?.raw_data?.bg_verification as Record<string, any> | undefined;
+  const hasBgData = Boolean(
+    bgRaw && (
+      bgRaw.meta?.completedAt ||
+      bgRaw.locality?.overallFeedbackLocality ||
+      bgRaw.locality?.anyIssueUpdated ||
+      bgRaw.social?.overallFeedbackSocialMedia ||
+      bgRaw.social?.politicalInterference ||
+      bgRaw.employer?.overallFeedbackEmployer
+    )
+  );
 
   const markComplete = async (check: 'technical' | 'background') => {
     setPending(check);
@@ -76,7 +91,33 @@ function HandoverChecklist({
         </span>
       </div>
       {done ? (
-        <span className="text-xs font-semibold text-success">Completed</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-success">Completed</span>
+          {check === 'background' && navigateToStage && (
+            <button
+              type="button"
+              onClick={() => navigateToStage('BACKGROUND_VERIFICATION')}
+              className="text-xs text-muted-foreground hover:text-primary underline font-medium"
+            >
+              View/Edit
+            </button>
+          )}
+        </div>
+      ) : check === 'background' && !hasBgData ? (
+        <Button
+          variant="secondary"
+          className="text-xs py-1 px-3 text-primary border-primary/30 hover:bg-primary/5 font-semibold"
+          onClick={() => {
+            if (navigateToStage) {
+              navigateToStage('BACKGROUND_VERIFICATION');
+            } else {
+              markComplete('background');
+            }
+          }}
+          disabled={disabled}
+        >
+          Fill BG Form →
+        </Button>
       ) : (
         <Button
           variant="secondary"
@@ -109,7 +150,7 @@ function HandoverChecklist({
   );
 }
 
-export function ApplicationStageWidget({ candidate, evaluations, onUpdate, isReadOnly = false }: ApplicationStageWidgetProps) {
+export function ApplicationStageWidget({ candidate, evaluations, onUpdate, navigateToStage, isReadOnly = false }: ApplicationStageWidgetProps) {
   const { user } = useAuth();
   const [isSending, setIsSending] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -176,7 +217,7 @@ export function ApplicationStageWidget({ candidate, evaluations, onUpdate, isRea
     <div className="space-y-8 mt-2">
 
       {user?.role === 'LOCAL_HR' && !isReadOnly && canSendToHO && (
-        <HandoverChecklist candidate={candidate} onUpdate={onUpdate} disabled={isReadOnly} />
+        <HandoverChecklist candidate={candidate} onUpdate={onUpdate} disabled={isReadOnly} navigateToStage={navigateToStage} />
       )}
 
       {/* Top Action Bar */}
@@ -198,6 +239,16 @@ export function ApplicationStageWidget({ candidate, evaluations, onUpdate, isRea
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100 font-bold text-sm rounded-sm shadow-sm transition-all duration-200"
               >
                 <Pencil className="w-4 h-4" /> Edit Application
+              </Button>
+            )}
+
+            {(user?.role === 'HO_HR' || user?.role === 'ADMIN') && navigateToStage && (
+              <Button
+                variant="secondary"
+                onClick={() => navigateToStage('BACKGROUND_VERIFICATION')}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 font-semibold text-sm rounded-sm shadow-sm transition-all duration-200"
+              >
+                <Pencil className="w-4 h-4" /> Edit Background Verification
               </Button>
             )}
 
@@ -248,6 +299,7 @@ export function ApplicationStageWidget({ candidate, evaluations, onUpdate, isRea
               evaluations={evals}
               includeCss={false}
               includeSalaryProposal={false}
+              onEditBg={navigateToStage ? () => navigateToStage('BACKGROUND_VERIFICATION') : undefined}
             />
           </div>
         </div>

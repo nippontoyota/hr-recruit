@@ -118,6 +118,8 @@ def merge_hr_application_raw_data(existing: dict | None, submitted: dict) -> dic
     """Apply HR form data without dropping server-owned workflow metadata."""
     current = dict(existing or {})
     preserved = {key: value for key, value in current.items() if key in SYSTEM_MANAGED_RAW_DATA_KEYS}
+    if "bg_verification" in submitted and submitted["bg_verification"]:
+        preserved["bg_verification"] = submitted["bg_verification"]
     merged = {**submitted, **preserved}
     if "previousJobs" in submitted:
         jobs = _normalize_previous_jobs(merged)

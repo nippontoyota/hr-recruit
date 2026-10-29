@@ -16,6 +16,7 @@ interface HoReviewPacketProps {
   evaluations: Evaluation[];
   includeCss?: boolean;
   includeSalaryProposal?: boolean;
+  onEditBg?: () => void;
 }
 
 function isPdfContent(contentType?: string, fileName?: string): boolean {
@@ -351,9 +352,29 @@ function TechnicalTestContent({ candidate, evaluations }: { candidate: Candidate
 }
 
 /** 5. Background Verification Details Content */
-function BackgroundVerificationContent({ candidate }: { candidate: Candidate }) {
+function BackgroundVerificationContent({ candidate, onEdit }: { candidate: Candidate; onEdit?: () => void }) {
   const saved = candidate.profile?.raw_data?.bg_verification as Partial<BgVerificationData> | undefined;
-  if (!saved || !hasAnyValue(saved)) return null;
+  if (!saved || !hasAnyValue(saved)) {
+    return (
+      <div className="mt-4 pt-2 border-t-2 border-[#1e3a5f]">
+        <div className="bg-amber-50/70 border border-amber-200 p-2.5 rounded flex items-center justify-between">
+          <div>
+            <span className="font-bold text-[11px] text-amber-900">5. Background Verification: </span>
+            <span className="text-[11px] text-amber-800">No background verification recorded by branch.</span>
+          </div>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="text-[10.5px] font-bold text-blue-700 hover:underline cursor-pointer print:hidden"
+            >
+              Fill Verification Details →
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const locality = saved.locality || {};
   const social = saved.social || {};
@@ -409,8 +430,17 @@ function BackgroundVerificationContent({ candidate }: { candidate: Candidate }) 
 
   return (
     <div className="mt-4 pt-2 border-t-2 border-[#1e3a5f]">
-      <div className="iaf-th font-bold text-[11.5px] uppercase tracking-wide text-center py-1 mb-1.5 border">
-        5. Background Verification Details
+      <div className="iaf-th font-bold text-[11.5px] uppercase tracking-wide py-1 mb-1.5 border px-2 flex items-center justify-between">
+        <span className="flex-1 text-center">5. Background Verification Details</span>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="text-[10px] font-bold text-blue-700 hover:underline print:hidden cursor-pointer shrink-0 ml-2"
+          >
+            Edit
+          </button>
+        )}
       </div>
       <table className="w-full border-collapse border border-black mb-1.5 text-[10.5px]">
         <tbody>
@@ -492,6 +522,7 @@ export function HoReviewPacket({
   evaluations,
   includeCss = false,
   includeSalaryProposal = false,
+  onEditBg,
 }: HoReviewPacketProps) {
   const hasTech = evaluations.some(hasTechResult);
   const bgData = candidate.profile?.raw_data?.bg_verification;
@@ -521,11 +552,11 @@ export function HoReviewPacket({
       <ResumeBlock candidate={candidate} />
 
       {/* 5. Technical Test Results & 6. Background Verification Details */}
-      {(hasTech || hasBg) && (
+      {(hasTech || hasBg || onEditBg) && (
         <div className="iaf-page-wrap iaf-break print:m-0 print:p-0">
           <section className="iaf-sheet iaf-form font-sans text-[10.5px] leading-[1.3] antialiased print:p-0 print:border-none print:shadow-none">
             <TechnicalTestContent candidate={candidate} evaluations={evaluations} />
-            <BackgroundVerificationContent candidate={candidate} />
+            <BackgroundVerificationContent candidate={candidate} onEdit={onEditBg} />
           </section>
         </div>
       )}

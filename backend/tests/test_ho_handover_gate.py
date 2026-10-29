@@ -263,3 +263,43 @@ def test_local_hr_cannot_update_checks_after_candidate_handed_over():
     with pytest.raises(HTTPException) as exc_info:
         ca.complete_technical_test_verification(candidate.id, db, user)
     assert exc_info.value.status_code == 403
+
+
+def test_local_hr_cannot_complete_bg_verification_without_form_data():
+    from app.models.candidate_profile import CandidateProfile
+    candidate = _candidate()
+    candidate.profile = CandidateProfile(candidate_id=candidate.id, raw_data={})
+    user = _local_hr()
+    db = MagicMock()
+    db.get.return_value = candidate
+    db.scalar.return_value = None
+    with pytest.raises(HTTPException) as exc_info:
+        ca.complete_background_verification(candidate.id, db, user)
+    assert exc_info.value.status_code == 400
+    assert "please fill out the background verification form" in str(exc_info.value.detail)
+
+
+def test_local_hr_can_complete_bg_verification_with_form_data():
+    from app.models.candidate_profile import CandidateProfile
+    candidate = _candidate()
+    candidate.profile = CandidateProfile(
+        candidate_id=candidate.id,
+        raw_data={"bg_verification": {"locality": {"overallFeedbackLocality": "Clean record verified."}}}
+    )
+    user = _local_hr()
+    db = MagicMock()
+    db.get.return_value = candidate
+    db.scalar.return_value = None
+    with patch.object(ca, "to_candidate_out", return_value="OUT"):
+        ca.complete_background_verification(candidate.id, db, user)
+    assert candidate.background_verification_completed is True
+
+
+def test_transition_prerequisites_blocks_if_bg_details_empty():
+    from app.models.candidate_profile import CandidateProfile
+    candidate = _candidate(technical_test_verified=True, background_verification_completed=True)
+    candidate.profile = CandidateProfile(candidate_id=candidate.id, raw_data={})
+    assert transition_prerequisites(candidate, PipelineStage.SENT_TO_HO) == [
+        "background verification details"
+    ]
+

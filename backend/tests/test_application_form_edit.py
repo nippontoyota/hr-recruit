@@ -35,6 +35,23 @@ def test_merge_hr_application_preserves_server_metadata_and_applies_form():
     assert merged["bg_verification"] == existing["bg_verification"]
 
 
+def test_merge_hr_application_allows_explicit_bg_verification_update():
+    existing = {
+        "whatsapp_template": {"formLink": "https://example.test/form"},
+        "bg_verification": {"status": "PENDING", "locality": {"overallFeedbackLocality": "Old"}},
+        "fullName": "Candidate",
+    }
+    submitted = {
+        "fullName": "Candidate",
+        "bg_verification": {"status": "COMPLETED", "locality": {"overallFeedbackLocality": "Updated by HO HR"}},
+    }
+
+    merged = merge_hr_application_raw_data(existing, submitted)
+
+    assert merged["whatsapp_template"] == existing["whatsapp_template"]
+    assert merged["bg_verification"] == {"status": "COMPLETED", "locality": {"overallFeedbackLocality": "Updated by HO HR"}}
+
+
 def test_merge_hr_application_normalizes_all_previous_jobs_and_legacy_slots():
     submitted = {
         "previousExperience": True,

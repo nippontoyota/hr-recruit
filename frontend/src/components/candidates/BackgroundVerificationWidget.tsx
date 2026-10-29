@@ -37,7 +37,8 @@ export function BackgroundVerificationWidget({
   const [data, setData] = useState<BgVerificationData>(() => buildInitialBgData(candidate));
 
   const bgFinished = Boolean(data.meta.completedAt);
-  const locked = isReadOnly;
+  const isHoOrAdmin = user?.role === 'HO_HR' || user?.role === 'ADMIN';
+  const locked = isHoOrAdmin ? false : isReadOnly;
 
   useEffect(() => {
     setData(buildInitialBgData(candidate));
@@ -132,7 +133,7 @@ export function BackgroundVerificationWidget({
           ...data.signatures,
           preparedBy: {
             name: user?.full_name || '',
-            role: 'HRD',
+            role: user?.role === 'HO_HR' ? 'HO_HR' : 'HRD',
             userId: user?.id,
             at: new Date().toISOString(),
           },
@@ -147,16 +148,26 @@ export function BackgroundVerificationWidget({
         bg_verification: completed,
       };
 
-      // Atomic single request for saving BG verification data and transitioning stage
-      const updatedCandidate = await updateCandidateStage(
-        candidate.id,
-        'APPLICATION' as PipelineStage,
-        'Background Verification completed.',
-        updatedRawData
-      );
-      toast.success('Background Verification completed successfully!');
-      if (navigateToStage) {
-        navigateToStage('APPLICATION');
+      let updatedCandidate: Candidate;
+      if (candidate.current_stage === 'BACKGROUND_VERIFICATION') {
+        // Normal branch workflow: advance stage to APPLICATION
+        updatedCandidate = await updateCandidateStage(
+          candidate.id,
+          'APPLICATION' as PipelineStage,
+          'Background Verification completed.',
+          updatedRawData
+        );
+        toast.success('Background Verification completed successfully!');
+        if (navigateToStage) {
+          navigateToStage('APPLICATION');
+        }
+      } else {
+        // Already at Head Office or in later stage: save raw data directly without regressing stage
+        updatedCandidate = await updateCandidateRawData(candidate.id, updatedRawData);
+        toast.success('Background Verification details saved successfully!');
+        if (navigateToStage) {
+          navigateToStage(candidate.current_stage);
+        }
       }
       onUpdate(updatedCandidate);
     } catch (err) {
@@ -532,11 +543,20 @@ export function BackgroundVerificationWidget({
 
       {!locked && (
         <div className="border-t border-border pt-6 flex justify-end gap-3">
+          {navigateToStage && candidate.current_stage !== 'BACKGROUND_VERIFICATION' && (
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => navigateToStage(candidate.current_stage)}
+            >
+              Back to Candidate Profile
+            </Button>
+          )}
           <Button variant="outline" onClick={handleSaveProgress} isLoading={isSaving}>
             <Save className="w-4 h-4 mr-2" /> Save Progress
           </Button>
           <Button variant="primary" onClick={handleComplete} isLoading={isCompleting}>
-            <FileCheck className="w-4 h-4 mr-2" /> Complete Verification
+            <FileCheck className="w-4 h-4 mr-2" /> {candidate.current_stage === 'BACKGROUND_VERIFICATION' ? 'Complete Verification' : 'Save & Complete Verification'}
           </Button>
         </div>
       )}
