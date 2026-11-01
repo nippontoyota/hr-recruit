@@ -11,11 +11,11 @@ function App() {
       <Toaster
         position="bottom-right"
         theme="light"
-        closeButton
+        closeButton={false}
         expand={false}
-        duration={3500}
+        duration={3000}
         visibleToasts={4}
-        gap={10}
+        gap={8}
         offset={20}
         mobileOffset={{ bottom: 16, right: 16, left: 16 }}
         icons={{
