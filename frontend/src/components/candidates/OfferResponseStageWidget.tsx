@@ -1,5 +1,6 @@
 import { AlertCircle, CheckCircle2, Clock3, Mail, Send, XCircle, Edit2, Loader2 } from 'lucide-react';
-import { Button, Input, RichTextEditor } from '../ui';
+import { Button, Input } from '../ui';
+import { RichTextEditor } from '../ui/RichTextEditor';
 import type { Candidate } from '../../types';
 import { sendOfferAcceptanceEmail, updateOfferResponse, getOfferAcceptanceEmailPreview } from '../../api/candidates';
 import { extractError } from '../../lib/utils';

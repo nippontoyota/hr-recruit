@@ -40,3 +40,21 @@ def test_production_app_exposes_server_timing_on_health_check():
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
     assert float(response.headers["server-timing"].split("dur=")[1]) >= 0
+
+
+def test_production_app_compresses_large_responses_with_gzip():
+    client = TestClient(production_app)
+    # Small payloads remain uncompressed to save CPU overhead
+    res_small = client.get("/health")
+    assert res_small.status_code == 200
+    assert res_small.headers.get("content-encoding") is None
+
+    # Payloads >= 1000 bytes receive transparent gzip compression
+    @production_app.get("/_test_compression")
+    def _test_payload():
+        return {"data": "X" * 2000}
+
+    res_large = client.get("/_test_compression")
+    assert res_large.status_code == 200
+    assert res_large.headers.get("content-encoding") == "gzip"
+    assert res_large.json()["data"] == "X" * 2000
