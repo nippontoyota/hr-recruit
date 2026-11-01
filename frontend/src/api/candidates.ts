@@ -56,6 +56,21 @@ export const getCandidateWorkStates = async (
   return response.data;
 };
 
+export const getQueueCounts = async (
+  queryState?: CandidateListQueryState,
+  signal?: AbortSignal,
+): Promise<Record<string, number>> => {
+  const query = candidateQueryParams(queryState ?? {
+    search: '', stages: [], offerStatuses: [], branches: [], sources: [], position: '', queue: '', nextActions: [],
+    createdDate: '', sentDate: '', sortBy: 'created_at', sortDirection: 'desc',
+  }, 1, 1);
+  query.delete('page');
+  query.delete('limit');
+  query.delete('queue');
+  const response = await request('GET', `/candidates/queue-counts?${query.toString()}`, undefined, { signal });
+  return response.data;
+};
+
 export const downloadCandidatesCsv = async (queryState: CandidateListQueryState): Promise<Blob> => {
   const query = candidateQueryParams(queryState, 1, 200);
   query.delete('page');

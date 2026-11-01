@@ -5,7 +5,9 @@ import type { Candidate } from '../../types';
 import { QUEUE_DEFINITIONS, type CandidateQueue, matchesQueue } from '../../lib/stages';
 
 interface WorkQueueSummaryProps {
-  candidates: Candidate[];
+  counts?: Record<string, number>;
+  totalCandidates?: number;
+  candidates?: Candidate[];
   selectedQueue: CandidateQueue | '';
   onQueueChange: (queue: CandidateQueue | '') => void;
   isLoading?: boolean;
@@ -85,23 +87,24 @@ function CountSkeleton({ skeletonClass }: { skeletonClass: string }) {
   );
 }
 
-export function WorkQueueSummary({ candidates, selectedQueue, onQueueChange, isLoading = false }: WorkQueueSummaryProps) {
-  const knownStateCount = candidates.filter((candidate) => candidate.work_state != null).length;
+export function WorkQueueSummary({
+  counts = {},
+  totalCandidates,
+  candidates = [],
+  selectedQueue,
+  onQueueChange,
+  isLoading = false,
+}: WorkQueueSummaryProps) {
   const overviewSelected = selectedQueue === '';
   const overviewTone = tones.OVERVIEW;
+  const overviewCount = totalCandidates ?? counts['OVERVIEW'] ?? candidates.length;
 
   return (
     <section aria-labelledby="work-queue-heading" className="space-y-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
         <div>
           <h2 id="work-queue-heading" className="text-sm font-semibold text-text-primary">Work queues</h2>
-          <p className="text-xs text-muted-foreground">Counts reflect the currently loaded candidates.</p>
         </div>
-        {knownStateCount < candidates.length && candidates.length > 0 && (
-          <span className="text-xs text-muted-foreground" role="status">
-            {candidates.length - knownStateCount} older response{candidates.length - knownStateCount === 1 ? '' : 's'} without workflow data
-          </span>
-        )}
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7" role="group" aria-label="Candidate work queues">
         <button
@@ -118,16 +121,18 @@ export function WorkQueueSummary({ candidates, selectedQueue, onQueueChange, isL
             Candidate Overview
           </span>
           <span className={cn('flex items-center gap-1 text-xl font-bold tabular-nums', overviewTone.count)}>
-            {isLoading && candidates.length === 0
+            {isLoading && overviewCount === 0
               ? <CountSkeleton skeletonClass={overviewTone.skeleton} />
-              : candidates.length}
+              : overviewCount}
             {overviewSelected && !isLoading && <CheckCircle2 className={cn('h-3.5 w-3.5', overviewTone.icon)} aria-hidden="true" />}
           </span>
         </button>
         {QUEUE_DEFINITIONS.map(({ key, label }) => {
           const Icon = icons[key];
           const tone = tones[key];
-          const count = candidates.filter((candidate) => matchesQueue(candidate, key)).length;
+          const count = counts[key] !== undefined
+            ? counts[key]
+            : candidates.filter((candidate) => matchesQueue(candidate, key)).length;
           const selected = selectedQueue === key;
           return (
             <button
@@ -146,7 +151,7 @@ export function WorkQueueSummary({ candidates, selectedQueue, onQueueChange, isL
                 {label}
               </span>
               <span className={cn('flex items-center gap-1 text-xl font-bold tabular-nums', tone.count)}>
-                {isLoading && candidates.length === 0
+                {isLoading && count === 0
                   ? <CountSkeleton skeletonClass={tone.skeleton} />
                   : count}
                 {selected && !isLoading && <CheckCircle2 className={cn('h-3.5 w-3.5', tone.icon)} aria-hidden="true" />}

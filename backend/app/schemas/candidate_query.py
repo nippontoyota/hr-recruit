@@ -44,6 +44,7 @@ class CandidateListQuery(BaseModel):
     branch: list[str] = Field(default=[], max_length=50)
     source: list[str] = Field(default=[], max_length=50)
     position: str | None = Field(default=None, max_length=255)
+    queue: str | None = Field(default=None, max_length=50)
     next_action: list[str] = Field(default=[], max_length=30)
     created_date: date | None = None
     created_before: date | None = None

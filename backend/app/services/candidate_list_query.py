@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Iterator
 from zoneinfo import ZoneInfo
 
@@ -97,6 +97,71 @@ def _utc_day_bounds(start, end):
     return start_at, end_at
 
 
+_HO_STAGES = frozenset(
+    {
+        PipelineStage.SENT_TO_HO,
+        PipelineStage.HO_INTERVIEW_INTIMATION,
+        PipelineStage.HO_INTERVIEWS,
+        PipelineStage.HO_HR_INTERVIEW,
+        PipelineStage.HO_DEPT_INTERVIEW,
+        PipelineStage.CSS,
+        PipelineStage.SALARY_DETAILS,
+        PipelineStage.FINAL_APPROVAL,
+        PipelineStage.OFFER_RESPONSE,
+        PipelineStage.HIRED,
+    }
+)
+
+_OFFER_STAGES = frozenset(
+    {
+        PipelineStage.CSS,
+        PipelineStage.SALARY_DETAILS,
+        PipelineStage.FINAL_APPROVAL,
+        PipelineStage.OFFER_RESPONSE,
+        PipelineStage.HIRED,
+    }
+)
+
+
+def queue_clause(queue: str, now_cutoff: datetime | None = None):
+    q = (queue or "").upper().strip()
+    cutoff = now_cutoff or (datetime.now(ZoneInfo("UTC")) - timedelta(days=4))
+    if q == "ON_HOLD":
+        return Candidate.current_stage == PipelineStage.ON_HOLD
+    if q == "WAITING_FOR_HO":
+        return Candidate.current_stage.in_(_HO_STAGES)
+    if q == "WAITING_FOR_CANDIDATE":
+        return or_(
+            Candidate.pre_form_status.in_(("SENT", "VIEWED")),
+            Candidate.offer_status == "SENT",
+        )
+    if q == "READY_FOR_OFFER":
+        return and_(
+            Candidate.current_stage.in_(_OFFER_STAGES),
+            Candidate.salary_data.is_not(None),
+            func.coalesce(Candidate.offer_status, "").notin_(("SENT", "ACCEPTED", "DECLINED")),
+        )
+    if q == "STALLED":
+        return and_(
+            Candidate.current_stage.notin_((PipelineStage.HIRED, PipelineStage.REJECTED)),
+            func.coalesce(Candidate.updated_at, Candidate.created_at) <= cutoff,
+        )
+    if q == "NEEDS_ACTION":
+        waiting_for_candidate = or_(
+            and_(
+                Candidate.current_stage.in_((PipelineStage.CALL_LETTER, PipelineStage.CANDIDATE_FORM)),
+                Candidate.pre_form_status.in_(("SENT", "VIEWED")),
+            ),
+            Candidate.offer_status == "SENT",
+        )
+        return and_(
+            Candidate.current_stage != PipelineStage.REJECTED,
+            func.coalesce(Candidate.offer_status, "").notin_(("ACCEPTED", "DECLINED")),
+            ~waiting_for_candidate,
+        )
+    return None
+
+
 def _next_action_expression():
     return case(
         (Candidate.current_stage == PipelineStage.REJECTED, "No further action"),
@@ -134,6 +199,10 @@ def build_candidate_list_query(user: User, query: CandidateListQuery) -> Select:
         statement = statement.where(Candidate.position_applied_for.ilike(f"%{query.position}%"))
     if query.next_action:
         statement = statement.where(_next_action_expression().in_(query.next_action))
+    if query.queue:
+        clause = queue_clause(query.queue)
+        if clause is not None:
+            statement = statement.where(clause)
     if query.search:
         term = f"%{query.search}%"
         statement = statement.where(or_(

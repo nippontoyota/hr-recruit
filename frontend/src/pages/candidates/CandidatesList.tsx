@@ -5,7 +5,7 @@ import { Button, Modal, LoadingSpinner, EmptyState, Badge } from '../../componen
 import { Plus, RefreshCw, Trash, CheckSquare, Square, Minus, Play, Users, Download, ArrowDown, ArrowUp } from 'lucide-react';
 import { useAuth } from '../../auth';
 import { deleteCandidate, bulkDeleteCandidates, unholdCandidate, downloadCandidatesExcel } from '../../api/candidates';
-import { getStageBadgeVariant, stageLabel, formatSource, isCandidateQueue, matchesQueue, type CandidateQueue } from '../../lib/stages';
+import { getStageBadgeVariant, stageLabel, formatSource, isCandidateQueue, type CandidateQueue } from '../../lib/stages';
 import type { Candidate } from '../../types';
 import { PIPELINE_STAGES, HO_PIPELINE_STAGES, HO_POST_SEND_STAGES } from '../../types';
 import { AddCandidateForm } from '../../components/candidates/AddCandidateForm';
@@ -64,6 +64,7 @@ export default function CandidatesList() {
   const {
     candidates,
     totalCount,
+    queueCounts,
     loading,
     refreshing,
     loadError,
@@ -135,6 +136,14 @@ export default function CandidatesList() {
   // Clear selection when filters change
   useEffect(() => { setSelectedIds(new Set()); }, [searchQuery, stageFilter, selectedQueue]);
 
+  useEffect(() => {
+    setAdvancedQuery((prev) => {
+      if (prev.queue === selectedQueue) return prev;
+      return { ...prev, queue: selectedQueue };
+    });
+    setPage(1);
+  }, [selectedQueue]);
+
   function setQueue(queue: CandidateQueue | '') {
     const next = new URLSearchParams(searchParams);
     if (queue) next.set('queue', queue);
@@ -142,12 +151,11 @@ export default function CandidatesList() {
     setSearchParams(next);
   }
 
-  // The backend filters and paginates; queue filtering is derived from the loaded page.
+  // The backend filters and paginates across all candidates in the system.
   const filteredCandidates = useMemo(
     () => {
-      const queueCandidates = selectedQueue ? candidates.filter((candidate) => matchesQueue(candidate, selectedQueue)) : candidates;
-      if (advancedQuery.nextActions.length === 0) return queueCandidates;
-      return queueCandidates.filter((candidate) => {
+      if (advancedQuery.nextActions.length === 0) return candidates;
+      return candidates.filter((candidate) => {
         // The list request omits workflow metadata for faster first paint.
         // Keep rows visible until that metadata arrives, then apply the
         // selected action locally while the server result is refreshing.
@@ -155,7 +163,7 @@ export default function CandidatesList() {
         return advancedQuery.nextActions.includes(getCandidateWorkState(candidate).next_action);
       });
     },
-    [candidates, selectedQueue, advancedQuery.nextActions]
+    [candidates, advancedQuery.nextActions]
   );
 
   // Select-all derived state
@@ -254,7 +262,7 @@ export default function CandidatesList() {
   const noMatches = !loading && !loadError && candidates.length > 0 && filteredCandidates.length === 0;
   const resultSummary = loading
     ? 'Loading candidates'
-    : `${filteredCandidates.length} candidate${filteredCandidates.length === 1 ? '' : 's'} shown${totalCount !== filteredCandidates.length && !selectedQueue ? ` of ${totalCount}` : ''}`;
+    : `${filteredCandidates.length} candidate${filteredCandidates.length === 1 ? '' : 's'} shown${totalCount > filteredCandidates.length ? ` of ${totalCount}` : ''}`;
 
   return (
     <>
@@ -289,6 +297,8 @@ export default function CandidatesList() {
           )}
 
           <WorkQueueSummary
+            counts={queueCounts}
+            totalCandidates={queueCounts['OVERVIEW'] ?? totalCount}
             candidates={candidates}
             selectedQueue={selectedQueue}
             onQueueChange={setQueue}
@@ -303,7 +313,7 @@ export default function CandidatesList() {
               ? HO_PIPELINE_STAGES.includes(stage) || stage === 'REJECTED'
               : true)}
             hasActiveFilters={filtersActive}
-            onClear={() => { setSearchQuery(''); setStageFilter(''); setAdvancedQuery((previous) => ({ ...previous, stages: [], offerStatuses: [], branches: [], sources: [], position: '', nextActions: [], createdDate: '', sentDate: '' })); setQueue(''); setPage(1); }}
+            onClear={() => { setSearchQuery(''); setStageFilter(''); setAdvancedQuery((previous) => ({ ...previous, stages: [], offerStatuses: [], branches: [], sources: [], position: '', queue: '', nextActions: [], createdDate: '', sentDate: '' })); setQueue(''); setPage(1); }}
           />
           <p className="px-1 text-xs text-muted-foreground" aria-live="polite">{resultSummary}</p>
           <div className="sr-only" aria-live="polite">{loading ? 'Loading candidates.' : `${filteredCandidates.length} candidates available.`}</div>

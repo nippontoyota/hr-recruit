@@ -1,10 +1,10 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
-from sqlalchemy import select, func, or_, delete
+from sqlalchemy import select, func, or_, delete, case
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
@@ -56,6 +56,7 @@ from app.services.candidate_list_query import (
     candidate_work_state_load_options,
     candidate_csv_rows,
     candidate_list_rows_with_metadata,
+    queue_clause,
 )
 from app.services.document_service import (
     document_out as _document_out,
@@ -427,6 +428,37 @@ def list_candidates(
         page=query.page,
         limit=query.limit
     )
+
+
+@router.get("/queue-counts", response_model=dict[str, int])
+def candidate_queue_counts(
+    query: CandidateListQuery = Depends(),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+):
+    """Return system-wide counts for each candidate work queue."""
+    base_query = query.model_copy(update={"queue": None, "stage": []})
+    statement = build_candidate_list_query(user, base_query).order_by(None)
+    now_cutoff = datetime.now(UTC) - timedelta(days=4)
+    counts_stmt = statement.with_only_columns(
+        func.count(Candidate.id).label("total"),
+        func.count(case((queue_clause("NEEDS_ACTION", now_cutoff), 1))).label("needs_action"),
+        func.count(case((queue_clause("WAITING_FOR_CANDIDATE", now_cutoff), 1))).label("waiting_for_candidate"),
+        func.count(case((queue_clause("WAITING_FOR_HO", now_cutoff), 1))).label("waiting_for_ho"),
+        func.count(case((queue_clause("READY_FOR_OFFER", now_cutoff), 1))).label("ready_for_offer"),
+        func.count(case((queue_clause("ON_HOLD", now_cutoff), 1))).label("on_hold"),
+        func.count(case((queue_clause("STALLED", now_cutoff), 1))).label("stalled"),
+    )
+    row = db.execute(counts_stmt).one()
+    return {
+        "OVERVIEW": int(row[0] or 0),
+        "NEEDS_ACTION": int(row[1] or 0),
+        "WAITING_FOR_CANDIDATE": int(row[2] or 0),
+        "WAITING_FOR_HO": int(row[3] or 0),
+        "READY_FOR_OFFER": int(row[4] or 0),
+        "ON_HOLD": int(row[5] or 0),
+        "STALLED": int(row[6] or 0),
+    }
 
 
 @router.get("/work-states", response_model=dict[str, CandidateWorkState])

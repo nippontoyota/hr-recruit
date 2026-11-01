@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { getCandidates, getCandidateWorkStates } from '../../api/candidates';
+import { getCandidates, getCandidateWorkStates, getQueueCounts } from '../../api/candidates';
 import type { Candidate, PipelineStage } from '../../types';
 import { extractError, isAbortError } from '../../lib/utils';
 import { emptyCandidateListQuery, sortCandidateRows, type CandidateListQueryState, type CandidateSortField } from '../../lib/candidateListQuery';
@@ -66,6 +66,7 @@ function writeCandidateListCache(key: string, data: Candidate[], totalCount: num
 export function useCandidatesList(initialPage = 1, initialLimit = 50) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [queueCounts, setQueueCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -117,6 +118,12 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
       setLoadError(null);
       writeCandidateListCache(cacheKey, candidateRows, candidateTotal);
       loadedRef.current = true;
+      void getQueueCounts(requestQuery, signal)
+        .then((counts) => {
+          if (signal?.aborted) return;
+          if (counts && typeof counts === 'object') setQueueCounts(counts);
+        })
+        .catch(() => {});
       void getCandidateWorkStates(candidateRows.map((candidate) => candidate.id), signal)
         .then((workStates) => {
           if (signal?.aborted) return;
@@ -163,6 +170,7 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
   return {
     candidates,
     totalCount,
+    queueCounts,
     loading,
     refreshing,
     loadError,

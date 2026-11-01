@@ -20,6 +20,7 @@ export interface CandidateListQueryState {
   branches: string[];
   sources: string[];
   position: string;
+  queue?: string;
   nextActions: string[];
   createdDate: string;
   sentDate: string;
@@ -28,13 +29,14 @@ export interface CandidateListQueryState {
 }
 
 export const emptyCandidateListQuery = (): CandidateListQueryState => ({
-  search: '', stages: [], offerStatuses: [], branches: [], sources: [], position: '', nextActions: [],
+  search: '', stages: [], offerStatuses: [], branches: [], sources: [], position: '', queue: '', nextActions: [],
   createdDate: '', sentDate: '', sortBy: 'created_at', sortDirection: 'desc',
 });
 
 export function candidateQueryParams(query: CandidateListQueryState, page: number, limit: number): URLSearchParams {
   const params = new URLSearchParams({ page: String(page), limit: String(limit), sort_by: query.sortBy, sort_direction: query.sortDirection });
   if (query.search.trim()) params.set('search', query.search.trim());
+  if (query.queue) params.set('queue', query.queue);
   query.stages.forEach((value) => params.append('stage', value));
   query.offerStatuses.forEach((value) => params.append('offer_status', value));
   query.branches.forEach((value) => params.append('branch', value));
