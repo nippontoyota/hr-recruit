@@ -97,7 +97,9 @@ export function WorkQueueSummary({
 }: WorkQueueSummaryProps) {
   const overviewSelected = selectedQueue === '';
   const overviewTone = tones.OVERVIEW;
-  const overviewCount = totalCandidates ?? counts['OVERVIEW'] ?? candidates.length;
+  const hasCounts = Boolean(counts && Object.keys(counts).length > 0);
+  const overviewCount = counts['OVERVIEW'] ?? totalCandidates ?? candidates.length;
+  const showSkeleton = isLoading && !hasCounts;
 
   return (
     <section aria-labelledby="work-queue-heading" className="space-y-2">
@@ -121,16 +123,19 @@ export function WorkQueueSummary({
             Candidate Overview
           </span>
           <span className={cn('flex items-center gap-1 text-xl font-bold tabular-nums', overviewTone.count)}>
-            {isLoading && overviewCount === 0
-              ? <CountSkeleton skeletonClass={overviewTone.skeleton} />
-              : overviewCount}
-            {overviewSelected && !isLoading && <CheckCircle2 className={cn('h-3.5 w-3.5', overviewTone.icon)} aria-hidden="true" />}
+            {showSkeleton ? (
+              <CountSkeleton skeletonClass={overviewTone.skeleton} />
+            ) : (
+              overviewCount
+            )}
+            {overviewSelected && !showSkeleton && <CheckCircle2 className={cn('h-3.5 w-3.5', overviewTone.icon)} aria-hidden="true" />}
           </span>
         </button>
         {QUEUE_DEFINITIONS.map(({ key, label }) => {
           const Icon = icons[key];
           const tone = tones[key];
-          const count = counts[key] !== undefined
+          const hasKey = counts[key] !== undefined;
+          const count = hasKey
             ? counts[key]
             : candidates.filter((candidate) => matchesQueue(candidate, key)).length;
           const selected = selectedQueue === key;
@@ -139,7 +144,7 @@ export function WorkQueueSummary({
               key={key}
               type="button"
               aria-pressed={selected}
-              aria-label={`${label}: ${count} candidates`}
+              aria-label={`${label}: ${showSkeleton ? 'loading' : count} candidates`}
               onClick={() => onQueueChange(key)}
               className={cn(
                 'flex min-h-16 flex-col justify-between rounded-xl border p-3 text-left transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
@@ -151,10 +156,12 @@ export function WorkQueueSummary({
                 {label}
               </span>
               <span className={cn('flex items-center gap-1 text-xl font-bold tabular-nums', tone.count)}>
-                {isLoading && count === 0
-                  ? <CountSkeleton skeletonClass={tone.skeleton} />
-                  : count}
-                {selected && !isLoading && <CheckCircle2 className={cn('h-3.5 w-3.5', tone.icon)} aria-hidden="true" />}
+                {showSkeleton ? (
+                  <CountSkeleton skeletonClass={tone.skeleton} />
+                ) : (
+                  count
+                )}
+                {selected && !showSkeleton && <CheckCircle2 className={cn('h-3.5 w-3.5', tone.icon)} aria-hidden="true" />}
               </span>
             </button>
           );

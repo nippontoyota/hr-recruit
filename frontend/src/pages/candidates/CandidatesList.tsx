@@ -67,6 +67,7 @@ export default function CandidatesList() {
     totalCount,
     queueCounts,
     loading,
+    queuesLoading,
     refreshing,
     loadError,
     page,
@@ -303,7 +304,7 @@ export default function CandidatesList() {
             candidates={candidates}
             selectedQueue={selectedQueue}
             onQueueChange={setQueue}
-            isLoading={loading}
+            isLoading={loading || queuesLoading}
           />
           <CandidateFilters
             searchQuery={searchQuery}

@@ -11,6 +11,7 @@ const CANDIDATE_LIST_CACHE_PREFIX = 'candidate-list-cache:v1:';
 type CandidateListCache = {
   data: Candidate[];
   totalCount: number;
+  queueCounts?: Record<string, number>;
   cachedAt: number;
 };
 
@@ -55,9 +56,9 @@ function readCandidateListCache(key: string): CandidateListCache | null {
   }
 }
 
-function writeCandidateListCache(key: string, data: Candidate[], totalCount: number) {
+function writeCandidateListCache(key: string, data: Candidate[], totalCount: number, queueCounts?: Record<string, number>) {
   try {
-    sessionStorage.setItem(key, JSON.stringify({ data, totalCount, cachedAt: Date.now() } satisfies CandidateListCache));
+    sessionStorage.setItem(key, JSON.stringify({ data, totalCount, queueCounts, cachedAt: Date.now() } satisfies CandidateListCache));
   } catch {
     // Cache is an optional latency optimization; quota/security errors are harmless.
   }
@@ -67,7 +68,9 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [queueCounts, setQueueCounts] = useState<Record<string, number>>({});
+  const queueCountsRef = useRef<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [queuesLoading, setQueuesLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadedRef = useRef(false);
@@ -94,13 +97,26 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
     if (cached) {
       setCandidates(cached.data);
       setTotalCount(cached.totalCount);
+      if (cached.queueCounts && Object.keys(cached.queueCounts).length > 0) {
+        setQueueCounts(cached.queueCounts);
+        queueCountsRef.current = cached.queueCounts;
+        setQueuesLoading(false);
+      }
       setLoadError(null);
       loadedRef.current = true;
     }
-    if (!loadedRef.current) setLoading(true);
-    else setRefreshing(true);
+    if (!loadedRef.current) {
+      setLoading(true);
+      setQueuesLoading(true);
+    } else {
+      setRefreshing(true);
+    }
     try {
-      const res = await getCandidates(page, limit, requestQuery, signal, false);
+      // Concurrently fetch candidate rows and global queue counts to eliminate waterfalls and visual flashing
+      const [res, countsRes] = await Promise.all([
+        getCandidates(page, limit, requestQuery, signal, false),
+        getQueueCounts(requestQuery, signal).catch(() => null),
+      ]);
       if (signal?.aborted) return;
       const candidateRows = Array.isArray(res.data) ? res.data : [];
       const candidateTotal = typeof res.total_count === 'number' ? res.total_count : candidateRows.length;
@@ -115,15 +131,18 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
         }));
       });
       setTotalCount(candidateTotal);
+
+      let latestCounts = queueCountsRef.current;
+      if (countsRes && typeof countsRes === 'object') {
+        latestCounts = countsRes;
+        queueCountsRef.current = countsRes;
+        setQueueCounts(countsRes);
+      }
+      setQueuesLoading(false);
       setLoadError(null);
-      writeCandidateListCache(cacheKey, candidateRows, candidateTotal);
+      writeCandidateListCache(cacheKey, candidateRows, candidateTotal, latestCounts);
       loadedRef.current = true;
-      void getQueueCounts(requestQuery, signal)
-        .then((counts) => {
-          if (signal?.aborted) return;
-          if (counts && typeof counts === 'object') setQueueCounts(counts);
-        })
-        .catch(() => {});
+
       void getCandidateWorkStates(candidateRows.map((candidate) => candidate.id), signal)
         .then((workStates) => {
           if (signal?.aborted) return;
@@ -132,7 +151,7 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
             work_state: workStates[candidate.id] ?? candidate.work_state,
           }));
           setCandidates(merged);
-          writeCandidateListCache(cacheKey, merged, candidateTotal);
+          writeCandidateListCache(cacheKey, merged, candidateTotal, latestCounts);
         })
         .catch((err) => {
           if (!signal?.aborted && !isAbortError(err)) {
@@ -152,6 +171,7 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
     } finally {
       if (!signal?.aborted) {
         setLoading(false);
+        setQueuesLoading(false);
         setRefreshing(false);
       }
     }
@@ -172,6 +192,7 @@ export function useCandidatesList(initialPage = 1, initialLimit = 50) {
     totalCount,
     queueCounts,
     loading,
+    queuesLoading,
     refreshing,
     loadError,
     page,
