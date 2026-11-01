@@ -30,7 +30,7 @@ ON_HOLD_EMAIL_SUBJECT = "Update on Your Application"
 def _signature(candidate: Candidate) -> str:
     contact = "River recruitment team" if brand_label(getattr(candidate, "brand", None)) == "River" else "8606986060, 9544286099"
     return (
-        "<p>Best regards,<br>Mathew Paul<br>Talent Acquisition Team<br>"
+        "<p>Best regards,<br>Talent Acquisition Team<br>"
         f"{escape(brand_label(getattr(candidate, 'brand', None)))}<br>"
         f"{escape(contact)}</p>"
     )
@@ -48,11 +48,11 @@ def _rejected_email_content(candidate: Candidate) -> tuple[str, str, str]:
     <html>
       <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.55;">
         <p>Dear {name},</p>
-        <p>Thank you for taking the time to apply for the {role} position at {brand} and for your interest in joining our organization.</p>
-        <p>After careful consideration, we regret to inform you that we have decided not to move forward with your application at this time. We appreciate the time and effort you invested throughout the recruitment process.</p>
+        <p>Thank you for your interest in the {role} position at {brand} and for taking the time to participate in our recruitment process.</p>
+        <p>After careful consideration of your application and qualifications, we regret to inform you that we have decided not to move forward with your candidacy for this role at this time.</p>
         <p>Please note that you are welcome to apply again for suitable opportunities at {brand} after 180 days from the date of this communication.</p>
-        <p>We encourage you to keep an eye on our future job openings, as there may be opportunities that better match your skills and experience.</p>
-        <p>We wish you all the very best in your future career endeavors.</p>
+        <p>We encourage you to keep an eye on our future job openings as new opportunities arise that may better match your profile.</p>
+        <p>We sincerely appreciate the time and effort you invested with us and wish you the very best in your future career endeavors.</p>
         {_signature(candidate)}
       </body>
     </html>

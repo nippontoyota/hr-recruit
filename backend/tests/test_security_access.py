@@ -307,3 +307,24 @@ def test_apply_salary_lands_on_salary_details_not_final_approval():
     # Re-uploading while already on the stage must not move it further.
     _apply_salary(db, candidate, {"gross salary": 16000, "name": "Land Here"}, admin)
     assert candidate.current_stage == PipelineStage.SALARY_DETAILS
+
+
+def test_rejection_forbidden_for_local_hr():
+    from unittest.mock import MagicMock
+    app.dependency_overrides[get_current_active_user] = lambda: _user(UserRole.LOCAL_HR)
+    candidate_id = uuid4()
+    cand = _other_candidate()
+    cand.id = candidate_id
+    db = MagicMock()
+    db.scalar.return_value = cand
+    db.get.return_value = cand
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        response = client.post(
+            f"/api/v1/candidates/{candidate_id}/transition",
+            json={"to_stage": "REJECTED", "remarks": "Not qualified for the role"},
+        )
+        assert response.status_code == 403
+        assert "Only Head Office HR" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()

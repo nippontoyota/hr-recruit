@@ -19,6 +19,7 @@ from app.core.positions import (
 )
 from app.models.technical_question import TechnicalQuestion
 from dept_question_banks import DEPT_PAPERS
+from service_ops_question_banks import SERVICE_OPS_PAPERS
 
 GEM_FRESHER = [
     ("R1", "What is the first step when dealing with a new customer?",
@@ -309,6 +310,7 @@ PAPERS: dict[str, list[tuple]] = {
     PAPER_LOBBY: LOBBY,
     PAPER_DRIVER: DRIVER,
     **DEPT_PAPERS,
+    **SERVICE_OPS_PAPERS,
 }
 
 

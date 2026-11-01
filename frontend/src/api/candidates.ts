@@ -315,13 +315,15 @@ export const updateCandidateStage = async (
   candidateId: string,
   toStage: string,
   remarks?: string,
-  rawData?: Record<string, any>
+  rawData?: Record<string, any>,
+  sendRejectionEmail?: boolean
 ): Promise<Candidate> => {
   invalidateCandidateCache(candidateId);
   const response = await request('POST', `/candidates/${candidateId}/transition`, {
     to_stage: toStage,
     remarks,
     ...(rawData ? { raw_data: rawData } : {}),
+    ...(sendRejectionEmail !== undefined ? { send_rejection_email: sendRejectionEmail } : {}),
   });
   if (response.data) {
     candidateCache.set(candidateId, { data: response.data, ts: Date.now() });

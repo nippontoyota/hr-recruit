@@ -108,3 +108,14 @@ def test_send_rejection_email_records_smtp_failure(monkeypatch):
     assert status == "FAILED"
     assert error == "Email provider failed while sending. Check SMTP configuration and try again."
     assert candidate.profile.raw_data["rejectionEmailStatus"] == "FAILED"
+
+
+def test_stage_change_schema_defaults_send_rejection_email_to_false():
+    from app.schemas.candidate import StageChange
+    from app.models.enums import PipelineStage
+
+    sc = StageChange(to_stage=PipelineStage.REJECTED, remarks="Not suitable for the position")
+    assert sc.send_rejection_email is False
+
+    sc_send = StageChange(to_stage=PipelineStage.REJECTED, remarks="Not suitable for the position", send_rejection_email=True)
+    assert sc_send.send_rejection_email is True

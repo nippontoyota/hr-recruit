@@ -124,6 +124,11 @@ def transition_stage(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
 ):
+    if body.to_stage == PipelineStage.REJECTED and user.role not in (UserRole.ADMIN, UserRole.HO_HR):
+        raise HTTPException(
+            status_code=403,
+            detail="Only Head Office HR (HO_HR) or Admin accounts can reject candidates.",
+        )
     row = get_candidate_for_user(db, id, user, write=True)
     previous_stage = row.current_stage
     if body.raw_data is not None:
@@ -148,7 +153,8 @@ def transition_stage(
     }:
         _send_head_office_forwarding_email(db, updated, user)
     if previous_stage != PipelineStage.REJECTED and body.to_stage == PipelineStage.REJECTED:
-        send_rejection_email(db, updated, user)
+        if body.send_rejection_email:
+            send_rejection_email(db, updated, user)
     elif previous_stage != PipelineStage.ON_HOLD and body.to_stage == PipelineStage.ON_HOLD:
         send_on_hold_email(db, updated, user)
     db.commit()
@@ -1431,7 +1437,7 @@ def resend_head_office_forwarding_email(
 def resend_rejection_email(
     id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR, UserRole.LOCAL_HR)),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.HO_HR)),
 ):
     row = get_candidate_for_user(db, id, user, write=True)
     status, error = send_rejection_email(db, row, user)

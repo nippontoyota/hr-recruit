@@ -837,6 +837,7 @@ class StageChange(BaseModel):
     to_stage: PipelineStage
     remarks: str | None = None
     raw_data: dict[str, Any] | None = None
+    send_rejection_email: bool = False
 
     @model_validator(mode="after")
     def check_reject_remarks(self) -> "StageChange":

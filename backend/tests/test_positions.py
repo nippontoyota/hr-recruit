@@ -37,8 +37,8 @@ def test_sales_positions_include_gem_and_driver():
 
 
 def test_other_departments_driver_only():
-    assert positions_for("Service") == (POS_DRIVER,)
-    assert positions_for("Call Centre") == (POS_DRIVER,)
+    assert positions_for("Administration") == (POS_DRIVER,)
+    assert positions_for("Purchase") == (POS_DRIVER,)
 
 
 def test_paper_departments_include_staff_and_driver():
@@ -214,5 +214,154 @@ def test_department_update_syncs_raw_data():
     # Direct model update check
     body = CandidateDepartmentUpdate(department="Sales", position_applied_for=POS_GEM)
     assert body.position_applied_for == POS_GEM
+
+
+def test_service_positions_catalog():
+    from app.core.positions import (
+        POS_SERVICE_TECH_TRAINEE,
+        POS_SERVICE_TECH,
+        POS_SERVICE_PAINT_TECH,
+        POS_SERVICE_PAINT_TECH_TRAINEE,
+        POS_SERVICE_BODY_TECH_TRAINEE,
+        POS_SERVICE_BODY_TECH,
+        POS_SERVICE_ADVISOR_TRAINEE,
+        POS_SERVICE_ADVISOR,
+        POS_SERVICE_CHIEF_GEN_TECH,
+        POS_SERVICE_FRONT_BACK_OFFICE,
+        POS_SERVICE_WARRANTY_INCHARGE,
+        POS_SERVICE_TECH_LEADER,
+        POS_SERVICE_PARTS_INCHARGE,
+    )
+    svc = positions_for("Service")
+    expected = [
+        POS_SERVICE_TECH_TRAINEE,
+        POS_SERVICE_TECH,
+        POS_SERVICE_PAINT_TECH_TRAINEE,
+        POS_SERVICE_PAINT_TECH,
+        POS_SERVICE_BODY_TECH_TRAINEE,
+        POS_SERVICE_BODY_TECH,
+        POS_SERVICE_ADVISOR_TRAINEE,
+        POS_SERVICE_ADVISOR,
+        POS_SERVICE_CHIEF_GEN_TECH,
+        POS_SERVICE_FRONT_BACK_OFFICE,
+        POS_SERVICE_WARRANTY_INCHARGE,
+        POS_SERVICE_TECH_LEADER,
+        POS_SERVICE_PARTS_INCHARGE,
+        POS_DRIVER,
+    ]
+    for p in expected:
+        assert p in svc
+
+
+def test_accessories_security_call_centre_catalog():
+    from app.core.positions import (
+        POS_ACCESSORIES_TECH,
+        POS_ACCESSORIES_SALES_EXEC,
+        POS_ACCESSORIES_PARTS_INCHARGE,
+        POS_SECURITY_GUARD,
+        POS_SECURITY_SUPERVISOR,
+        POS_CALL_CENTRE_EXEC,
+    )
+    acc = positions_for("Accessories")
+    assert POS_ACCESSORIES_TECH in acc
+    assert POS_ACCESSORIES_SALES_EXEC in acc
+    assert POS_ACCESSORIES_PARTS_INCHARGE in acc
+    assert POS_DRIVER in acc
+
+    sec = positions_for("Security")
+    assert POS_SECURITY_GUARD in sec
+    assert POS_SECURITY_SUPERVISOR in sec
+    assert POS_DRIVER in sec
+
+    cc = positions_for("Call Centre")
+    assert POS_CALL_CENTRE_EXEC in cc
+    assert POS_DRIVER in cc
+
+
+def test_all_19_roles_paper_keys_and_test_assembly(monkeypatch):
+    from scripts.service_ops_question_banks import SERVICE_OPS_PAPERS
+    from app.core.positions import (
+        POS_SERVICE_TECH_TRAINEE,
+        POS_SERVICE_TECH,
+        POS_SERVICE_PAINT_TECH_TRAINEE,
+        POS_SERVICE_PAINT_TECH,
+        POS_SERVICE_BODY_TECH_TRAINEE,
+        POS_SERVICE_BODY_TECH,
+        POS_SERVICE_ADVISOR_TRAINEE,
+        POS_SERVICE_ADVISOR,
+        POS_SERVICE_CHIEF_GEN_TECH,
+        POS_SERVICE_FRONT_BACK_OFFICE,
+        POS_SERVICE_WARRANTY_INCHARGE,
+        POS_SERVICE_TECH_LEADER,
+        POS_SERVICE_PARTS_INCHARGE,
+        POS_CALL_CENTRE_EXEC,
+        POS_ACCESSORIES_TECH,
+        POS_ACCESSORIES_SALES_EXEC,
+        POS_ACCESSORIES_PARTS_INCHARGE,
+        POS_SECURITY_GUARD,
+        POS_SECURITY_SUPERVISOR,
+    )
+
+    test_roles = [
+        ("Service", POS_SERVICE_TECH_TRAINEE),
+        ("Service", POS_SERVICE_TECH),
+        ("Service", POS_SERVICE_PAINT_TECH_TRAINEE),
+        ("Service", POS_SERVICE_PAINT_TECH),
+        ("Service", POS_SERVICE_BODY_TECH_TRAINEE),
+        ("Service", POS_SERVICE_BODY_TECH),
+        ("Service", POS_SERVICE_ADVISOR_TRAINEE),
+        ("Service", POS_SERVICE_ADVISOR),
+        ("Service", POS_SERVICE_CHIEF_GEN_TECH),
+        ("Service", POS_SERVICE_FRONT_BACK_OFFICE),
+        ("Service", POS_SERVICE_WARRANTY_INCHARGE),
+        ("Service", POS_SERVICE_TECH_LEADER),
+        ("Service", POS_SERVICE_PARTS_INCHARGE),
+        ("Call Centre", POS_CALL_CENTRE_EXEC),
+        ("Accessories", POS_ACCESSORIES_TECH),
+        ("Accessories", POS_ACCESSORIES_SALES_EXEC),
+        ("Accessories", POS_ACCESSORIES_PARTS_INCHARGE),
+        ("Security", POS_SECURITY_GUARD),
+        ("Security", POS_SECURITY_SUPERVISOR),
+    ]
+
+    assert len(test_roles) == 19
+
+    # Mock common questions
+    common_bank = [
+        TechnicalQuestion(id=f"C{i}", department="COMMON", text=f"Common Q{i}", options={"A": "1", "B": "2"}, answer="A")
+        for i in range(1, 7)
+    ]
+
+    # Convert SERVICE_OPS_PAPERS to TechnicalQuestion model objects
+    role_banks = {}
+    for p_key, q_tuples in SERVICE_OPS_PAPERS.items():
+        role_banks[p_key] = [
+            TechnicalQuestion(id=qid, department=p_key, text=qtxt, options=qopts, answer=qans)
+            for qid, qtxt, qopts, qans in q_tuples
+        ]
+        assert len(role_banks[p_key]) == 15, f"{p_key} must have exactly 15 questions"
+
+    def fake_load(_db, key: str):
+        if key == "COMMON":
+            return list(common_bank)
+        return list(role_banks[key])
+
+    monkeypatch.setattr("app.core.test_paper._load_paper", fake_load)
+
+    # Validate paper_key and assemble_test_questions for all 19 roles
+    for dept, pos in test_roles:
+        key = paper_key(dept, pos, "Fresher")
+        assert key is not None, f"paper_key returned None for ({dept}, {pos})"
+        assert key in SERVICE_OPS_PAPERS, f"paper_key {key} not found in SERVICE_OPS_PAPERS"
+
+        # Generate test paper
+        test_questions = assemble_test_questions(MagicMock(), dept, pos, "Fresher")
+        # Must have exactly 15 questions: 6 common + 9 sampled from the 15
+        assert len(test_questions) == 15, f"Expected 15 questions for {pos}, got {len(test_questions)}"
+        assert {q.id for q in test_questions[:6]} == {f"C{i}" for i in range(1, 7)}
+        role_q_ids = {q.id for q in test_questions[6:]}
+        assert len(role_q_ids) == 9
+        assert role_q_ids <= {f"R{i}" for i in range(1, 16)}
+
 
 

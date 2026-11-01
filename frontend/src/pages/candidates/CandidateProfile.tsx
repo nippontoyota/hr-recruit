@@ -306,6 +306,7 @@ export default function CandidateProfile() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
+  const [sendRejectionEmailNotice, setSendRejectionEmailNotice] = useState(true);
   const [isRejecting, setIsRejecting] = useState(false);
 
   const [showHoldModal, setShowHoldModal] = useState(false);
@@ -494,16 +495,27 @@ export default function CandidateProfile() {
       toast.error('message' in validation ? validation.message : 'Rejection reason is required.');
       return;
     }
+    const shouldSendEmail = sendRejectionEmailNotice && Boolean(candidate.email);
     setIsRejecting(true);
     try {
-      const updated = await updateCandidateStage(candidate.id, 'REJECTED', rejectRemarks);
+      const updated = await updateCandidateStage(
+        candidate.id,
+        'REJECTED',
+        rejectRemarks,
+        undefined,
+        shouldSendEmail
+      );
       handleUpdate();
       setShowRejectModal(false);
       setRejectRemarks('');
-      if (updated.profile?.raw_data?.rejectionEmailStatus === 'FAILED') {
-        toast.warning('Candidate rejected, but the notification email could not be sent. See the notice below to retry.');
+      if (shouldSendEmail) {
+        if (updated.profile?.raw_data?.rejectionEmailStatus === 'FAILED') {
+          toast.warning('Candidate rejected, but the notification email could not be sent. See the notice below to retry.');
+        } else {
+          toast.success('Candidate rejected and notification email dispatched');
+        }
       } else {
-        toast.success('Candidate rejected and notified by email');
+        toast.success('Candidate moved to Rejected status (no email sent)');
       }
     } catch (err: any) {
       toast.error(extractError(err, 'Failed to reject candidate.'));
@@ -801,14 +813,20 @@ export default function CandidateProfile() {
                 >
                   <Pause className="mr-1.5 h-3.5 w-3.5" /> Hold Candidate
                 </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => setShowRejectModal(true)}
-                  className="h-8 px-3 text-white bg-[#DC143C] hover:bg-[#B21030] transition-colors shadow-sm font-extrabold uppercase rounded-sm tracking-wider text-xs"
-                >
-                  <XCircle className="mr-1.5 h-3.5 w-3.5" /> Reject Candidate
-                </Button>
+                {/* Rejection is strictly reserved for Head Office accounts (HO_HR and ADMIN) */}
+                {(isHO || isAdmin) && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => {
+                      setSendRejectionEmailNotice(Boolean(candidate.email));
+                      setShowRejectModal(true);
+                    }}
+                    className="h-8 px-3 text-white bg-[#DC143C] hover:bg-[#B21030] transition-colors shadow-sm font-extrabold uppercase rounded-sm tracking-wider text-xs"
+                  >
+                    <XCircle className="mr-1.5 h-3.5 w-3.5" /> Reject Candidate
+                  </Button>
+                )}
               </div>
             )}
 
@@ -1288,7 +1306,9 @@ export default function CandidateProfile() {
         <div className="space-y-4 p-6">
           <div className="p-3 bg-danger/5 border border-danger/20 rounded-[10px] flex items-start gap-3">
             <XCircle className="w-4 h-4 text-danger shrink-0 mt-0.5" />
-            <p className="text-sm text-muted-foreground">This will move the candidate to <strong className="text-danger">Rejected</strong> status and email them a rejection notice. This can be reversed later.</p>
+            <p className="text-sm text-muted-foreground">
+              This will move the candidate to <strong className="text-danger">Rejected</strong> status. You can choose whether to dispatch an official rejection email below.
+            </p>
           </div>
           <div>
             <label htmlFor="rejection-reason" className="block text-xs font-semibold text-foreground uppercase tracking-wider mb-1.5">
@@ -1298,12 +1318,44 @@ export default function CandidateProfile() {
               id="rejection-reason"
               value={rejectRemarks}
               onChange={(e) => setRejectRemarks(e.target.value)}
-              className="w-full bg-background border border-border rounded-[10px] p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-danger/40 focus:border-transparent transition-all duration-200 min-h-[100px] resize-y"
+              placeholder="Internal reason for rejection (required for audit)..."
+              className="w-full bg-background border border-border rounded-[10px] p-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-danger/40 focus:border-transparent transition-all duration-200 min-h-[90px] resize-y"
             />
           </div>
+
+          {candidate.email ? (
+            <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+              <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium text-foreground select-none">
+                <input
+                  type="checkbox"
+                  checked={sendRejectionEmailNotice}
+                  onChange={(e) => setSendRejectionEmailNotice(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-danger focus:ring-danger/30"
+                />
+                <span>Send official rejection email to candidate</span>
+              </label>
+              {sendRejectionEmailNotice && (
+                <div className="text-xs text-muted-foreground bg-background p-2.5 rounded border border-border space-y-1">
+                  <p className="font-semibold text-foreground/80">
+                    Recipient: <span className="font-mono text-foreground font-normal">{candidate.email}</span>
+                  </p>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Candidate will receive a formal notification thanking them for their time and stating the 180-day reapplication policy.
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              ⚠️ Candidate has no email address on file. Rejection email cannot be dispatched.
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-4 border-t border-border">
             <Button variant="ghost" onClick={() => setShowRejectModal(false)}>Cancel</Button>
-            <Button variant="danger" onClick={handleReject} isLoading={isRejecting}>Reject Candidate</Button>
+            <Button variant="danger" onClick={handleReject} isLoading={isRejecting}>
+              {sendRejectionEmailNotice && candidate.email ? 'Reject & Send Email' : 'Reject Candidate'}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -1346,7 +1398,7 @@ export default function CandidateProfile() {
                 <option value="FINAL_APPROVAL">Final Approval</option>
                 <option value="OFFER_RESPONSE">Offer Response</option>
                 <option value="ON_HOLD">On Hold</option>
-                <option value="REJECTED">Rejected</option>
+                {(isHO || isAdmin) && <option value="REJECTED">Rejected</option>}
                 <option value="HIRED">Hired</option>
               </Select>
             </div>

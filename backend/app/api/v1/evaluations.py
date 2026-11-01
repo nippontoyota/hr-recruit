@@ -142,7 +142,6 @@ def _apply_evaluation_outcome(
         return
 
     if verdict == EvaluationVerdict.REJECTED:
-        previous_stage = candidate.current_stage
         transition(
             db=db,
             candidate=candidate,
@@ -151,8 +150,7 @@ def _apply_evaluation_outcome(
             remarks=f"Rejected during {evaluation.type.value.replace('_', ' ').title()} evaluation.",
             skip_handover_lock=True,
         )
-        if previous_stage != PipelineStage.REJECTED:
-            send_rejection_email(db, candidate, user)
+        # Rejection emails are exclusively dispatched when confirmed by HO from the rejection popup
         return
     if verdict == EvaluationVerdict.ON_HOLD:
         previous_stage = candidate.current_stage
