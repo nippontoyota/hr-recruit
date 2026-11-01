@@ -9,6 +9,7 @@ import type { UserRole } from '../../types';
 import { cn } from '../../lib/utils';
 import { brandThemeStyle, getBrandConfig } from '../../lib/branding';
 import { BrandMark } from './BrandMark';
+import { prefetchRoute } from '../../lib/routePrefetch';
 
 export const AppShell = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -58,6 +59,7 @@ export const AppShell = () => {
                 location.pathname !== '/admin/dashboard' && (
                   <Link 
                     to="/admin/dashboard"
+                    onMouseEnter={() => prefetchRoute('admin-dashboard')}
                     className="flex items-center text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
                   >
                     <ChevronLeft size={16} className="mr-1" /> Back to Workspace

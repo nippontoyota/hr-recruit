@@ -1,5 +1,5 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -99,10 +99,12 @@ def _ensure_kalamassery_for_branch(db: Session, branch: str) -> None:
 
 @router.get("/locations", response_model=list[LocationTemplateResponse])
 def list_location_templates(
+    response: Response,
     branch: str | None = Query(None, description="Branch for ADMIN/HO_HR"),
     db: Session = Depends(get_db),
     user: User = Depends(_HR),
 ):
+    response.headers["Cache-Control"] = "private, max-age=60, stale-while-revalidate=300"
     branch_loc = _resolve_branch(user, branch)
     _ensure_kalamassery_for_branch(db, branch_loc)
     return list(
@@ -190,10 +192,12 @@ def delete_location_template(
 
 @router.get("/touchpoints", response_model=list[TouchpointTemplateResponse])
 def list_touchpoint_templates(
+    response: Response,
     branch: str | None = Query(None, description="Branch for ADMIN/HO_HR"),
     db: Session = Depends(get_db),
     user: User = Depends(_HR),
 ):
+    response.headers["Cache-Control"] = "private, max-age=60, stale-while-revalidate=300"
     branch_loc = _resolve_branch(user, branch)
     return list(
         db.scalars(
@@ -328,10 +332,12 @@ def delete_message_template(
 
 @router.get("/interviewers", response_model=list[InterviewerNameResponse])
 def list_interviewers(
+    response: Response,
     branch: str | None = Query(None, description="Branch for ADMIN/HO_HR"),
     db: Session = Depends(get_db),
     user: User = Depends(_HR),
 ):
+    response.headers["Cache-Control"] = "private, max-age=60, stale-while-revalidate=300"
     branch_loc = _resolve_branch(user, branch)
     return list(
         db.scalars(

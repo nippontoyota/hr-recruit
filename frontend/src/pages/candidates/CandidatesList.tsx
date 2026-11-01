@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { CandidateTableFilter } from '../../components/candidates/CandidateTableFilter';
 import { cycleSort, type CandidateSortField } from '../../lib/candidateListQuery';
 import { getBrandConfig } from '../../lib/branding';
+import { prefetchRoute } from '../../lib/routePrefetch';
 
 function CandidatesTableSkeleton() {
   return (
@@ -424,6 +425,7 @@ export default function CandidatesList() {
                             navigate(`/candidates/${candidate.id}`);
                           }
                         }}
+                        onMouseEnter={() => prefetchRoute('candidate-profile')}
                         tabIndex={0}
                         aria-label={`Open ${candidate.full_name} candidate profile`}
                         className={cn(
@@ -452,6 +454,8 @@ export default function CandidatesList() {
                           <div className="flex flex-col">
                             <a
                               href={`/candidates/${candidate.id}`}
+                              onMouseEnter={() => prefetchRoute('candidate-profile')}
+                              onFocus={() => prefetchRoute('candidate-profile')}
                               onClick={(event) => {
                                 event.stopPropagation();
                                 if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;

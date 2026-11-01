@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -27,9 +27,11 @@ def _get_opening(db: Session, opening_id: uuid.UUID) -> JobOpening:
 
 @router.get("", response_model=list[JobOpeningOut])
 def list_openings(
+    response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(_READ),
 ):
+    response.headers["Cache-Control"] = "private, max-age=60, stale-while-revalidate=300"
     statement = select(JobOpening)
     if user.role == UserRole.LOCAL_HR:
         statement = statement.where(
