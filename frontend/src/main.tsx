@@ -8,9 +8,10 @@ import { isAbortError } from './lib/utils';
 const originalToastError = toast.error.bind(toast);
 toast.error = ((message, data) => {
   if (message == null || message === '') return;
-  if (typeof message !== 'string' && isAbortError(message)) return;
+  if (isAbortError(message)) return;
   if (typeof message === 'string' && /^(Aborted|The user aborted a request\.?|The operation was aborted\.?)$/i.test(message)) return;
-  return originalToastError(message, data);
+  const safeMessage = message instanceof Error ? message.message : message;
+  return originalToastError(safeMessage, data);
 }) as typeof toast.error;
 
 // Public links were minted as /#/pre-form/... (hash router). BrowserRouter

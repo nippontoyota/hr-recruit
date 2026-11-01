@@ -1,43 +1,74 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { Input, Button } from '../components/ui';
 import { BrandMark } from '../components/layout/BrandMark';
 import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
+import { extractError } from '../lib/utils';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState('');
-  const { login, isLoading } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user, login, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const from = location.state?.from?.pathname || '/';
 
+  // If already authenticated, redirect straight to the destination
+  useEffect(() => {
+    if (user && !isLoading) {
+      const destination = (from && from !== '/' && from !== '/login')
+        ? from
+        : (user.role === 'ADMIN' ? '/admin/dashboard' : '/candidates');
+      const target = (user.role !== 'ADMIN' && destination.startsWith('/admin')) ? '/candidates' : destination;
+      navigate(target, { replace: true });
+    }
+  }, [user, isLoading, navigate, from]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting || isLoading) return;
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setFormError('Please enter your email address.');
+      return;
+    }
+    if (!password) {
+      setFormError('Please enter your password.');
+      return;
+    }
+
     setFormError('');
+    setIsSubmitting(true);
     try {
-      await login(email, password);
-      toast.success('Signed in');
+      const loggedInUser = await login(trimmedEmail, password);
 
-      const storedUser = localStorage.getItem('user');
-      const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+      const destination = (from && from !== '/' && from !== '/login')
+        ? from
+        : (loggedInUser.role === 'ADMIN' ? '/admin/dashboard' : '/candidates');
 
-      let targetPath = from;
-      if (parsedUser && parsedUser.role !== 'ADMIN' && targetPath.startsWith('/admin')) {
-        targetPath = '/';
-      }
+      const targetPath = (loggedInUser.role !== 'ADMIN' && destination.startsWith('/admin'))
+        ? '/candidates'
+        : destination;
+
+      toast.success(`Signed in as ${loggedInUser.full_name || loggedInUser.email}`, {
+        id: 'auth-status',
+        duration: 3500,
+      });
 
       navigate(targetPath, { replace: true });
     } catch (err: any) {
-      const detail = err?.response?.data?.detail;
-      const message = detail || err.message || 'Sign in failed. Check your email and password.';
+      const message = extractError(err, 'Sign in failed. Check your email and password.');
       setFormError(message);
-      toast.error(message);
+      toast.error(message, { id: 'auth-error' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -116,7 +147,7 @@ export default function Login() {
               </p>
             )}
 
-            <Button type="submit" className="mt-1 w-full" isLoading={isLoading}>
+            <Button type="submit" className="mt-1 w-full" isLoading={isLoading || isSubmitting} disabled={isLoading || isSubmitting}>
               Sign in
             </Button>
           </form>

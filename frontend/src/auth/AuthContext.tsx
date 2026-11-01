@@ -44,6 +44,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(response.user);
       localStorage.setItem('user', JSON.stringify(response.user));
       setAccessToken(response.access_token || response.token);
+      return response.user;
     } finally {
       setIsLoading(false);
     }
@@ -64,7 +65,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   useEffect(() => {
-    const handleAuthExpired = () => logout(false);
+    const handleAuthExpired = () => {
+      logout(false);
+      toast.error('Your session has expired. Please sign in again.', { id: 'session-expired' });
+    };
     window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
   }, [logout]);

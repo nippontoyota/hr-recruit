@@ -2,7 +2,7 @@ import time
 from dataclasses import dataclass, field
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -66,7 +66,8 @@ def clear_login_cache() -> None:
 
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, response: Response, db: Session = Depends(get_db)) -> TokenResponse:
-    record = _login_cache.get(body.email.lower())
+    norm_email = body.email.strip().lower()
+    record = _login_cache.get(norm_email)
     if record is not None and time.monotonic() - record.cached_at >= _LOGIN_CACHE_TTL_SECONDS:
         record = None
     if record is not None:
@@ -103,7 +104,9 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
         )
 
     try:
-        user = db.scalar(select(User).where(User.email == body.email.lower()))
+        user = db.scalar(
+            select(User).where(func.lower(func.trim(User.email)) == norm_email)
+        )
     except OperationalError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -119,7 +122,7 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Inactive user",
         )
-    _login_cache[user.email.lower()] = _record_from_user(user)
+    _login_cache[norm_email] = _record_from_user(user)
 
     frontend_role = role_for_frontend(user.role)
     token = create_access_token(
