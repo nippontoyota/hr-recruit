@@ -1,3 +1,11 @@
+// Defensive shim for older browsers where global Iterator is not defined
+if (typeof globalThis !== 'undefined' && typeof (globalThis as any).Iterator === 'undefined') {
+  (globalThis as any).Iterator = class Iterator {};
+}
+if (typeof window !== 'undefined' && typeof (window as any).Iterator === 'undefined') {
+  (window as any).Iterator = class Iterator {};
+}
+
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { toast } from 'sonner';

@@ -132,8 +132,8 @@ def queue_clause(queue: str, now_cutoff: datetime | None = None):
         return Candidate.current_stage.in_(_HO_STAGES)
     if q == "WAITING_FOR_CANDIDATE":
         return or_(
-            Candidate.pre_form_status.in_(("SENT", "VIEWED")),
-            Candidate.offer_status == "SENT",
+            func.coalesce(Candidate.pre_form_status, "").in_(("SENT", "VIEWED")),
+            func.coalesce(Candidate.offer_status, "") == "SENT",
         )
     if q == "READY_FOR_OFFER":
         return and_(
@@ -150,11 +150,12 @@ def queue_clause(queue: str, now_cutoff: datetime | None = None):
         waiting_for_candidate = or_(
             and_(
                 Candidate.current_stage.in_((PipelineStage.CALL_LETTER, PipelineStage.CANDIDATE_FORM)),
-                Candidate.pre_form_status.in_(("SENT", "VIEWED")),
+                func.coalesce(Candidate.pre_form_status, "").in_(("SENT", "VIEWED")),
             ),
-            Candidate.offer_status == "SENT",
+            func.coalesce(Candidate.offer_status, "") == "SENT",
         )
         return and_(
+            Candidate.current_stage.is_not(None),
             Candidate.current_stage != PipelineStage.REJECTED,
             func.coalesce(Candidate.offer_status, "").notin_(("ACCEPTED", "DECLINED")),
             ~waiting_for_candidate,
