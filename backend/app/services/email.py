@@ -54,18 +54,33 @@ def send_email(
             settings.smtp_host,
             settings.smtp_port,
             timeout=20,
-            source_address=('0.0.0.0', 0)
         ) as server:
             server.starttls()
             server.login(settings.smtp_user, settings.smtp_password)
             server.send_message(msg, from_addr=settings.smtp_from_email, to_addrs=to_addrs)
-            
+        
         logger.info(f"Email sent successfully to {to_email}")
         return True
+    except smtplib.SMTPAuthenticationError as e:
+        logger.error("SMTP Authentication failed for %s: %s", settings.smtp_user, e)
+        raise EmailSendError(
+            f"SMTP Authentication failed for {settings.smtp_user}. Check Google App Password in configuration."
+        ) from e
+    except smtplib.SMTPRecipientsRefused as e:
+        logger.error("Candidate email rejected for %s: %s", to_email, e)
+        raise EmailSendError(
+            f"Candidate email rejected by email provider ({to_email}). Check recipient address."
+        ) from e
+    except smtplib.SMTPException as e:
+        logger.error("SMTP error while sending to %s: %s", to_email, e)
+        raise EmailSendError(
+            f"Email provider error while sending ({type(e).__name__}): {e}. Check SMTP configuration and try again."
+        ) from e
     except Exception as e:
         logger.error("Failed to send email to %s: %s", to_email, e)
+        err_msg = str(e).strip() or type(e).__name__
         raise EmailSendError(
-            "Email provider failed while sending. Check SMTP configuration and try again."
+            f"Email provider failed while sending: {err_msg}. Check SMTP configuration and try again."
         ) from e
 
 

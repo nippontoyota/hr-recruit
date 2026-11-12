@@ -97,7 +97,8 @@ def test_queue_clause_evaluates_correctly_with_null_offer_and_pre_form():
         needs_action_expr = queue_clause("NEEDS_ACTION")
 
         # Compile and run against SQLite table
-        # Since queue_clause binds to app.models.candidate.Candidate, let's verify SQL compilation includes COALESCE
+        # Since queue_clause binds to app.models.candidate.Candidate, let's verify SQL compilation includes COALESCE and CAST for PostgreSQL enum safety
         sql = str(needs_action_expr.compile())
         assert "coalesce" in sql.lower()
+        assert "cast(" in sql.lower() and "as varchar" in sql.lower()
 

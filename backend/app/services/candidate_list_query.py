@@ -4,7 +4,7 @@ from datetime import datetime, time, timedelta
 from typing import Iterator
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Select, and_, case, exists, func, or_, select
+from sqlalchemy import Select, String, and_, case, cast, exists, func, or_, select
 from sqlalchemy.orm import Session, joinedload, load_only
 
 from app.core.ho_pipeline import HO_HANDOVER_STAGES, HO_HR_PIPELINE_STAGES
@@ -132,7 +132,7 @@ def queue_clause(queue: str, now_cutoff: datetime | None = None):
         return Candidate.current_stage.in_(_HO_STAGES)
     if q == "WAITING_FOR_CANDIDATE":
         return or_(
-            func.coalesce(Candidate.pre_form_status, "").in_(("SENT", "VIEWED")),
+            func.coalesce(cast(Candidate.pre_form_status, String), "").in_(("SENT", "VIEWED")),
             func.coalesce(Candidate.offer_status, "") == "SENT",
         )
     if q == "READY_FOR_OFFER":
@@ -150,7 +150,7 @@ def queue_clause(queue: str, now_cutoff: datetime | None = None):
         waiting_for_candidate = or_(
             and_(
                 Candidate.current_stage.in_((PipelineStage.CALL_LETTER, PipelineStage.CANDIDATE_FORM)),
-                func.coalesce(Candidate.pre_form_status, "").in_(("SENT", "VIEWED")),
+                func.coalesce(cast(Candidate.pre_form_status, String), "").in_(("SENT", "VIEWED")),
             ),
             func.coalesce(Candidate.offer_status, "") == "SENT",
         )
