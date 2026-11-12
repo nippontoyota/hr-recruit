@@ -1,6 +1,8 @@
-import smtplib
-from email.message import EmailMessage
 import logging
+import smtplib
+import ssl
+from email.message import EmailMessage
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -8,6 +10,38 @@ logger = logging.getLogger(__name__)
 
 class EmailSendError(Exception):
     """Raised when email cannot be sent; message is safe for HR-facing errors."""
+
+
+def _send_smtp_attempt(
+    host: str,
+    port: int,
+    user: str,
+    password: str,
+    from_email: str,
+    msg: EmailMessage,
+    to_addrs: list[str],
+) -> bool:
+    context = ssl.create_default_context()
+    if int(port) == 465:
+        with smtplib.SMTP_SSL(host, port, context=context, timeout=20) as server:
+            if hasattr(server, "ehlo"):
+                server.ehlo()
+            server.login(user, password)
+            server.send_message(msg, from_addr=from_email, to_addrs=to_addrs)
+            return True
+
+    with smtplib.SMTP(host, port, timeout=20) as server:
+        if hasattr(server, "ehlo"):
+            server.ehlo()
+        try:
+            server.starttls(context=context)
+        except TypeError:
+            server.starttls()
+        if hasattr(server, "ehlo"):
+            server.ehlo()
+        server.login(user, password)
+        server.send_message(msg, from_addr=from_email, to_addrs=to_addrs)
+        return True
 
 
 def send_email(
@@ -19,7 +53,7 @@ def send_email(
     from_name: str | None = None,
 ):
     """
-    Sends an HTML email using standard SMTP.
+    Sends an HTML email using standard SMTP with automatic TLS/SSL port fallback.
     """
     if not settings.smtp_password or not settings.smtp_host or not settings.smtp_from_email:
         raise EmailSendError(
@@ -50,14 +84,45 @@ def send_email(
                 filename=filename,
             )
         
-        with smtplib.SMTP(
-            settings.smtp_host,
-            settings.smtp_port,
-            timeout=20,
-        ) as server:
-            server.starttls()
-            server.login(settings.smtp_user, settings.smtp_password)
-            server.send_message(msg, from_addr=settings.smtp_from_email, to_addrs=to_addrs)
+        primary_port = int(settings.smtp_port or 587)
+        fallback_port = 465 if primary_port == 587 else 587
+
+        try:
+            _send_smtp_attempt(
+                settings.smtp_host,
+                primary_port,
+                settings.smtp_user,
+                settings.smtp_password,
+                settings.smtp_from_email,
+                msg,
+                to_addrs,
+            )
+        except smtplib.SMTPServerDisconnected as disconnect_err:
+            logger.warning(
+                "Primary SMTP attempt on %s:%s disconnected (%s). Retrying on port %s...",
+                settings.smtp_host,
+                primary_port,
+                disconnect_err,
+                fallback_port,
+            )
+            try:
+                _send_smtp_attempt(
+                    settings.smtp_host,
+                    fallback_port,
+                    settings.smtp_user,
+                    settings.smtp_password,
+                    settings.smtp_from_email,
+                    msg,
+                    to_addrs,
+                )
+            except Exception as fallback_err:
+                logger.error(
+                    "Fallback SMTP attempt on %s:%s also failed: %s",
+                    settings.smtp_host,
+                    fallback_port,
+                    fallback_err,
+                )
+                raise fallback_err
         
         logger.info(f"Email sent successfully to {to_email}")
         return True

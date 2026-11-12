@@ -132,3 +132,47 @@ def test_email_recipients_refused_provides_descriptive_message(monkeypatch):
             pdf_bytes=b"pdf",
             pdf_filename="offer.pdf",
         )
+
+
+def test_email_smtp_disconnected_falls_back_to_ssl_port(monkeypatch):
+    import smtplib
+
+    monkeypatch.setattr(settings, "smtp_password", "configured")
+    monkeypatch.setattr(settings, "smtp_host", "smtp.gmail.com")
+    monkeypatch.setattr(settings, "smtp_port", 587)
+    monkeypatch.setattr(settings, "smtp_from_email", "hr@example.test")
+
+    class DisconnectingSMTP:
+        def __init__(self, *args, **kwargs):
+            pass
+        def __enter__(self):
+            raise smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
+        def __exit__(self, *args):
+            return False
+
+    fallback_sent = False
+
+    class SuccessfulSSLSMTP:
+        def __init__(self, *args, **kwargs):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def login(self, u, p):
+            pass
+        def send_message(self, msg, **kwargs):
+            nonlocal fallback_sent
+            fallback_sent = True
+
+    monkeypatch.setattr("app.services.email.smtplib.SMTP", DisconnectingSMTP)
+    monkeypatch.setattr("app.services.email.smtplib.SMTP_SSL", SuccessfulSSLSMTP)
+
+    assert send_email_with_pdf(
+        to_email="candidate@example.test",
+        subject="Offer",
+        body_html="<p>Offer</p>",
+        pdf_bytes=b"pdf",
+        pdf_filename="offer.pdf",
+    ) is True
+    assert fallback_sent is True
