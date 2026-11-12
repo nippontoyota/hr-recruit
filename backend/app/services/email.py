@@ -97,9 +97,15 @@ def send_email(
                 msg,
                 to_addrs,
             )
-        except smtplib.SMTPServerDisconnected as disconnect_err:
+        except (
+            smtplib.SMTPServerDisconnected,
+            smtplib.SMTPConnectError,
+            TimeoutError,
+            OSError,
+            ConnectionResetError,
+        ) as disconnect_err:
             logger.warning(
-                "Primary SMTP attempt on %s:%s disconnected (%s). Retrying on port %s...",
+                "Primary SMTP attempt on %s:%s failed (%s). Retrying on fallback port %s...",
                 settings.smtp_host,
                 primary_port,
                 disconnect_err,

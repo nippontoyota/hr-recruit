@@ -19,6 +19,7 @@ from app.core.positions import (
     POS_GEM,
     POS_HR,
     POS_LOBBY,
+    canonical_position,
     paper_key,
     positions_for,
     validate_assignment,
@@ -362,6 +363,40 @@ def test_all_19_roles_paper_keys_and_test_assembly(monkeypatch):
         role_q_ids = {q.id for q in test_questions[6:]}
         assert len(role_q_ids) == 9
         assert role_q_ids <= {f"R{i}" for i in range(1, 16)}
+
+
+def test_service_advisor_trainee_case_and_alias_normalization():
+    # Lowercase, trailing space, hyphens
+    variations = [
+        "Service Advisor Trainee",
+        "service advisor trainee",
+        "SERVICE ADVISOR TRAINEE",
+        "Service Advisor - Trainee",
+        "service advisor (trainee)",
+    ]
+    for pos_var in variations:
+        key = paper_key("Service", pos_var, None)
+        assert key == "SERVICE_ADVISOR_TRAINEE", f"Failed for {pos_var}"
+        canon = canonical_position("Service", pos_var)
+        assert canon == "Service Advisor Trainee", f"Canonical failed for {pos_var}"
+        validate_assignment("Service", pos_var)
+
+
+def test_load_paper_catalog_fallback_when_db_empty():
+    from app.core.test_paper import _load_paper
+
+    mock_db = MagicMock()
+    # Simulate DB returning empty list (unseeded)
+    mock_db.scalars.return_value.all.return_value = []
+    # Simulate DB commit failing or succeeding
+    mock_db.commit.side_effect = Exception("DB read only / unseeded")
+
+    questions = _load_paper(mock_db, "SERVICE_ADVISOR_TRAINEE")
+    assert len(questions) == 15
+    assert questions[0].department == "SERVICE_ADVISOR_TRAINEE"
+    assert questions[0].text is not None
+    assert len(questions[0].options) == 4
+
 
 
 

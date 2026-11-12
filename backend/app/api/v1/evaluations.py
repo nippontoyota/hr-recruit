@@ -52,7 +52,7 @@ from app.schemas.evaluation import (
 )
 from app.core.config import settings
 from app.core.interviewer_packet import filter_interviewer_packet
-from app.core.positions import paper_key, validate_assignment
+from app.core.positions import canonical_position, paper_key, validate_assignment
 from app.core.test_paper import assemble_for_candidate, assemble_test_questions, to_test_data
 from app.services.workflow import transition
 from app.services import storage
@@ -341,6 +341,7 @@ def get_department_questions(
             status_code=400,
             detail="Provide candidate_id, or department and position.",
         )
+    position = canonical_position(department, position) or position
     if not paper_key(department, position, experience):
         return []
     return assemble_test_questions(
@@ -543,7 +544,7 @@ def _assign_test_position(candidate: Candidate, position: str | None) -> None:
             validate_assignment(candidate.department, position, candidate.experience)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        candidate.position_applied_for = position
+        candidate.position_applied_for = canonical_position(candidate.department, position) or position
     if not paper_key(candidate.department, candidate.position_applied_for, candidate.experience):
         raise HTTPException(
             status_code=400,

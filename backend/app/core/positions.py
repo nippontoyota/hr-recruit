@@ -243,45 +243,79 @@ def positions_for(department: str) -> tuple[str, ...]:
     return ()
 
 
+import re
+
+
+def _clean_role_key(val: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", val.lower())
+
+
+_SERVICE_PAPER_CLEAN = {_clean_role_key(k): v for k, v in SERVICE_PAPER_BY_POS.items()}
+_ACCESSORIES_PAPER_CLEAN = {_clean_role_key(k): v for k, v in ACCESSORIES_PAPER_BY_POS.items()}
+_SECURITY_PAPER_CLEAN = {_clean_role_key(k): v for k, v in SECURITY_PAPER_BY_POS.items()}
+_CALL_CENTRE_PAPER_CLEAN = {_clean_role_key(k): v for k, v in CALL_CENTRE_PAPER_BY_POS.items()}
+
+
 def paper_key(department: str | None, position: str | None, experience: str | None) -> str | None:
     """Return the role-bank paper key, or None if the assignment has no paper."""
     pos = (position or "").strip()
     dept = (department or "").strip()
     exp = (experience or "").strip() or EXPERIENCE_FRESHER
-    if pos == POS_DRIVER:
+    pos_clean = _clean_role_key(pos)
+
+    if pos_clean == _clean_role_key(POS_DRIVER):
         return PAPER_DRIVER
-    if dept == SALES_DEPARTMENT:
-        if pos == POS_GEM:
-            if exp == EXPERIENCE_EXPERIENCED:
+
+    if dept.casefold() == SALES_DEPARTMENT.casefold():
+        if pos_clean == _clean_role_key(POS_GEM):
+            if exp.casefold() == EXPERIENCE_EXPERIENCED.casefold():
                 return PAPER_GEM_EXPERIENCED
             return PAPER_GEM_FRESHER
-        if pos == POS_BACK_OFFICE:
+        if pos_clean == _clean_role_key(POS_BACK_OFFICE):
             return PAPER_BACK_OFFICE
-        if pos == POS_LOBBY:
+        if pos_clean == _clean_role_key(POS_LOBBY):
             return PAPER_LOBBY
         return None
-    if dept == "CR" and pos == POS_CR:
-        if exp == EXPERIENCE_EXPERIENCED:
+
+    if dept.casefold() == "cr" and pos_clean == _clean_role_key(POS_CR):
+        if exp.casefold() == EXPERIENCE_EXPERIENCED.casefold():
             return PAPER_CR_EXPERIENCED
         return PAPER_CR_FRESHER
-    if pos == STAFF_BY_DEPT.get(dept):
-        return PAPER_BY_DEPT.get(dept)
-    if dept in (SERVICE_DEPARTMENT, "Service - Lexus") or pos in SERVICE_PAPER_BY_POS:
-        paper = SERVICE_PAPER_BY_POS.get(pos)
-        if paper:
-            return paper
-    if dept == ACCESSORIES_DEPARTMENT or pos in ACCESSORIES_PAPER_BY_POS:
-        paper = ACCESSORIES_PAPER_BY_POS.get(pos)
-        if paper:
-            return paper
-    if dept == SECURITY_DEPARTMENT or pos in SECURITY_PAPER_BY_POS:
-        paper = SECURITY_PAPER_BY_POS.get(pos)
-        if paper:
-            return paper
-    if dept == CALL_CENTRE_DEPARTMENT or pos in CALL_CENTRE_PAPER_BY_POS:
-        paper = CALL_CENTRE_PAPER_BY_POS.get(pos)
-        if paper:
-            return paper
+
+    for d, s in STAFF_BY_DEPT.items():
+        if pos_clean == _clean_role_key(s):
+            return PAPER_BY_DEPT.get(d)
+
+    paper = _SERVICE_PAPER_CLEAN.get(pos_clean)
+    if paper:
+        return paper
+
+    paper = _ACCESSORIES_PAPER_CLEAN.get(pos_clean)
+    if paper:
+        return paper
+
+    paper = _SECURITY_PAPER_CLEAN.get(pos_clean)
+    if paper:
+        return paper
+
+    paper = _CALL_CENTRE_PAPER_CLEAN.get(pos_clean)
+    if paper:
+        return paper
+
+    return None
+
+
+def canonical_position(department: str | None, position: str | None) -> str | None:
+    """Return the official title-cased position name matching the input, or None."""
+    if not department or not position:
+        return None
+    allowed = positions_for(department)
+    if position in allowed:
+        return position
+    pos_clean = _clean_role_key(position)
+    for p in allowed:
+        if _clean_role_key(p) == pos_clean:
+            return p
     return None
 
 
@@ -290,10 +324,17 @@ def validate_assignment(
     position: str,
     experience: str | None = None,
 ) -> None:
-    if department not in DEPARTMENTS:
+    matched_dept = None
+    dept_clean = _clean_role_key(department)
+    for d in DEPARTMENTS:
+        if _clean_role_key(d) == dept_clean:
+            matched_dept = d
+            break
+    if not matched_dept:
         raise ValueError(f"Department must be one of: {', '.join(DEPARTMENTS)}")
-    allowed = positions_for(department)
-    if position not in allowed:
+    allowed = positions_for(matched_dept)
+    pos_clean = _clean_role_key(position)
+    if not any(_clean_role_key(p) == pos_clean for p in allowed):
         raise ValueError(f"Position must be one of: {', '.join(allowed)}")
     if experience is not None and experience not in EXPERIENCE_LEVELS:
         raise ValueError("Experience must be Fresher or Experienced.")

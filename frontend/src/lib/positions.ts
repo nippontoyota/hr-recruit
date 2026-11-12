@@ -117,19 +117,31 @@ const STAFF_BY_DEPT: Record<string, string> = {
   Training: POS_TRAINING,
 };
 
+function cleanRole(s: string): string {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 export function positionsFor(department: string): readonly string[] {
-  if (department === 'Sales') return SALES_POSITIONS;
-  if (department === 'Service' || department === 'Service - Lexus') return SERVICE_POSITIONS;
-  if (department === 'Accessories') return ACCESSORIES_POSITIONS;
-  if (department === 'Security') return SECURITY_POSITIONS;
-  if (department === 'Call Centre') return CALL_CENTRE_POSITIONS;
-  const staff = STAFF_BY_DEPT[department];
-  if (staff) return [staff, POS_DRIVER];
-  if ((CANDIDATE_DEPARTMENTS as readonly string[]).includes(department)) return DRIVER_ONLY;
+  const d = (department || '').trim().toLowerCase();
+  if (d === 'sales') return SALES_POSITIONS;
+  if (d === 'service' || d === 'service - lexus') return SERVICE_POSITIONS;
+  if (d === 'accessories') return ACCESSORIES_POSITIONS;
+  if (d === 'security') return SECURITY_POSITIONS;
+  if (d === 'call centre' || d === 'call center') return CALL_CENTRE_POSITIONS;
+  for (const [dept, role] of Object.entries(STAFF_BY_DEPT)) {
+    if (dept.toLowerCase() === d) return [role, POS_DRIVER];
+  }
+  for (const dept of CANDIDATE_DEPARTMENTS) {
+    if (dept.toLowerCase() === d) return DRIVER_ONLY;
+  }
   return [];
 }
 
 export function catalogPosition(department?: string, position?: string): string {
   if (!department || !position) return '';
-  return positionsFor(department).includes(position) ? position : '';
+  const allowed = positionsFor(department);
+  if (allowed.includes(position)) return position;
+  const target = cleanRole(position);
+  const match = allowed.find((r) => cleanRole(r) === target);
+  return match || '';
 }

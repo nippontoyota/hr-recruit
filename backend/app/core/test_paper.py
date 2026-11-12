@@ -15,18 +15,54 @@ from app.core.positions import (
     paper_key,
 )
 from app.core.branding import brand_is_river
+from app.core.question_banks import QUESTION_CATALOG
 from app.models.candidate import Candidate
 from app.models.technical_question import TechnicalQuestion
 
 
 def _load_paper(db: Session, key: str) -> list[TechnicalQuestion]:
-    return list(
+    questions = list(
         db.scalars(
             select(TechnicalQuestion)
             .where(TechnicalQuestion.department == key)
             .order_by(TechnicalQuestion.id)
         ).all()
     )
+    if questions:
+        return questions
+
+    catalog_rows = QUESTION_CATALOG.get(key)
+    if not catalog_rows:
+        return []
+
+    # Attempt to seed DB dynamically so future reads find it in the DB
+    try:
+        new_objs = []
+        for qid, text, options, answer in catalog_rows:
+            obj = TechnicalQuestion(
+                id=qid,
+                department=key,
+                text=text,
+                options=options,
+                answer=answer,
+            )
+            db.add(obj)
+            new_objs.append(obj)
+        db.commit()
+        return new_objs
+    except Exception:
+        db.rollback()
+        # Fallback to in-memory transient instances
+        return [
+            TechnicalQuestion(
+                id=qid,
+                department=key,
+                text=text,
+                options=options,
+                answer=answer,
+            )
+            for qid, text, options, answer in catalog_rows
+        ]
 
 
 def assemble_test_questions(
