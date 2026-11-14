@@ -309,6 +309,11 @@ function familyMemberFromRaw(value: unknown): FamilyMember | null {
   return familyMemberHasContent(member) ? member : null;
 }
 
+function legacyMemberHasData(member: FamilyMember): boolean {
+  return [member.name, member.age, member.occupation, member.company, member.phone]
+    .some((value) => (value || '').trim().length > 0);
+}
+
 function legacyFamilyMember(
   data: CandidateFormData,
   prefix: 'father' | 'mother' | 'spouse' | 'child1' | 'child2' | 'child3' | 'sibling1' | 'sibling2' | 'sibling3',
@@ -342,19 +347,30 @@ export function familyMembersFromForm(data: CandidateFormData): FamilyMember[] {
     legacyFamilyMember(data, 'sibling1', 'Brother / Sister'),
     legacyFamilyMember(data, 'sibling2', 'Brother / Sister'),
     legacyFamilyMember(data, 'sibling3', 'Brother / Sister'),
-  ].filter(familyMemberHasContent);
+  ].filter(legacyMemberHasData);
 }
+
+const isFatherRelation = (rel: string) => {
+  const r = (rel || '').trim().toLowerCase();
+  return r === 'father' || r.startsWith('father');
+};
+const isMotherRelation = (rel: string) => {
+  const r = (rel || '').trim().toLowerCase();
+  return r === 'mother' || r.startsWith('mother');
+};
+const isSpouseRelation = (rel: string) => {
+  const r = (rel || '').trim().toLowerCase();
+  return r === 'spouse' || r === 'wife' || r === 'husband';
+};
 
 export function familyMembersPatch(members: FamilyMember[]): Partial<CandidateFormData> {
   const normalized = members
     .map(familyMemberFromRaw)
     .filter((member): member is FamilyMember => member !== null);
   const empty = EMPTY_FAMILY_MEMBER;
-  const findRelation = (relation: string, fallbackIndex: number) =>
-    normalized.find((member) => member.relation.trim().toLowerCase() === relation) || normalized[fallbackIndex] || empty;
-  const father = findRelation('father', 0);
-  const mother = findRelation('mother', 1);
-  const spouse = normalized.find((member) => member.relation.trim().toLowerCase() === 'spouse') || empty;
+  const father = normalized.find((member) => isFatherRelation(member.relation)) || empty;
+  const mother = normalized.find((member) => isMotherRelation(member.relation)) || empty;
+  const spouse = normalized.find((member) => isSpouseRelation(member.relation)) || empty;
   const optional = normalized.filter((member) => member !== father && member !== mother && member !== spouse);
   const child1 = optional[0] || empty;
   const child2 = optional[1] || empty;

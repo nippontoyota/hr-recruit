@@ -13,21 +13,67 @@ function hasContent(member: FamilyMember): boolean {
     .some((value) => value.trim() !== '');
 }
 
+const isFatherRel = (rel: string) => {
+  const r = (rel || '').trim().toLowerCase();
+  return r === 'father' || r.startsWith('father');
+};
+const isMotherRel = (rel: string) => {
+  const r = (rel || '').trim().toLowerCase();
+  return r === 'mother' || r.startsWith('mother');
+};
+const isSpouseRel = (rel: string) => {
+  const r = (rel || '').trim().toLowerCase();
+  return r === 'spouse' || r === 'wife' || r === 'husband';
+};
+
+function hasSubstantiveData(member: FamilyMember): boolean {
+  return [member.name, member.age, member.occupation, member.company, member.phone]
+    .some((value) => (value || '').trim().length > 0);
+}
+
 function coreMembers(data: CandidateFormData): FamilyMember[] {
   const members = familyMembersFromForm(data);
   const married = data.maritalStatus === 'Married';
-  const father = members.find((member) => member.relation.trim().toLowerCase() === 'father') || members[0];
-  const mother = members.find((member) => member.relation.trim().toLowerCase() === 'mother') || members[1];
+
+  const fatherFromLegacy: FamilyMember = {
+    relation: 'Father',
+    name: data.fatherName || '',
+    age: data.fatherAge || '',
+    occupation: data.fatherOccupation || '',
+    company: data.fatherCompany || '',
+    phone: data.fatherPhone || '',
+  };
+  const motherFromLegacy: FamilyMember = {
+    relation: 'Mother',
+    name: data.motherName || '',
+    age: data.motherAge || '',
+    occupation: data.motherOccupation || '',
+    company: data.motherCompany || '',
+    phone: data.motherPhone || '',
+  };
+  const spouseFromLegacy: FamilyMember = {
+    relation: 'Spouse',
+    name: data.spouseName || '',
+    age: data.spouseAge || '',
+    occupation: data.spouseOccupation || '',
+    company: data.spouseCompany || '',
+    phone: data.spousePhone || '',
+  };
+
+  const father = members.find((member) => isFatherRel(member.relation))
+    || (hasSubstantiveData(fatherFromLegacy) ? fatherFromLegacy : { ...EMPTY_FAMILY_MEMBER, relation: 'Father' });
+  const mother = members.find((member) => isMotherRel(member.relation))
+    || (hasSubstantiveData(motherFromLegacy) ? motherFromLegacy : { ...EMPTY_FAMILY_MEMBER, relation: 'Mother' });
   const spouse = married
-    ? members.find((member) => member.relation.trim().toLowerCase() === 'spouse') || members[2]
+    ? (members.find((member) => isSpouseRel(member.relation))
+        || (hasSubstantiveData(spouseFromLegacy) ? spouseFromLegacy : { ...EMPTY_FAMILY_MEMBER, relation: 'Spouse' }))
     : undefined;
+
   const optional = members.filter((member) => member !== father && member !== mother && member !== spouse);
   return [
-    father || { ...EMPTY_FAMILY_MEMBER, relation: 'Father' },
-    mother || { ...EMPTY_FAMILY_MEMBER, relation: 'Mother' },
-    ...(married
-      ? [spouse || { ...EMPTY_FAMILY_MEMBER, relation: 'Spouse' }]
-      : []),
+    father,
+    mother,
+    ...(married && spouse ? [spouse] : []),
     ...optional,
   ];
 }
@@ -36,6 +82,7 @@ function FamilyMemberRow({
   member,
   index,
   required,
+  isCoreSlot,
   updateMember,
   removeMember,
   errors,
@@ -44,13 +91,15 @@ function FamilyMemberRow({
   member: FamilyMember;
   index: number;
   required: boolean;
+  isCoreSlot: boolean;
   updateMember: (index: number, patch: Partial<FamilyMember>) => void;
   removeMember?: () => void;
   errors: FormSectionProps['errors'];
   onBlurField: FormSectionProps['onBlurField'];
 }) {
-  const relation = member.relation.trim().toLowerCase();
-  const nameField = relation === 'father' ? 'fatherName' : relation === 'mother' ? 'motherName' : undefined;
+  const nameField = isCoreSlot
+    ? (index === 0 ? 'fatherName' : index === 1 ? 'motherName' : 'spouseName')
+    : undefined;
 
   return (
     <div className="space-y-3 rounded-lg border border-border/60 p-4">
@@ -71,7 +120,10 @@ function FamilyMemberRow({
           <Input
             value={member.relation}
             onChange={(e) => updateMember(index, { relation: e.target.value })}
-            placeholder="e.g. Father / Sister"
+            placeholder="e.g. Brother / Sister / Son"
+            readOnly={isCoreSlot}
+            disabled={isCoreSlot}
+            className={isCoreSlot ? 'bg-muted/50 cursor-not-allowed text-text-secondary select-none' : undefined}
           />
         </div>
         <FormField field={nameField || `familyMembers.${index}.name`} error={nameField ? errors?.[nameField] : undefined}>
@@ -162,6 +214,7 @@ export const FamilyForm = ({ data, update, patch, errors = {}, onBlurField = () 
           member={member}
           index={index}
           required={index < requiredCount}
+          isCoreSlot={index < requiredCount}
           updateMember={updateMember}
           removeMember={index >= requiredCount ? () => removeMember(index) : undefined}
           errors={errors}
