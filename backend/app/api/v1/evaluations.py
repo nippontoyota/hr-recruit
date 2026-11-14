@@ -52,7 +52,7 @@ from app.schemas.evaluation import (
 )
 from app.core.config import settings
 from app.core.interviewer_packet import filter_interviewer_packet
-from app.core.positions import canonical_position, paper_key, validate_assignment
+from app.core.positions import canonical_position, department_for_position, paper_key, validate_assignment
 from app.core.test_paper import assemble_for_candidate, assemble_test_questions, to_test_data
 from app.services.workflow import transition
 from app.services import storage
@@ -342,11 +342,12 @@ def get_department_questions(
             detail="Provide candidate_id, or department and position.",
         )
     position = canonical_position(department, position) or position
-    if not paper_key(department, position, experience):
+    dept = department_for_position(position) or department
+    if not paper_key(dept, position, experience):
         return []
     return assemble_test_questions(
         db,
-        department,
+        dept,
         position,
         experience,
         brand=normalize_brand(candidate.brand) if candidate_id else None,
@@ -538,13 +539,15 @@ def schedule_evaluation(
 
 def _assign_test_position(candidate: Candidate, position: str | None) -> None:
     if position:
-        if not candidate.department:
+        dept = department_for_position(position) or candidate.department
+        if not dept:
             raise HTTPException(status_code=400, detail="Set a department on the candidate first.")
         try:
-            validate_assignment(candidate.department, position, candidate.experience)
+            validate_assignment(dept, position, candidate.experience)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        candidate.position_applied_for = canonical_position(candidate.department, position) or position
+        candidate.department = dept
+        candidate.position_applied_for = canonical_position(dept, position) or position
     if not paper_key(candidate.department, candidate.position_applied_for, candidate.experience):
         raise HTTPException(
             status_code=400,

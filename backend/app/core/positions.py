@@ -259,25 +259,24 @@ _CALL_CENTRE_PAPER_CLEAN = {_clean_role_key(k): v for k, v in CALL_CENTRE_PAPER_
 def paper_key(department: str | None, position: str | None, experience: str | None) -> str | None:
     """Return the role-bank paper key, or None if the assignment has no paper."""
     pos = (position or "").strip()
-    dept = (department or "").strip()
     exp = (experience or "").strip() or EXPERIENCE_FRESHER
     pos_clean = _clean_role_key(pos)
 
     if pos_clean == _clean_role_key(POS_DRIVER):
         return PAPER_DRIVER
 
-    if dept.casefold() == SALES_DEPARTMENT.casefold():
-        if pos_clean == _clean_role_key(POS_GEM):
-            if exp.casefold() == EXPERIENCE_EXPERIENCED.casefold():
-                return PAPER_GEM_EXPERIENCED
-            return PAPER_GEM_FRESHER
-        if pos_clean == _clean_role_key(POS_BACK_OFFICE):
-            return PAPER_BACK_OFFICE
-        if pos_clean == _clean_role_key(POS_LOBBY):
-            return PAPER_LOBBY
-        return None
+    if pos_clean == _clean_role_key(POS_GEM):
+        if exp.casefold() == EXPERIENCE_EXPERIENCED.casefold():
+            return PAPER_GEM_EXPERIENCED
+        return PAPER_GEM_FRESHER
 
-    if dept.casefold() == "cr" and pos_clean == _clean_role_key(POS_CR):
+    if pos_clean == _clean_role_key(POS_BACK_OFFICE):
+        return PAPER_BACK_OFFICE
+
+    if pos_clean == _clean_role_key(POS_LOBBY):
+        return PAPER_LOBBY
+
+    if pos_clean == _clean_role_key(POS_CR):
         if exp.casefold() == EXPERIENCE_EXPERIENCED.casefold():
             return PAPER_CR_EXPERIENCED
         return PAPER_CR_FRESHER
@@ -307,15 +306,46 @@ def paper_key(department: str | None, position: str | None, experience: str | No
 
 def canonical_position(department: str | None, position: str | None) -> str | None:
     """Return the official title-cased position name matching the input, or None."""
-    if not department or not position:
+    if not position:
         return None
-    allowed = positions_for(department)
-    if position in allowed:
-        return position
     pos_clean = _clean_role_key(position)
-    for p in allowed:
-        if _clean_role_key(p) == pos_clean:
-            return p
+    if department:
+        allowed = positions_for(department)
+        if position in allowed:
+            return position
+        for p in allowed:
+            if _clean_role_key(p) == pos_clean:
+                return p
+    # Global fallback across all departments
+    for d in DEPARTMENTS:
+        for p in positions_for(d):
+            if _clean_role_key(p) == pos_clean:
+                return p
+    return None
+
+
+def department_for_position(position: str | None) -> str | None:
+    """Return the primary department for a given position name."""
+    if not position:
+        return None
+    pos_clean = _clean_role_key(position)
+    if pos_clean == _clean_role_key(POS_DRIVER):
+        return None
+    if pos_clean in {_clean_role_key(POS_GEM), _clean_role_key(POS_BACK_OFFICE), _clean_role_key(POS_LOBBY)}:
+        return SALES_DEPARTMENT
+    if pos_clean == _clean_role_key(POS_CR):
+        return "CR"
+    for d, s in STAFF_BY_DEPT.items():
+        if pos_clean == _clean_role_key(s):
+            return d
+    if pos_clean in _SERVICE_PAPER_CLEAN:
+        return SERVICE_DEPARTMENT
+    if pos_clean in _ACCESSORIES_PAPER_CLEAN:
+        return ACCESSORIES_DEPARTMENT
+    if pos_clean in _SECURITY_PAPER_CLEAN:
+        return SECURITY_DEPARTMENT
+    if pos_clean in _CALL_CENTRE_PAPER_CLEAN:
+        return CALL_CENTRE_DEPARTMENT
     return None
 
 

@@ -16,7 +16,7 @@ import { updateCandidateDepartment } from '../../api/candidates';
 import type { Candidate, Evaluation } from '../../types';
 import { cn, extractError, isAbortError, copyTextToClipboard } from '../../lib/utils';
 import { formatDate, formatTime } from '../../lib/dateTime';
-import { catalogPosition, positionsFor } from '../../lib/positions';
+import { catalogPosition, departmentForPosition, getAllGroupedPositions } from '../../lib/positions';
 import { usePrint } from '../../hooks/usePrint';
 import { useAuth } from '../../auth';
 import { buildTechnicalTestWhatsAppMessage, evalScheduleLabels, openWhatsAppChat } from '../../lib/whatsappTemplate';
@@ -75,9 +75,10 @@ export function EvaluationStageWidget({
     setDesignation(newDesignation);
     if (!newDesignation || newDesignation === candidate.position_applied_for) return;
     try {
+      const targetDept = departmentForPosition(newDesignation) || candidate.department;
       await updateCandidateDepartment(
         candidate.id,
-        candidate.department,
+        targetDept,
         newDesignation,
         candidate.experience,
         candidate.source,
@@ -397,7 +398,7 @@ function TechnicalTestPaperWidget({ ev, candidate, designation, onDesignationCha
     contentRef: printRef,
     documentTitle: `TechnicalTest_${candidate.full_name}`,
   });
-  const roles = positionsFor(candidate.department || '');
+  const groupedRoles = getAllGroupedPositions();
   const [downloadingCommentSheet, setDownloadingCommentSheet] = useState(false);
   const handleDownloadCommentSheet = async () => {
     if (downloadingCommentSheet) return;
@@ -419,7 +420,7 @@ function TechnicalTestPaperWidget({ ev, candidate, designation, onDesignationCha
             <>
               <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
                 Designation
-                <div className="min-w-[14rem] w-56">
+                <div className="min-w-[15rem] w-64">
                   <Select
                     className="h-8 text-xs font-semibold normal-case tracking-normal"
                     value={designation}
@@ -428,10 +429,14 @@ function TechnicalTestPaperWidget({ ev, candidate, designation, onDesignationCha
                     <option value="" disabled>
                       Select designation
                     </option>
-                    {roles.map((role: string) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
+                    {groupedRoles.map((group) => (
+                      <optgroup key={group.department} label={group.department}>
+                        {group.positions.map((role: string) => (
+                          <option key={role} value={role}>
+                            {role}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </Select>
                 </div>

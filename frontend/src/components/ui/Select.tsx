@@ -31,17 +31,24 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
     const searchRef = useRef<HTMLInputElement>(null);
 
     const options = useMemo(() => {
-      const next: { value: string; label: React.ReactNode; disabled?: boolean }[] = [];
-      React.Children.forEach(children, (child) => {
-        if (isValidElement(child) && child.type === 'option') {
-          const optionProps = child.props as { value?: string; disabled?: boolean; children?: React.ReactNode };
-          next.push({
-            value: optionProps.value ?? optionProps.children?.toString() ?? '',
-            label: optionProps.children,
-            disabled: optionProps.disabled,
-          });
+      const next: { value: string; label: React.ReactNode; disabled?: boolean; group?: string }[] = [];
+      const processChild = (child: React.ReactNode, group?: string) => {
+        if (isValidElement(child)) {
+          if (child.type === 'option') {
+            const optionProps = child.props as { value?: string; disabled?: boolean; children?: React.ReactNode };
+            next.push({
+              value: optionProps.value ?? optionProps.children?.toString() ?? '',
+              label: optionProps.children,
+              disabled: optionProps.disabled,
+              group,
+            });
+          } else if (child.type === 'optgroup') {
+            const groupProps = child.props as { label?: string; children?: React.ReactNode };
+            React.Children.forEach(groupProps.children, (subChild) => processChild(subChild, groupProps.label));
+          }
         }
-      });
+      };
+      React.Children.forEach(children, (child) => processChild(child));
       return next;
     }, [children]);
 
@@ -182,30 +189,40 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
               {filtered.length === 0 ? (
                 <div className="px-3 py-4 text-center text-xs text-muted-foreground">No matches found</div>
               ) : (
-                filtered.map((option, index) => (
-                  <div
-                    key={`${option.value}-${index}`}
-                    role="option"
-                    aria-selected={value === option.value}
-                    tabIndex={option.disabled ? -1 : 0}
-                    onKeyDown={(event) => {
-                      if ((event.key === 'Enter' || event.key === ' ') && !option.disabled) {
-                        event.preventDefault();
-                        handleSelect(option.value);
-                      }
-                    }}
-                    className={cn(
-                      'cursor-pointer px-3 py-2 text-left text-sm transition-colors',
-                      option.disabled ? 'cursor-not-allowed bg-muted/20 opacity-50' : 'hover:bg-muted',
-                      value === option.value && 'bg-primary/10 font-bold text-primary'
-                    )}
-                    onClick={() => {
-                      if (!option.disabled) handleSelect(option.value);
-                    }}
-                  >
-                    {option.label}
-                  </div>
-                ))
+                filtered.map((option, index) => {
+                  const showGroupHeader = option.group && (index === 0 || filtered[index - 1].group !== option.group);
+                  return (
+                    <React.Fragment key={`${option.value}-${index}`}>
+                      {showGroupHeader && (
+                        <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/60 sticky top-0 z-10 border-b border-border/40 select-none">
+                          {option.group}
+                        </div>
+                      )}
+                      <div
+                        role="option"
+                        aria-selected={value === option.value}
+                        tabIndex={option.disabled ? -1 : 0}
+                        onKeyDown={(event) => {
+                          if ((event.key === 'Enter' || event.key === ' ') && !option.disabled) {
+                            event.preventDefault();
+                            handleSelect(option.value);
+                          }
+                        }}
+                        className={cn(
+                          'cursor-pointer px-3 py-2 text-left text-sm transition-colors',
+                          option.disabled ? 'cursor-not-allowed bg-muted/20 opacity-50' : 'hover:bg-muted',
+                          value === option.value && 'bg-primary/10 font-bold text-primary',
+                          option.group && 'pl-4'
+                        )}
+                        onClick={() => {
+                          if (!option.disabled) handleSelect(option.value);
+                        }}
+                      >
+                        {option.label}
+                      </div>
+                    </React.Fragment>
+                  );
+                })
               )}
             </div>
 

@@ -137,11 +137,108 @@ export function positionsFor(department: string): readonly string[] {
   return [];
 }
 
-export function catalogPosition(department?: string, position?: string): string {
-  if (!department || !position) return '';
-  const allowed = positionsFor(department);
-  if (allowed.includes(position)) return position;
+export interface DepartmentPositionsGroup {
+  department: string;
+  positions: readonly string[];
+}
+
+export function getAllGroupedPositions(): readonly DepartmentPositionsGroup[] {
+  return [
+    {
+      department: 'Service',
+      positions: [
+        POS_SERVICE_ADVISOR_TRAINEE,
+        POS_SERVICE_ADVISOR,
+        POS_SERVICE_TECH_TRAINEE,
+        POS_SERVICE_TECH,
+        POS_SERVICE_PAINT_TECH_TRAINEE,
+        POS_SERVICE_PAINT_TECH,
+        POS_SERVICE_BODY_TECH_TRAINEE,
+        POS_SERVICE_BODY_TECH,
+        POS_SERVICE_CHIEF_GEN_TECH,
+        POS_SERVICE_FRONT_BACK_OFFICE,
+        POS_SERVICE_WARRANTY_INCHARGE,
+        POS_SERVICE_TECH_LEADER,
+        POS_SERVICE_PARTS_INCHARGE,
+      ],
+    },
+    {
+      department: 'Sales',
+      positions: [
+        POS_GEM,
+        POS_BACK_OFFICE,
+        POS_LOBBY,
+      ],
+    },
+    {
+      department: 'Accessories',
+      positions: [
+        POS_ACCESSORIES_TECH,
+        POS_ACCESSORIES_SALES_EXEC,
+        POS_ACCESSORIES_PARTS_INCHARGE,
+      ],
+    },
+    {
+      department: 'Call Centre',
+      positions: [
+        POS_CALL_CENTRE_EXEC,
+      ],
+    },
+    {
+      department: 'Security',
+      positions: [
+        POS_SECURITY_GUARD,
+        POS_SECURITY_SUPERVISOR,
+      ],
+    },
+    {
+      department: 'Other Departments',
+      positions: [
+        POS_CR,
+        POS_ACCOUNTS,
+        POS_HR,
+        POS_SYSTEMS,
+        POS_PROJECTS,
+        POS_INSURANCE,
+        POS_MARKETING,
+        POS_FINANCE,
+        POS_TRAINING,
+        POS_DRIVER,
+      ],
+    },
+  ];
+}
+
+export function departmentForPosition(position?: string): string | null {
+  if (!position) return null;
   const target = cleanRole(position);
-  const match = allowed.find((r) => cleanRole(r) === target);
-  return match || '';
+  if (target === cleanRole(POS_DRIVER)) return null;
+  for (const group of getAllGroupedPositions()) {
+    if (group.department === 'Other Departments') {
+      for (const [dept, role] of Object.entries(STAFF_BY_DEPT)) {
+        if (cleanRole(role) === target) return dept;
+      }
+    } else {
+      if (group.positions.some((p) => cleanRole(p) === target)) {
+        return group.department;
+      }
+    }
+  }
+  return null;
+}
+
+export function catalogPosition(department?: string, position?: string): string {
+  if (!position) return '';
+  const target = cleanRole(position);
+  if (department) {
+    const allowed = positionsFor(department);
+    if (allowed.includes(position)) return position;
+    const match = allowed.find((r) => cleanRole(r) === target);
+    if (match) return match;
+  }
+  for (const group of getAllGroupedPositions()) {
+    const match = group.positions.find((r) => cleanRole(r) === target);
+    if (match) return match;
+  }
+  return '';
 }

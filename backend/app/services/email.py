@@ -12,6 +12,25 @@ class EmailSendError(Exception):
     """Raised when email cannot be sent; message is safe for HR-facing errors."""
 
 
+def _login_clean(server, user: str, password: str) -> None:
+    clean_user = (user or "").strip()
+    clean_password = (password or "").strip().replace(" ", "").strip('"').strip("'")
+    server.user = clean_user
+    server.password = clean_password
+    try:
+        # Send PLAIN auth directly. If credentials are bad, Gmail returns 535 BadCredentials.
+        # Python's standard server.login() attempts a secondary AUTH LOGIN when PLAIN fails,
+        # which triggers Gmail to drop the socket and mask the 535 behind 'Connection unexpectedly closed'.
+        if hasattr(server, "auth") and hasattr(server, "auth_plain"):
+            server.auth("PLAIN", server.auth_plain)
+            return
+    except smtplib.SMTPAuthenticationError:
+        raise
+    except Exception:
+        pass
+    server.login(clean_user, clean_password)
+
+
 def _send_smtp_attempt(
     host: str,
     port: int,
@@ -26,7 +45,7 @@ def _send_smtp_attempt(
         with smtplib.SMTP_SSL(host, port, context=context, timeout=20) as server:
             if hasattr(server, "ehlo"):
                 server.ehlo()
-            server.login(user, password)
+            _login_clean(server, user, password)
             server.send_message(msg, from_addr=from_email, to_addrs=to_addrs)
             return True
 
@@ -39,7 +58,7 @@ def _send_smtp_attempt(
             server.starttls()
         if hasattr(server, "ehlo"):
             server.ehlo()
-        server.login(user, password)
+        _login_clean(server, user, password)
         server.send_message(msg, from_addr=from_email, to_addrs=to_addrs)
         return True
 
