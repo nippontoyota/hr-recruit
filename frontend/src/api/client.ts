@@ -11,6 +11,7 @@ const fallbackBaseURL = import.meta.env.DEV
 // Force HTTPS for production
 const forceHttps = (url: string) => {
   if (import.meta.env.DEV) return url;
+  if (!url || url.startsWith('/')) return url;
   if (url.startsWith('http://')) return url.replace('http://', 'https://');
   if (!url.startsWith('https://')) return 'https://' + url;
   return url;
@@ -46,23 +47,47 @@ export function getAuthHeaders(extra?: Record<string, string>): Record<string, s
   return headers;
 }
 
-class FetchError extends Error {
+export class FetchError extends Error {
+  status: number;
+  url?: string;
+  endpoint?: string;
+  method?: string;
+  isNetworkError?: boolean;
+  isOffline?: boolean;
   response: { status: number; data?: any };
-  constructor(status: number, data?: any) {
-    super(`Request failed with status ${status}`);
+
+  constructor(status: number, data?: any, meta?: { url?: string; endpoint?: string; method?: string; isNetworkError?: boolean }) {
+    const detail = typeof data?.detail === 'string' ? data.detail : (data?.message || '');
+    const message = detail
+      ? `Request failed (${status}): ${detail}`
+      : status > 0
+      ? `Request failed with status ${status}`
+      : (data?.detail || 'Network connection error');
+    super(message);
+    this.name = 'FetchError';
+    this.status = status;
+    this.url = meta?.url;
+    this.endpoint = meta?.endpoint;
+    this.method = meta?.method;
+    this.isNetworkError = meta?.isNetworkError;
+    this.isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
     this.response = { status, data };
   }
 }
 
-function normalizeFetchAbort(err: unknown, callerSignal?: AbortSignal): never {
+function normalizeFetchAbort(err: unknown, meta?: { url?: string; endpoint?: string; method?: string }, callerSignal?: AbortSignal): never {
   if (callerSignal?.aborted) {
     throw isAbortError(err) ? err : new DOMException('Aborted', 'AbortError');
   }
   if (isAbortError(err)) {
-    throw new FetchError(408, { detail: 'Request timed out. Try again.' });
+    throw new FetchError(408, { detail: 'Request timed out. Try again.' }, meta);
   }
   if (err instanceof TypeError && (err.message === 'Failed to fetch' || err.message.includes('NetworkError'))) {
-    throw new Error('Network Error: The server is unreachable. Please check your internet connection or disable any strict ad blockers.');
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+    const detail = isOffline
+      ? 'You appear to be offline. Please check your internet connection.'
+      : 'Network Error: The server is unreachable. Please check your internet connection or disable any strict ad blockers.';
+    throw new FetchError(0, { detail }, { ...meta, isNetworkError: true });
   }
   throw err;
 }
@@ -147,7 +172,7 @@ async function executeRequest(method: string, endpoint: string, body?: any, conf
       signal: controller.signal,
     });
   } catch (err) {
-    throw normalizeFetchAbort(err, config?.signal);
+    throw normalizeFetchAbort(err, { url, endpoint, method }, config?.signal);
   } finally {
     window.clearTimeout(timeoutId);
     config?.signal?.removeEventListener('abort', onCallerAbort);
@@ -166,14 +191,14 @@ async function executeRequest(method: string, endpoint: string, body?: any, conf
     try {
       data = await response.blob();
     } catch (err) {
-      throw normalizeFetchAbort(err, config?.signal);
+      throw normalizeFetchAbort(err, { url, endpoint, method }, config?.signal);
     }
   } else {
     let text: string;
     try {
       text = await response.text();
     } catch (err) {
-      throw normalizeFetchAbort(err, config?.signal);
+      throw normalizeFetchAbort(err, { url, endpoint, method }, config?.signal);
     }
     try {
       data = text ? JSON.parse(text) : null;
@@ -186,7 +211,7 @@ async function executeRequest(method: string, endpoint: string, body?: any, conf
     if (data && typeof data === 'object' && Array.isArray(data.detail)) {
       data.detail = data.detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
     }
-    throw new FetchError(response.status, data);
+    throw new FetchError(response.status, data, { url, endpoint, method });
   }
 
   return { data };

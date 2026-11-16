@@ -4,7 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ChevronRight, ChevronLeft, Clock, ListChecks, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Button } from '../../components/ui';
 import { getPublicTestPreview, getPublicTestQuestions, submitPublicTest } from '../../api/evaluations';
-import { cn, extractError, isAbortError } from '../../lib/utils';
+import { cn, extractError, extractDiagnosticInfo, type DiagnosticErrorInfo, isAbortError } from '../../lib/utils';
 import { toast } from 'sonner';
 import { PublicShell } from '../../components/layout/PublicShell';
 import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
@@ -55,6 +55,7 @@ export default function PublicTestPage() {
   const [brand, setBrand] = useState<string | undefined>();
   const [previewLoading, setPreviewLoading] = useState(true);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [diagnosticInfo, setDiagnosticInfo] = useState<DiagnosticErrorInfo | null>(null);
   const [starting, setStarting] = useState(false);
 
   const [department, setDepartment] = useState('');
@@ -75,6 +76,7 @@ export default function PublicTestPage() {
     try {
       setStarting(true);
       setPreviewError(null);
+      setDiagnosticInfo(null);
       const res = await getPublicTestQuestions(token);
       setDepartment(res.department);
       setBrand(res.brand);
@@ -86,7 +88,9 @@ export default function PublicTestPage() {
       }
     } catch (err: any) {
       if (isAbortError(err)) return;
-      setPreviewError(extractError(err, 'Unable to start the test. Please try again.'));
+      const diag = extractDiagnosticInfo(err, 'Unable to start test', 'Unable to start the test. Please try again.', token);
+      setDiagnosticInfo(diag);
+      setPreviewError(diag.message);
     } finally {
       setStarting(false);
     }
@@ -96,6 +100,7 @@ export default function PublicTestPage() {
     if (!token) return;
     setPreviewLoading(true);
     setPreviewError(null);
+    setDiagnosticInfo(null);
     try {
       const res = await getPublicTestPreview(token);
       setPreview(res);
@@ -105,7 +110,9 @@ export default function PublicTestPage() {
       }
     } catch (err: any) {
       if (isAbortError(err)) return;
-      setPreviewError(extractError(err, 'This technical test link is invalid, expired, or has already been used.'));
+      const diag = extractDiagnosticInfo(err, 'Technical test unavailable', 'This technical test link is invalid, expired, or has already been used.', token);
+      setDiagnosticInfo(diag);
+      setPreviewError(diag.message);
     } finally {
       setPreviewLoading(false);
     }
@@ -332,8 +339,9 @@ export default function PublicTestPage() {
         <PhaseTransition id="error">
           <PublicStatusPanel
             kind="expired"
-            title="Technical test unavailable"
+            title={diagnosticInfo?.title || 'Technical test unavailable'}
             message={`${previewError || 'This test is no longer available, or has already been submitted.'} Ask your HR recruiter for a fresh link if needed.`}
+            diagnosticInfo={diagnosticInfo || undefined}
             actionLabel="Try again"
             onAction={() => void fetchPreview()}
           />

@@ -13,7 +13,7 @@ import { Button, Modal, PdfViewer } from '../../components/ui';
 import { getPublicEvaluation, submitPublicEvaluation } from '../../api/evaluations';
 import { defaultInterviewTitle, interviewTitle } from '../../lib/interviewTitle';
 import type { EvaluationPublicDetails, EvaluationVerdict } from '../../types';
-import { cn, extractError, isAbortError, resumeEmbedUrl, formatSalary } from '../../lib/utils';
+import { cn, extractError, extractDiagnosticInfo, type DiagnosticErrorInfo, isAbortError, resumeEmbedUrl, formatSalary } from '../../lib/utils';
 import { PublicShell } from '../../components/layout/PublicShell';
 import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
 import { formatDate } from '../../lib/dateTime';
@@ -204,6 +204,7 @@ export default function PublicInterviewerPage() {
   const [details, setDetails] = useState<EvaluationPublicDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [diagnosticInfo, setDiagnosticInfo] = useState<DiagnosticErrorInfo | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [mobileTab, setMobileTab] = useState<'scorecard' | 'details'>('scorecard');
@@ -236,7 +237,9 @@ export default function PublicInterviewerPage() {
       } catch (err) {
         if (cancelled || isAbortError(err)) return;
         if (initial) {
-          setError(extractError(err, 'This evaluation link is invalid or already used.'));
+          const diag = extractDiagnosticInfo(err, 'Scorecard link unavailable', 'This scorecard link is invalid or expired.', token);
+          setDiagnosticInfo(diag);
+          setError(diag.message || extractError(err, 'This evaluation link is invalid or already used.'));
         }
       } finally {
         if (!cancelled && initial) setLoading(false);
@@ -301,7 +304,16 @@ export default function PublicInterviewerPage() {
   }
 
   if (error || !details) {
-    return <PublicShell brand={details?.brand} title="Interview scorecard"><PublicStatusPanel kind="expired" title="Scorecard link unavailable" message={`${error || 'This scorecard link is invalid or expired.'} Ask the recruitment team for a new link if needed.`} /></PublicShell>;
+    return (
+      <PublicShell brand={details?.brand} title="Interview scorecard">
+        <PublicStatusPanel
+          kind="expired"
+          title={diagnosticInfo?.title || 'Scorecard link unavailable'}
+          message={`${error || 'This scorecard link is invalid or expired.'} Ask the recruitment team for a new link if needed.`}
+          diagnosticInfo={diagnosticInfo || undefined}
+        />
+      </PublicShell>
+    );
   }
 
   if (submitted) {

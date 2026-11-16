@@ -4,12 +4,12 @@ import { initialCandidateData } from './wizard/wizardTypes';
 import type { CandidateFormData } from './wizard/wizardTypes';
 import { publicGetFullStatus, publicApplyFullCandidate } from '../../api/candidates';
 import { Button } from '../../components/ui';
-import { extractError, isAbortError } from '../../lib/utils';
 import {
   validatePreFormFields,
   validateOnePreFormField,
   type PreFormFieldErrors,
 } from '../../lib/validatePreForm';
+import { extractError, extractDiagnosticInfo, type DiagnosticErrorInfo, isAbortError } from '../../lib/utils';
 import { clearPreFormDraft, loadDraftFiles, loadPreFormDraft, savePreFormDraft } from '../../lib/preFormDraft';
 import { PublicShell } from '../../components/layout/PublicShell';
 import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
@@ -32,6 +32,7 @@ export default function PreFormPage() {
   const [candidateBrand, setCandidateBrand] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [diagnosticInfo, setDiagnosticInfo] = useState<DiagnosticErrorInfo | null>(null);
 
   const [formData, setFormData] = useState<CandidateFormData>(initialCandidateData);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,7 +90,9 @@ export default function PreFormPage() {
       })
       .catch((err) => {
         if (isAbortError(err)) return;
-        setStatusError(extractError(err, 'Invalid candidate reference URL.'));
+        const diag = extractDiagnosticInfo(err, 'Candidate form unavailable', 'Invalid candidate reference URL.', token);
+        setDiagnosticInfo(diag);
+        setStatusError(diag.message);
         setLoading(false);
       });
   }, [token]);
@@ -197,7 +200,16 @@ export default function PreFormPage() {
   }
 
   if (statusError) {
-    return <PublicShell brand={candidateBrand} maxWidth="2xl" title="Candidate form"><PublicStatusPanel kind="expired" message={`${statusError} Please ask your HR recruiter for a new link or clarification.`} /></PublicShell>;
+    return (
+      <PublicShell brand={candidateBrand} maxWidth="2xl" title="Candidate form">
+        <PublicStatusPanel
+          kind="expired"
+          title={diagnosticInfo?.title || 'Candidate form unavailable'}
+          message={`${statusError} Please ask your HR recruiter for a new link or clarification.`}
+          diagnosticInfo={diagnosticInfo || undefined}
+        />
+      </PublicShell>
+    );
   }
 
   if (submitSuccess) {

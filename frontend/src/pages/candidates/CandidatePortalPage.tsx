@@ -5,7 +5,7 @@ import { getCandidatePortal, submitCandidatePortalResponse, type CandidatePortal
 import { Button } from '../../components/ui';
 import { PublicShell } from '../../components/layout/PublicShell';
 import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
-import { extractError, isAbortError } from '../../lib/utils';
+import { extractError, extractDiagnosticInfo, type DiagnosticErrorInfo, isAbortError } from '../../lib/utils';
 import { formatDateTime } from '../../lib/dateTime';
 
 function formatDate(value: string | null) {
@@ -42,6 +42,7 @@ export default function CandidatePortalPage() {
   const [portalData, setPortalData] = useState<CandidatePortalOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [diagnosticInfo, setDiagnosticInfo] = useState<DiagnosticErrorInfo | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [responseError, setResponseError] = useState<string | null>(null);
   const [finalResponse, setFinalResponse] = useState<string | null>(null);
@@ -50,10 +51,13 @@ export default function CandidatePortalPage() {
     if (!token) { setLoadError('This link is missing its candidate reference.'); setLoading(false); return; }
     try {
       setLoadError(null);
+      setDiagnosticInfo(null);
       setPortalData(await getCandidatePortal(token));
     } catch (err) {
       if (isAbortError(err)) return;
-      setLoadError(extractError(err, 'This link is invalid, expired, or no longer active.'));
+      const diag = extractDiagnosticInfo(err, 'Candidate portal unavailable', 'This link is invalid, expired, or no longer active.', token);
+      setDiagnosticInfo(diag);
+      setLoadError(diag.message);
     } finally { setLoading(false); }
   }, [token]);
 
@@ -75,7 +79,20 @@ export default function CandidatePortalPage() {
   };
 
   if (loading) return <PublicShell brand={portalData?.brand} title="Candidate portal"><PublicStatusPanel kind="loading" message="Loading your candidate portal…" /></PublicShell>;
-  if (loadError || !portalData) return <PublicShell brand={portalData?.brand} title="Candidate portal"><PublicStatusPanel kind="expired" title="Link unavailable" message={`${loadError || 'This portal link is no longer active.'} Ask your HR recruiter for help or a fresh link.`} actionLabel="Try again" onAction={() => { setLoading(true); void fetchPortal(); }} /></PublicShell>;
+  if (loadError || !portalData) {
+    return (
+      <PublicShell brand={portalData?.brand} title="Candidate portal">
+        <PublicStatusPanel
+          kind="expired"
+          title={diagnosticInfo?.title || 'Link unavailable'}
+          message={`${loadError || 'This portal link is no longer active.'} Ask your HR recruiter for help or a fresh link.`}
+          diagnosticInfo={diagnosticInfo || undefined}
+          actionLabel="Try again"
+          onAction={() => { setLoading(true); void fetchPortal(); }}
+        />
+      </PublicShell>
+    );
+  }
 
   const pendingInterviews = portalData.evaluations.filter((evaluation) => !evaluation.candidate_response);
   const respondedInterviews = portalData.evaluations.filter((evaluation) => evaluation.candidate_response);

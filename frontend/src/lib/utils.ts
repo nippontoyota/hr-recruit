@@ -37,6 +37,91 @@ export function extractError(err: any, defaultMsg = 'An error occurred'): string
   return err?.message || defaultMsg;
 }
 
+export interface DiagnosticErrorInfo {
+  title: string;
+  message: string;
+  statusCode?: number;
+  detail?: string;
+  url?: string;
+  endpoint?: string;
+  method?: string;
+  isNetworkError?: boolean;
+  isOffline?: boolean;
+  timestamp: string;
+  tokenSnippet?: string;
+  rawError?: string;
+}
+
+export function extractDiagnosticInfo(
+  err: any,
+  fallbackTitle = 'Link unavailable',
+  fallbackMsg = 'This link is invalid, expired, or has already been used.',
+  token?: string,
+): DiagnosticErrorInfo {
+  if (isAbortError(err)) {
+    return {
+      title: fallbackTitle,
+      message: '',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  const isOffline = (typeof navigator !== 'undefined' && !navigator.onLine) || err?.isOffline === true;
+  const status = Number(err?.status ?? err?.response?.status ?? 0);
+  const detail = typeof err?.response?.data?.detail === 'string'
+    ? err.response.data.detail
+    : (typeof err?.response?.data?.message === 'string' ? err.response.data.message : undefined);
+  const url = err?.url || err?.response?.url;
+  const endpoint = err?.endpoint;
+  const method = err?.method;
+  const isNetwork = err?.isNetworkError || status === 0 || err instanceof TypeError || /network|failed to fetch/i.test(String(err?.message || ''));
+
+  let title = fallbackTitle;
+  let message = detail || err?.message || fallbackMsg;
+
+  if (isOffline) {
+    title = 'No Internet Connection';
+    message = 'Your device appears to be offline. Please reconnect to the internet and try again.';
+  } else if (status === 404) {
+    title = 'Link Expired or Not Found (404)';
+    message = detail || 'This link does not exist, has expired, or has already been used.';
+  } else if (status === 400 || status === 410) {
+    title = 'Link Unavailable or Already Completed';
+    message = detail || 'This link has already been completed or is no longer accessible.';
+  } else if (status === 401 || status === 403) {
+    title = 'Access Restricted';
+    message = detail || 'You do not have permission to view this page or your session has ended.';
+  } else if (status === 408 || status === 504) {
+    title = 'Request Timed Out';
+    message = 'The server took too long to respond. Please check your connection and try again.';
+  } else if (status >= 500) {
+    title = `Server Error (${status})`;
+    message = detail || 'The server encountered a temporary error. Please try again in a few moments.';
+  } else if (isNetwork) {
+    title = 'Unable to Connect to Server';
+    message = detail || 'The server could not be reached. Check your internet connection or verify if your network or ad blocker is blocking the request.';
+  }
+
+  const tokenSnippet = token
+    ? (token.length > 16 ? `${token.slice(0, 8)}...${token.slice(-8)}` : token)
+    : undefined;
+
+  return {
+    title,
+    message,
+    statusCode: status || undefined,
+    detail,
+    url,
+    endpoint,
+    method,
+    isNetworkError: isNetwork,
+    isOffline,
+    timestamp: new Date().toISOString(),
+    tokenSnippet,
+    rawError: err?.message ? String(err.message) : undefined,
+  };
+}
+
 /** Format a salary or number into Indian Rupee format, e.g. "₹4,25,000" */
 export function formatSalary(value?: string | number | null): string {
   if (value == null) return '';

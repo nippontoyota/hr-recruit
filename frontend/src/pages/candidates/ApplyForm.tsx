@@ -8,6 +8,7 @@ import { PublicShell } from '../../components/layout/PublicShell';
 import { clearJsonDraft, getStoredFile, loadJsonDraft, putStoredFile, saveJsonDraft } from '../../lib/preFormDraft';
 import { FieldRequirement, FormField } from './wizard/FormField';
 import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
+import { extractDiagnosticInfo, type DiagnosticErrorInfo } from '../../lib/utils';
 
 export default function ApplyForm() {
   const [searchParams] = useSearchParams();
@@ -18,6 +19,7 @@ export default function ApplyForm() {
   const [candidateBrand, setCandidateBrand] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [diagnosticInfo, setDiagnosticInfo] = useState<DiagnosticErrorInfo | null>(null);
 
   // Form Fields
   const [fullName, setFullName] = useState('');
@@ -84,9 +86,16 @@ export default function ApplyForm() {
           }
         } else {
           setErrorText('Missing reference parameters. Please use the link provided by your HR recruiter.');
+          setDiagnosticInfo({
+            title: 'Missing Reference Parameters',
+            message: 'No candidate token or recruiter reference was provided in this URL.',
+            timestamp: new Date().toISOString(),
+          });
         }
       } catch (err: any) {
-        setErrorText(err?.response?.data?.detail || 'Invalid recruiter or candidate link.');
+        const diag = extractDiagnosticInfo(err, 'Candidate link unavailable', 'Invalid recruiter or candidate link.', formToken || hrId || undefined);
+        setDiagnosticInfo(diag);
+        setErrorText(diag.message || 'Invalid recruiter or candidate link.');
       } finally {
         setLoading(false);
       }
@@ -192,7 +201,16 @@ export default function ApplyForm() {
   }
 
   if (errorText) {
-    return <PublicShell brand={candidateBrand} title="Candidate registration"><PublicStatusPanel kind="expired" title="Link unavailable" message={`${errorText} Please request a fresh link from your HR recruiter if the problem continues.`} /></PublicShell>;
+    return (
+      <PublicShell brand={candidateBrand} title="Candidate registration">
+        <PublicStatusPanel
+          kind="expired"
+          title={diagnosticInfo?.title || 'Link unavailable'}
+          message={`${errorText} Please request a fresh link from your HR recruiter if the problem continues.`}
+          diagnosticInfo={diagnosticInfo || undefined}
+        />
+      </PublicShell>
+    );
   }
 
   if (submitSuccess) {
