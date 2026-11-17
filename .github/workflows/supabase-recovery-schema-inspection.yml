@@ -334,7 +334,7 @@ jobs:
                           })
 
           ddl_proc = subprocess.run(
-              ["pg_restore", "-s", "-n", "recruitment", "extracted/database.dump"],
+              ["pg_restore", "-s", "-n", "recruitment", "-f", "-", "extracted/database.dump"],
               capture_output=True,
               text=True,
           )
