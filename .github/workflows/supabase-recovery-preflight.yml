@@ -1,0 +1,363 @@
+name: Supabase Recovery Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Original successful backup workflow run ID"
+        required: true
+        default: "43843597091"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preflight:
+    name: Inspect Restored Database Dependencies
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: supabase/postgres:17.12.0.000
+        env:
+          POSTGRES_PASSWORD: restore-test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U supabase_admin -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
+
+    env:
+      PGPASSWORD: restore-test-only-password
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: supabase_admin
+      PGDATABASE: recovery_preflight
+
+    steps:
+      - name: Download original backup artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: supabase-backup-${{ inputs.run_id }}
+          path: downloaded
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id }}
+
+      - name: Install PostgreSQL 17 client
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates gnupg
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Decrypt and safely extract backup
+        shell: bash
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t encrypted_files < <(
+            find downloaded -type f -name "*.enc"
+          )
+
+          if [ "${#encrypted_files[@]}" -ne 1 ]; then
+            echo "Expected exactly one encrypted backup file."
+            exit 1
+          fi
+
+          mkdir -p extracted decrypted
+
+          openssl enc -d -aes-256-cbc -pbkdf2 -salt \
+            -in "${encrypted_files[0]}" \
+            -out decrypted/backup.tar.gz \
+            -pass env:BACKUP_ENCRYPTION_KEY
+
+          python3 - <<'PY'
+          import tarfile
+          from pathlib import Path, PurePosixPath
+          import shutil
+
+          archive = Path("decrypted/backup.tar.gz")
+          destination = Path("extracted").resolve()
+
+          with tarfile.open(archive, "r:gz") as tar:
+              seen = set()
+
+              for member in tar.getmembers():
+                  name = PurePosixPath(member.name)
+
+                  if name.is_absolute() or ".." in name.parts:
+                      raise RuntimeError(f"Unsafe archive path: {member.name}")
+
+                  if not (member.isfile() or member.isdir()):
+                      raise RuntimeError(f"Unsupported archive entry: {member.name}")
+
+                  if member.name in seen:
+                      raise RuntimeError(f"Duplicate archive entry: {member.name}")
+
+                  seen.add(member.name)
+
+                  target = (destination / Path(*name.parts)).resolve()
+
+                  if target != destination and destination not in target.parents:
+                      raise RuntimeError(f"Path escape: {member.name}")
+
+                  if member.isdir():
+                      target.mkdir(parents=True, exist_ok=True)
+                  else:
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      source = tar.extractfile(member)
+
+                      if source is None:
+                          raise RuntimeError(f"Cannot read: {member.name}")
+
+                      with source, target.open("wb") as output:
+                          shutil.copyfileobj(source, output)
+
+          if not (destination / "database.dump").is_file():
+              raise RuntimeError("database.dump missing from backup")
+
+          print("Backup safely extracted.")
+          PY
+
+          rm -rf decrypted
+
+      - name: Wait for temporary PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for i in {1..30}; do
+            if pg_isready -h 127.0.0.1 -p 5432 -U supabase_admin -d postgres; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Temporary PostgreSQL did not become ready."
+          exit 1
+
+      - name: Create isolated preflight database
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          createdb \
+            --maintenance-db=postgres \
+            -h 127.0.0.1 \
+            -p 5432 \
+            -U supabase_admin \
+            recovery_preflight
+
+      - name: Restore original database into isolated container
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pg_restore \
+            --verbose \
+            --exit-on-error \
+            --single-transaction \
+            --no-owner \
+            --no-privileges \
+            --host=127.0.0.1 \
+            --port=5432 \
+            --username=supabase_admin \
+            --dbname=recovery_preflight \
+            extracted/database.dump
+
+      - name: Generate recovery dependency report
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "# Supabase Recovery Preflight Report"
+            echo
+            echo "**Source backup run:** ${{ inputs.run_id }}"
+            echo
+            echo "**Database:** recovery_preflight"
+            echo
+            echo "## 1. Recruitment table inventory"
+            echo '```text'
+
+            psql -X -v ON_ERROR_STOP=1 -c "
+              SELECT count(*) AS recruitment_tables
+              FROM information_schema.tables
+              WHERE table_schema = 'recruitment'
+                AND table_type = 'BASE TABLE';
+            "
+
+            echo '```'
+            echo
+            echo "## 2. Recruitment table row counts"
+            echo '```text'
+
+            psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT format(
+            'SELECT %L AS table_name, count(*) AS row_count FROM %I.%I;',
+            table_name, table_schema, table_name
+          )
+          FROM information_schema.tables
+          WHERE table_schema = 'recruitment'
+            AND table_type = 'BASE TABLE'
+          ORDER BY table_name
+          \gexec
+          SQL
+
+            echo '```'
+            echo
+            echo "## 3. Foreign keys crossing schema boundaries"
+            echo '```text'
+
+            psql -X -v ON_ERROR_STOP=1 -c "
+              SELECT
+                source_ns.nspname || '.' || source_table.relname AS source_table,
+                constraint_info.conname AS constraint_name,
+                target_ns.nspname || '.' || target_table.relname AS referenced_table
+              FROM pg_constraint constraint_info
+              JOIN pg_class source_table
+                ON source_table.oid = constraint_info.conrelid
+              JOIN pg_namespace source_ns
+                ON source_ns.oid = source_table.relnamespace
+              JOIN pg_class target_table
+                ON target_table.oid = constraint_info.confrelid
+              JOIN pg_namespace target_ns
+                ON target_ns.oid = target_table.relnamespace
+              WHERE constraint_info.contype = 'f'
+                AND (source_ns.nspname = 'recruitment'
+                     OR target_ns.nspname = 'recruitment')
+                AND source_ns.nspname <> target_ns.nspname
+              ORDER BY source_table, constraint_name;
+            "
+
+            echo '```'
+            echo
+            echo "## 4. Supabase Auth table inventory"
+            echo '```text'
+
+            psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT format(
+            'SELECT %L AS table_name, count(*) AS row_count FROM auth.%I;',
+            table_name, table_name
+          )
+          FROM information_schema.tables
+          WHERE table_schema = 'auth'
+            AND table_type = 'BASE TABLE'
+          ORDER BY table_name
+          \gexec
+          SQL
+
+            echo '```'
+            echo
+            echo "## 5. Recruitment functions and procedures"
+            echo '```text'
+
+            psql -X -v ON_ERROR_STOP=1 -c "
+              SELECT
+                routine_name,
+                routine_type,
+                data_type
+              FROM information_schema.routines
+              WHERE specific_schema = 'recruitment'
+              ORDER BY routine_name;
+            "
+
+            echo '```'
+            echo
+            echo "## 6. Recruitment views"
+            echo '```text'
+
+            psql -X -v ON_ERROR_STOP=1 -c "
+              SELECT table_name, table_type
+              FROM information_schema.tables
+              WHERE table_schema = 'recruitment'
+                AND table_type IN ('VIEW', 'FOREIGN')
+              ORDER BY table_name;
+            "
+
+            echo '```'
+            echo
+            echo "## 7. Recruitment triggers"
+            echo '```text'
+
+            psql -X -v ON_ERROR_STOP=1 -c "
+              SELECT
+                event_object_table AS table_name,
+                trigger_name,
+                event_manipulation,
+                action_timing
+              FROM information_schema.triggers
+              WHERE trigger_schema = 'recruitment'
+              ORDER BY event_object_table, trigger_name;
+            "
+
+            echo '```'
+            echo
+            echo "## 8. Recruitment sequences"
+            echo '```text'
+
+            psql -X -v ON_ERROR_STOP=1 -c "
+              SELECT
+                sequence_name
+              FROM information_schema.sequences
+              WHERE sequence_schema = 'recruitment'
+              ORDER BY sequence_name;
+            "
+
+            echo '```'
+            echo
+            echo "## 9. Recruitment Row Level Security policies"
+            echo '```text'
+
+            psql -X -v ON_ERROR_STOP=1 -c "
+              SELECT
+                tablename,
+                policyname,
+                permissive,
+                roles,
+                cmd
+              FROM pg_policies
+              WHERE schemaname = 'recruitment'
+              ORDER BY tablename, policyname;
+            "
+
+            echo '```'
+            echo
+            echo "## 10. Installed extensions"
+            echo '```text'
+
+            psql -X -v ON_ERROR_STOP=1 -c "
+              SELECT extname, extversion, nspname AS schema
+              FROM pg_extension
+              JOIN pg_namespace ON pg_namespace.oid = pg_extension.extnamespace
+              ORDER BY extname;
+            "
+
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean up temporary backup files
+        if: always()
+        shell: bash
+        run: |
+          rm -rf downloaded decrypted extracted
