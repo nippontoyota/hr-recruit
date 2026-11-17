@@ -1,0 +1,494 @@
+name: Inspect Supabase encrypted backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Workflow run ID of the backup artifact to inspect"
+        required: true
+        default: "43843597091"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    name: Inspect Encrypted Backup
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download encrypted backup artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: supabase-backup-${{ inputs.run_id }}
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: download
+
+      - name: Install OpenSSL and PostgreSQL 17 client
+        shell: bash
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] http://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y openssl postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          openssl version
+          pg_restore --version
+
+      - name: Decrypt backup archive
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$BACKUP_ENCRYPTION_KEY" ]; then
+            echo "::error::BACKUP_ENCRYPTION_KEY secret is empty or not configured."
+            exit 1
+          fi
+
+          # Verify that exactly one .enc file exists in the downloaded artifact
+          mapfile -t enc_files < <(find download -maxdepth 2 -type f -name '*.enc')
+          enc_count="${#enc_files[@]}"
+
+          if [ "$enc_count" -eq 0 ]; then
+            echo "::error::No .enc backup file found in downloaded artifact."
+            exit 1
+          fi
+
+          if [ "$enc_count" -gt 1 ]; then
+            echo "::error::Expected exactly one .enc file in downloaded artifact, but found $enc_count: ${enc_files[*]}"
+            exit 1
+          fi
+
+          enc_file="${enc_files[0]}"
+          echo "Verified exactly one encrypted archive: $enc_file ($(stat -c%s "$enc_file") bytes)"
+          mkdir -p decrypted
+
+          # Decrypt using identical parameters as backup workflow
+          openssl enc -d -aes-256-cbc -pbkdf2 -salt \
+            -in "$enc_file" \
+            -out "decrypted/backup.tar.gz" \
+            -pass env:BACKUP_ENCRYPTION_KEY
+
+          echo "Decryption completed successfully."
+
+      - name: Validate member paths and safely extract archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - << 'EOF'
+          import os
+          import sys
+          import tarfile
+          from pathlib import Path
+
+          archive_path = Path("decrypted/backup.tar.gz")
+          if not archive_path.is_file():
+              print("::error::Decrypted archive decrypted/backup.tar.gz does not exist.", file=sys.stderr)
+              sys.exit(1)
+
+          extract_root = Path("extracted").resolve()
+          extract_root.mkdir(parents=True, exist_ok=True)
+
+          print(f"Validating archive member paths and checking for conflicts before extraction...")
+
+          seen_paths = set()
+          declared_files = set()
+          declared_dirs = set()
+
+          with tarfile.open(archive_path, "r:gz") as tar:
+              members = tar.getmembers()
+              print(f"Total archive members: {len(members)}")
+
+              for member in members:
+                  # 1. Strictly allow ONLY regular files and directories
+                  # Reject all symbolic links, hard links, FIFOs, and special file types
+                  if not (member.isfile() or member.isdir()):
+                      print(f"::error::Rejected unsafe member type in archive: {member.name} (type={member.type!r})", file=sys.stderr)
+                      sys.exit(1)
+
+                  member_path = Path(member.name)
+
+                  # 2. Reject absolute paths
+                  if member_path.is_absolute():
+                      print(f"::error::Unsafe absolute path in archive: {member.name}", file=sys.stderr)
+                      sys.exit(1)
+
+                  # 3. Reject path traversal components (..)
+                  if ".." in member_path.parts:
+                      print(f"::error::Unsafe path traversal component in archive: {member.name}", file=sys.stderr)
+                      sys.exit(1)
+
+                  # 4. Verify resolved destination is strictly within extract_root
+                  destination = (extract_root / member_path).resolve()
+                  if destination != extract_root and extract_root not in destination.parents:
+                      print(f"::error::Path escapes extraction directory: {member.name}", file=sys.stderr)
+                      sys.exit(1)
+
+                  # 5. Check for duplicate normalized member paths and conflicting file/directory paths
+                  norm_path = Path(os.path.normpath(member_path.as_posix())).as_posix().strip("/")
+                  if not norm_path:
+                      norm_path = "."
+
+                  if norm_path in seen_paths:
+                      print(f"::error::Duplicate normalized member path in archive: {member.name} ({norm_path})", file=sys.stderr)
+                      sys.exit(1)
+                  seen_paths.add(norm_path)
+
+                  parents = [p.as_posix() for p in Path(norm_path).parents if p.as_posix() not in (".", "/")]
+                  for parent in parents:
+                      if parent in declared_files:
+                          print(f"::error::Conflicting path in archive: parent '{parent}' of '{norm_path}' was already declared as a regular file.", file=sys.stderr)
+                          sys.exit(1)
+
+                  if member.isfile():
+                      if norm_path in declared_dirs:
+                          print(f"::error::Conflicting path in archive: '{norm_path}' was previously declared as a directory.", file=sys.stderr)
+                          sys.exit(1)
+                      declared_files.add(norm_path)
+                      for p in parents:
+                          declared_dirs.add(p)
+                  elif member.isdir():
+                      if norm_path in declared_files:
+                          print(f"::error::Conflicting path in archive: '{norm_path}' was previously declared as a regular file.", file=sys.stderr)
+                          sys.exit(1)
+                      declared_dirs.add(norm_path)
+                      # Register implicit parent directories of directory members too
+                      for p in parents:
+                          declared_dirs.add(p)
+
+              print("All archive members validated successfully: no symlinks, hardlinks, traversal, duplicates, or path conflicts. Extracting...")
+              tar.extractall(extract_root)
+              print("Safe extraction completed successfully.")
+          EOF
+
+          # Immediately remove decrypted tarball to minimize plaintext disk footprint
+          rm -f "decrypted/backup.tar.gz"
+
+      - name: Verify archive structure
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -f "extracted/database.dump" ]; then
+            echo "::error::Verification failed: database.dump is missing from the archive."
+            exit 1
+          fi
+
+          if [ ! -f "extracted/manifest.json" ]; then
+            echo "::error::Verification failed: manifest.json is missing from the archive."
+            exit 1
+          fi
+
+          echo "Archive structure verified: database.dump and manifest.json exist."
+
+      - name: Inspect database dump and storage manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Run pg_restore --list against database.dump strictly in inspection mode
+          pg_restore --list extracted/database.dump > extracted/toc.txt
+
+          python3 - << 'EOF'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          def format_bytes(size: int) -> str:
+              for unit in ["B", "KB", "MB", "GB"]:
+                  if abs(size) < 1024.0:
+                      return f"{size:.2f} {unit}"
+                  size /= 1024.0
+              return f"{size:.2f} TB"
+
+          verification_errors = []
+
+          # 1. Database dump inspection
+          db_dump_path = Path("extracted/database.dump")
+          db_dump_size = db_dump_path.stat().st_size if db_dump_path.exists() else 0
+
+          dump_metadata = {}
+          schemas = set()
+          tables_by_schema = {}
+          toc_entries_count = 0
+
+          try:
+              with open("extracted/toc.txt", "r", encoding="utf-8", errors="replace") as f:
+                  for line in f:
+                      line_clean = line.strip()
+                      if not line_clean:
+                          continue
+                      if line_clean.startswith(";"):
+                          content = line_clean.lstrip(";").strip()
+                          if content.startswith("Archive created at"):
+                              dump_metadata["Created At"] = content.replace("Archive created at", "").strip()
+                          elif ":" in content:
+                              k, v = content.split(":", 1)
+                              dump_metadata[k.strip()] = v.strip()
+                          continue
+
+                      toc_entries_count += 1
+                      if ";" in line:
+                          parts = line.split(";", 1)
+                          rest = parts[1].strip().split()
+                          if len(rest) >= 3:
+                              desc = rest[2]
+                              if desc == "SCHEMA":
+                                  schema_name = rest[4] if len(rest) > 4 and rest[3] == "-" else rest[3]
+                                  schemas.add(schema_name)
+                              elif desc == "TABLE":
+                                  if len(rest) >= 5:
+                                      sch = rest[3]
+                                      tbl = rest[4]
+                                      schemas.add(sch)
+                                      tables_by_schema.setdefault(sch, []).append(tbl)
+          except Exception as e:
+              verification_errors.append(f"Failed to parse pg_restore TOC: {e}")
+
+          # Require at least one actual TOC entry; fail if zero
+          if toc_entries_count == 0:
+              verification_errors.append("pg_restore --list produced zero TOC entries; database dump is empty or unreadable.")
+
+          # 2. Storage manifest inspection & exact set comparison
+          EXPECTED_BUCKET = "candidate-documents"
+          manifest_path = Path("extracted/manifest.json")
+          manifest_data = {}
+          manifest_error = None
+
+          try:
+              with open(manifest_path, "r", encoding="utf-8") as f:
+                  manifest_data = json.load(f)
+
+              # Validate manifest schema strictly
+              if not isinstance(manifest_data, dict):
+                  manifest_error = "Manifest root must be a JSON object (dictionary)."
+              elif "bucket" not in manifest_data or not isinstance(manifest_data.get("bucket"), str) or not manifest_data.get("bucket").strip():
+                  manifest_error = "Manifest 'bucket' field is missing or not a non-empty string."
+              elif manifest_data.get("bucket").strip() != EXPECTED_BUCKET:
+                  manifest_error = f"Manifest bucket '{manifest_data.get('bucket').strip()}' does not match expected bucket '{EXPECTED_BUCKET}'."
+              elif "objects" not in manifest_data or not isinstance(manifest_data.get("objects"), list):
+                  manifest_error = "Manifest 'objects' field is missing or not a list."
+              else:
+                  for idx, obj in enumerate(manifest_data["objects"]):
+                      if not isinstance(obj, dict):
+                          manifest_error = f"Manifest object at index {idx} is not a valid JSON object."
+                          break
+                      raw_path = obj.get("path")
+                      if not isinstance(raw_path, str) or not raw_path.strip():
+                          manifest_error = f"Manifest object at index {idx} has an invalid or empty 'path'."
+                          break
+                      raw_size = obj.get("size")
+                      if isinstance(raw_size, bool) or not isinstance(raw_size, int) or raw_size < 0:
+                          manifest_error = f"Manifest object at index {idx} ('{raw_path}') has an invalid non-negative integer 'size': {raw_size!r}."
+                          break
+          except Exception as e:
+              manifest_error = f"Failed to read/parse manifest.json: {e}"
+
+          if manifest_error:
+              verification_errors.append(f"Manifest validation error: {manifest_error}")
+
+          bucket_name = manifest_data.get("bucket", "N/A") if isinstance(manifest_data, dict) else "N/A"
+          manifest_created_at = manifest_data.get("created_at", "N/A") if isinstance(manifest_data, dict) else "N/A"
+
+          # Explicitly require extracted/storage to exist and be a directory
+          storage_dir = (Path("extracted") / "storage").resolve()
+          storage_dir_valid = storage_dir.exists() and storage_dir.is_dir()
+          if not storage_dir_valid:
+              verification_errors.append("Extracted storage directory 'extracted/storage' does not exist or is not a directory.")
+
+          manifest_path_map = {}
+          duplicate_manifest_paths = []
+          escaped_manifest_paths = []
+          declared_count = 0
+          declared_bytes = 0
+
+          # Only process objects if manifest schema is completely valid
+          # If manifest validation failed, skip object processing to avoid ValueError crashes
+          if manifest_error is None:
+              storage_objects = manifest_data["objects"]
+              declared_count = len(storage_objects)
+
+              for obj in storage_objects:
+                  raw_path = obj["path"].strip()
+                  raw_size = obj["size"]
+                  declared_bytes += raw_size
+
+                  p = Path(raw_path)
+                  if p.is_absolute() or ".." in p.parts:
+                      escaped_manifest_paths.append(raw_path)
+                      continue
+
+                  norm_path = Path(os.path.normpath(raw_path)).as_posix().strip("/")
+                  if not norm_path or norm_path == ".":
+                      escaped_manifest_paths.append(raw_path)
+                      continue
+
+                  resolved = (storage_dir / norm_path).resolve()
+                  if resolved != storage_dir and storage_dir not in resolved.parents:
+                      escaped_manifest_paths.append(raw_path)
+                      continue
+
+                  # Detect duplicate paths on normalized string
+                  if norm_path in manifest_path_map:
+                      duplicate_manifest_paths.append(norm_path)
+                  else:
+                      manifest_path_map[norm_path] = raw_size
+
+          # Collect exact set of extracted storage files on disk (normalized POSIX relative paths)
+          extracted_path_map = {}
+          if storage_dir_valid:
+              for file_path in storage_dir.rglob("*"):
+                  if file_path.is_file():
+                      rel_str = Path(os.path.normpath(file_path.relative_to(storage_dir).as_posix())).as_posix().strip("/")
+                      extracted_path_map[rel_str] = file_path.stat().st_size
+
+          actual_count = len(extracted_path_map)
+          actual_bytes = sum(extracted_path_map.values())
+
+          # Exact set comparisons
+          manifest_set = set(manifest_path_map.keys())
+          extracted_set = set(extracted_path_map.keys())
+
+          missing_files = sorted(manifest_set - extracted_set)
+          extra_files = sorted(extracted_set - manifest_set)
+          size_mismatches = [
+              (p, manifest_path_map[p], extracted_path_map[p])
+              for p in (manifest_set & extracted_set)
+              if manifest_path_map[p] != extracted_path_map[p]
+          ]
+
+          # Strict MATCH requirement: storage directory must exist, manifest must be valid, and all path/size checks must pass
+          storage_fully_matches = (
+              storage_dir_valid and
+              manifest_error is None and
+              len(duplicate_manifest_paths) == 0 and
+              len(escaped_manifest_paths) == 0 and
+              len(missing_files) == 0 and
+              len(extra_files) == 0 and
+              len(size_mismatches) == 0 and
+              actual_count == declared_count and
+              actual_bytes == declared_bytes
+          )
+
+          if not storage_fully_matches:
+              if not storage_dir_valid:
+                  verification_errors.append("Storage directory 'extracted/storage' is missing or not a directory.")
+              if duplicate_manifest_paths:
+                  verification_errors.append(f"Manifest contains {len(duplicate_manifest_paths):,} duplicate path(s) after normalization: {duplicate_manifest_paths[:3]}")
+              if escaped_manifest_paths:
+                  verification_errors.append(f"Manifest contains {len(escaped_manifest_paths):,} path(s) escaping storage root or invalid: {escaped_manifest_paths[:3]}")
+              if missing_files:
+                  verification_errors.append(f"{len(missing_files):,} declared object(s) missing on disk: {missing_files[:3]}")
+              if extra_files:
+                  verification_errors.append(f"{len(extra_files):,} unexpected extra file(s) found on disk: {extra_files[:3]}")
+              if size_mismatches:
+                  verification_errors.append(f"{len(size_mismatches):,} file(s) with size discrepancies on disk")
+              if actual_count != declared_count:
+                  verification_errors.append(f"Storage object count mismatch: manifest declared {declared_count:,}, found {actual_count:,}")
+              if actual_bytes != declared_bytes:
+                  verification_errors.append(f"Storage byte count mismatch: manifest declared {declared_bytes:,} bytes, found {actual_bytes:,} bytes")
+
+          # 3. Build Markdown Report
+          lines = []
+          lines.append("# 📦 Supabase Backup Inspection Report")
+          lines.append("")
+          lines.append("## 🔍 Inspection Summary")
+          lines.append("| Item | Assessment | Details |")
+          lines.append("|---|---|---|")
+          lines.append(f"| **Archive Decryption** | COMPLETED | AES-256-CBC PBKDF2 decrypted; gzip decompressed successfully |")
+          lines.append(f"| **Archive Member Paths** | SAFE | All paths verified within extraction directory (no symlinks, hardlinks, conflicts, or traversal) |")
+          lines.append(f"| **Structure Verification** | {'PASSED' if storage_dir_valid else 'FAILED'} | `database.dump`, `manifest.json`, and `storage/` directory |")
+          lines.append(f"| **Database Dump Size** | RECORDED | {format_bytes(db_dump_size)} ({db_dump_size:,} bytes) |")
+
+          if toc_entries_count > 0:
+              lines.append(f"| **Database TOC** | READABILITY VERIFIED | {toc_entries_count:,} TOC entries parsed via `pg_restore --list` |")
+          else:
+              lines.append(f"| **Database TOC** | FAILED | 0 TOC entries parsed via `pg_restore --list` (empty or corrupted dump) |")
+
+          lines.append(f"| **Storage Manifest** | {'VALID' if not manifest_error else 'ERROR'} | Bucket: `{bucket_name}` (expected: `{EXPECTED_BUCKET}`), {declared_count:,} objects declared ({format_bytes(declared_bytes)}) |")
+
+          if storage_fully_matches:
+              lines.append(f"| **Storage Files On Disk** | MATCH | {actual_count:,} files ({format_bytes(actual_bytes)}) exactly match manifest set |")
+          else:
+              lines.append(f"| **Storage Files On Disk** | MISMATCH | Declared: {declared_count:,} files ({format_bytes(declared_bytes)}) vs Actual: {actual_count:,} files ({format_bytes(actual_bytes)}) |")
+
+          lines.append("")
+
+          lines.append("## 🗄️ PostgreSQL Dump Information")
+          lines.append("| Property | Value |")
+          lines.append("|---|---|")
+          for k in ["Format", "Dump Version", "Dumped by pg_dump version", "dbname", "Created At", "Compression"]:
+              if k in dump_metadata:
+                  lines.append(f"| **{k}** | `{dump_metadata[k]}` |")
+          lines.append("")
+
+          lines.append("## 📋 Available Schemas & Tables")
+          lines.append("| Schema | Table Count | Tables |")
+          lines.append("|---|---|---|")
+          all_known_schemas = sorted(schemas.union(tables_by_schema.keys()))
+          for sch in all_known_schemas:
+              tbls = sorted(tables_by_schema.get(sch, []))
+              tbl_str = ", ".join(f"`{t}`" for t in tbls) if tbls else "*(no standalone tables)*"
+              lines.append(f"| **`{sch}`** | {len(tbls)} | {tbl_str} |")
+          lines.append("")
+
+          lines.append("## ☁️ Supabase Storage Summary")
+          lines.append("| Property | Value |")
+          lines.append("|---|---|")
+          lines.append(f"| **Manifest Bucket Name** | `{bucket_name}` |")
+          lines.append(f"| **Expected Bucket Name** | `{EXPECTED_BUCKET}` |")
+          lines.append(f"| **Bucket Verification** | `{'MATCH' if bucket_name == EXPECTED_BUCKET else 'MISMATCH'}` |")
+          lines.append(f"| **Storage Directory Exists** | `{'YES' if storage_dir_valid else 'NO'}` |")
+          lines.append(f"| **Manifest Created At** | `{manifest_created_at}` |")
+          lines.append(f"| **Manifest Declared Objects** | {declared_count:,} |")
+          lines.append(f"| **Manifest Declared Size** | {format_bytes(declared_bytes)} ({declared_bytes:,} bytes) |")
+          lines.append(f"| **Extracted Files On Disk** | {actual_count:,} |")
+          lines.append(f"| **Extracted Size On Disk** | {format_bytes(actual_bytes)} ({actual_bytes:,} bytes) |")
+          lines.append(f"| **Storage Verification Result** | `{'MATCH' if storage_fully_matches else 'MISMATCH'}` |")
+          lines.append("")
+
+          if verification_errors:
+              lines.append("## ❌ Verification Failures")
+              for err in verification_errors:
+                  lines.append(f"- {err}")
+              lines.append("")
+
+          lines.append("> **Scope & Integrity Notice:**")
+          lines.append("> - `pg_restore --list` verifies that PostgreSQL 17 can read and parse the archive's Table of Contents (TOC) metadata. It does not validate or read every individual table data block inside the dump.")
+          lines.append("> - OpenSSL AES-256-CBC without HMAC does not provide authenticated encryption by itself; decompression of the `.tar.gz` and readability of the TOC provide structural consistency checks, but full database integrity can only be proven during actual schema/data restoration.")
+          lines.append("> - This workflow does not connect to, modify, or restore any Supabase database or Storage bucket. It does not modify repository files or secrets.")
+
+          report_md = "\n".join(lines)
+
+          # Output to GitHub Step Summary
+          summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_file:
+              with open(summary_file, "a", encoding="utf-8") as f:
+                  f.write(report_md + "\n")
+
+          # Output to console stdout
+          print(report_md)
+
+          if verification_errors:
+              print(f"\n::error::Backup inspection completed with {len(verification_errors)} verification failure(s). See summary report.", file=sys.stderr)
+              sys.exit(1)
+          EOF
+
+      - name: Clean up decrypted and temporary files
+        if: always()
+        shell: bash
+        run: |
+          echo "Purging all temporary files, downloaded artifacts, and decrypted archives..."
+          rm -rf download decrypted extracted
+          echo "Cleanup complete. Runner disk is clean."
