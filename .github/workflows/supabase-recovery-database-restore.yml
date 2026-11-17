@@ -1,0 +1,988 @@
+name: Supabase Recovery Database Restore
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Original successful backup workflow run ID"
+        required: true
+        default: "43843597091"
+        type: string
+      confirm_restore:
+        description: "Safety gate: MUST be set to true to execute restore. Leave false for Preflight-only mode."
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  database-restore:
+    name: Restore Recruitment Schema to Supabase
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Safety confirmation status
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.confirm_restore }}" = "true" ]; then
+            echo "=================================================================="
+            echo "RESTORE EXPLICITLY AUTHORIZED"
+            echo "Target database writes will be executed if preflight checks pass."
+            echo "=================================================================="
+          else
+            echo "=================================================================="
+            echo "PREFLIGHT-ONLY MODE"
+            echo "All compatibility and validation checks will execute."
+            echo "NO database writes will be performed against target project."
+            echo "=================================================================="
+          fi
+
+      - name: Download original backup artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: supabase-backup-${{ inputs.run_id }}
+          path: downloaded
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id }}
+
+      - name: Install PostgreSQL 17 client
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates gnupg
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /tmp/ACCC4CF8.asc
+          sudo gpg --no-tty --batch --yes --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg /tmp/ACCC4CF8.asc
+          rm -f /tmp/ACCC4CF8.asc
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Decrypt, extract and validate backup archive
+        shell: bash
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t encrypted_files < <(
+            find downloaded -type f -name "*.enc"
+          )
+
+          if [ "${#encrypted_files[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one encrypted backup file in downloaded artifact."
+            exit 1
+          fi
+
+          mkdir -p extracted decrypted
+
+          openssl enc -d -aes-256-cbc -pbkdf2 -salt \
+            -in "${encrypted_files[0]}" \
+            -out decrypted/backup.tar.gz \
+            -pass env:BACKUP_ENCRYPTION_KEY
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path, PurePosixPath
+          import re
+          import shutil
+          import subprocess
+          import sys
+          import tarfile
+
+          EXPECTED_TABLES = [
+              "activity_logs", "alembic_version", "branch_interviews", "candidate_profiles",
+              "candidate_screening", "candidates", "communications", "documents",
+              "evaluation_tokens", "evaluations", "followups", "interviewer_names",
+              "job_openings", "location_templates", "message_templates", "stage_history",
+              "technical_questions", "touchpoint_templates", "users"
+          ]
+
+          archive = Path("decrypted/backup.tar.gz")
+          destination = Path("extracted").resolve()
+
+          # 1. Safe Tar Extraction with Path Bounds Checking
+          with tarfile.open(archive, "r:gz") as tar:
+              seen = set()
+              for member in tar.getmembers():
+                  name = PurePosixPath(member.name)
+                  if name.is_absolute() or ".." in name.parts:
+                      raise RuntimeError(f"Unsafe archive path: {member.name}")
+                  if not (member.isfile() or member.isdir()):
+                      raise RuntimeError(f"Unsupported archive entry: {member.name}")
+                  if member.name in seen:
+                      raise RuntimeError(f"Duplicate archive entry: {member.name}")
+                  seen.add(member.name)
+
+                  target = (destination / Path(*name.parts)).resolve()
+                  if target != destination and destination not in target.parents:
+                      raise RuntimeError(f"Path escape: {member.name}")
+
+                  if member.isdir():
+                      target.mkdir(parents=True, exist_ok=True)
+                  else:
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      source = tar.extractfile(member)
+                      if source is None:
+                          raise RuntimeError(f"Cannot read: {member.name}")
+                      with source, target.open("wb") as output:
+                          shutil.copyfileobj(source, output)
+
+          dump_path = destination / "database.dump"
+          manifest_path = destination / "manifest.json"
+
+          if not dump_path.is_file():
+              raise RuntimeError("database.dump is missing from backup")
+          if not manifest_path.is_file():
+              raise RuntimeError("manifest.json is missing from backup")
+
+          # 2. Parse and Validate Manifest matching exact backup_supabase.py structure and verified baseline
+          try:
+              with open(manifest_path, "r", encoding="utf-8") as f:
+                  manifest = json.load(f)
+              if not isinstance(manifest, dict):
+                  raise RuntimeError("manifest.json is not a valid JSON dictionary")
+              if "bucket" not in manifest or "objects" not in manifest or not isinstance(manifest.get("objects"), list):
+                  raise RuntimeError("manifest.json missing required 'bucket' or 'objects' list")
+              
+              # Validate expected bucket name
+              expected_bucket = "candidate-documents"
+              if manifest.get("bucket") != expected_bucket:
+                  raise RuntimeError(f"Manifest bucket '{manifest.get('bucket')}' does not match expected '{expected_bucket}'")
+
+              # Validate verified file count baseline (1,218 storage objects)
+              expected_file_count = 1218
+              actual_file_count = len(manifest["objects"])
+              if actual_file_count != expected_file_count:
+                  raise RuntimeError(f"Manifest objects count ({actual_file_count}) does not match expected baseline ({expected_file_count})")
+
+              print(f"Manifest validated: bucket='{manifest['bucket']}', exactly {actual_file_count} storage files verified.")
+          except Exception as ex:
+              raise RuntimeError(f"manifest.json validation failed: {ex}")
+
+          # 3. Extract and Verify Recruitment Schema DDL directly via pg_restore -s -n recruitment
+          ddl_proc = subprocess.run(
+              ["pg_restore", "-s", "-n", "recruitment", "-f", "-", str(dump_path)],
+              capture_output=True,
+              text=True
+          )
+          if ddl_proc.returncode != 0:
+              raise RuntimeError(f"pg_restore -s failed to extract recruitment DDL: {ddl_proc.stderr.strip()}")
+
+          ddl_sql = ddl_proc.stdout
+
+          # Verify schema definition
+          if "CREATE SCHEMA recruitment;" not in ddl_sql:
+              raise RuntimeError("DDL missing 'CREATE SCHEMA recruitment;'")
+
+          # Verify all 19 tables in DDL
+          found_tables = set(re.findall(r"CREATE TABLE recruitment\.([a-zA-Z0-9_]+)\s*\(", ddl_sql))
+          missing_tables = [t for t in EXPECTED_TABLES if t not in found_tables]
+          if missing_tables:
+              raise RuntimeError(f"DDL missing expected recruitment tables: {missing_tables}")
+          print(f"DDL verified: All {len(EXPECTED_TABLES)} expected tables defined in recruitment schema.")
+
+          # 4. Dynamic Inspection of Custom ENUM types, Columns, and Defaults from DDL
+          found_enums = sorted(set(re.findall(r"CREATE TYPE recruitment\.([a-zA-Z0-9_]+)\s+AS\s+ENUM", ddl_sql)))
+          print(f"DDL verified: {len(found_enums)} custom ENUM types defined in recruitment schema: {', '.join(found_enums)}")
+
+          # Extract column defaults specifically from table definitions
+          table_matches = re.findall(r"CREATE TABLE recruitment\.([a-zA-Z0-9_]+)\s*\((.*?)\);", ddl_sql, re.DOTALL)
+          defaults_by_col = {}
+
+          for tbl, body in table_matches:
+              for line in body.splitlines():
+                  line = line.strip().rstrip(",")
+                  if not line or line.startswith("--"):
+                      continue
+                  parts = line.split()
+                  if len(parts) >= 2:
+                      col_name = parts[0]
+                      rest = " ".join(parts[1:])
+                      # Extract column DEFAULT expression if present
+                      def_m = re.search(r"\bDEFAULT\s+(.+)", rest, re.IGNORECASE)
+                      if def_m:
+                          d_expr = def_m.group(1).strip()
+                          d_expr = re.sub(r"\s+NOT\s+NULL\s*$", "", d_expr, flags=re.IGNORECASE).strip()
+                          defaults_by_col[f"{tbl}.{col_name}"] = d_expr
+
+          # Also extract any column defaults set via ALTER TABLE ... SET DEFAULT
+          alter_defaults = re.findall(
+              r"ALTER TABLE\s+(?:ONLY\s+)?recruitment\.([a-zA-Z0-9_]+)\s+ALTER COLUMN\s+([a-zA-Z0-9_]+)\s+SET DEFAULT\s+([^;\n]+);",
+              ddl_sql,
+              re.IGNORECASE
+          )
+          for tbl, col, expr in alter_defaults:
+              defaults_by_col[f"{tbl}.{col}"] = expr.strip()
+
+          print(f"DDL verified: {len(defaults_by_col)} column defaults identified across tables.")
+
+          # Extract check constraints (if any)
+          check_constraints = re.findall(
+              r"ALTER TABLE\s+(?:ONLY\s+)?recruitment\.([a-zA-Z0-9_]+)\s+ADD CONSTRAINT\s+([a-zA-Z0-9_]+)\s+CHECK\s*\((.*?)\);",
+              ddl_sql,
+              re.IGNORECASE
+          )
+          print(f"DDL verified: {len(check_constraints)} table check constraints identified.")
+
+          # 5. Extract Function Calls Specifically from Default Expressions and Check Constraints
+          known_types_and_keywords = {
+              "character", "varying", "varchar", "numeric", "decimal", "text", "regclass",
+              "timestamp", "time", "zone", "integer", "boolean", "not", "null", "cast"
+          }
+          funcs_in_defaults = set()
+          for col_key, expr in defaults_by_col.items():
+              for m in re.finditer(r"\b([a-zA-Z0-9_]+)\s*\(", expr):
+                  fn = m.group(1).lower()
+                  if fn not in known_types_and_keywords:
+                      funcs_in_defaults.add(fn)
+
+          for tbl, con, expr in check_constraints:
+              for m in re.finditer(r"\b([a-zA-Z0-9_]+)\s*\(", expr):
+                  fn = m.group(1).lower()
+                  if fn not in known_types_and_keywords:
+                      funcs_in_defaults.add(fn)
+
+          print(f"DDL verified: Functions extracted from defaults and constraints: {sorted(funcs_in_defaults)}")
+
+          # 6. Candidate ID Column and Sequence DDL Inspection
+          cand_col_type = None
+          cand_default_expr = defaults_by_col.get("candidates.candidate_id")
+
+          cand_table_match = re.search(r"CREATE TABLE recruitment\.candidates\s*\((.*?)\);", ddl_sql, re.DOTALL)
+          if cand_table_match:
+              for line in cand_table_match.group(1).splitlines():
+                  line = line.strip().rstrip(",")
+                  if line.startswith("candidate_id "):
+                      m = re.match(r"candidate_id\s+(.+?)(?:\s+DEFAULT\s+(.+))?$", line, re.IGNORECASE)
+                      if m:
+                          cand_col_type = re.sub(r"\s+NOT\s+NULL\s*$", "", m.group(1), flags=re.IGNORECASE).strip()
+
+          found_sequences = re.findall(r"CREATE SEQUENCE recruitment\.([a-zA-Z0-9_]+)\b", ddl_sql)
+          print(f"DDL candidate_id inspection: column type='{cand_col_type}', default='{cand_default_expr}'")
+          print(f"DDL sequence inspection: sequences defined={found_sequences}")
+
+          # 7. Extract Baseline Constraints and Explicit Indexes directly from DDL
+          ddl_constraints = []
+          for match in re.finditer(r"ALTER TABLE ONLY recruitment\.([a-zA-Z0-9_]+)\s+ADD CONSTRAINT ([a-zA-Z0-9_]+)\s+([^;]+);", ddl_sql):
+              tbl, con_name, con_def = match.groups()
+              ddl_constraints.append({
+                  "table_name": tbl,
+                  "constraint_name": con_name,
+                  "definition": " ".join(con_def.split())
+              })
+
+          ddl_indexes = []
+          for match in re.finditer(r"(CREATE (?:UNIQUE )?INDEX ([a-zA-Z0-9_]+) ON recruitment\.([a-zA-Z0-9_]+)\s+([^;]+));", ddl_sql):
+              full_stmt, idx_name, tbl, idx_def = match.groups()
+              ddl_indexes.append({
+                  "table_name": tbl,
+                  "index_name": idx_name,
+                  "definition": " ".join(idx_def.split()),
+                  "full_statement": " ".join(full_stmt.split())
+              })
+
+          if len(ddl_constraints) != 46:
+              raise RuntimeError(f"Expected exactly 46 constraints in DDL baseline, found {len(ddl_constraints)}")
+          if len(ddl_indexes) != 33:
+              raise RuntimeError(f"Expected exactly 33 explicit indexes in DDL baseline, found {len(ddl_indexes)}")
+
+          print(f"Extracted ground-truth DDL objects: exactly 46 constraints and 33 explicit index statements (56 total index catalog entries expected after restoration).")
+
+          # Verify absence of cross-schema extension function dependencies in recruitment DDL
+          external_refs = re.findall(r"\b(extensions|vault|auth|storage)\.[a-zA-Z0-9_]+", ddl_sql, re.IGNORECASE)
+          if external_refs:
+              raise RuntimeError(f"Unexpected external schema references detected in recruitment DDL: {set(external_refs)}")
+
+          print("DDL verified: Zero external schema references detected in recruitment schema.")
+
+          # Save Ground-Truth Baseline and Dependency Metadata for Preflight and Post-Restore Verification
+          ddl_payload = {
+              "constraints": ddl_constraints,
+              "indexes": ddl_indexes,
+              "custom_enums": found_enums,
+              "required_functions": sorted(funcs_in_defaults),
+              "candidate_id_config": {
+                  "column_type": cand_col_type,
+                  "default_expression": cand_default_expr,
+              },
+              "sequences": found_sequences
+          }
+          with open("/tmp/expected_ddl_objects.json", "w", encoding="utf-8") as f:
+              json.dump(ddl_payload, f)
+          PY
+
+          rm -rf decrypted
+
+      - name: Target database preflight checks
+        shell: bash
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.RESTORE_DATABASE_URL }}
+          CONFIRM_RESTORE: ${{ inputs.confirm_restore }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+          from urllib.parse import urlsplit
+
+          db_url = os.environ.get("RESTORE_DATABASE_URL", "").strip()
+          confirm_restore = (os.environ.get("CONFIRM_RESTORE", "false").lower() == "true")
+          RUN_ID = os.environ.get("RUN_ID", "43843597091")
+
+          if not db_url:
+              print("::error::RESTORE_DATABASE_URL is not set.")
+              sys.exit(1)
+
+          EXPECTED_PROJECT_REF = "ozhaqdcgaormjrxyvhun"
+          FORBIDDEN_PROJECT_REF = "rupgxwsfkberlaeseigk"
+
+          # 1. Strict Target Project and Hostname Validation
+          parsed = urlsplit(db_url)
+          host = (parsed.hostname or "").lower()
+          user = (parsed.username or "").lower()
+
+          if FORBIDDEN_PROJECT_REF in db_url:
+              print("::error::RESTORE_DATABASE_URL contains the legacy/deleted project ref! Aborting immediately.")
+              sys.exit(1)
+
+          is_direct_host = host == f"db.{EXPECTED_PROJECT_REF}.supabase.co"
+          is_pooler_host = host.endswith(".pooler.supabase.com") and user == f"postgres.{EXPECTED_PROJECT_REF}"
+
+          if not (is_direct_host or is_pooler_host):
+              print(f"::error::RESTORE_DATABASE_URL does not match documented recovery project formats for '{EXPECTED_PROJECT_REF}'.")
+              print(f"Resolved host: '{host}', user: '{user}'")
+              sys.exit(1)
+
+          print(f"Target validated: strictly matches recovery project '{EXPECTED_PROJECT_REF}'.")
+
+          def run_psql(query):
+              cmd = [
+                  "psql",
+                  "-X",
+                  "-v",
+                  "ON_ERROR_STOP=1",
+                  "-At",
+                  "-d",
+                  db_url,
+                  "-c",
+                  query,
+              ]
+              res = subprocess.run(cmd, capture_output=True, text=True)
+              if res.returncode != 0:
+                  safe_err = res.stderr.replace(db_url, "[REDACTED_URL]").strip()
+                  raise RuntimeError(f"psql execution failed: {safe_err}")
+              return res.stdout.strip()
+
+          def run_psql_json(query):
+              clean_q = query.strip().rstrip(";")
+              wrapped = f"SELECT COALESCE(json_agg(sub), '[]'::json) FROM ({clean_q}) sub;"
+              raw = run_psql(wrapped)
+              return json.loads(raw) if raw else []
+
+          # 2. Strict PostgreSQL 17 Major Version Compatibility Check
+          server_version = run_psql("SHOW server_version;")
+          server_version_num = int(run_psql("SHOW server_version_num;"))
+          target_major = server_version_num // 10000
+
+          print(f"Target server version: {server_version} (num: {server_version_num}, major: {target_major})")
+          if target_major != 17:
+              print(f"::error::PostgreSQL major version mismatch! Source dump was created using PostgreSQL 17 (17.12). Target must run PostgreSQL 17 (found {server_version}).")
+              sys.exit(1)
+
+          # Verify connected user is database administrator (postgres or supabase_admin)
+          current_user = run_psql("SELECT current_user;")
+          if current_user not in ("postgres", "supabase_admin"):
+              print(f"::error::Connected user '{current_user}' is not the expected database administrator role.")
+              sys.exit(1)
+          print(f"Connected as database administrator: '{current_user}'.")
+
+          target_database = run_psql("SELECT current_database();")
+          if target_database != "postgres":
+              raise RuntimeError(
+                  f"Unexpected target database '{target_database}'. "
+                  "Recovery is permitted only on the 'postgres' database."
+              )
+          print(f"Target database identity verified: '{target_database}'.")
+
+          # 3. Connection Privilege Check
+          can_create = run_psql("SELECT has_database_privilege(current_user, current_database(), 'CREATE');")
+          if can_create.lower() not in ("t", "true"):
+              raise RuntimeError("Connecting user does not have CREATE privilege on target database.")
+
+          # 4. Strict Schema Initial State Check: Reject any pre-existing recruitment schema
+          schema_exists = int(run_psql("SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'recruitment';"))
+          if schema_exists > 0:
+              print("::error::Schema 'recruitment' already exists on target database!")
+              print("Refusing to execute restoration to avoid schema creation conflicts or overwriting data.")
+              sys.exit(1)
+          print("Confirmed: Schema 'recruitment' does NOT exist on target (clean slate).")
+
+          # Check if any application tables exist in public schema
+          EXPECTED_TABLES = [
+              "activity_logs", "alembic_version", "branch_interviews", "candidate_profiles",
+              "candidate_screening", "candidates", "communications", "documents",
+              "evaluation_tokens", "evaluations", "followups", "interviewer_names",
+              "job_openings", "location_templates", "message_templates", "stage_history",
+              "technical_questions", "touchpoint_templates", "users"
+          ]
+          tables_in_public = run_psql_json(f"""
+              SELECT table_name FROM information_schema.tables
+              WHERE table_schema = 'public'
+                AND table_name IN ({', '.join(repr(t) for t in EXPECTED_TABLES)});
+          """)
+          if tables_in_public:
+              t_names = [t["table_name"] for t in tables_in_public]
+              print(f"::error::Application tables already exist in 'public' schema: {', '.join(t_names)}")
+              sys.exit(1)
+
+          # 5. Extension Availability & Catalog Dependency Verification
+          with open("/tmp/expected_ddl_objects.json", "r", encoding="utf-8") as f:
+              ddl_meta = json.load(f)
+
+          extensions = run_psql_json("SELECT extname, extversion, extnamespace::regnamespace::text AS schema_name FROM pg_extension;")
+          ext_names = {e["extname"] for e in extensions}
+          print(f"Target extensions installed ({len(ext_names)}): {', '.join(sorted(ext_names))}")
+
+          # Verify functions extracted specifically from defaults and constraints exist on target
+          required_functions = ddl_meta.get("required_functions", [])
+          target_funcs = []
+          if required_functions:
+              func_query_params = ", ".join(repr(fn) for fn in required_functions)
+              target_funcs = run_psql_json(f"""
+                  SELECT
+                    p.proname,
+                    n.nspname AS schema_name,
+                    COALESCE(e.extname, 'core pg_catalog') AS extension_origin
+                  FROM pg_proc p
+                  JOIN pg_namespace n ON n.oid = p.pronamespace
+                  LEFT JOIN pg_depend d ON d.objid = p.oid AND d.classid = 'pg_proc'::regclass AND d.refclassid = 'pg_extension'::regclass
+                  LEFT JOIN pg_extension e ON e.oid = d.refobjid
+                  WHERE p.proname IN ({func_query_params})
+                    AND n.nspname = 'pg_catalog';
+              """)
+              found_func_names = {fn["proname"] for fn in target_funcs}
+              missing_funcs = [fn for fn in required_functions if fn not in found_func_names]
+              if missing_funcs:
+                  raise RuntimeError(f"Target database missing required default functions in pg_catalog: {missing_funcs}")
+              print(f"Catalog function dependency verified: Inspected functions ({', '.join(sorted(required_functions))}) exist in 'pg_catalog'.")
+
+          print(
+              "Limited dependency checks passed: inspected functions from defaults "
+              "and constraints were found in pg_catalog. Custom ENUM types are "
+              "defined in recruitment. This is not a complete extension dependency analysis."
+          )
+
+          # Execute live evaluation check of native types including uuid, jsonb, and timestamptz
+          type_check = run_psql("""
+              SELECT
+                'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid AS test_uuid,
+                '{"test": true}'::jsonb AS test_jsonb,
+                now()::timestamptz AS test_timestamptz,
+                true::boolean AS test_bool,
+                123::integer AS test_int,
+                'test'::text AS test_text,
+                'test'::varchar AS test_varchar;
+          """)
+          if not type_check:
+              raise RuntimeError("Target database failed live uuid/jsonb/timestamptz type evaluation check.")
+          print("Target database live type evaluation verified: uuid, jsonb, and timestamptz successfully evaluated.")
+
+          # Log candidate ID and sequence configuration extracted from DDL
+          cand_config = ddl_meta.get("candidate_id_config", {})
+          print(f"DDL candidate_id configuration: column type='{cand_config.get('column_type')}', default='{cand_config.get('default_expression')}', sequences={ddl_meta.get('sequences')}")
+
+          # 6. Capture Inventory of Monitored Managed-Schema Objects Before Restoration
+          MANAGED_SCHEMAS = [
+              'auth', 'storage', 'vault', 'extensions',
+              'graphql', 'graphql_public', 'pgbouncer', 'realtime'
+          ]
+          managed_baseline = run_psql_json(f"""
+              SELECT 'relation' AS obj_kind, n.nspname AS schema_name, c.relname AS object_name, c.relkind::text AS sub_kind
+              FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname IN ({', '.join(repr(s) for s in MANAGED_SCHEMAS)})
+              UNION ALL
+              SELECT 'function' AS obj_kind, n.nspname AS schema_name, p.proname AS object_name, p.prokind::text AS sub_kind
+              FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+              WHERE n.nspname IN ({', '.join(repr(s) for s in MANAGED_SCHEMAS)})
+              UNION ALL
+              SELECT 'type' AS obj_kind, n.nspname AS schema_name, t.typname AS object_name, t.typtype::text AS sub_kind
+              FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+              WHERE n.nspname IN ({', '.join(repr(s) for s in MANAGED_SCHEMAS)})
+              UNION ALL
+              SELECT 'trigger' AS obj_kind, n.nspname AS schema_name, tg.tgname AS object_name, '' AS sub_kind
+              FROM pg_trigger tg
+              JOIN pg_class c ON c.oid = tg.tgrelid
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname IN ({', '.join(repr(s) for s in MANAGED_SCHEMAS)})
+                AND NOT tg.tgisinternal
+              ORDER BY schema_name, obj_kind, object_name;
+          """)
+          with open("/tmp/managed_baseline.json", "w", encoding="utf-8") as f:
+              json.dump(managed_baseline, f)
+          print(f"Captured baseline of monitored managed-schema objects: {len(managed_baseline)} objects across {len(MANAGED_SCHEMAS)} schemas.")
+
+          # If running in Preflight-Only mode (confirm_restore is false), write Preflight Summary
+          if not confirm_restore:
+              summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+              if summary_path:
+                  num_enums = len(ddl_meta.get("custom_enums", []))
+                  cand_def = cand_config.get("default_expression") or "None defined"
+                  preflight_report = [
+                      "# Supabase Recovery Preflight Report (Preflight-Only Mode)\n",
+                      f"**Target Project Reference:** `{EXPECTED_PROJECT_REF}` (`nippon-hr-recovery`)  ",
+                      f"**Source Backup Run ID:** `{RUN_ID}`  ",
+                      "**Execution Mode:** `PREFLIGHT ONLY (Zero database writes performed)`\n",
+                      "## Preflight Compatibility & Integrity Assessment",
+                      "- ✅ **Target Project Identity:** Verified (`db.ozhaqdcgaormjrxyvhun.supabase.co` or pooler `postgres.ozhaqdcgaormjrxyvhun`)",
+                      f"- ✅ **Target Database Name:** Verified ('{target_database}')",
+                      "- ✅ **PostgreSQL Version Compatibility:** Target runs PostgreSQL 17 (Matching Source PostgreSQL 17.12)",
+                      "- ✅ **Target Initial State:** Clean (Schema `recruitment` does not exist; no application tables in `public`)",
+                      f"- ✅ **Connecting Administrator:** Connected as `{current_user}` with `CREATE` privilege",
+                      "- ✅ **Backup Manifest Validation:** Validated (`candidate-documents`, 1,218 storage files)",
+                      f"- ✅ **Backup DDL Validation:** All 19 tables, {num_enums} custom ENUM types, 46 constraints, and 33 explicit index statements verified in DDL (56 total index catalog entries expected upon restore)",
+                      f"- ✅ **Candidate ID & Sequence DDL Inspection:** Column `recruitment.candidates.candidate_id` ({cand_config.get('column_type')}) with default `{cand_def}`; sequences: `{ddl_meta.get('sequences')}`",
+                      f"- ✅ **Limited Dependency Checks:** Inspected functions and custom ENUM types were checked. This is not a complete extension dependency analysis.",
+                      "- ✅ **Native Type Evaluation:** Target database verified for uuid, jsonb, timestamptz, boolean, integer, text, and varchar",
+                      f"- ✅ **Monitored Managed-Schema Objects Baseline:** Captured baseline of monitored objects (relations, functions, types, non-internal triggers) across {len(MANAGED_SCHEMAS)} schemas ({len(managed_baseline)} monitored objects)\n",
+                      "> [!NOTE]\n> All configured preflight checks passed. Review the report before explicitly authorizing restoration.\n"
+                  ]
+                  with open(summary_path, "a", encoding="utf-8") as f:
+                      f.write("\n".join(preflight_report) + "\n")
+                  print("Preflight summary appended to GITHUB_STEP_SUMMARY.")
+
+          print("\n=== All Target Database Preflight Checks Passed Successfully ===")
+          PY
+
+      - name: Restore recruitment schema into target Supabase project
+        if: ${{ inputs.confirm_restore }}
+        shell: bash
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.RESTORE_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+
+          echo "Starting targeted restoration of 'recruitment' schema..."
+          echo "Restoration parameters:"
+          echo "  - Schema filter: recruitment only (--schema=recruitment)"
+          echo "  - Transaction mode: single transaction (atomic, rollback on error)"
+          echo "  - Ownership: suppressed (--no-owner, assigned to connected postgres role)"
+          echo "  - Privileges: suppressed (--no-privileges, unexposed to public/anon)"
+          echo "  - Managed schemas: NOT touched"
+
+          pg_restore \
+            --verbose \
+            --exit-on-error \
+            --single-transaction \
+            --no-owner \
+            --no-privileges \
+            --schema=recruitment \
+            --dbname="$RESTORE_DATABASE_URL" \
+            extracted/database.dump
+
+          echo "pg_restore completed successfully within atomic transaction."
+
+      - name: Perform comprehensive post-restore verification
+        if: ${{ inputs.confirm_restore }}
+        shell: bash
+        env:
+          RESTORE_DATABASE_URL: ${{ secrets.RESTORE_DATABASE_URL }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+
+          db_url = os.environ.get("RESTORE_DATABASE_URL", "").strip()
+          RUN_ID = os.environ.get("RUN_ID", "43843597091")
+          EXPECTED_PROJECT_REF = "ozhaqdcgaormjrxyvhun"
+
+          BASELINE_COUNTS = {
+              "activity_logs": 4558,
+              "alembic_version": 1,
+              "branch_interviews": 0,
+              "candidate_profiles": 721,
+              "candidate_screening": 0,
+              "candidates": 754,
+              "communications": 562,
+              "documents": 426,
+              "evaluation_tokens": 82,
+              "evaluations": 947,
+              "followups": 0,
+              "interviewer_names": 82,
+              "job_openings": 4,
+              "location_templates": 17,
+              "message_templates": 0,
+              "stage_history": 233,
+              "technical_questions": 273,
+              "touchpoint_templates": 10,
+              "users": 25,
+          }
+          EXPECTED_ROW_SUM = 8695
+          EXPECTED_CONSTRAINT_COUNT = 46
+          EXPECTED_EXPLICIT_INDEX_COUNT = 33
+          EXPECTED_CONSTRAINT_INDEX_COUNT = 23
+          EXPECTED_TOTAL_INDEX_COUNT = 56
+
+          EXPECTED_SEQ_LAST_VALUE = 825
+          EXPECTED_SEQ_IS_CALLED = True
+
+          def run_psql(query):
+              cmd = [
+                  "psql",
+                  "-X",
+                  "-v",
+                  "ON_ERROR_STOP=1",
+                  "-At",
+                  "-d",
+                  db_url,
+                  "-c",
+                  query,
+              ]
+              res = subprocess.run(cmd, capture_output=True, text=True)
+              if res.returncode != 0:
+                  safe_err = res.stderr.replace(db_url, "[REDACTED_URL]").strip()
+                  raise RuntimeError(f"psql execution failed: {safe_err}")
+              return res.stdout.strip()
+
+          def run_psql_json(query):
+              clean_q = query.strip().rstrip(";")
+              wrapped = f"SELECT COALESCE(json_agg(sub), '[]'::json) FROM ({clean_q}) sub;"
+              raw = run_psql(wrapped)
+              return json.loads(raw) if raw else []
+
+          def md_table(headers, rows):
+              if not rows:
+                  return "_None found._\n"
+              lines = [
+                  "| " + " | ".join(headers) + " |",
+                  "| " + " | ".join(["---"] * len(headers)) + " |",
+              ]
+              for r in rows:
+                  lines.append("| " + " | ".join(str(c).replace("\n", " ").replace("|", "\\|") for c in r) + " |")
+              return "\n".join(lines) + "\n"
+
+          def normalize_sql(s):
+              return re.sub(r"\s+", " ", s.strip().lower()).replace('"', "").rstrip(";")
+
+          # Load DDL Ground-Truth Baseline extracted from backup
+          with open("/tmp/expected_ddl_objects.json", "r", encoding="utf-8") as f:
+              ddl_expected = json.load(f)
+
+          expected_con_map = {c["constraint_name"]: c["definition"] for c in ddl_expected["constraints"]}
+          expected_idx_map = {i["index_name"]: i for i in ddl_expected["indexes"]}
+
+          # 1. Verify Restored Tables (Strict: exactly 19, zero missing, zero unexpected)
+          discovered_tables_data = run_psql_json("""
+              SELECT table_name
+              FROM information_schema.tables
+              WHERE table_schema = 'recruitment' AND table_type = 'BASE TABLE'
+              ORDER BY table_name;
+          """)
+          discovered_tables = [t["table_name"] for t in discovered_tables_data]
+
+          actual_counts = {}
+          for t in discovered_tables:
+              cnt = run_psql(f'SELECT count(*) FROM recruitment."{t}";')
+              actual_counts[t] = int(cnt)
+
+          missing_tables = [t for t in BASELINE_COUNTS if t not in discovered_tables]
+          unexpected_tables = [t for t in discovered_tables if t not in BASELINE_COUNTS]
+          count_mismatches = []
+          for t, expected in BASELINE_COUNTS.items():
+              actual = actual_counts.get(t)
+              if actual is not None and actual != expected:
+                  count_mismatches.append({"table": t, "expected": expected, "actual": actual})
+
+          total_actual_rows = sum(actual_counts.values())
+
+          # 2. Verify Constraints (Strict: exactly 46 constraints, names and normalized definitions)
+          constraints = run_psql_json("""
+              SELECT
+                c.relname AS table_name,
+                con.conname AS constraint_name,
+                con.contype AS constraint_type,
+                pg_get_constraintdef(con.oid, true) AS definition
+              FROM pg_constraint con
+              JOIN pg_class c ON c.oid = con.conrelid
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'recruitment'
+              ORDER BY c.relname, con.conname;
+          """)
+          actual_con_map = {c["constraint_name"]: c["definition"] for c in constraints}
+
+          missing_ddl_con_names = [c for c in expected_con_map if c not in actual_con_map]
+          con_def_mismatches = []
+          for con_name, exp_def in expected_con_map.items():
+              if con_name in actual_con_map:
+                  norm_exp = normalize_sql(exp_def)
+                  norm_act = normalize_sql(actual_con_map[con_name])
+                  if norm_exp != norm_act:
+                      con_def_mismatches.append({"name": con_name, "expected": exp_def, "actual": actual_con_map[con_name]})
+
+          constraint_counts_match = (len(constraints) == EXPECTED_CONSTRAINT_COUNT)
+          constraint_names_match = (len(missing_ddl_con_names) == 0)
+          constraint_defs_match = (len(con_def_mismatches) == 0)
+
+          # 3. Verify Indexes (Strict: 56 total index catalog entries; 33 explicit DDL indexes + 23 constraint-backed indexes)
+          indexes = run_psql_json("""
+              SELECT
+                c.relname AS table_name,
+                i.relname AS index_name,
+                idx.indisunique AS is_unique,
+                idx.indisprimary AS is_primary,
+                pg_get_indexdef(idx.indexrelid) AS definition,
+                EXISTS (
+                    SELECT 1
+                    FROM pg_constraint con
+                    WHERE con.conindid = idx.indexrelid
+                      AND con.contype IN ('p', 'u')
+                ) AS is_constraint_backed
+              FROM pg_index idx
+              JOIN pg_class c ON c.oid = idx.indrelid
+              JOIN pg_class i ON i.oid = idx.indexrelid
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'recruitment'
+              ORDER BY c.relname, i.relname;
+          """)
+          actual_idx_map = {i["index_name"]: i for i in indexes}
+
+          total_index_count_match = (len(indexes) == EXPECTED_TOTAL_INDEX_COUNT)
+
+          # Check the 33 explicit DDL indexes
+          missing_explicit_idx_names = [name for name in expected_idx_map if name not in actual_idx_map]
+          explicit_idx_def_mismatches = []
+          for idx_name, exp_meta in expected_idx_map.items():
+              if idx_name in actual_idx_map:
+                  act_meta = actual_idx_map[idx_name]
+                  norm_exp_stmt = normalize_sql(exp_meta["full_statement"])
+                  norm_act_stmt = normalize_sql(act_meta["definition"])
+                  if norm_exp_stmt != norm_act_stmt:
+                      explicit_idx_def_mismatches.append({
+                          "name": idx_name,
+                          "expected": exp_meta["full_statement"],
+                          "actual": act_meta["definition"]
+                      })
+
+          explicit_indexes_match = (len(missing_explicit_idx_names) == 0 and len(explicit_idx_def_mismatches) == 0)
+
+          # Check the 23 constraint-backed indexes
+          constraint_backed_indexes = [i for i in indexes if i["is_constraint_backed"]]
+          constraint_backed_count_match = (
+              len(constraint_backed_indexes) == EXPECTED_CONSTRAINT_INDEX_COUNT
+          )
+          non_unique_constraint_indexes = [
+              i["index_name"]
+              for i in constraint_backed_indexes
+              if not i["is_unique"]
+          ]
+
+          # 4. Read-Only Candidate ID and Sequence State Inspection
+          expected_cand_default = ddl_expected.get("candidate_id_config", {}).get("default_expression")
+          cand_default = run_psql("""
+              SELECT COALESCE(pg_get_expr(d.adbin, d.adrelid), '')
+              FROM pg_attrdef d
+              JOIN pg_class c ON c.oid = d.adrelid
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+              JOIN pg_attribute a ON a.attrelid = d.adrelid AND a.attnum = d.adnum
+              WHERE n.nspname = 'recruitment' AND c.relname = 'candidates' AND a.attname = 'candidate_id';
+          """)
+
+          if expected_cand_default:
+              cand_default_match = (normalize_sql(cand_default) == normalize_sql(expected_cand_default))
+          else:
+              cand_default_match = True
+
+          # Read-only sequence state verification (No nextval() and no setval() calls)
+          seq_state_str = run_psql("SELECT last_value, is_called FROM recruitment.candidate_id_seq;")
+          last_val_str, is_called_str = [x.strip() for x in seq_state_str.split("|")]
+          actual_seq_last_val = int(last_val_str)
+          actual_seq_is_called = is_called_str.lower() in ("t", "true")
+
+          seq_preserved = (
+              actual_seq_last_val == EXPECTED_SEQ_LAST_VALUE and
+              actual_seq_is_called == EXPECTED_SEQ_IS_CALLED
+          )
+
+          # 5. Monitored Managed-Schema Objects Isolation Verification
+          MANAGED_SCHEMAS = [
+              'auth', 'storage', 'vault', 'extensions',
+              'graphql', 'graphql_public', 'pgbouncer', 'realtime'
+          ]
+          managed_current = run_psql_json(f"""
+              SELECT 'relation' AS obj_kind, n.nspname AS schema_name, c.relname AS object_name, c.relkind::text AS sub_kind
+              FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname IN ({', '.join(repr(s) for s in MANAGED_SCHEMAS)})
+              UNION ALL
+              SELECT 'function' AS obj_kind, n.nspname AS schema_name, p.proname AS object_name, p.prokind::text AS sub_kind
+              FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+              WHERE n.nspname IN ({', '.join(repr(s) for s in MANAGED_SCHEMAS)})
+              UNION ALL
+              SELECT 'type' AS obj_kind, n.nspname AS schema_name, t.typname AS object_name, t.typtype::text AS sub_kind
+              FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+              WHERE n.nspname IN ({', '.join(repr(s) for s in MANAGED_SCHEMAS)})
+              UNION ALL
+              SELECT 'trigger' AS obj_kind, n.nspname AS schema_name, tg.tgname AS object_name, '' AS sub_kind
+              FROM pg_trigger tg
+              JOIN pg_class c ON c.oid = tg.tgrelid
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname IN ({', '.join(repr(s) for s in MANAGED_SCHEMAS)})
+                AND NOT tg.tgisinternal
+              ORDER BY schema_name, obj_kind, object_name;
+          """)
+
+          with open("/tmp/managed_baseline.json", "r", encoding="utf-8") as f:
+              managed_baseline = json.load(f)
+
+          baseline_set = {(item["obj_kind"], item["schema_name"], item["object_name"], item["sub_kind"]) for item in managed_baseline}
+          current_set = {(item["obj_kind"], item["schema_name"], item["object_name"], item["sub_kind"]) for item in managed_current}
+
+          added_managed_objects = current_set - baseline_set
+          removed_managed_objects = baseline_set - current_set
+          managed_schemas_untouched = (len(added_managed_objects) == 0 and len(removed_managed_objects) == 0)
+
+          # Build GitHub Actions Step Summary Report
+          report = []
+          report.append("# Supabase Recovery Database Restoration Report\n")
+          report.append(f"**Target Project Reference:** `{EXPECTED_PROJECT_REF}` (`nippon-hr-recovery`)  ")
+          report.append(f"**Source Backup Run ID:** `{RUN_ID}`  ")
+          report.append("**Target Schema Restored:** `recruitment` (Strict Schema Isolation)\n")
+
+          overall_success = (
+              len(discovered_tables) == 19 and
+              len(missing_tables) == 0 and
+              len(unexpected_tables) == 0 and
+              len(count_mismatches) == 0 and
+              total_actual_rows == EXPECTED_ROW_SUM and
+              constraint_counts_match and
+              constraint_names_match and
+              constraint_defs_match and
+              total_index_count_match and
+              explicit_indexes_match and
+              constraint_backed_count_match and
+              len(non_unique_constraint_indexes) == 0 and
+              cand_default_match and
+              seq_preserved and
+              managed_schemas_untouched
+          )
+
+          report.append("## Executive Summary\n")
+          if overall_success:
+              report.append("### ✅ SUCCESS: All Configured Post-Restore Verification Checks Passed\n")
+          else:
+              report.append("### ❌ POST-RESTORE VERIFICATION FAILED\n")
+              report.append("> [!WARNING]\n> The `recruitment` schema was restored into the target database, but one or more post-restore verification checks failed. **DO NOT re-run this workflow blindly.** Inspect the target database manually before taking any further action.\n")
+
+          report.append(f"- **Tables Restored:** `{len(discovered_tables)} of 19` (Unexpected: `{len(unexpected_tables)}`, Missing: `{len(missing_tables)}`)")
+          report.append(f"- **Total Rows Restored:** `{total_actual_rows:,} of {EXPECTED_ROW_SUM:,}` expected rows")
+          report.append(f"- **Row Count Discrepancies:** `{len(count_mismatches)}`")
+          report.append(f"- **Constraints Cataloged:** `{len(constraints)} of {EXPECTED_CONSTRAINT_COUNT}` expected ({len(constraints)-len(missing_ddl_con_names)}/{EXPECTED_CONSTRAINT_COUNT} names match, {EXPECTED_CONSTRAINT_COUNT-len(con_def_mismatches)}/{EXPECTED_CONSTRAINT_COUNT} strict definition matches)")
+          report.append(f"- **Indexes Cataloged:** `{len(indexes)} of {EXPECTED_TOTAL_INDEX_COUNT}` total entries (33 explicit DDL indexes: {33-len(missing_explicit_idx_names)}/33 names match, {33-len(explicit_idx_def_mismatches)}/33 definition matches; 23 constraint-backed indexes: {len(constraint_backed_indexes)}/23 verified)")
+          report.append(f"- **Candidate ID Default Binding:** `{'✅ VERIFIED MATCH' if cand_default_match else '❌ MISMATCH'}` (restored: `{cand_default}`)")
+          report.append(f"- **Sequence State (`candidate_id_seq`):** `last_value={actual_seq_last_val}, is_called={actual_seq_is_called}` ({'✅ PRESERVED' if seq_preserved else '❌ ALTERED'})")
+          report.append(f"- **Monitored Managed-Schema Objects:** `{'No changes detected in monitored managed-schema objects (relations, functions, types, non-internal triggers).' if managed_schemas_untouched else '❌ MODIFICATIONS DETECTED'}`\n")
+
+          report.append("## Table-by-Table Row Count Audit\n")
+          table_rows = []
+          for tbl in sorted(BASELINE_COUNTS.keys()):
+              exp = BASELINE_COUNTS[tbl]
+              act = actual_counts.get(tbl, "MISSING")
+              status = "✅ MATCH" if act == exp else "❌ MISMATCH"
+              table_rows.append([tbl, f"{exp:,}", f"{act:,}" if isinstance(act, int) else act, status])
+          report.append(md_table(["Table Name", "Expected Rows", "Actual Restored Rows", "Verification Status"], table_rows))
+
+          if unexpected_tables:
+              report.append(f"### ⚠️ Unexpected Tables Discovered ({len(unexpected_tables)})\n")
+              for t in unexpected_tables:
+                  report.append(f"- `recruitment.{t}` (Rows: {actual_counts.get(t, 0):,})")
+              report.append("")
+
+          report.append("## Constraints and Indexes Verification\n")
+          report.append(md_table(
+              ["Object Category", "Expected Count", "Restored Count", "Name Matching", "Definition Verification", "Status"],
+              [
+                  ["Constraints (PK, UQ, FK)", str(EXPECTED_CONSTRAINT_COUNT), str(len(constraints)), f"{EXPECTED_CONSTRAINT_COUNT-len(missing_ddl_con_names)}/{EXPECTED_CONSTRAINT_COUNT} Match", f"{EXPECTED_CONSTRAINT_COUNT-len(con_def_mismatches)}/{EXPECTED_CONSTRAINT_COUNT} Strict Match against DDL", "✅ MATCH" if constraint_counts_match and constraint_names_match and constraint_defs_match else "❌ MISMATCH"],
+                  ["Explicit Indexes (DDL Defined)", str(EXPECTED_EXPLICIT_INDEX_COUNT), str(len(expected_idx_map) - len(missing_explicit_idx_names)), f"{EXPECTED_EXPLICIT_INDEX_COUNT-len(missing_explicit_idx_names)}/{EXPECTED_EXPLICIT_INDEX_COUNT} Match", f"{EXPECTED_EXPLICIT_INDEX_COUNT-len(explicit_idx_def_mismatches)}/{EXPECTED_EXPLICIT_INDEX_COUNT} Match against DDL Statement", "✅ MATCH" if explicit_indexes_match else "❌ MISMATCH"],
+                  ["Constraint-Backed Indexes (PK/UQ)", str(EXPECTED_CONSTRAINT_INDEX_COUNT), str(len(constraint_backed_indexes)), f"{len(constraint_backed_indexes)}/{EXPECTED_CONSTRAINT_INDEX_COUNT} Match", "Unique / PK Catalog Indexes Verified", "✅ MATCH" if constraint_backed_count_match and len(non_unique_constraint_indexes) == 0 else "❌ MISMATCH"],
+                  ["Total Catalog Index Entries", str(EXPECTED_TOTAL_INDEX_COUNT), str(len(indexes)), f"{len(indexes)}/{EXPECTED_TOTAL_INDEX_COUNT} Present", "Complete pg_index Catalog Verification", "✅ MATCH" if total_index_count_match and explicit_indexes_match and constraint_backed_count_match else "❌ MISMATCH"],
+              ]
+          ))
+
+          report.append("## Sequence State Preservation\n")
+          report.append(md_table(
+              ["Sequence Name", "Expected State", "Actual Restored State", "Default Expression", "Status"],
+              [["recruitment.candidate_id_seq", f"last_value={EXPECTED_SEQ_LAST_VALUE}, is_called={EXPECTED_SEQ_IS_CALLED}", f"last_value={actual_seq_last_val}, is_called={actual_seq_is_called}", f"Matched DDL ({cand_default})" if cand_default_match else "MISMATCH", "✅ PRESERVED IN ORIGINAL STATE" if seq_preserved and cand_default_match else "❌ MISMATCH"]]
+          ))
+
+          report.append("## Monitored Managed-Schema Objects Isolation Audit\n")
+          if managed_schemas_untouched:
+              report.append(f"✅ No changes detected in the monitored managed-schema objects across all {len(MANAGED_SCHEMAS)} schemas (`{', '.join(MANAGED_SCHEMAS)}`) for relations, functions, types, and non-internal triggers. Exactly 0 monitored objects added and 0 monitored objects removed during restoration.\n")
+          else:
+              report.append("❌ Discrepancies detected in monitored managed schemas:\n")
+              if added_managed_objects:
+                  report.append(f"- Added objects: {added_managed_objects}")
+              if removed_managed_objects:
+                  report.append(f"- Removed objects: {removed_managed_objects}")
+              report.append("")
+
+          report.append("## Permissions and Security Notice\n")
+          report.append("> [!NOTE]\n> The `recruitment` schema was restored with `--no-owner` and `--no-privileges` under administrator role `postgres`. Application grants, service role bindings, and RLS policies must be configured and tested separately as part of post-recovery application enablement.\n")
+
+          markdown_content = "\n".join(report)
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a") as f:
+                  f.write(markdown_content + "\n")
+              print("Report appended to GITHUB_STEP_SUMMARY.")
+          else:
+              print(markdown_content)
+
+          # Enforcement of verification criteria
+          if not overall_success:
+              print("::error::RESTORATION COMMITTED BUT VERIFICATION FAILED. The 'recruitment' schema was restored into the target database, but post-restore checks failed. DO NOT re-run this workflow blindly. Inspect the database manually.")
+              if len(discovered_tables) != 19 or missing_tables or unexpected_tables:
+                  print(f"Table validation failed: {len(discovered_tables)} tables (expected 19). Missing: {missing_tables}, Unexpected: {unexpected_tables}")
+              if count_mismatches or total_actual_rows != EXPECTED_ROW_SUM:
+                  print(f"Row count validation failed: total {total_actual_rows} (expected {EXPECTED_ROW_SUM}). Mismatches: {count_mismatches}")
+              if not constraint_counts_match or missing_ddl_con_names or con_def_mismatches:
+                  print(f"Constraint validation failed: found {len(constraints)} (expected {EXPECTED_CONSTRAINT_COUNT}). Missing: {missing_ddl_con_names}, Def mismatches: {con_def_mismatches}")
+              if not total_index_count_match or missing_explicit_idx_names or explicit_idx_def_mismatches or not constraint_backed_count_match or non_unique_constraint_indexes:
+                  print(f"Index validation failed: found {len(indexes)} (expected {EXPECTED_TOTAL_INDEX_COUNT}). Missing explicit: {missing_explicit_idx_names}, Def mismatches: {explicit_idx_def_mismatches}, Constraint-backed count: {len(constraint_backed_indexes)} (expected {EXPECTED_CONSTRAINT_INDEX_COUNT}), Non-unique constraint indexes: {non_unique_constraint_indexes}")
+              if not cand_default_match:
+                  print(f"Candidate ID default mismatch: restored '{cand_default}', expected '{expected_cand_default}'")
+              if not seq_preserved:
+                  print(f"Sequence state mismatch: found ({actual_seq_last_val}, {actual_seq_is_called}), expected ({EXPECTED_SEQ_LAST_VALUE}, {EXPECTED_SEQ_IS_CALLED})")
+              if not managed_schemas_untouched:
+                  print("Monitored managed-schema objects were modified during restoration!")
+              sys.exit(1)
+
+          print("\n=== All Configured Post-Restore Verification Checks Passed ===")
+          PY
+
+      - name: Clean up temporary backup files
+        if: always()
+        shell: bash
+        run: |
+          rm -rf downloaded decrypted extracted
