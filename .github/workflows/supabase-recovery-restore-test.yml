@@ -1,0 +1,255 @@
+name: Test Supabase backup restore in isolation
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Original successful backup workflow run ID"
+        required: true
+        default: "43843597091"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  restore-test:
+    name: Restore Test in Temporary PostgreSQL
+    runs-on: ubuntu-latest
+
+    # This database exists only inside this GitHub Actions job.
+    services:
+      postgres:
+        image: supabase/postgres:17.12.0.000
+        env:
+          POSTGRES_PASSWORD: restore-test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U supabase_admin -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
+
+    steps:
+      - name: Download original encrypted backup
+        uses: actions/download-artifact@v4
+        with:
+          name: supabase-backup-${{ inputs.run_id }}
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: download
+
+      - name: Install required tools
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] http://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+
+          sudo apt-get update
+          sudo apt-get install -y openssl postgresql-client-17
+
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Decrypt original backup
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -n "$BACKUP_ENCRYPTION_KEY"
+
+          mapfile -t files < <(find download -type f -name '*.enc')
+
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one encrypted backup."
+            exit 1
+          fi
+
+          mkdir -p decrypted
+
+          openssl enc -d -aes-256-cbc -pbkdf2 -salt \
+            -in "${files[0]}" \
+            -out decrypted/backup.tar.gz \
+            -pass env:BACKUP_ENCRYPTION_KEY
+
+          echo "Backup decryption successful."
+
+      - name: Validate and extract archive safely
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import tarfile
+          from pathlib import Path, PurePosixPath
+          import sys
+
+          archive = Path("decrypted/backup.tar.gz")
+          root = Path("extracted").resolve()
+          root.mkdir(parents=True, exist_ok=True)
+
+          seen = set()
+
+          with tarfile.open(archive, "r:gz") as tar:
+              members = tar.getmembers()
+
+              for member in members:
+                  path = PurePosixPath(member.name)
+
+                  if not (member.isfile() or member.isdir()):
+                      sys.exit(f"Rejected unsafe member: {member.name}")
+
+                  if path.is_absolute() or ".." in path.parts:
+                      sys.exit(f"Rejected unsafe path: {member.name}")
+
+                  normalized = path.as_posix().rstrip("/")
+
+                  if normalized in seen:
+                      sys.exit(f"Duplicate archive path: {member.name}")
+
+                  seen.add(normalized)
+
+                  destination = (root / normalized).resolve()
+
+                  if destination != root and root not in destination.parents:
+                      sys.exit(f"Path escapes extraction directory: {member.name}")
+
+                  if member.isfile() and any(
+                      parent.as_posix() in seen
+                      and not next(
+                          m for m in members
+                          if m.name.rstrip("/") == parent.as_posix()
+                      ).isdir()
+                      for parent in path.parents
+                      if parent.as_posix() != "."
+                  ):
+                      sys.exit(f"File/directory conflict: {member.name}")
+
+              tar.extractall(root)
+
+          if not (root / "database.dump").is_file():
+              sys.exit("database.dump is missing")
+
+          print(f"Safe extraction successful. {len(members)} archive members.")
+          PY
+
+          rm -f decrypted/backup.tar.gz
+
+      - name: Wait for temporary PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for i in {1..30}; do
+            if pg_isready -h 127.0.0.1 -p 5432 -U supabase_admin -d postgres; then
+              echo "Temporary PostgreSQL is ready."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error::Temporary PostgreSQL did not become ready."
+          exit 1
+
+      - name: Create isolated restore database
+        env:
+          PGPASSWORD: restore-test-only-password
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          psql \
+            -h 127.0.0.1 \
+            -p 5432 \
+            -U supabase_admin \
+            -d postgres \
+            -v ON_ERROR_STOP=1 \
+            -c "CREATE DATABASE recovery_restore_test;"
+
+          echo "Empty test database created."
+
+      - name: Perform actual database restore
+        env:
+          PGPASSWORD: restore-test-only-password
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pg_restore \
+            --verbose \
+            --exit-on-error \
+            --single-transaction \
+            --no-owner \
+            --no-privileges \
+            --host=127.0.0.1 \
+            --port=5432 \
+            --username=supabase_admin \
+            --dbname=recovery_restore_test \
+            extracted/database.dump
+
+          echo "ACTUAL DATABASE RESTORE COMPLETED."
+
+      - name: Verify restored recruitment database
+        env:
+          PGPASSWORD: restore-test-only-password
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TABLE_COUNT=$(psql -X -At \
+            -h 127.0.0.1 -p 5432 \
+            -U supabase_admin \
+            -d recovery_restore_test \
+            -c "SELECT count(*) FROM pg_tables WHERE schemaname = 'recruitment';")
+
+          echo "Recruitment tables restored: $TABLE_COUNT"
+
+          if [ "$TABLE_COUNT" -ne 19 ]; then
+            echo "::error::Expected 19 recruitment tables, found $TABLE_COUNT."
+            exit 1
+          fi
+
+          {
+            echo "# Isolated Database Restore Test"
+            echo ""
+            echo "**Actual PostgreSQL restore: SUCCESS**"
+            echo ""
+            echo "- Database: recovery_restore_test"
+            echo "- Recruitment tables: $TABLE_COUNT"
+            echo ""
+            echo "## Recruitment table row counts"
+            echo '```text'
+            psql -X -P pager=off \
+              -h 127.0.0.1 -p 5432 \
+              -U supabase_admin \
+              -d recovery_restore_test <<'SQL'
+          SELECT format(
+            'SELECT %L AS table_name, count(*) AS row_count FROM %I.%I;',
+            tablename, schemaname, tablename
+          )
+          FROM pg_tables
+          WHERE schemaname = 'recruitment'
+          ORDER BY tablename
+          \gexec
+          SQL
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Recruitment verification passed."
+
+      - name: Cleanup temporary files
+        if: always()
+        shell: bash
+        run: |
+          rm -rf download decrypted extracted
+          echo "Temporary backup files removed."
