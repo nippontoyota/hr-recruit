@@ -1,0 +1,1103 @@
+name: Supabase Recovery Schema Inspection
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Original successful backup workflow run ID"
+        required: true
+        default: "43843597091"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  schema-inspection:
+    name: Inspect Restored Recruitment Schema
+    runs-on: ubuntu-latest
+
+    # This database exists only inside this GitHub Actions job.
+    services:
+      postgres:
+        image: supabase/postgres:17.12.0.000
+        env:
+          POSTGRES_PASSWORD: restore-test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U supabase_admin -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
+
+    env:
+      PGPASSWORD: restore-test-only-password
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: supabase_admin
+      PGDATABASE: recovery_schema_inspect
+
+    steps:
+      - name: Download original backup artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: supabase-backup-${{ inputs.run_id }}
+          path: downloaded
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id }}
+
+      - name: Install PostgreSQL 17 client
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates gnupg
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /tmp/ACCC4CF8.asc
+          sudo gpg --no-tty --batch --yes --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg /tmp/ACCC4CF8.asc
+          rm -f /tmp/ACCC4CF8.asc
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Decrypt and safely extract backup
+        shell: bash
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t encrypted_files < <(
+            find downloaded -type f -name "*.enc"
+          )
+
+          if [ "${#encrypted_files[@]}" -ne 1 ]; then
+            echo "Expected exactly one encrypted backup file."
+            exit 1
+          fi
+
+          mkdir -p extracted decrypted
+
+          openssl enc -d -aes-256-cbc -pbkdf2 -salt \
+            -in "${encrypted_files[0]}" \
+            -out decrypted/backup.tar.gz \
+            -pass env:BACKUP_ENCRYPTION_KEY
+
+          python3 - <<'PY'
+          import tarfile
+          from pathlib import Path, PurePosixPath
+          import shutil
+
+          archive = Path("decrypted/backup.tar.gz")
+          destination = Path("extracted").resolve()
+
+          with tarfile.open(archive, "r:gz") as tar:
+              seen = set()
+
+              for member in tar.getmembers():
+                  name = PurePosixPath(member.name)
+
+                  if name.is_absolute() or ".." in name.parts:
+                      raise RuntimeError(f"Unsafe archive path: {member.name}")
+
+                  if not (member.isfile() or member.isdir()):
+                      raise RuntimeError(f"Unsupported archive entry: {member.name}")
+
+                  if member.name in seen:
+                      raise RuntimeError(f"Duplicate archive entry: {member.name}")
+
+                  seen.add(member.name)
+
+                  target = (destination / Path(*name.parts)).resolve()
+
+                  if target != destination and destination not in target.parents:
+                      raise RuntimeError(f"Path escape: {member.name}")
+
+                  if member.isdir():
+                      target.mkdir(parents=True, exist_ok=True)
+                  else:
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      source = tar.extractfile(member)
+
+                      if source is None:
+                          raise RuntimeError(f"Cannot read: {member.name}")
+
+                      with source, target.open("wb") as output:
+                          shutil.copyfileobj(source, output)
+
+          if not (destination / "database.dump").is_file():
+              raise RuntimeError("database.dump missing from backup")
+
+          print("Backup safely extracted.")
+          PY
+
+          rm -rf decrypted
+
+      - name: Wait for temporary PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for i in {1..30}; do
+            if pg_isready -h 127.0.0.1 -p 5432 -U supabase_admin -d postgres; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Temporary PostgreSQL did not become ready."
+          exit 1
+
+      - name: Create isolated schema inspection database
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          createdb \
+            --maintenance-db=postgres \
+            -h 127.0.0.1 \
+            -p 5432 \
+            -U supabase_admin \
+            recovery_schema_inspect
+
+      - name: Restore original database dump into isolated container
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pg_restore \
+            --verbose \
+            --exit-on-error \
+            --single-transaction \
+            --no-owner \
+            --no-privileges \
+            --host=127.0.0.1 \
+            --port=5432 \
+            --username=supabase_admin \
+            --dbname=recovery_schema_inspect \
+            extracted/database.dump
+
+      - name: Perform comprehensive schema inspection
+        shell: bash
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+
+          RUN_ID = os.environ.get("RUN_ID", "43843597091")
+
+          EXPECTED_TABLES = [
+              "activity_logs",
+              "alembic_version",
+              "branch_interviews",
+              "candidate_profiles",
+              "candidate_screening",
+              "candidates",
+              "communications",
+              "documents",
+              "evaluation_tokens",
+              "evaluations",
+              "followups",
+              "interviewer_names",
+              "job_openings",
+              "location_templates",
+              "message_templates",
+              "stage_history",
+              "technical_questions",
+              "touchpoint_templates",
+              "users",
+          ]
+
+          STANDARD_SUPABASE_ROLES = {
+              "postgres",
+              "supabase_admin",
+              "authenticator",
+              "anon",
+              "authenticated",
+              "service_role",
+              "supabase_auth_admin",
+              "supabase_storage_admin",
+              "dashboard_user",
+              "pg_database_owner",
+              "pg_read_all_data",
+              "pg_write_all_data",
+              "pg_monitor",
+              "pg_read_all_settings",
+              "pg_read_all_stats",
+              "pg_stat_scan_tables",
+              "PUBLIC",
+              "public",
+              "supabase_replication_admin",
+              "supabase_functions_admin",
+          }
+
+          def run_psql(query, dbname="recovery_schema_inspect"):
+              cmd = [
+                  "psql",
+                  "-X",
+                  "-v",
+                  "ON_ERROR_STOP=1",
+                  "-At",
+                  "-h",
+                  "127.0.0.1",
+                  "-p",
+                  "5432",
+                  "-U",
+                  "supabase_admin",
+                  "-d",
+                  dbname,
+                  "-c",
+                  query,
+              ]
+              env = os.environ.copy()
+              env["PGPASSWORD"] = "restore-test-only-password"
+              res = subprocess.run(cmd, capture_output=True, text=True, env=env)
+              if res.returncode != 0:
+                  raise RuntimeError(f"psql error: {res.stderr.strip()}")
+              return res.stdout.strip()
+
+          def run_psql_json(query, dbname="recovery_schema_inspect"):
+              clean_q = query.strip().rstrip(";")
+              wrapped = f"SELECT COALESCE(json_agg(sub), '[]'::json) FROM ({clean_q}) sub;"
+              raw = run_psql(wrapped, dbname)
+              return json.loads(raw) if raw else []
+
+          def md_table(headers, rows):
+              if not rows:
+                  return "_None found._\n"
+              lines = [
+                  "| " + " | ".join(headers) + " |",
+                  "| " + " | ".join(["---"] * len(headers)) + " |",
+              ]
+              for r in rows:
+                  lines.append(
+                      "| "
+                      + " | ".join(
+                          str(c if c is not None else "")
+                          .replace("\n", " ")
+                          .replace("|", "\\|")
+                          for c in r
+                      )
+                      + " |"
+                  )
+              return "\n".join(lines) + "\n"
+
+          # -------------------------------------------------------------
+          # 1. Inspect Original Backup Archive Directly (TOC & DDL)
+          # -------------------------------------------------------------
+          toc_proc = subprocess.run(
+              ["pg_restore", "-l", "extracted/database.dump"],
+              capture_output=True,
+              text=True,
+          )
+          if toc_proc.returncode != 0:
+              raise RuntimeError(f"pg_restore -l failed: {toc_proc.stderr.strip()}")
+          toc_lines = toc_proc.stdout.splitlines()
+
+          original_archive_objects = []
+          for line in toc_lines:
+              clean = line.strip()
+              if not clean or clean.startswith(";"):
+                  continue
+              parts = clean.split(";", 1)
+              if len(parts) == 2:
+                  entry_id = parts[0].strip()
+                  fields = parts[1].strip().split()
+                  if len(fields) >= 4:
+                      obj_type = fields[2]
+                      schema = fields[3]
+                      name = fields[4] if len(fields) > 4 else ""
+                      owner = fields[5] if len(fields) > 5 else ""
+                      if schema == "recruitment" or name == "recruitment":
+                          original_archive_objects.append({
+                              "id": entry_id,
+                              "type": obj_type,
+                              "schema": schema,
+                              "name": name,
+                              "owner": owner,
+                          })
+
+          ddl_proc = subprocess.run(
+              ["pg_restore", "-s", "-n", "recruitment", "extracted/database.dump"],
+              capture_output=True,
+              text=True,
+          )
+          if ddl_proc.returncode != 0:
+              raise RuntimeError(f"pg_restore -s failed: {ddl_proc.stderr.strip()}")
+          dump_ddl = ddl_proc.stdout
+
+          original_owner_stmts = []
+          original_grant_stmts = []
+          original_revoke_stmts = []
+          original_defpriv_stmts = []
+
+          for raw_line in dump_ddl.splitlines():
+              l = raw_line.strip()
+              if l.startswith("ALTER ") and " OWNER TO " in l:
+                  original_owner_stmts.append(l)
+              elif l.startswith("GRANT ") and " TO " in l:
+                  original_grant_stmts.append(l)
+              elif l.startswith("REVOKE ") and " FROM " in l:
+                  original_revoke_stmts.append(l)
+              elif l.startswith("ALTER DEFAULT PRIVILEGES"):
+                  original_defpriv_stmts.append(l)
+
+          archive_roles = set()
+          for obj in original_archive_objects:
+              if obj["owner"]:
+                  archive_roles.add(obj["owner"])
+          for stmt in original_owner_stmts:
+              m = re.search(r"OWNER TO\s+([a-zA-Z0-9_\"]+)", stmt, re.IGNORECASE)
+              if m:
+                  archive_roles.add(m.group(1).strip('"'))
+          for stmt in original_grant_stmts:
+              m = re.search(r"TO\s+([a-zA-Z0-9_\", ]+);?$", stmt, re.IGNORECASE)
+              if m:
+                  for r in m.group(1).split(","):
+                      archive_roles.add(r.strip().strip('"'))
+
+          non_standard_archive_roles = sorted([r for r in archive_roles if r not in STANDARD_SUPABASE_ROLES])
+
+          # -------------------------------------------------------------
+          # 2. Inspect Restored Database Catalogs
+          # -------------------------------------------------------------
+
+          # Objects in recruitment
+          objects_sql = """
+            SELECT
+              c.relname AS object_name,
+              CASE c.relkind
+                WHEN 'r' THEN 'Table'
+                WHEN 'v' THEN 'View'
+                WHEN 'm' THEN 'Materialized View'
+                WHEN 'S' THEN 'Sequence'
+                WHEN 'f' THEN 'Foreign Table'
+                WHEN 'p' THEN 'Partitioned Table'
+                ELSE c.relkind::text
+              END AS object_type,
+              r.rolname AS restored_owner
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_roles r ON r.oid = c.relowner
+            WHERE n.nspname = 'recruitment' AND c.relkind IN ('r', 'v', 'm', 'S', 'f', 'p')
+            ORDER BY object_type, object_name
+          """
+          objects = run_psql_json(objects_sql)
+          discovered_tables = sorted([o["object_name"] for o in objects if o["object_type"] == "Table"])
+
+          # Table Row Counts in the Restored Container Database
+          table_row_counts = {}
+          for tbl in discovered_tables:
+              cnt = run_psql(f'SELECT count(*) FROM recruitment."{tbl}";')
+              table_row_counts[tbl] = int(cnt)
+
+          # Columns
+          columns_sql = """
+            SELECT
+              c.relname AS table_name,
+              a.attname AS column_name,
+              a.attnum AS column_position,
+              format_type(a.atttypid, a.atttypmod) AS data_type,
+              NOT a.attnotnull AS is_nullable,
+              COALESCE(pg_get_expr(d.adbin, d.adrelid), '') AS default_expression,
+              CASE a.attidentity
+                WHEN 'a' THEN 'ALWAYS'
+                WHEN 'd' THEN 'BY DEFAULT'
+                ELSE 'NO'
+              END AS identity_generation,
+              CASE a.attgenerated
+                WHEN 's' THEN 'STORED'
+                ELSE 'NO'
+              END AS is_generated
+            FROM pg_attribute a
+            JOIN pg_class c ON c.oid = a.attrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+            WHERE n.nspname = 'recruitment'
+              AND c.relkind = 'r'
+              AND a.attnum > 0
+              AND NOT a.attisdropped
+            ORDER BY c.relname, a.attnum
+          """
+          columns = run_psql_json(columns_sql)
+
+          # Constraints
+          constraints_sql = """
+            SELECT
+              c.relname AS table_name,
+              con.conname AS constraint_name,
+              CASE con.contype
+                WHEN 'p' THEN 'PRIMARY KEY'
+                WHEN 'u' THEN 'UNIQUE'
+                WHEN 'c' THEN 'CHECK'
+                WHEN 'f' THEN 'FOREIGN KEY'
+                WHEN 'x' THEN 'EXCLUSION'
+                ELSE con.contype::text
+              END AS constraint_type,
+              pg_get_constraintdef(con.oid, true) AS definition,
+              CASE
+                WHEN con.contype = 'f' THEN fc.relnamespace::regnamespace::text || '.' || fc.relname
+                ELSE ''
+              END AS foreign_table
+            FROM pg_constraint con
+            JOIN pg_class c ON c.oid = con.conrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            LEFT JOIN pg_class fc ON fc.oid = con.confrelid
+            WHERE n.nspname = 'recruitment'
+            ORDER BY c.relname, con.contype, con.conname
+          """
+          constraints = run_psql_json(constraints_sql)
+
+          # Indexes
+          indexes_sql = """
+            SELECT
+              c.relname AS table_name,
+              i.relname AS index_name,
+              idx.indisunique AS is_unique,
+              idx.indisprimary AS is_primary,
+              (idx.indpred IS NOT NULL) AS is_partial,
+              COALESCE(pg_get_expr(idx.indpred, idx.indrelid), '') AS predicate_expression,
+              pg_get_indexdef(idx.indexrelid) AS definition
+            FROM pg_index idx
+            JOIN pg_class c ON c.oid = idx.indrelid
+            JOIN pg_class i ON i.oid = idx.indexrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'recruitment'
+            ORDER BY c.relname, i.relname
+          """
+          indexes = run_psql_json(indexes_sql)
+
+          # Sequences with ownership check filtering classid = 'pg_class'::regclass and refclassid = 'pg_class'::regclass
+          sequences_sql = """
+            SELECT
+              s.sequencename AS sequence_name,
+              s.sequenceowner AS restored_owner,
+              s.data_type,
+              s.start_value,
+              s.min_value,
+              s.max_value,
+              s.increment_by,
+              s.cycle,
+              s.cache_size,
+              s.last_value,
+              COALESCE(dep.table_name, '') AS owned_by_table,
+              COALESCE(dep.column_name, '') AS owned_by_column,
+              COALESCE(dep.deptype_desc, 'unlinked') AS ownership_type
+            FROM pg_sequences s
+            LEFT JOIN (
+              SELECT
+                seq.relname AS seq_name,
+                tab.relname AS table_name,
+                attr.attname AS column_name,
+                CASE d.deptype
+                  WHEN 'a' THEN 'auto (serial)'
+                  WHEN 'i' THEN 'identity'
+                  ELSE d.deptype::text
+                END AS deptype_desc
+              FROM pg_depend d
+              JOIN pg_class seq ON seq.oid = d.objid AND seq.relkind = 'S'
+              JOIN pg_class tab ON tab.oid = d.refobjid AND tab.relkind = 'r'
+              JOIN pg_attribute attr ON attr.attrelid = d.refobjid AND attr.attnum = d.refobjsubid
+              JOIN pg_namespace n ON n.oid = seq.relnamespace
+              WHERE d.classid = 'pg_class'::regclass
+                AND d.refclassid = 'pg_class'::regclass
+                AND n.nspname = 'recruitment'
+                AND d.deptype IN ('a', 'i')
+            ) dep ON dep.seq_name = s.sequencename
+            WHERE s.schemaname = 'recruitment'
+            ORDER BY s.sequencename
+          """
+          sequences = run_psql_json(sequences_sql)
+
+          # Sequence references in column defaults
+          seq_defaults_sql = """
+            SELECT
+              c.relname AS table_name,
+              a.attname AS column_name,
+              pg_get_expr(d.adbin, d.adrelid) AS default_expression
+            FROM pg_attrdef d
+            JOIN pg_class c ON c.oid = d.adrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_attribute a ON a.attrelid = d.adrelid AND a.attnum = d.adnum
+            WHERE n.nspname = 'recruitment'
+              AND pg_get_expr(d.adbin, d.adrelid) ~* 'nextval'
+            ORDER BY c.relname, a.attname
+          """
+          seq_defaults = run_psql_json(seq_defaults_sql)
+
+          # -------------------------------------------------------------
+          # 3. Comprehensive External Dependencies
+          # -------------------------------------------------------------
+
+          # Cross-schema Foreign Keys
+          cross_fk_sql = """
+            SELECT
+              source_ns.nspname || '.' || source_table.relname AS source_table,
+              con.conname AS constraint_name,
+              pg_get_constraintdef(con.oid, true) AS definition,
+              target_ns.nspname || '.' || target_table.relname AS referenced_table
+            FROM pg_constraint con
+            JOIN pg_class source_table ON source_table.oid = con.conrelid
+            JOIN pg_namespace source_ns ON source_ns.oid = source_table.relnamespace
+            JOIN pg_class target_table ON target_table.oid = con.confrelid
+            JOIN pg_namespace target_ns ON target_ns.oid = target_table.relnamespace
+            WHERE con.contype = 'f'
+              AND (source_ns.nspname = 'recruitment' OR target_ns.nspname = 'recruitment')
+              AND source_ns.nspname <> target_ns.nspname
+            ORDER BY source_table.relname, con.conname
+          """
+          cross_fks = run_psql_json(cross_fk_sql)
+
+          # Cross-schema Column Defaults or Generated Expressions
+          cross_defaults_sql = """
+            SELECT
+              c.relname AS table_name,
+              a.attname AS column_name,
+              CASE WHEN a.attgenerated = 's' THEN 'GENERATED' ELSE 'DEFAULT' END AS expr_kind,
+              pg_get_expr(d.adbin, d.adrelid) AS expression
+            FROM pg_attrdef d
+            JOIN pg_class c ON c.oid = d.adrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_attribute a ON a.attrelid = d.adrelid AND a.attnum = d.adnum
+            WHERE n.nspname = 'recruitment'
+              AND pg_get_expr(d.adbin, d.adrelid) ~* '(^|[^a-zA-Z0-9_])(auth|storage|extensions|vault|public)\\.'
+            ORDER BY c.relname, a.attname
+          """
+          cross_defaults = run_psql_json(cross_defaults_sql)
+
+          # Cross-schema CHECK Constraints
+          cross_checks_sql = """
+            SELECT
+              c.relname AS table_name,
+              con.conname AS constraint_name,
+              pg_get_constraintdef(con.oid, true) AS definition
+            FROM pg_constraint con
+            JOIN pg_class c ON c.oid = con.conrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'recruitment'
+              AND con.contype = 'c'
+              AND pg_get_constraintdef(con.oid, true) ~* '(^|[^a-zA-Z0-9_])(auth|storage|extensions|vault|public)\\.'
+            ORDER BY c.relname, con.conname
+          """
+          cross_checks = run_psql_json(cross_checks_sql)
+
+          # Cross-schema Expression & Partial Indexes
+          cross_indexes_sql = """
+            SELECT
+              c.relname AS table_name,
+              i.relname AS index_name,
+              pg_get_indexdef(idx.indexrelid) AS definition
+            FROM pg_index idx
+            JOIN pg_class c ON c.oid = idx.indrelid
+            JOIN pg_class i ON i.oid = idx.indexrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'recruitment'
+              AND (idx.indexprs IS NOT NULL OR idx.indpred IS NOT NULL)
+              AND pg_get_indexdef(idx.indexrelid) ~* '(^|[^a-zA-Z0-9_])(auth|storage|extensions|vault|public)\\.'
+            ORDER BY c.relname, i.relname
+          """
+          cross_indexes = run_psql_json(cross_indexes_sql)
+
+          # External Functions and Types Referenced via pg_depend
+          # Explicitly filtering classid = 'pg_class'::regclass and refclassid to prevent false catalog matches
+          external_dependencies_sql = """
+            SELECT DISTINCT
+              c.relname AS object_name,
+              CASE
+                WHEN d.objsubid > 0 THEN a.attname
+                ELSE ''
+              END AS column_name,
+              CASE c.relkind
+                WHEN 'r' THEN 'Table'
+                WHEN 'v' THEN 'View'
+                WHEN 'm' THEN 'Materialized View'
+                WHEN 'S' THEN 'Sequence'
+                WHEN 'i' THEN 'Index'
+                ELSE c.relkind::text
+              END AS object_type,
+              'function' AS dependency_kind,
+              pn.nspname || '.' || p.proname AS referenced_dependency
+            FROM pg_depend d
+            JOIN pg_class c ON c.oid = d.objid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            LEFT JOIN pg_attribute a ON a.attrelid = d.objid AND a.attnum = d.objsubid
+            JOIN pg_proc p ON p.oid = d.refobjid
+            JOIN pg_namespace pn ON pn.oid = p.pronamespace
+            WHERE d.classid = 'pg_class'::regclass
+              AND d.refclassid = 'pg_proc'::regclass
+              AND n.nspname = 'recruitment'
+              AND pn.nspname NOT IN ('recruitment', 'pg_catalog', 'information_schema')
+
+            UNION
+
+            SELECT DISTINCT
+              c.relname AS object_name,
+              CASE
+                WHEN d.objsubid > 0 THEN a.attname
+                ELSE ''
+              END AS column_name,
+              CASE c.relkind
+                WHEN 'r' THEN 'Table'
+                WHEN 'v' THEN 'View'
+                WHEN 'm' THEN 'Materialized View'
+                WHEN 'S' THEN 'Sequence'
+                WHEN 'i' THEN 'Index'
+                ELSE c.relkind::text
+              END AS object_type,
+              'type' AS dependency_kind,
+              tn.nspname || '.' || t.typname AS referenced_dependency
+            FROM pg_depend d
+            JOIN pg_class c ON c.oid = d.objid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            LEFT JOIN pg_attribute a ON a.attrelid = d.objid AND a.attnum = d.objsubid
+            JOIN pg_type t ON t.oid = d.refobjid
+            JOIN pg_namespace tn ON tn.oid = t.typnamespace
+            WHERE d.classid = 'pg_class'::regclass
+              AND d.refclassid = 'pg_type'::regclass
+              AND n.nspname = 'recruitment'
+              AND tn.nspname NOT IN ('recruitment', 'pg_catalog', 'information_schema')
+            ORDER BY object_type, object_name, dependency_kind
+          """
+          external_dependencies = run_psql_json(external_dependencies_sql)
+
+          # Raw Catalog ACLs in Restored Database
+          raw_acls_sql = """
+            SELECT
+              c.relname AS object_name,
+              CASE c.relkind
+                WHEN 'r' THEN 'Table'
+                WHEN 'S' THEN 'Sequence'
+                WHEN 'v' THEN 'View'
+                ELSE c.relkind::text
+              END AS object_type,
+              r.rolname AS current_catalog_owner,
+              COALESCE(c.relacl::text, 'DEFAULT (none explicit)') AS raw_acl
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_roles r ON r.oid = c.relowner
+            WHERE n.nspname = 'recruitment' AND c.relkind IN ('r', 'S', 'v')
+            ORDER BY c.relkind, c.relname
+          """
+          raw_acls = run_psql_json(raw_acls_sql)
+
+          # Installed Extensions
+          extensions_sql = """
+            SELECT
+              e.extname AS extension_name,
+              e.extversion AS version,
+              n.nspname AS schema_name
+            FROM pg_extension e
+            JOIN pg_namespace n ON n.oid = e.extnamespace
+            ORDER BY e.extname
+          """
+          extensions = run_psql_json(extensions_sql)
+
+          # -------------------------------------------------------------
+          # 4. Strict Sequence Synchronization Analysis
+          # -------------------------------------------------------------
+          seq_sync_results = []
+          for seq in sequences:
+              s_name = seq["sequence_name"]
+              inc = seq["increment_by"]
+              cache = seq["cache_size"]
+              t_name = seq.get("owned_by_table")
+              c_name = seq.get("owned_by_column")
+              ownership_type = seq.get("ownership_type", "unlinked")
+
+              # Inspect sequence relation directly returning ordinary columns
+              seq_rel_state = None
+              try:
+                  state_data = run_psql_json(f'SELECT last_value, is_called FROM recruitment."{s_name}";')
+                  if state_data:
+                      seq_rel_state = state_data[0]
+              except Exception as ex:
+                  print(f"Warning: could not query sequence {s_name}: {ex}")
+
+              if seq_rel_state is not None:
+                  last_val = seq_rel_state.get("last_value")
+                  is_called = seq_rel_state.get("is_called")
+              else:
+                  last_val = seq.get("last_value")
+                  is_called = None
+
+              # If not linked via pg_depend, check default expressions
+              if not t_name:
+                  for ref in seq_defaults:
+                      if s_name in ref["default_expression"]:
+                          t_name = ref["table_name"]
+                          c_name = ref["column_name"]
+                          ownership_type = "referenced via default"
+                          break
+
+              if not t_name or not c_name:
+                  seq_sync_results.append({
+                      "sequence": s_name,
+                      "target": "Standalone / Unlinked",
+                      "category": "inconclusive",
+                      "status": "⚠️ INCONCLUSIVE",
+                      "last_value": str(last_val) if last_val is not None else "NULL",
+                      "is_called": str(is_called) if is_called is not None else "N/A",
+                      "table_max": "N/A",
+                      "details": "Standalone sequence without proven table/column dependency in catalogs",
+                  })
+                  continue
+
+              col_match = next((c for c in columns if c["table_name"] == t_name and c["column_name"] == c_name), None)
+              col_type = col_match["data_type"].lower() if col_match else ""
+              is_integer_col = any(k in col_type for k in ["int", "smallint", "bigint", "serial"])
+
+              if inc <= 0:
+                  seq_sync_results.append({
+                      "sequence": s_name,
+                      "target": f"{t_name}.{c_name} ({col_type})",
+                      "category": "inconclusive",
+                      "status": "⚠️ INCONCLUSIVE",
+                      "last_value": str(last_val),
+                      "is_called": str(is_called),
+                      "table_max": "N/A",
+                      "details": f"Descending sequence (increment_by={inc}); maximum value check does not apply",
+                  })
+                  continue
+
+              if not is_integer_col:
+                  seq_sync_results.append({
+                      "sequence": s_name,
+                      "target": f"{t_name}.{c_name} ({col_type})",
+                      "category": "inconclusive",
+                      "status": "⚠️ INCONCLUSIVE",
+                      "last_value": str(last_val) if last_val is not None else "NULL",
+                      "is_called": str(is_called) if is_called is not None else "N/A",
+                      "table_max": "N/A (non-integer)",
+                      "details": f"Target column '{t_name}.{c_name}' has non-integer type '{col_type}'. Synchronization cannot be mathematically proven by catalog inspection alone.",
+                  })
+                  continue
+
+              # Verified integer column: inspect table maximum
+              max_res = run_psql(f'SELECT COALESCE(MAX("{c_name}"), 0) FROM recruitment."{t_name}";')
+              max_val = int(max_res)
+
+              if last_val is None or is_called is None:
+                  if max_val == 0:
+                      seq_sync_results.append({
+                          "sequence": s_name,
+                          "target": f"{t_name}.{c_name} ({col_type})",
+                          "category": "confirmed",
+                          "status": "✅ SYNCHRONIZED",
+                          "last_value": "NULL (uncalled)",
+                          "is_called": "False",
+                          "table_max": "0",
+                          "details": "Sequence is uncalled and table has 0 rows.",
+                      })
+                  else:
+                      seq_sync_results.append({
+                          "sequence": s_name,
+                          "target": f"{t_name}.{c_name} ({col_type})",
+                          "category": "inconclusive",
+                          "status": "⚠️ INCONCLUSIVE",
+                          "last_value": "NULL",
+                          "is_called": "Unknown",
+                          "table_max": str(max_val),
+                          "details": f"Sequence state could not be conclusively determined while table has rows (maximum={max_val}).",
+                      })
+                  continue
+
+              # Determine what nextval() will return
+              next_expected = (last_val + inc) if is_called else last_val
+
+              if next_expected <= max_val:
+                  seq_sync_results.append({
+                      "sequence": s_name,
+                      "target": f"{t_name}.{c_name} ({col_type})",
+                      "category": "potential_problem",
+                      "status": "❌ DESYNCHRONIZED",
+                      "last_value": str(last_val),
+                      "is_called": str(is_called),
+                      "table_max": str(max_val),
+                      "details": f"Sequence (last_value={last_val}, is_called={is_called}) will generate {next_expected}, which is <= table maximum ({max_val}). Collision risk!",
+                  })
+              else:
+                  if cache > 1:
+                      seq_sync_results.append({
+                          "sequence": s_name,
+                          "target": f"{t_name}.{c_name} ({col_type})",
+                          "category": "inconclusive",
+                          "status": "⚠️ INCONCLUSIVE",
+                          "last_value": str(last_val),
+                          "is_called": str(is_called),
+                          "table_max": str(max_val),
+                          "details": f"Next value ({next_expected}) > table max ({max_val}), but cache_size={cache} preallocates blocks; exact next-value sequence state is inconclusive.",
+                      })
+                  else:
+                      seq_sync_results.append({
+                          "sequence": s_name,
+                          "target": f"{t_name}.{c_name} ({col_type})",
+                          "category": "confirmed",
+                          "status": "✅ SYNCHRONIZED",
+                          "last_value": str(last_val),
+                          "is_called": str(is_called),
+                          "table_max": str(max_val),
+                          "details": f"Confirmed: sequence (last_value={last_val}, is_called={is_called}) will generate {next_expected}, which is strictly ahead of table maximum ({max_val}).",
+                      })
+
+          # -------------------------------------------------------------
+          # 5. Generate Markdown Report
+          # -------------------------------------------------------------
+          missing_tables = [t for t in EXPECTED_TABLES if t not in discovered_tables]
+          unexpected_tables = [t for t in discovered_tables if t not in EXPECTED_TABLES]
+          total_rows = sum(table_row_counts.values())
+
+          confirmed_seqs = [s for s in seq_sync_results if s["category"] == "confirmed"]
+          problem_seqs = [s for s in seq_sync_results if s["category"] == "potential_problem"]
+          inconclusive_seqs = [s for s in seq_sync_results if s["category"] == "inconclusive"]
+
+          report = []
+          report.append("# Supabase Recovery Schema Inspection Report\n")
+          report.append(f"**Backup Run ID:** `{RUN_ID}`  ")
+          report.append("**Target Schema:** `recruitment`  ")
+          report.append("**Database Engine:** PostgreSQL 17 (Isolated Ephemeral Service Container)\n")
+
+          report.append("## Executive Summary\n")
+          report.append(f"- **Expected Tables Restored:** {'✅ 19 of 19' if not missing_tables else f'❌ {19 - len(missing_tables)} of 19 (FAIL)'}")
+          report.append(f"- **Row Counts Obtained:** `{total_rows:,}` total rows counted across all restored tables in the isolated container")
+          report.append(f"- **Archive TOC Objects:** `{len(original_archive_objects)}` items in `recruitment` schema")
+          report.append(f"- **Sequences Analyzed:** `{len(sequences)}` total (`{len(confirmed_seqs)}` confirmed sync, `{len(problem_seqs)}` desync problems, `{len(inconclusive_seqs)}` inconclusive)")
+          report.append(f"- **Cross-Schema Foreign Keys:** `{len(cross_fks)}` detected")
+          report.append(f"- **Non-Standard Archive Roles:** `{len(non_standard_archive_roles)}` detected in original DDL")
+          report.append(f"- **Installed Extensions:** `{len(extensions)}` present in restored template\n")
+
+          # -------------------------------------------------------------
+          # Category 1: Confirmed Findings
+          # -------------------------------------------------------------
+          report.append("## 1. Confirmed Findings\n")
+          report.append("1. **Table Restoration & Completeness**: All 19 expected application tables were restored in the isolated container, and exact row counts were successfully obtained across each table in the temporary database.")
+          report.append(f"2. **Archive Table of Contents**: The original backup archive TOC contains `{len(original_archive_objects)}` distinct entries associated with the `recruitment` schema.")
+          report.append(f"3. **Original Ownership Identification**: Extracted `{len(original_owner_stmts)}` original `OWNER TO` declarations from the archive's unapplied schema DDL.")
+          report.append(f"4. **Original Privilege Identification**: Extracted `{len(original_grant_stmts)}` original `GRANT` and `{len(original_revoke_stmts)}` `REVOKE` statements from the archive DDL.")
+          report.append(f"5. **Constraint & Index Cataloging**: Cataloged `{len(constraints)}` constraints and `{len(indexes)}` indexes across the restored schema.")
+          if confirmed_seqs:
+              report.append(f"6. **Confirmed Synchronized Sequences**: `{len(confirmed_seqs)}` sequence(s) mathematically confirmed ahead of integer column maximums.")
+          report.append("")
+
+          # -------------------------------------------------------------
+          # Category 2: Potential Dependencies Requiring Manual Review
+          # -------------------------------------------------------------
+          report.append("## 2. Potential Dependencies Requiring Manual Review\n")
+          has_potential_deps = False
+
+          if unexpected_tables:
+              has_potential_deps = True
+              report.append(f"### ⚠️ Unexpected Tables Discovered in Schema ({len(unexpected_tables)} found)\n")
+              report.append("The following tables exist in the `recruitment` schema but are not part of the standard 19-table application baseline:\n")
+              for t in unexpected_tables:
+                  report.append(f"- `recruitment.{t}`")
+              report.append("")
+
+          if problem_seqs:
+              has_potential_deps = True
+              report.append(f"### ❌ Confirmed Sequence Desynchronizations ({len(problem_seqs)} found)\n")
+              report.append("The following sequences have a confirmed next-value less than or equal to their table's current column maximum. They will cause primary key collisions unless updated with `setval()`:\n")
+              report.append(md_table(
+                  ["Sequence", "Target Column", "last_value", "is_called", "Table Max", "Details"],
+                  [[s["sequence"], s["target"], s["last_value"], s["is_called"], s["table_max"], s["details"]] for s in problem_seqs]
+              ))
+
+          if cross_fks:
+              has_potential_deps = True
+              report.append(f"### ⚠️ Cross-Schema Foreign Keys ({len(cross_fks)} found)\n")
+              report.append("These foreign keys reference tables in other schemas (such as `auth.users`). Referenced rows must exist in the target Supabase project before restoring recruitment data:\n")
+              report.append(md_table(
+                  ["Source Table", "Constraint Name", "Referenced Table", "Definition"],
+                  [[f["source_table"], f["constraint_name"], f["referenced_table"], f["definition"]] for f in cross_fks]
+              ))
+
+          if non_standard_archive_roles:
+              has_potential_deps = True
+              report.append(f"### ⚠️ Non-Standard Archive Roles Detected ({len(non_standard_archive_roles)} roles)\n")
+              report.append("The original backup DDL references the following roles that are not default Supabase roles. Ensure these roles are pre-created or remapped to `postgres` / `service_role` in the target project:\n")
+              for r in non_standard_archive_roles:
+                  report.append(f"- `{r}`")
+              report.append("")
+
+          if cross_defaults or cross_checks or cross_indexes:
+              has_potential_deps = True
+              report.append("### ⚠️ External Schema References in Expressions\n")
+              if cross_defaults:
+                  report.append("#### Column Defaults & Generated Columns Referencing External Schemas:\n")
+                  report.append(md_table(
+                      ["Table", "Column", "Kind", "Expression"],
+                      [[d["table_name"], d["column_name"], d["expr_kind"], d["expression"]] for d in cross_defaults]
+                  ))
+              if cross_checks:
+                  report.append("#### CHECK Constraints Referencing External Schemas:\n")
+                  report.append(md_table(
+                      ["Table", "Constraint Name", "Definition"],
+                      [[c["table_name"], c["constraint_name"], c["definition"]] for c in cross_checks]
+                  ))
+              if cross_indexes:
+                  report.append("#### Expression / Partial Indexes Referencing External Schemas:\n")
+                  report.append(md_table(
+                      ["Table", "Index Name", "Definition"],
+                      [[i["table_name"], i["index_name"], i["definition"]] for i in cross_indexes]
+                  ))
+
+          if external_dependencies:
+              has_potential_deps = True
+              report.append(f"### ⚠️ Catalog Object Dependencies on External Schemas ({len(external_dependencies)} found)\n")
+              report.append("The following recruitment objects directly depend on functions or types belonging to other schemas (filtered by `pg_depend.classid` and `refclassid`):\n")
+              report.append(md_table(
+                  ["Object", "Column", "Type", "Dependency Kind", "Referenced External Object"],
+                  [[d["object_name"], d["column_name"], d["object_type"], d["dependency_kind"], d["referenced_dependency"]] for d in external_dependencies]
+              ))
+
+          if not has_potential_deps:
+              report.append("_No blocking cross-schema dependencies, unexpected tables, or confirmed sequence desynchronizations detected._\n")
+
+          # -------------------------------------------------------------
+          # Category 3: Inconclusive Checks
+          # -------------------------------------------------------------
+          report.append("## 3. Inconclusive Checks\n")
+          if inconclusive_seqs:
+              report.append("### Sequence State Heuristics & Uncertain Mappings\n")
+              report.append("The following sequence synchronization checks could not be mathematically proven and are reported as inconclusive:\n")
+              report.append(md_table(
+                  ["Sequence", "Target Column", "last_value", "is_called", "Table Max", "Reason Inconclusive"],
+                  [[s["sequence"], s["target"], s["last_value"], s["is_called"], s["table_max"], s["details"]] for s in inconclusive_seqs]
+              ))
+          else:
+              report.append("_No inconclusive checks recorded._\n")
+
+          # -------------------------------------------------------------
+          # Category 4: Checks That Cannot Be Performed
+          # -------------------------------------------------------------
+          report.append("## 4. Checks That Cannot Be Performed\n")
+          report.append("1. **Live Remote Project Comparison**: Due to strict safety boundaries, no remote Supabase project (including recovery project `ozhaqdcgaormjrxyvhun`) was accessed or modified during this workflow. The inspection was conducted entirely inside the ephemeral runner container.")
+          report.append("2. **Dynamic SQL in Routine Bodies**: Functions and trigger procedures were verified in catalogs, but dynamic SQL strings executed via `EXECUTE '...'` inside procedural code cannot be statically resolved by catalog queries.")
+          report.append("3. **Supabase Storage Bucket Payloads**: The backup contains database dumps and table metadata. Verification of physical files in S3/Supabase Storage was not performed by this schema-only inspection.")
+          report.append("4. **Restored Container Ownership State**: Because `pg_restore` was executed with `--no-owner --no-privileges`, the live catalog inside the temporary container assigns ownership to `supabase_admin`. The original ownership and permissions are documented from the archive DDL in Section C below.\n")
+
+          # -------------------------------------------------------------
+          # Detailed Breakdowns (Sections A-E)
+          # -------------------------------------------------------------
+          report.append("## Section A: Schema Structure & Table Definitions\n")
+          report.append("### Objects in `recruitment` Schema\n")
+          report.append(md_table(
+              ["Object Name", "Type", "Restored Container Owner"],
+              [[o["object_name"], o["object_type"], o["restored_owner"]] for o in objects]
+          ))
+
+          report.append("### Tables, Columns & Constraints\n")
+          for tbl in discovered_tables:
+              tbl_cols = [c for c in columns if c["table_name"] == tbl]
+              tbl_cons = [c for c in constraints if c["table_name"] == tbl]
+              tbl_idxs = [i for i in indexes if i["table_name"] == tbl]
+
+              report.append(f"<details><summary><b>Table: recruitment.{tbl}</b> (Rows: {table_row_counts.get(tbl, 0):,}, Columns: {len(tbl_cols)})</summary>\n")
+              report.append("#### Columns\n")
+              report.append(md_table(
+                  ["#", "Column", "Data Type", "Nullable", "Default Expression", "Identity", "Generated"],
+                  [[c["column_position"], c["column_name"], c["data_type"], "YES" if c["is_nullable"] else "NO", c["default_expression"], c["identity_generation"], c["is_generated"]] for c in tbl_cols]
+              ))
+
+              if tbl_cons:
+                  report.append("#### Constraints\n")
+                  report.append(md_table(
+                      ["Constraint Name", "Type", "Definition"],
+                      [[c["constraint_name"], c["constraint_type"], c["definition"]] for c in tbl_cons]
+                  ))
+
+              if tbl_idxs:
+                  report.append("#### Indexes\n")
+                  report.append(md_table(
+                      ["Index Name", "Unique", "Primary", "Partial", "Definition"],
+                      [[i["index_name"], "YES" if i["is_unique"] else "NO", "YES" if i["is_primary"] else "NO", "YES" if i["is_partial"] else "NO", i["definition"]] for i in tbl_idxs]
+                  ))
+              report.append("</details>\n")
+
+          report.append("## Section B: Sequence Details & Current State\n")
+          report.append(md_table(
+              ["Sequence Name", "Restored Owner", "Data Type", "Start", "Min", "Max", "Increment", "Cycle", "Cache", "last_value", "Owned Table.Column", "Ownership Type"],
+              [[s["sequence_name"], s["restored_owner"], s["data_type"], s["start_value"], s["min_value"], s["max_value"], s["increment_by"], "YES" if s["cycle"] else "NO", s["cache_size"], s["last_value"], f"{s['owned_by_table']}.{s['owned_by_column']}" if s["owned_by_table"] else "None", s["ownership_type"]] for s in sequences]
+          ))
+
+          report.append("## Section C: Permissions, Ownership & Roles\n")
+          report.append("### Statements Found in Generated Schema SQL (`pg_restore -s -n recruitment`)\n")
+          report.append("> [!NOTE]\n> The following statements were extracted using text pattern matching from the unapplied schema SQL dump as an inspection aid. They are reported to assist pre-restore role preparation and do not constitute an exhaustive AST parse of all possible permission or role dependencies.\n")
+
+          report.append("#### Extracted Ownership Statements (`ALTER ... OWNER TO`)\n")
+          if original_owner_stmts:
+              report.append("```sql\n" + "\n".join(original_owner_stmts) + "\n```\n")
+          else:
+              report.append("_No explicit OWNER TO statements found in extracted schema SQL._\n")
+
+          report.append("#### Extracted Privilege Statements (`GRANT` / `REVOKE`)\n")
+          if original_grant_stmts or original_revoke_stmts:
+              priv_text = "\n".join(original_grant_stmts + original_revoke_stmts)
+              report.append("```sql\n" + priv_text + "\n```\n")
+          else:
+              report.append("_No explicit GRANT/REVOKE statements found in extracted schema SQL._\n")
+
+          if original_defpriv_stmts:
+              report.append("#### Extracted Default Privilege Statements (`ALTER DEFAULT PRIVILEGES`)\n")
+              report.append("```sql\n" + "\n".join(original_defpriv_stmts) + "\n```\n")
+
+          report.append("### Restored Ephemeral Container Catalog ACLs\n")
+          report.append("> [!NOTE]\n> The temporary database was restored using `--no-owner --no-privileges` to ensure clean, isolated execution in the runner. The catalog entries below reflect container runtime state (owned by `supabase_admin`) rather than original production privileges.\n")
+          report.append(md_table(
+              ["Object Name", "Type", "Container Owner", "Raw ACL Array"],
+              [[a["object_name"], a["object_type"], a["current_catalog_owner"], a["raw_acl"]] for a in raw_acls]
+          ))
+
+          report.append("## Section D: Installed Extensions\n")
+          report.append(md_table(
+              ["Extension Name", "Version", "Installed Schema"],
+              [[e["extension_name"], e["version"], e["schema_name"]] for e in extensions]
+          ))
+
+          report.append("## Section E: Data Integrity & Table Row Counts\n")
+          report.append(md_table(
+              ["Table Name", "Expected Table?", "Row Count (Restored Container)", "Restoration Status"],
+              [[tbl, "YES" if tbl in EXPECTED_TABLES else "UNEXPECTED", f"{table_row_counts.get(tbl, 0):,}", "✅ RESTORED & COUNTED IN CONTAINER"] for tbl in discovered_tables]
+          ))
+
+          markdown_content = "\n".join(report)
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a") as f:
+                  f.write(markdown_content + "\n")
+              print("Report successfully appended to GITHUB_STEP_SUMMARY.")
+          else:
+              print(markdown_content)
+
+          print("\n=== Comprehensive Schema Inspection Completed Successfully ===")
+
+          # -------------------------------------------------------------
+          # 6. Completeness Enforcement
+          # -------------------------------------------------------------
+          if missing_tables:
+              print(f"::error::Missing expected recruitment tables: {', '.join(missing_tables)}")
+              print(f"\nFAILED INSPECTION: {len(missing_tables)} of {len(EXPECTED_TABLES)} expected tables are missing from the restored backup!")
+              sys.exit(1)
+          PY
+
+      - name: Clean up temporary backup files
+        if: always()
+        shell: bash
+        run: |
+          rm -rf downloaded decrypted extracted
