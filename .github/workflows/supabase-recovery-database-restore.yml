@@ -172,7 +172,24 @@ jobs:
           except Exception as ex:
               raise RuntimeError(f"manifest.json validation failed: {ex}")
 
-          # 3. Extract and Verify Recruitment Schema DDL directly via pg_restore -s -n recruitment
+          # 3. Verify Recruitment Schema Definition in Archive TOC
+          toc_proc = subprocess.run(
+              ["pg_restore", "-l", str(dump_path)],
+              capture_output=True,
+              text=True
+          )
+          if toc_proc.returncode != 0:
+              raise RuntimeError(f"pg_restore -l failed to read archive TOC: {toc_proc.stderr.strip()}")
+
+          has_recruitment_schema = any(
+              re.search(r"\bSCHEMA\s+-\s+recruitment\b", line)
+              for line in toc_proc.stdout.splitlines()
+          )
+          if not has_recruitment_schema:
+              raise RuntimeError("Backup archive TOC does not contain 'recruitment' schema definition.")
+          print("Archive TOC verified: 'recruitment' schema entry confirmed present.")
+
+          # Extract and Verify Recruitment Schema DDL directly via pg_restore -s -n recruitment
           ddl_proc = subprocess.run(
               ["pg_restore", "-s", "-n", "recruitment", "-f", "-", str(dump_path)],
               capture_output=True,
@@ -182,10 +199,6 @@ jobs:
               raise RuntimeError(f"pg_restore -s failed to extract recruitment DDL: {ddl_proc.stderr.strip()}")
 
           ddl_sql = ddl_proc.stdout
-
-          # Verify schema definition
-          if "CREATE SCHEMA recruitment;" not in ddl_sql:
-              raise RuntimeError("DDL missing 'CREATE SCHEMA recruitment;'")
 
           # Verify all 19 tables in DDL
           found_tables = set(re.findall(r"CREATE TABLE recruitment\.([a-zA-Z0-9_]+)\s*\(", ddl_sql))
@@ -556,7 +569,7 @@ jobs:
                       "- ✅ **Target Initial State:** Clean (Schema `recruitment` does not exist; no application tables in `public`)",
                       f"- ✅ **Connecting Administrator:** Connected as `{current_user}` with `CREATE` privilege",
                       "- ✅ **Backup Manifest Validation:** Validated (`candidate-documents`, 1,218 storage files)",
-                      f"- ✅ **Backup DDL Validation:** All 19 tables, {num_enums} custom ENUM types, 46 constraints, and 33 explicit index statements verified in DDL (56 total index catalog entries expected upon restore)",
+                      f"- ✅ **Backup Archive & DDL Validation:** Schema 'recruitment' verified in archive TOC; all 19 tables, {num_enums} custom ENUM types, 46 constraints, and 33 explicit index statements verified in DDL (56 total index catalog entries expected upon restore)",
                       f"- ✅ **Candidate ID & Sequence DDL Inspection:** Column `recruitment.candidates.candidate_id` ({cand_config.get('column_type')}) with default `{cand_def}`; sequences: `{ddl_meta.get('sequences')}`",
                       f"- ✅ **Limited Dependency Checks:** Inspected functions and custom ENUM types were checked. This is not a complete extension dependency analysis.",
                       "- ✅ **Native Type Evaluation:** Target database verified for uuid, jsonb, timestamptz, boolean, integer, text, and varchar",
@@ -578,7 +591,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "Starting targeted restoration of 'recruitment' schema..."
+          echo "Creating empty 'recruitment' schema on target database..."
+          psql -X -v ON_ERROR_STOP=1 -d "$RESTORE_DATABASE_URL" -c "CREATE SCHEMA recruitment;"
+          echo "Confirmed: Empty 'recruitment' schema created on target database."
+
+          echo "Starting targeted restoration of 'recruitment' schema objects..."
           echo "Restoration parameters:"
           echo "  - Schema filter: recruitment only (--schema=recruitment)"
           echo "  - Transaction mode: single transaction (atomic, rollback on error)"
@@ -586,7 +603,7 @@ jobs:
           echo "  - Privileges: suppressed (--no-privileges, unexposed to public/anon)"
           echo "  - Managed schemas: NOT touched"
 
-          pg_restore \
+          if ! pg_restore \
             --verbose \
             --exit-on-error \
             --single-transaction \
@@ -594,7 +611,11 @@ jobs:
             --no-privileges \
             --schema=recruitment \
             --dbname="$RESTORE_DATABASE_URL" \
-            extracted/database.dump
+            extracted/database.dump; then
+            echo "::error::pg_restore execution failed! An empty or partial 'recruitment' schema may remain on the target project."
+            echo "::error::DO NOT blindly retry this workflow. Inspect the target database before taking any further action."
+            exit 1
+          fi
 
           echo "pg_restore completed successfully within atomic transaction."
 
