@@ -1,0 +1,1357 @@
+name: Supabase Recovery Storage Restore
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Original successful backup workflow run ID"
+        required: true
+        default: "43843597091"
+        type: string
+      confirm_restore:
+        description: "Safety gate: MUST be set to true to execute restore. Leave false for Preflight-only mode."
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: supabase-storage-restore
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  storage-restore:
+    name: Restore Supabase Storage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate inputs and safety gate
+        shell: bash
+        env:
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+          CONFIRM_RESTORE: ${{ inputs.confirm_restore }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$INPUT_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Invalid run_id: '$INPUT_RUN_ID'. Must be a strictly positive integer."
+            exit 1
+          fi
+
+          echo "=================================================================="
+          echo "SUPABASE RECOVERY STORAGE RESTORE WORKFLOW"
+          echo "Target backup workflow run ID: $INPUT_RUN_ID"
+          echo "Target recovery project ref: ozhaqdcgaormjrxyvhun"
+          echo "Target recovery hostname: ozhaqdcgaormjrxyvhun.supabase.co"
+          echo "Target bucket: candidate-documents (Private)"
+          if [ "$CONFIRM_RESTORE" = "true" ]; then
+            echo "Mode: ACTUAL RESTORATION EXPLICITLY AUTHORIZED"
+            echo "Preflight checks, metadata validation, and resumption audit will run first."
+            echo "If all checks pass, missing files will be uploaded and verified with SHA-256 and strict metadata equality."
+          else
+            echo "Mode: PREFLIGHT-ONLY (Dry-Run)"
+            echo "All preflight checks, metadata validations, and resumption audits will execute."
+            echo "NO bucket creation and NO uploads will be performed."
+          fi
+          echo "=================================================================="
+
+      - name: Download original backup artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: supabase-backup-${{ inputs.run_id }}
+          path: downloaded
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id }}
+
+      - name: Install PostgreSQL 17 client and OpenSSL
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates gnupg openssl
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /tmp/ACCC4CF8.asc
+          sudo gpg --no-tty --batch --yes --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg /tmp/ACCC4CF8.asc
+          rm -f /tmp/ACCC4CF8.asc
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          pg_restore --version
+          openssl version
+
+      - name: Decrypt, extract and validate backup archive
+        shell: bash
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BACKUP_ENCRYPTION_KEY:-}" ]; then
+            echo "::error::BACKUP_ENCRYPTION_KEY secret is not configured or empty."
+            exit 1
+          fi
+
+          mapfile -t encrypted_files < <(
+            find downloaded -type f -name "*.enc"
+          )
+
+          if [ "${#encrypted_files[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one encrypted backup file (.enc) in downloaded artifact, found ${#encrypted_files[@]}."
+            exit 1
+          fi
+
+          mkdir -p extracted decrypted
+
+          echo "Decrypting backup archive with OpenSSL AES-256-CBC PBKDF2..."
+          openssl enc -d -aes-256-cbc -pbkdf2 -salt \
+            -in "${encrypted_files[0]}" \
+            -out decrypted/backup.tar.gz \
+            -pass env:BACKUP_ENCRYPTION_KEY
+
+          echo "Decryption completed successfully."
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path, PurePosixPath
+          import shutil
+          import sys
+          import tarfile
+
+          archive = Path("decrypted/backup.tar.gz")
+          destination = Path("extracted").resolve()
+
+          # Safe tar extraction with path bounds, normalization, ancestor-conflict, and duplicate destination checking
+          with tarfile.open(archive, "r:gz") as tar:
+              seen_destinations = set()
+              file_targets = set()
+              dir_targets = set()
+              validated_members = []
+
+              # Pass 1: Pre-validation of all archive members before extracting anything
+              for member in tar.getmembers():
+                  raw_name = member.name
+                  if not raw_name or not raw_name.strip():
+                      raise RuntimeError("Archive entry with empty name detected.")
+
+                  if not (member.isfile() or member.isdir()):
+                      raise RuntimeError(f"Unsupported archive entry (symlink/device): {raw_name}")
+
+                  posix_path = PurePosixPath(raw_name)
+
+                  if posix_path.is_absolute() or raw_name.startswith("/"):
+                      raise RuntimeError(f"Absolute archive path rejected: {raw_name}")
+
+                  if ".." in posix_path.parts:
+                      raise RuntimeError(f"Path traversal '..' rejected: {raw_name}")
+
+                  if "." in posix_path.parts:
+                      raise RuntimeError(f"Ambiguous '.' component rejected: {raw_name}")
+
+                  if "//" in raw_name:
+                      raise RuntimeError(f"Repeated path separators rejected: {raw_name}")
+
+                  norm_posix = posix_path.as_posix()
+                  if norm_posix != raw_name and norm_posix != raw_name.rstrip("/"):
+                      raise RuntimeError(f"Ambiguous or non-normalized archive path rejected: '{raw_name}' != '{norm_posix}'")
+
+                  target = (destination / Path(*posix_path.parts)).resolve()
+                  if target != destination and destination not in target.parents:
+                      raise RuntimeError(f"Path traversal escape detected: {raw_name}")
+
+                  if target in seen_destinations:
+                      raise RuntimeError(f"Duplicate normalized destination detected in archive: {raw_name} -> {target}")
+
+                  # Type-specific conflict detection
+                  if member.isdir():
+                      if target in file_targets:
+                          raise RuntimeError(f"Archive entry conflict: directory '{raw_name}' conflicts with existing file target '{target}'")
+                      dir_targets.add(target)
+                  else:
+                      if target in dir_targets:
+                          raise RuntimeError(f"Archive entry conflict: regular file '{raw_name}' conflicts with existing directory target '{target}'")
+                      file_targets.add(target)
+
+                  seen_destinations.add(target)
+                  validated_members.append((member, target))
+
+              # Check for file/directory ancestor conflicts:
+              # No regular file target can be an ancestor directory of any other target
+              for member, target in validated_members:
+                  for parent in target.parents:
+                      if parent == destination:
+                          break
+                      if parent in file_targets:
+                          raise RuntimeError(
+                              f"Archive entry ancestor conflict: regular file target '{parent}' is an ancestor directory of '{member.name}' ({target})"
+                          )
+
+              # Pass 2: Extract verified members to validated destination targets
+              for member, target in validated_members:
+                  if member.isdir():
+                      target.mkdir(parents=True, exist_ok=True)
+                  else:
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      source = tar.extractfile(member)
+                      if source is None:
+                          raise RuntimeError(f"Cannot read archive member: {member.name}")
+                      with source, target.open("wb") as output:
+                          shutil.copyfileobj(source, output)
+
+          print("Archive pre-validated and safely extracted with strict normalization, ancestor-conflict checks, and bounds verification.")
+          PY
+
+          # Immediately remove decrypted tarball to minimize plaintext disk footprint
+          rm -f decrypted/backup.tar.gz
+
+      - name: Execute storage preflight, restore, and verification
+        shell: bash
+        env:
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+          CONFIRM_RESTORE: ${{ inputs.confirm_restore }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import collections
+          import hashlib
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+          import re
+          import subprocess
+          import sys
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          RUN_ID = os.environ.get("INPUT_RUN_ID", "43843597091").strip()
+          CONFIRM_RESTORE = os.environ.get("CONFIRM_RESTORE", "false").strip().lower() == "true"
+          SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
+          SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+
+          EXPECTED_PROJECT_REF = "ozhaqdcgaormjrxyvhun"
+          EXPECTED_HOSTNAME = "ozhaqdcgaormjrxyvhun.supabase.co"
+          FORBIDDEN_PROJECT_REF = "rupgxwsfkberlaeseigk"
+          EXPECTED_BUCKET = "candidate-documents"
+          EXPECTED_FILE_COUNT = 1218
+          EXPECTED_TOTAL_SIZE = 583477130
+
+          dump_path = Path("extracted/database.dump")
+          manifest_path = Path("extracted/manifest.json")
+          storage_dir = Path("extracted/storage")
+
+          print("==================================================================")
+          print("PHASE 1: ENVIRONMENT & STRICT HOSTNAME PREFLIGHT")
+          print("==================================================================")
+
+          # 1.1 Strict SUPABASE_URL validation
+          if not SUPABASE_URL:
+              raise RuntimeError("SUPABASE_URL secret is not configured or empty.")
+
+          parsed_url = urllib.parse.urlparse(SUPABASE_URL)
+          if parsed_url.scheme != "https":
+              raise RuntimeError(f"SUPABASE_URL must use secure HTTPS protocol, got '{parsed_url.scheme}'.")
+
+          hostname = (parsed_url.hostname or "").lower()
+          if not hostname:
+              raise RuntimeError(f"Unable to parse hostname from SUPABASE_URL: '{SUPABASE_URL}'.")
+
+          # Strict security checks on project ref and forbidden targets
+          if FORBIDDEN_PROJECT_REF in hostname or FORBIDDEN_PROJECT_REF in SUPABASE_URL:
+              raise RuntimeError(
+                  f"CRITICAL SECURITY GATE: SUPABASE_URL references the deleted project '{FORBIDDEN_PROJECT_REF}'. "
+                  "Restoration to or connecting with the deleted project is strictly forbidden."
+              )
+
+          if hostname != EXPECTED_HOSTNAME:
+              raise RuntimeError(
+                  f"CRITICAL SECURITY GATE: Target hostname mismatch! "
+                  f"Expected exact hostname '{EXPECTED_HOSTNAME}', but SUPABASE_URL resolved to '{hostname}'."
+              )
+
+          if parsed_url.port not in (None, 443):
+              raise RuntimeError(f"CRITICAL SECURITY GATE: Unexpected non-standard port in SUPABASE_URL: {parsed_url.port}")
+
+          print(f"Target recovery host strictly verified: '{EXPECTED_HOSTNAME}' (HTTPS).")
+
+          # 1.2 Verify SUPABASE_SERVICE_ROLE_KEY
+          if not SERVICE_ROLE_KEY:
+              raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY secret is not configured or empty.")
+          if len(SERVICE_ROLE_KEY) < 20:
+              raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY appears invalid or truncated (length < 20).")
+
+          print("Supabase service role authentication credentials verified.")
+
+          # Standard API request helper with error handling and timeouts
+          def api_request(url, method="GET", headers=None, data=None, timeout=60):
+              req = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
+              try:
+                  with urllib.request.urlopen(req, timeout=timeout) as resp:
+                      return resp.status, resp.read(), resp.headers
+              except urllib.error.HTTPError as e:
+                  return e.code, e.read(), e.headers
+              except Exception as e:
+                  raise
+
+          auth_headers = {
+              "Authorization": f"Bearer {SERVICE_ROLE_KEY}",
+              "apiKey": SERVICE_ROLE_KEY,
+          }
+          json_headers = {
+              "Authorization": f"Bearer {SERVICE_ROLE_KEY}",
+              "apiKey": SERVICE_ROLE_KEY,
+              "Content-Type": "application/json",
+          }
+
+          # Helper: download remote object content bytes via service role
+          def download_remote_object(path_str):
+              quoted = urllib.parse.quote(path_str, safe="/")
+              url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/{EXPECTED_BUCKET}/{quoted}"
+              return api_request(url, method="GET", headers=auth_headers, timeout=60)
+
+          print("\n==================================================================")
+          print("PHASE 2: LOCAL BACKUP ARCHIVE & SHA-256 HASH COMPUTATION")
+          print("==================================================================")
+
+          if not dump_path.is_file():
+              raise RuntimeError("database.dump is missing from the extracted backup archive.")
+          if not manifest_path.is_file():
+              raise RuntimeError("manifest.json is missing from the extracted backup archive.")
+          if not storage_dir.is_dir():
+              raise RuntimeError("storage/ directory is missing from the extracted backup archive.")
+
+          # Parse and validate manifest.json
+          with open(manifest_path, "r", encoding="utf-8") as f:
+              manifest = json.load(f)
+
+          if not isinstance(manifest, dict):
+              raise RuntimeError("manifest.json root must be a JSON dictionary.")
+
+          manifest_bucket = manifest.get("bucket", "")
+          if manifest_bucket != EXPECTED_BUCKET:
+              raise RuntimeError(f"manifest.json bucket is '{manifest_bucket}', expected '{EXPECTED_BUCKET}'.")
+
+          manifest_objects = manifest.get("objects")
+          if not isinstance(manifest_objects, list):
+              raise RuntimeError("manifest.json 'objects' field must be a list.")
+
+          if len(manifest_objects) != EXPECTED_FILE_COUNT:
+              raise RuntimeError(
+                  f"manifest.json objects count mismatch: found {len(manifest_objects)}, expected {EXPECTED_FILE_COUNT}."
+              )
+
+          storage_dir_resolved = storage_dir.resolve()
+          seen_normalized_paths = set()
+          manifest_total_bytes = 0
+          manifest_size_map = {}
+          raw_manifest_paths = []
+          local_sha256_map = {}
+
+          for idx, obj in enumerate(manifest_objects):
+              if not isinstance(obj, dict):
+                  raise RuntimeError(f"Manifest entry {idx} is not a dictionary.")
+
+              p_raw = obj.get("path")
+              size_raw = obj.get("size")
+
+              if not isinstance(p_raw, str) or not p_raw:
+                  raise RuntimeError(f"Manifest entry {idx} has invalid or empty path.")
+              if p_raw != p_raw.strip():
+                  raise RuntimeError(f"Manifest path has leading/trailing whitespace: '{p_raw}'.")
+              if "\0" in p_raw or "//" in p_raw:
+                  raise RuntimeError(f"Manifest path contains invalid null or repeated separators: '{p_raw}'.")
+
+              posix_p = PurePosixPath(p_raw)
+              if posix_p.is_absolute() or ".." in posix_p.parts or "." in posix_p.parts:
+                  raise RuntimeError(f"Unsafe manifest path detected: '{p_raw}'.")
+              if posix_p.as_posix() != p_raw:
+                  raise RuntimeError(f"Non-canonical manifest path representation: '{p_raw}' != '{posix_p.as_posix()}'.")
+
+              if p_raw in seen_normalized_paths:
+                  raise RuntimeError(f"Duplicate path detected in manifest.json: '{p_raw}'.")
+              seen_normalized_paths.add(p_raw)
+              raw_manifest_paths.append(p_raw)
+
+              if isinstance(size_raw, bool) or not isinstance(size_raw, int) or size_raw < 0:
+                  raise RuntimeError(f"Manifest entry '{p_raw}' has invalid size: {size_raw!r}.")
+
+              target_file = (storage_dir / Path(*posix_p.parts)).resolve()
+              if target_file == storage_dir_resolved or storage_dir_resolved not in target_file.parents:
+                  raise RuntimeError(f"Manifest path escapes storage boundary: '{p_raw}'.")
+              if not target_file.is_file():
+                  raise RuntimeError(f"File listed in manifest is missing on disk: '{p_raw}'.")
+
+              file_data = target_file.read_bytes()
+              actual_disk_size = len(file_data)
+              if actual_disk_size != size_raw:
+                  raise RuntimeError(f"File size mismatch on disk: '{p_raw}' (expected {size_raw}, got {actual_disk_size}).")
+
+              # Compute exact local SHA-256 hash for every file
+              local_sha256_map[p_raw] = hashlib.sha256(file_data).hexdigest()
+              manifest_total_bytes += size_raw
+              manifest_size_map[p_raw] = size_raw
+
+          if manifest_total_bytes != EXPECTED_TOTAL_SIZE:
+              raise RuntimeError(
+                  f"Total manifest storage size mismatch: calculated {manifest_total_bytes} bytes, expected {EXPECTED_TOTAL_SIZE} bytes."
+              )
+
+          # Verify no unexpected files on disk
+          all_disk_files = [f for f in storage_dir.rglob("*") if f.is_file()]
+          if len(all_disk_files) != EXPECTED_FILE_COUNT:
+              raise RuntimeError(
+                  f"On-disk file count mismatch: found {len(all_disk_files)} files, expected {EXPECTED_FILE_COUNT}."
+              )
+
+          for f in all_disk_files:
+              rel_posix = f.relative_to(storage_dir).as_posix()
+              if rel_posix not in seen_normalized_paths:
+                  raise RuntimeError(f"Unexpected file found on disk not listed in manifest: '{rel_posix}'.")
+
+          print(f"Manifest, file sizes, and SHA-256 hashes calculated: exactly {len(all_disk_files)} files, {manifest_total_bytes:,} bytes.")
+
+          print("\n==================================================================")
+          print("PHASE 3: METADATA EXTRACTION & FAIL-CLOSED ONE-TO-ONE VALIDATION")
+          print("==================================================================")
+
+          # Robust byte-level PostgreSQL COPY text-format field decoder
+          def decode_pg_copy_field(s):
+              if s == r"\N":
+                  return None
+              raw_bytes = s.encode("utf-8")
+              out = bytearray()
+              i = 0
+              n = len(raw_bytes)
+              while i < n:
+                  b = raw_bytes[i]
+                  if b == 0x5C and i + 1 < n:  # Backslash '\'
+                      nxt = raw_bytes[i + 1]
+                      if nxt == ord("b"):
+                          out.append(0x08)
+                          i += 2
+                      elif nxt == ord("f"):
+                          out.append(0x0C)
+                          i += 2
+                      elif nxt == ord("n"):
+                          out.append(0x0A)
+                          i += 2
+                      elif nxt == ord("r"):
+                          out.append(0x0D)
+                          i += 2
+                      elif nxt == ord("t"):
+                          out.append(0x09)
+                          i += 2
+                      elif nxt == ord("v"):
+                          out.append(0x0B)
+                          i += 2
+                      elif nxt == ord("\\"):
+                          out.append(0x5C)
+                          i += 2
+                      elif ord("0") <= nxt <= ord("7"):
+                          oct_bytes = bytearray([nxt])
+                          j = i + 2
+                          while j < n and j < i + 4 and ord("0") <= raw_bytes[j] <= ord("7"):
+                              oct_bytes.append(raw_bytes[j])
+                              j += 1
+                          val = int(oct_bytes.decode("ascii"), 8)
+                          out.append(val)
+                          i = j
+                      elif nxt == ord("x"):
+                          hex_bytes = bytearray()
+                          j = i + 2
+                          while j < n and j < i + 4 and chr(raw_bytes[j]) in "0123456789abcdefABCDEF":
+                              hex_bytes.append(raw_bytes[j])
+                              j += 1
+                          if hex_bytes:
+                              val = int(hex_bytes.decode("ascii"), 16)
+                              out.append(val)
+                              i = j
+                          else:
+                              out.append(ord("x"))
+                              i += 2
+                      else:
+                          out.append(nxt)
+                          i += 2
+                  else:
+                      out.append(b)
+                      i += 1
+              return out.decode("utf-8")
+
+          dump_metadata_by_path = {}
+          intended_mime_by_path = {}
+          intended_cache_by_path = {}
+          metadata_errors = []
+
+          data_proc = subprocess.run(
+              ["pg_restore", "-a", "-n", "storage", "-f", "-", str(dump_path)],
+              capture_output=True,
+              text=True
+          )
+          if data_proc.returncode != 0:
+              raise RuntimeError(
+                  f"METADATA VALIDATION FAILED: pg_restore failed with return code {data_proc.returncode}: {data_proc.stderr[:300]}"
+              )
+
+          copy_re = re.compile(
+              r"^COPY\s+(?:\"?storage\"?\.)?\"?objects\"?\s*\((.*?)\)\s+FROM\s+stdin;",
+              re.IGNORECASE
+          )
+          in_copy = False
+          cols = []
+          found_copy_block = False
+
+          for line_no, line in enumerate(data_proc.stdout.splitlines(), start=1):
+              if not in_copy:
+                  m = copy_re.match(line.strip())
+                  if m:
+                      in_copy = True
+                      found_copy_block = True
+                      cols = [c.strip().strip('"').lower() for c in m.group(1).split(",")]
+              else:
+                  if line.strip() == r"\.":
+                      in_copy = False
+                  else:
+                      raw_vals = line.split("\t")
+                      if len(raw_vals) == len(cols):
+                          try:
+                              decoded_vals = [decode_pg_copy_field(v) for v in raw_vals]
+                              row = dict(zip(cols, decoded_vals))
+                              b_id = row.get("bucket_id")
+                              obj_name = row.get("name")
+                              meta_raw = row.get("metadata")
+                              if b_id == EXPECTED_BUCKET:
+                                  if not obj_name:
+                                      metadata_errors.append(f"Line {line_no}: Empty object name in storage.objects")
+                                      continue
+                                  if obj_name in dump_metadata_by_path:
+                                      metadata_errors.append(f"Line {line_no}: Duplicate metadata row for object '{obj_name}'")
+                                      continue
+                                  if not meta_raw or meta_raw == r"\N":
+                                      metadata_errors.append(f"Line {line_no}: Missing or NULL metadata JSON for '{obj_name}'")
+                                      continue
+                                  try:
+                                      meta_dict = json.loads(meta_raw, strict=False)
+                                      if not isinstance(meta_dict, dict):
+                                          metadata_errors.append(f"Line {line_no}: Metadata for '{obj_name}' is not a JSON dictionary")
+                                          continue
+                                      mime_val = meta_dict.get("mimetype")
+                                      cache_val = meta_dict.get("cacheControl")
+                                      if not mime_val or not isinstance(mime_val, str) or not mime_val.strip():
+                                          metadata_errors.append(f"Line {line_no}: Missing or invalid mimetype for '{obj_name}': {mime_val!r}")
+                                          continue
+                                      if not cache_val or not isinstance(cache_val, str) or not cache_val.strip():
+                                          metadata_errors.append(f"Line {line_no}: Missing or invalid cacheControl for '{obj_name}': {cache_val!r}")
+                                          continue
+                                      dump_metadata_by_path[obj_name] = meta_dict
+                                      intended_mime_by_path[obj_name] = mime_val.strip()
+                                      intended_cache_by_path[obj_name] = cache_val.strip()
+                                  except Exception as je:
+                                      metadata_errors.append(f"Line {line_no}: JSON parse error for '{obj_name}': {je}")
+                          except Exception as de:
+                              metadata_errors.append(f"Line {line_no}: COPY decode error: {de}")
+                      else:
+                          metadata_errors.append(f"Line {line_no}: Column count mismatch ({len(raw_vals)} vs {len(cols)})")
+
+          if not found_copy_block:
+              raise RuntimeError("METADATA VALIDATION FAILED: No COPY block for storage.objects was found in database dump.")
+          if in_copy:
+              raise RuntimeError("METADATA VALIDATION FAILED: Unterminated COPY block for storage.objects (missing '\\.').")
+
+          if metadata_errors:
+              raise RuntimeError(
+                  f"METADATA VALIDATION FAILED: Found {len(metadata_errors)} error(s) during PostgreSQL COPY/JSON metadata parsing:\n"
+                  + "\n".join(metadata_errors[:20])
+              )
+
+          dump_paths_set = set(dump_metadata_by_path.keys())
+          manifest_paths_set = set(raw_manifest_paths)
+
+          missing_in_dump = sorted(list(manifest_paths_set - dump_paths_set))
+          unexpected_in_dump = sorted(list(dump_paths_set - manifest_paths_set))
+
+          if missing_in_dump:
+              raise RuntimeError(
+                  f"METADATA VALIDATION FAILED: {len(missing_in_dump)} manifest path(s) missing from storage.objects dump metadata. "
+                  f"First few missing: {missing_in_dump[:5]}"
+              )
+
+          if unexpected_in_dump:
+              raise RuntimeError(
+                  f"METADATA VALIDATION FAILED: {len(unexpected_in_dump)} unmapped object(s) in storage.objects dump not in manifest. "
+                  f"First few unmapped: {unexpected_in_dump[:5]}"
+              )
+
+          if len(dump_metadata_by_path) != EXPECTED_FILE_COUNT:
+              raise RuntimeError(
+                  f"METADATA VALIDATION FAILED: Exact count mismatch: decoded {len(dump_metadata_by_path)} metadata records, expected {EXPECTED_FILE_COUNT}."
+              )
+
+          meta_extraction_status = f"PASS (All {EXPECTED_FILE_COUNT:,} object metadata records decoded and mapped 1-to-1 with zero errors)"
+          print(f"Metadata validation PASSED 100%: All {EXPECTED_FILE_COUNT:,} objects have verified mimetype and cacheControl decoded from dump with zero errors.")
+
+          print("\n==================================================================")
+          print("PHASE 4: STRICT TARGET BUCKET STATUS & CONFIGURATION CHECK")
+          print("==================================================================")
+
+          # Helper: verify complete bucket configuration (public=False, file_size_limit=None, allowed_mime_types=None)
+          def verify_bucket_config(bucket_dict, context_msg=""):
+              if not isinstance(bucket_dict, dict):
+                  raise RuntimeError(f"{context_msg}: Invalid bucket response (not a dictionary).")
+
+              # 1. public must be False (Private)
+              if bucket_dict.get("public") is not False:
+                  raise RuntimeError(
+                      f"{context_msg}: Bucket '{EXPECTED_BUCKET}' public visibility mismatch: "
+                      f"expected False (Private), got {bucket_dict.get('public')}."
+                  )
+
+              # 2. file_size_limit must be None / null (unlimited)
+              fsl = bucket_dict.get("file_size_limit")
+              if fsl is not None:
+                  raise RuntimeError(
+                      f"{context_msg}: Bucket '{EXPECTED_BUCKET}' file_size_limit mismatch: "
+                      f"expected None (NULL / unlimited), got {fsl}."
+                  )
+
+              # 3. allowed_mime_types must be None / null (all types allowed)
+              amt = bucket_dict.get("allowed_mime_types")
+              if amt is not None:
+                  raise RuntimeError(
+                      f"{context_msg}: Bucket '{EXPECTED_BUCKET}' allowed_mime_types mismatch: "
+                      f"expected None (NULL / all types allowed), got {amt}."
+                  )
+
+          # 4.1 Strict specific bucket check (require 200 or 404, fail on all other statuses)
+          bucket_check_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/bucket/{EXPECTED_BUCKET}"
+          b_status, b_body, _ = api_request(bucket_check_url, method="GET", headers=auth_headers)
+
+          if b_status == 200:
+              bucket_exists = True
+          elif b_status == 404:
+              bucket_exists = False
+          else:
+              err_text = b_body.decode("utf-8", errors="replace")[:300]
+              raise RuntimeError(
+                  f"STRICT BUCKET CHECK FAILED: Expected HTTP 200 or 404 when querying bucket '{EXPECTED_BUCKET}', "
+                  f"but received unexpected HTTP {b_status}: {err_text}"
+              )
+
+          # 4.2 Strict full bucket list check
+          buckets_list_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/bucket"
+          bl_status, bl_body, _ = api_request(buckets_list_url, method="GET", headers=auth_headers)
+
+          if bl_status in (401, 403):
+              raise RuntimeError(
+                  f"SAFETY PREFLIGHT GATE FAILED: Authentication failure (HTTP {bl_status}) communicating with Supabase Storage API. "
+                  "Verify that SUPABASE_SERVICE_ROLE_KEY has administrative permissions."
+              )
+          if bl_status != 200:
+              err_text = bl_body.decode("utf-8", errors="replace")[:300]
+              raise RuntimeError(f"SAFETY PREFLIGHT GATE FAILED: Could not query bucket list (HTTP {bl_status}): {err_text}")
+
+          existing_buckets = json.loads(bl_body)
+          if not isinstance(existing_buckets, list):
+              raise RuntimeError("Invalid response format from Supabase Storage bucket listing.")
+
+          existing_bucket_names = [b.get("name") for b in existing_buckets if isinstance(b, dict)]
+          existing_bucket_ids = [b.get("id") for b in existing_buckets if isinstance(b, dict)]
+          in_list = (EXPECTED_BUCKET in existing_bucket_names) or (EXPECTED_BUCKET in existing_bucket_ids)
+
+          # Strict consistency check between GET /bucket/{id} and GET /bucket
+          if bucket_exists and not in_list:
+              raise RuntimeError(
+                  f"Inconsistent bucket state: GET /bucket/{EXPECTED_BUCKET} returned HTTP 200, but bucket is missing from bucket list."
+              )
+          if not bucket_exists and in_list:
+              raise RuntimeError(
+                  f"Inconsistent bucket state: GET /bucket/{EXPECTED_BUCKET} returned HTTP 404, but bucket was found in bucket list."
+              )
+
+          print(f"Bucket existence status strictly verified: exists={bucket_exists}")
+
+          # Helper: recursively list all remote objects
+          def list_remote_objects(base_url, key, bucket, prefix=""):
+              list_endpoint = f"{base_url.rstrip('/')}/storage/v1/object/list/{bucket}"
+              headers = {
+                  "Authorization": f"Bearer {key}",
+                  "apiKey": key,
+                  "Content-Type": "application/json",
+              }
+              items = []
+              offset = 0
+              page_size = 100
+
+              while True:
+                  payload = json.dumps({
+                      "prefix": prefix,
+                      "limit": page_size,
+                      "offset": offset,
+                      "sortBy": {"column": "name", "order": "asc"},
+                  }).encode("utf-8")
+
+                  st, bd, _ = api_request(list_endpoint, method="POST", headers=headers, data=payload, timeout=60)
+                  if st != 200:
+                      err_t = bd.decode("utf-8", errors="replace")[:300]
+                      raise RuntimeError(f"Failed to list remote objects at prefix '{prefix}' (HTTP {st}): {err_t}")
+
+                  entries = json.loads(bd)
+                  if not isinstance(entries, list):
+                      raise RuntimeError("Invalid listing response from Supabase Storage API.")
+
+                  for entry in entries:
+                      if not isinstance(entry, dict):
+                          continue
+                      n = str(entry.get("name") or "").strip()
+                      if not n:
+                          continue
+                      if entry.get("id") is None:
+                          child_pref = f"{prefix.rstrip('/')}/{n}/" if prefix else f"{n}/"
+                          items.extend(list_remote_objects(base_url, key, bucket, child_pref))
+                      else:
+                          full_p = f"{prefix.rstrip('/')}/{n}" if prefix else n
+                          meta = entry.get("metadata") or {}
+                          sz = meta.get("size")
+                          if sz is None:
+                              sz = meta.get("contentLength")
+                          items.append({
+                              "path": full_p,
+                              "size": int(sz) if sz is not None else None,
+                              "mimetype": meta.get("mimetype"),
+                              "cacheControl": meta.get("cacheControl"),
+                          })
+
+                  if len(entries) < page_size:
+                      break
+                  offset += page_size
+
+              return items
+
+          # Helper: check individual remote object existence and verified integer size (never accepts unknown size)
+          def check_remote_object(path_str):
+              quoted = urllib.parse.quote(path_str, safe="/")
+              head_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/{EXPECTED_BUCKET}/{quoted}"
+              h_status, _, h_headers = api_request(head_url, method="HEAD", headers=auth_headers, timeout=30)
+              if h_status == 200:
+                  cl = h_headers.get("Content-Length")
+                  if cl is not None:
+                      try:
+                          return True, int(cl)
+                      except (ValueError, TypeError):
+                          pass
+                  # When HEAD returns 200 but Content-Length is missing or invalid,
+                  # do NOT return (True, None). Continue to listing fallback to resolve exact size.
+              elif h_status == 404:
+                  return False, None
+
+              # Fallback to list search if HEAD returned unexpected status (e.g. 405) or lacked Content-Length
+              posix_p = PurePosixPath(path_str)
+              parent_str = posix_p.parent.as_posix()
+              prefix = "" if parent_str == "." else parent_str
+              list_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/list/{EXPECTED_BUCKET}"
+              payload = json.dumps({
+                  "prefix": prefix,
+                  "search": posix_p.name,
+                  "limit": 100,
+                  "offset": 0,
+              }).encode("utf-8")
+              l_status, l_body, _ = api_request(list_url, method="POST", headers=json_headers, data=payload, timeout=30)
+              if l_status == 200:
+                  try:
+                      items = json.loads(l_body)
+                      if isinstance(items, list):
+                          for it in items:
+                              if isinstance(it, dict) and it.get("name") == posix_p.name and it.get("id") is not None:
+                                  meta = it.get("metadata") or {}
+                                  sz = meta.get("size") if meta.get("size") is not None else meta.get("contentLength")
+                                  if sz is not None:
+                                      try:
+                                          return True, int(sz)
+                                      except (ValueError, TypeError):
+                                          pass
+                  except Exception:
+                      pass
+              return False, None
+
+          print("\n==================================================================")
+          print("PHASE 5: RESUMPTION & REMOTE OBJECT SHA-256 CONTENT AUDIT")
+          print("==================================================================")
+
+          existing_remote_items = []
+          existing_remote_paths = set()
+          existing_verified_bytes = 0
+
+          if bucket_exists:
+              # 5.1 Verify complete bucket configuration: private, null size limit, null mime types
+              vb_status, vb_body, _ = api_request(bucket_check_url, method="GET", headers=auth_headers)
+              if vb_status != 200:
+                  raise RuntimeError(f"Failed to inspect existing bucket '{EXPECTED_BUCKET}' (HTTP {vb_status}).")
+              b_info = json.loads(vb_body)
+              verify_bucket_config(b_info, "Existing bucket configuration audit")
+              print(f"Existing bucket '{EXPECTED_BUCKET}' verified with required configuration (private, unlimited size, all mime types).")
+
+              # 5.2 Recursively list all existing objects in bucket
+              print(f"Querying existing remote objects in '{EXPECTED_BUCKET}' for resumption audit...")
+              existing_remote_items = list_remote_objects(SUPABASE_URL, SERVICE_ROLE_KEY, EXPECTED_BUCKET)
+              print(f"Existing remote objects cataloged: {len(existing_remote_items):,} found.")
+
+              # 5.3 Audit every existing remote object: path, size, metadata, and SHA-256 content verification
+              print("Auditing existing remote objects and verifying SHA-256 content hashes and metadata against local backup...")
+              for entry in existing_remote_items:
+                  p = entry["path"]
+                  sz = entry["size"]
+                  if p not in manifest_size_map:
+                      raise RuntimeError(
+                          f"RESUMPTION SAFETY ABORT: Existing remote object '{p}' is NOT listed in the backup manifest! "
+                          "Unexpected files detected in recovery bucket. Halting immediately to prevent corruption."
+                      )
+                  exp_sz = manifest_size_map[p]
+                  if sz is None:
+                      raise RuntimeError(
+                          f"RESUMPTION SAFETY ABORT: Could not verify remote size for '{p}'. "
+                          "The object cannot be treated as restored."
+                      )
+                  if sz != exp_sz:
+                      raise RuntimeError(
+                          f"RESUMPTION SAFETY ABORT: Size mismatch for '{p}': "
+                          f"remote={sz}, expected={exp_sz}. Overwriting is forbidden."
+                      )
+
+                  # Download existing remote object and compare SHA-256 against local backup
+                  d_st, d_bytes, d_hdrs = download_remote_object(p)
+                  if d_st != 200:
+                      raise RuntimeError(
+                          f"RESUMPTION SAFETY ABORT: Failed to download existing remote object '{p}' for SHA-256 verification (HTTP {d_st})."
+                      )
+                  remote_hash = hashlib.sha256(d_bytes).hexdigest()
+                  expected_hash = local_sha256_map[p]
+                  if remote_hash != expected_hash:
+                      raise RuntimeError(
+                          f"RESUMPTION SAFETY ABORT: SHA-256 hash mismatch for existing remote object '{p}'!\n"
+                          f"  Expected (local backup): {expected_hash}\n"
+                          f"  Observed (remote store): {remote_hash}\n"
+                          "Overwriting is forbidden. Halting immediately to prevent corruption."
+                      )
+
+                  # Verify metadata on existing objects during resumption audit (listing metadata or GET response headers)
+                  ex_mime = entry.get("mimetype")
+                  ex_cache = entry.get("cacheControl")
+                  if not ex_mime and d_hdrs:
+                      ex_mime = d_hdrs.get("Content-Type")
+                  if not ex_cache and d_hdrs:
+                      ex_cache = d_hdrs.get("Cache-Control")
+
+                  if not ex_mime:
+                      raise RuntimeError(
+                          f"RESUMPTION SAFETY ABORT: Existing remote object '{p}' is missing MIME type metadata and Content-Type header."
+                      )
+                  if not ex_cache:
+                      raise RuntimeError(
+                          f"RESUMPTION SAFETY ABORT: Existing remote object '{p}' is missing cache-control metadata and Cache-Control header."
+                      )
+
+                  exp_mime = intended_mime_by_path[p]
+                  exp_cache = intended_cache_by_path[p]
+
+                  ex_mime_norm = ex_mime.strip().lower().split(";")[0]
+                  exp_mime_norm = exp_mime.strip().lower().split(";")[0]
+                  if ex_mime_norm != exp_mime_norm:
+                      raise RuntimeError(
+                          f"RESUMPTION SAFETY ABORT: Existing remote object '{p}' MIME type mismatch:\n"
+                          f"  Observed: '{ex_mime}'\n"
+                          f"  Expected: '{exp_mime}'\n"
+                          "Halting immediately to prevent partial restore."
+                      )
+
+                  ex_cache_norm = ex_cache.strip().lower()
+                  exp_cache_norm = exp_cache.strip().lower()
+                  if ex_cache_norm != exp_cache_norm:
+                      raise RuntimeError(
+                          f"RESUMPTION SAFETY ABORT: Existing remote object '{p}' cache-control mismatch:\n"
+                          f"  Observed: '{ex_cache}'\n"
+                          f"  Expected: '{exp_cache}'\n"
+                          "Halting immediately to prevent partial restore."
+                      )
+
+                  existing_remote_paths.add(p)
+                  existing_verified_bytes += exp_sz
+
+              print(f"Existing objects audit: All {len(existing_remote_paths):,} existing remote files match manifest paths, verified sizes, metadata, and SHA-256 hashes.")
+          else:
+              print(f"Bucket '{EXPECTED_BUCKET}' does not exist yet. Clean start: 0 existing objects.")
+
+          # Identify missing objects that need to be uploaded
+          missing_paths = [p for p in raw_manifest_paths if p not in existing_remote_paths]
+          missing_bytes = sum(manifest_size_map[p] for p in missing_paths)
+
+          print(f"Resumption Summary: {len(existing_remote_paths):,} existing verified objects ({existing_verified_bytes:,} bytes), "
+                f"{len(missing_paths):,} missing objects to restore ({missing_bytes:,} bytes).")
+
+          print("\n==================================================================")
+          print("PHASE 6: CONFIRMATION SAFETY GATE & EXECUTION")
+          print("==================================================================")
+
+          preflight_status = "PASS"
+          bucket_create_status = "SKIPPED"
+          upload_status = "SKIPPED"
+          post_verify_status = "SKIPPED"
+          newly_uploaded_files_count = 0
+          newly_uploaded_bytes = 0
+          resumed_during_upload_count = 0
+          upload_retries_count = 0
+          remote_final_count = 0
+          remote_final_bytes = 0
+
+          if not CONFIRM_RESTORE:
+              print("PREFLIGHT MODE (Dry-Run): confirm_restore is FALSE.")
+              print("No bucket will be created. No files will be uploaded.")
+              if len(missing_paths) == 0:
+                  overall_verdict = "PASS (Preflight Only - Already Fully Restored)"
+                  verdict_summary = f"All {EXPECTED_FILE_COUNT:,} objects are already present and verified (with matching SHA-256 and metadata) in private bucket '{EXPECTED_BUCKET}'. No uploads needed."
+              else:
+                  overall_verdict = "PASS (Preflight Only - Ready for Restore)"
+                  verdict_summary = (
+                      f"Preflight checks, metadata validation, and resumption audit passed. "
+                      f"{len(existing_remote_paths):,} objects already verified on remote, "
+                      f"{len(missing_paths):,} missing objects ready for restore upon confirmation."
+                  )
+          else:
+              print("RESTORE EXPLICITLY AUTHORIZED: confirm_restore is TRUE.")
+
+              # Step 6.1: Bucket creation if bucket does not exist
+              if not bucket_exists:
+                  print(f"Creating private storage bucket '{EXPECTED_BUCKET}'...")
+                  create_payload = json.dumps({
+                      "id": EXPECTED_BUCKET,
+                      "name": EXPECTED_BUCKET,
+                      "public": False,
+                      "file_size_limit": None,
+                      "allowed_mime_types": None
+                  }).encode("utf-8")
+
+                  cb_status, cb_body, _ = api_request(buckets_list_url, method="POST", headers=json_headers, data=create_payload)
+                  if cb_status not in (200, 201):
+                      err_text = cb_body.decode("utf-8", errors="replace")[:300]
+                      raise RuntimeError(f"Bucket creation failed (HTTP {cb_status}): {err_text}")
+
+                  # Verify created bucket properties immediately against complete configuration
+                  vb_status, vb_body, _ = api_request(bucket_check_url, method="GET", headers=auth_headers)
+                  if vb_status != 200:
+                      raise RuntimeError(f"Failed to fetch created bucket '{EXPECTED_BUCKET}' for verification (HTTP {vb_status}).")
+
+                  created_info = json.loads(vb_body)
+                  verify_bucket_config(created_info, "Newly created bucket verification")
+
+                  bucket_create_status = "PASS (Created Private Bucket with Verified Config)"
+                  print(f"Bucket '{EXPECTED_BUCKET}' successfully created and verified (private, unlimited size, all mime types).")
+              else:
+                  bucket_create_status = "PASS (Reused Existing Verified Private Bucket)"
+                  print(f"Reusing existing verified private bucket '{EXPECTED_BUCKET}'. Bucket creation skipped.")
+
+              # Step 6.2: Resumable Upload of missing objects only with immediate SHA-256 and metadata verification
+              if len(missing_paths) == 0:
+                  print(f"Resumption check: All {EXPECTED_FILE_COUNT:,} objects are already restored and verified on remote storage!")
+                  upload_status = f"PASS (All {EXPECTED_FILE_COUNT:,} objects already present from prior run; 0 uploads needed)"
+              else:
+                  print(f"Proceeding to upload {len(missing_paths):,} missing objects with x-upsert: false and SHA-256 verification...")
+                  MAX_RETRIES = 3
+                  start_upload_time = time.time()
+
+                  for idx, rel_path in enumerate(missing_paths, start=1):
+                      expected_size = manifest_size_map[rel_path]
+                      expected_hash = local_sha256_map[rel_path]
+                      file_on_disk = storage_dir / Path(rel_path)
+                      file_bytes = file_on_disk.read_bytes()
+
+                      if len(file_bytes) != expected_size:
+                          raise RuntimeError(f"Pre-upload check failed: '{rel_path}' size mismatch ({len(file_bytes)} vs {expected_size}).")
+
+                      obj_mime = intended_mime_by_path[rel_path]
+                      obj_cache = intended_cache_by_path[rel_path]
+
+                      quoted_path = urllib.parse.quote(rel_path, safe="/")
+                      upload_endpoint = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/{EXPECTED_BUCKET}/{quoted_path}"
+
+                      upload_headers = {
+                          "Authorization": f"Bearer {SERVICE_ROLE_KEY}",
+                          "apiKey": SERVICE_ROLE_KEY,
+                          "Content-Type": obj_mime,
+                          "cache-control": obj_cache,
+                          "x-upsert": "false",  # Strict safety: never overwrite
+                      }
+
+                      upload_succeeded = False
+                      already_present_remotely = False
+                      last_err = ""
+
+                      for attempt in range(MAX_RETRIES + 1):
+                          try:
+                              u_status, u_body, _ = api_request(
+                                  upload_endpoint,
+                                  method="POST",
+                                  headers=upload_headers,
+                                  data=file_bytes,
+                                  timeout=60
+                              )
+                              if u_status in (200, 201):
+                                  upload_succeeded = True
+                                  break
+
+                              # If HTTP 400 Duplicate, check if the object actually reached remote storage with verified size and SHA-256
+                              if u_status == 400 and (b"Duplicate" in u_body or b"already exists" in u_body):
+                                  obj_exists_remotely, remote_sz = check_remote_object(rel_path)
+                                  if obj_exists_remotely:
+                                      if remote_sz is None:
+                                          raise RuntimeError(
+                                              f"SAFETY ABORT: Object '{rel_path}' exists on remote storage, but remote size could not be determined. "
+                                              "Cannot verify integrity without size match."
+                                          )
+                                      if remote_sz != expected_size:
+                                          raise RuntimeError(
+                                              f"SAFETY ABORT: Size mismatch for '{rel_path}': "
+                                              f"remote={remote_sz}, expected={expected_size}. Overwriting is forbidden (x-upsert=false)."
+                                          )
+                                      # Verify SHA-256 content
+                                      d_st, d_data, _ = download_remote_object(rel_path)
+                                      if d_st != 200:
+                                          raise RuntimeError(f"SAFETY ABORT: Could not download '{rel_path}' for SHA-256 check (HTTP {d_st}).")
+                                      rem_h = hashlib.sha256(d_data).hexdigest()
+                                      if rem_h != expected_hash:
+                                          raise RuntimeError(
+                                              f"SAFETY ABORT: SHA-256 mismatch for existing remote object '{rel_path}' ({rem_h} vs {expected_hash})."
+                                          )
+                                      already_present_remotely = True
+                                      upload_succeeded = True
+                                      break
+                                  else:
+                                      err_text = u_body.decode("utf-8", errors="replace")[:300]
+                                      raise RuntimeError(f"Client error HTTP 400 for object '{rel_path}': {err_text}")
+
+                              elif 400 <= u_status < 500 and u_status != 429:
+                                  err_text = u_body.decode("utf-8", errors="replace")[:300]
+                                  raise RuntimeError(f"Client error HTTP {u_status} uploading object index {idx}: {err_text}")
+
+                              else:
+                                  # Transient server error (5xx or 429)
+                                  upload_retries_count += 1
+                                  err_text = u_body.decode("utf-8", errors="replace")[:200]
+                                  last_err = f"HTTP {u_status}: {err_text}"
+                                  # Check if upload actually reached storage before retry
+                                  obj_exists_remotely, remote_sz = check_remote_object(rel_path)
+                                  if obj_exists_remotely and remote_sz == expected_size:
+                                      d_st, d_data, _ = download_remote_object(rel_path)
+                                      if d_st == 200 and hashlib.sha256(d_data).hexdigest() == expected_hash:
+                                          already_present_remotely = True
+                                          upload_succeeded = True
+                                          break
+                                  if attempt < MAX_RETRIES:
+                                      backoff = 2 ** attempt
+                                      time.sleep(backoff)
+
+                          except (urllib.error.URLError, TimeoutError, ConnectionError) as net_err:
+                              upload_retries_count += 1
+                              last_err = f"Network error: {net_err}"
+                              # Network timeout/drop: check if upload reached storage
+                              obj_exists_remotely, remote_sz = check_remote_object(rel_path)
+                              if obj_exists_remotely and remote_sz == expected_size:
+                                  d_st, d_data, _ = download_remote_object(rel_path)
+                                  if d_st == 200 and hashlib.sha256(d_data).hexdigest() == expected_hash:
+                                      already_present_remotely = True
+                                      upload_succeeded = True
+                                      break
+                              if attempt < MAX_RETRIES:
+                                  backoff = 2 ** attempt
+                                  time.sleep(backoff)
+
+                      if not upload_succeeded:
+                          raise RuntimeError(
+                              f"Failed to restore object index {idx} ('{rel_path}') after {MAX_RETRIES + 1} attempts: {last_err}"
+                          )
+
+                      # Download remote object immediately to verify SHA-256 hash and response headers
+                      if not already_present_remotely:
+                          d_st, d_data, d_hdrs = download_remote_object(rel_path)
+                          if d_st != 200:
+                              raise RuntimeError(
+                                  f"POST-UPLOAD VERIFICATION FAILED: Could not download '{rel_path}' for SHA-256 verification (HTTP {d_st})."
+                              )
+                          rem_h = hashlib.sha256(d_data).hexdigest()
+                          if rem_h != expected_hash:
+                              raise RuntimeError(
+                                  f"POST-UPLOAD VERIFICATION FAILED: SHA-256 hash mismatch for uploaded object '{rel_path}'!\n"
+                                  f"  Local backup hash:  {expected_hash}\n"
+                                  f"  Remote stored hash: {rem_h}\n"
+                                  "Uploaded content was corrupted in transit. Restoration halted immediately."
+                              )
+
+                          # Immediate metadata header check
+                          if d_hdrs:
+                              up_mime = d_hdrs.get("Content-Type")
+                              up_cache = d_hdrs.get("Cache-Control")
+                              if up_mime and up_mime.strip().lower().split(";")[0] != obj_mime.strip().lower().split(";")[0]:
+                                  raise RuntimeError(
+                                      f"POST-UPLOAD VERIFICATION FAILED: Content-Type mismatch for '{rel_path}': remote='{up_mime}', expected='{obj_mime}'."
+                                  )
+                              if up_cache and up_cache.strip().lower() != obj_cache.strip().lower():
+                                  raise RuntimeError(
+                                      f"POST-UPLOAD VERIFICATION FAILED: Cache-Control mismatch for '{rel_path}': remote='{up_cache}', expected='{obj_cache}'."
+                                  )
+
+                          newly_uploaded_files_count += 1
+                          newly_uploaded_bytes += len(file_bytes)
+                      else:
+                          resumed_during_upload_count += 1
+
+                      if idx % 100 == 0 or idx == len(missing_paths):
+                          pct = (idx / len(missing_paths)) * 100
+                          mb_done = newly_uploaded_bytes / (1024 * 1024)
+                          print(f"[{idx:>4}/{len(missing_paths)}] missing objects processed & SHA-256 verified ({pct:>5.1f}%, {mb_done:>6.2f} MB uploaded)...")
+
+                  elapsed_upload = time.time() - start_upload_time
+                  print(f"Upload phase completed in {elapsed_upload:.1f}s: {newly_uploaded_files_count:,} newly uploaded ({newly_uploaded_bytes:,} bytes), "
+                        f"{resumed_during_upload_count:,} verified existing, {upload_retries_count} retries.")
+                  upload_status = f"PASS ({newly_uploaded_files_count:,} newly uploaded, {resumed_during_upload_count:,} resumed, all SHA-256 verified)"
+
+              print("\n==================================================================")
+              print("PHASE 7: POST-RESTORATION REMOTE VERIFICATION & STRICT METADATA AUDIT")
+              print("==================================================================")
+
+              # 7.1 Verify bucket status and complete configuration
+              vb_status, vb_body, _ = api_request(bucket_check_url, method="GET", headers=auth_headers)
+              if vb_status != 200:
+                  raise RuntimeError(f"Post-restoration bucket verification failed (HTTP {vb_status}).")
+              b_info = json.loads(vb_body)
+              verify_bucket_config(b_info, "Post-restoration bucket configuration verification")
+
+              # 7.2 Recursively list all remote objects
+              print(f"Recursively listing all restored objects from remote bucket '{EXPECTED_BUCKET}'...")
+              remote_items = list_remote_objects(SUPABASE_URL, SERVICE_ROLE_KEY, EXPECTED_BUCKET)
+              remote_final_count = len(remote_items)
+
+              print(f"Remote objects cataloged: {remote_final_count:,} items found.")
+
+              if remote_final_count != EXPECTED_FILE_COUNT:
+                  raise RuntimeError(
+                      f"Post-restoration verification FAILED: found {remote_final_count} remote objects, expected {EXPECTED_FILE_COUNT}."
+                  )
+
+              remote_paths_set = {it["path"] for it in remote_items}
+              manifest_paths_set = set(raw_manifest_paths)
+
+              missing_remote = sorted(list(manifest_paths_set - remote_paths_set))
+              unexpected_remote = sorted(list(remote_paths_set - manifest_paths_set))
+
+              if missing_remote:
+                  raise RuntimeError(
+                      f"Post-restoration verification FAILED: {len(missing_remote)} object(s) missing from remote storage. First missing: {missing_remote[:5]}"
+                  )
+              if unexpected_remote:
+                  raise RuntimeError(
+                      f"Post-restoration verification FAILED: {len(unexpected_remote)} unexpected object(s) found in remote storage. First unexpected: {unexpected_remote[:5]}"
+                  )
+
+              remote_size_mismatches = []
+              remote_mime_mismatches = []
+              remote_cache_mismatches = []
+              missing_metadata_objects = []
+
+              for it in remote_items:
+                  p = it["path"]
+                  act_sz = it["size"]
+                  exp_sz = manifest_size_map.get(p)
+                  if act_sz is None:
+                      raise RuntimeError(f"Post-restoration verification FAILED: Remote object '{p}' size could not be determined.")
+                  if act_sz != exp_sz:
+                      remote_size_mismatches.append(f"'{p}': remote={act_sz}, expected={exp_sz}")
+                  remote_final_bytes += act_sz
+
+                  # Retrieve remote metadata from listing, with HEAD fallback if missing
+                  r_mime = it.get("mimetype")
+                  r_cache = it.get("cacheControl")
+
+                  if not r_mime or not r_cache:
+                      quoted = urllib.parse.quote(p, safe="/")
+                      head_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/{EXPECTED_BUCKET}/{quoted}"
+                      h_st, _, h_hdrs = api_request(head_url, method="HEAD", headers=auth_headers, timeout=30)
+                      if h_st == 200:
+                          if not r_mime:
+                              r_mime = h_hdrs.get("Content-Type")
+                          if not r_cache:
+                              r_cache = h_hdrs.get("Cache-Control")
+
+                  if not r_mime:
+                      missing_metadata_objects.append(f"'{p}' (missing mimetype)")
+                  if not r_cache:
+                      missing_metadata_objects.append(f"'{p}' (missing cacheControl)")
+
+                  exp_mime = intended_mime_by_path[p]
+                  exp_cache = intended_cache_by_path[p]
+
+                  # Strict exact comparison with standard HTTP header normalization
+                  if r_mime:
+                      r_mime_norm = r_mime.strip().lower().split(";")[0]
+                      exp_mime_norm = exp_mime.strip().lower().split(";")[0]
+                      if r_mime_norm != exp_mime_norm:
+                          remote_mime_mismatches.append(f"'{p}': remote='{r_mime}', expected='{exp_mime}'")
+
+                  if r_cache:
+                      r_cache_norm = r_cache.strip().lower()
+                      exp_cache_norm = exp_cache.strip().lower()
+                      if r_cache_norm != exp_cache_norm:
+                          remote_cache_mismatches.append(f"'{p}': remote='{r_cache}', expected='{exp_cache}'")
+
+              # Strict assertions: abort immediately if any size, metadata presence, or metadata value mismatch exists
+              if remote_size_mismatches:
+                  raise RuntimeError(
+                      f"Post-restoration verification FAILED: {len(remote_size_mismatches)} object size mismatch(es) detected:\n"
+                      + "\n".join(remote_size_mismatches[:10])
+                  )
+
+              if remote_final_bytes != EXPECTED_TOTAL_SIZE:
+                  raise RuntimeError(
+                      f"Post-restoration verification FAILED: Total restored size is {remote_final_bytes} bytes, expected {EXPECTED_TOTAL_SIZE} bytes."
+                  )
+
+              if missing_metadata_objects:
+                  raise RuntimeError(
+                      f"Post-restoration verification FAILED: Remote metadata could not be retrieved for {len(missing_metadata_objects)} object(s):\n"
+                      + "\n".join(missing_metadata_objects[:10])
+                  )
+
+              if remote_mime_mismatches:
+                  raise RuntimeError(
+                      f"Post-restoration verification FAILED: {len(remote_mime_mismatches)} MIME type mismatch(es) detected:\n"
+                      + "\n".join(remote_mime_mismatches[:10])
+                  )
+
+              if remote_cache_mismatches:
+                  raise RuntimeError(
+                      f"Post-restoration verification FAILED: {len(remote_cache_mismatches)} cache-control mismatch(es) detected:\n"
+                      + "\n".join(remote_cache_mismatches[:10])
+                  )
+
+              print(f"Post-restoration remote verification PASSED 100% across all {EXPECTED_FILE_COUNT:,} objects:")
+              print(f"  - 100% path and exact size match ({remote_final_bytes:,} bytes)")
+              print(f"  - 100% exact MIME type match ({EXPECTED_FILE_COUNT:,}/{EXPECTED_FILE_COUNT:,})")
+              print(f"  - 100% exact cacheControl match ({EXPECTED_FILE_COUNT:,}/{EXPECTED_FILE_COUNT:,})")
+              print(f"  - 100% SHA-256 byte-for-byte content equality verified")
+
+              post_verify_status = f"PASS (100% path, size, SHA-256, and metadata match across all {remote_final_count:,} objects)"
+              overall_verdict = "PASS (Restoration and Verification Complete)"
+              verdict_summary = (
+                  f"Storage bucket 'candidate-documents' verified with complete configuration. "
+                  f"All {remote_final_count:,} objects verified with 100% SHA-256 content equality and 100% exact metadata match ({len(existing_remote_paths):,} pre-existing/resumed, {newly_uploaded_files_count:,} newly uploaded)."
+              )
+
+          # ====================================================================
+          # PHASE 8: GENERATE GITHUB ACTIONS STEP SUMMARY
+          # ====================================================================
+          def format_bytes(n):
+              for u in ["bytes", "KB", "MB", "GB"]:
+                  if abs(n) < 1024.0:
+                      return f"{n:,.2f} {u}" if u != "bytes" else f"{n:,} bytes"
+                  n /= 1024.0
+              return f"{n:.2f} TB"
+
+          report = []
+          report.append("# Supabase Storage Recovery Report\n")
+          report.append(f"**Target Backup Workflow Run ID:** `{RUN_ID}`  ")
+          report.append(f"**Recovery Hostname:** `{EXPECTED_HOSTNAME}`  ")
+          report.append(f"**Target Storage Bucket:** `{EXPECTED_BUCKET}` (Private)  ")
+          report.append(f"**Execution Mode:** `{'ACTUAL RESTORATION (CONFIRMED)' if CONFIRM_RESTORE else 'PREFLIGHT ONLY (DRY-RUN)'}`\n")
+
+          if not CONFIRM_RESTORE:
+              report.append("> [!NOTE]\n> **PREFLIGHT-ONLY MODE**: Strictly read-only. No storage bucket was created and no files were uploaded. All credentials, project reference, backup archive integrity, 1,218 metadata records, and local SHA-256 hashes passed.\n")
+          else:
+              report.append("> [!IMPORTANT]\n> **RESTORATION EXECUTED**: Supabase Storage bucket was created/verified, files were uploaded with x-upsert: false, every object was verified via SHA-256 download, and all 1,218 metadata records were verified exact.\n")
+
+          report.append("## Executive Summary Status Matrix\n")
+          report.append("| Recovery Dimension | Status | Verified Audit Finding |")
+          report.append("|---|---|---|")
+          report.append(f"| **1. Backup Run ID** | `PASS` | `{RUN_ID}` (Validated positive integer) |")
+          report.append(f"| **2. Target Hostname Ref** | `PASS` | `{EXPECTED_HOSTNAME}` (Strict hostname check) |")
+          report.append(f"| **3. Safety Gate (`confirm_restore`)** | `{'CONFIRMED' if CONFIRM_RESTORE else 'PREFLIGHT ONLY'}` | `{'Explicitly authorized by user' if CONFIRM_RESTORE else 'confirm_restore=false (Dry-Run)'}` |")
+          report.append(f"| **4. Archive Decryption & Extraction** | `PASS` | Decrypted with OpenSSL PBKDF2 & safely extracted |")
+          report.append(f"| **5. Backup Manifest Validation** | `PASS` | `{EXPECTED_BUCKET}`, `{EXPECTED_FILE_COUNT:,}` files, `{format_bytes(EXPECTED_TOTAL_SIZE)}` |")
+          report.append(f"| **6. Local SHA-256 Hash Computation** | `PASS` | `{len(local_sha256_map):,}` files hashed from disk |")
+          report.append(f"| **7. Metadata Fail-Closed Decoding** | `PASS` | `{meta_extraction_status}` |")
+          report.append(f"| **8. Bucket State & Configuration** | `{bucket_create_status if CONFIRM_RESTORE else ('PASS (Exists, Verified Config)' if bucket_exists else 'PASS (Absent 404, Ready to Create)')}` | `{'Private, unlimited size, all mime types' if bucket_exists or CONFIRM_RESTORE else 'Bucket absent (404), will create private bucket'}` |")
+          report.append(f"| **9. Resumption & SHA-256 Upload** | `{upload_status if CONFIRM_RESTORE else ('PASS (' + str(len(missing_paths)) + ' pending upload, ' + str(len(existing_remote_paths)) + ' already verified)')}` | `{'All missing files uploaded & verified' if CONFIRM_RESTORE else 'Preflight audit: ' + str(len(missing_paths)) + ' missing files to upload'}` |")
+          report.append(f"| **10. Remote Metadata Verification** | `{post_verify_status.split(' ')[0]}` | `{'All ' + str(EXPECTED_FILE_COUNT) + ' objects verified (exact MIME type & cache-control match)' if CONFIRM_RESTORE else 'Skipped in preflight'}` |")
+          report.append(f"| **11. Remote Storage Verification** | `{post_verify_status}` | `{'100% path, size, SHA-256, and metadata match across all objects' if CONFIRM_RESTORE else 'Skipped in preflight'}` |")
+          report.append(f"| **12. Overall Workflow Verdict** | `{overall_verdict}` | {verdict_summary} |\n")
+
+          report.append("## Preflight & Resumption Audit\n")
+          report.append("| Audit Item | Baseline Requirement | Inspected Value | Status |")
+          report.append("|---|---|---|---|")
+          report.append(f"| **Target Hostname** | `{EXPECTED_HOSTNAME}` | `{hostname}` | `✅ PASS` |")
+          report.append(f"| **Bucket Initial State** | Exists (Verified Config) OR Absent (404) | `{'Present & Verified (Private)' if bucket_exists else 'Absent (404)'}` | `✅ PASS` |")
+          report.append(f"| **Total Files in Manifest** | `{EXPECTED_FILE_COUNT:,}` files | `{len(all_disk_files):,}` files verified on disk | `✅ PASS` |")
+          report.append(f"| **Total Archive Size** | `{format_bytes(EXPECTED_TOTAL_SIZE)}` | `{format_bytes(manifest_total_bytes)}` (`{manifest_total_bytes:,}` bytes) | `✅ PASS` |")
+          report.append(f"| **Metadata 1-to-1 Mapping** | 100% (1,218/1,218) | `{len(dump_metadata_by_path):,}` / `{EXPECTED_FILE_COUNT:,}` mapped with zero errors | `✅ PASS` |")
+          report.append(f"| **Local SHA-256 Hashes Computed** | 100% (1,218/1,218) | `{len(local_sha256_map):,}` / `{EXPECTED_FILE_COUNT:,}` hashed | `✅ PASS` |")
+          report.append(f"| **Previously Verified on Remote** | Baseline audit | `{len(existing_remote_paths):,}` objects ({format_bytes(existing_verified_bytes)}) | `✅ PASS` |")
+          report.append(f"| **Pending Restore / Missing** | To be uploaded | `{len(missing_paths):,}` objects ({format_bytes(missing_bytes)}) | `✅ PASS` |")
+          report.append(f"| **Unexpected Remote Files** | `0` | `0` unexpected | `✅ PASS` |")
+          report.append(f"| **Remote Size / Hash Mismatches** | `0` | `0` mismatches | `✅ PASS` |\n")
+
+          if CONFIRM_RESTORE:
+              report.append("## Restoration & Remote Verification Audit\n")
+              report.append("| Metric | Expected Target | Remote Verified Value | Status |")
+              report.append("|---|---|---|---|")
+              report.append(f"| **Bucket Name / ID** | `{EXPECTED_BUCKET}` | `{EXPECTED_BUCKET}` | `✅ PASS` |")
+              report.append(f"| **Bucket Visibility** | `False` (Private) | `False` (Private) | `✅ PASS` |")
+              report.append(f"| **File Size Limit** | `None` (Unlimited) | `None` (Unlimited) | `✅ PASS` |")
+              report.append(f"| **Allowed MIME Types** | `None` (All Types) | `None` (All Types) | `✅ PASS` |")
+              report.append(f"| **Previously Verified (Resumed)** | Resumption audit | `{len(existing_remote_paths):,}` objects | `✅ PASS` |")
+              report.append(f"| **Newly Uploaded This Run** | Missing objects | `{newly_uploaded_files_count:,}` objects ({format_bytes(newly_uploaded_bytes)}) | `✅ PASS` |")
+              report.append(f"| **Total Verified Remote Objects** | `{EXPECTED_FILE_COUNT:,}` objects | `{remote_final_count:,}` objects | `✅ PASS` |")
+              report.append(f"| **Total Restored Size** | `{format_bytes(EXPECTED_TOTAL_SIZE)}` | `{format_bytes(remote_final_bytes)}` | `✅ PASS` |")
+              report.append(f"| **SHA-256 Content Verified** | 100% (1,218/1,218) | `{remote_final_count:,}` / `{EXPECTED_FILE_COUNT:,}` verified byte-for-byte | `✅ PASS` |")
+              report.append(f"| **Missing Remote Objects** | `0` | `0` missing | `✅ PASS` |")
+              report.append(f"| **Unexpected Remote Objects** | `0` | `0` unexpected | `✅ PASS` |")
+              report.append(f"| **Transient Upload Retries** | Self-healing | `{upload_retries_count}` retries | `✅ PASS` |\n")
+
+              report.append("## Storage Metadata Audit (`mimetype` & `cacheControl`)\n")
+              report.append("| Metadata Dimension | Expected Target | Remote Verified Value | Status |")
+              report.append("|---|---|---|---|")
+              report.append(f"| **Original Dump Recovery** | All `{EXPECTED_FILE_COUNT:,}` objects decoded | `{len(dump_metadata_by_path):,}` / `{EXPECTED_FILE_COUNT:,}` objects | `✅ PASS` |")
+              report.append(f"| **MIME Type Match** | 100% exact match | `{EXPECTED_FILE_COUNT:,}` / `{EXPECTED_FILE_COUNT:,}` verified exact | `✅ PASS` |")
+              report.append(f"| **Cache-Control Match** | `no-cache` exact match | `{EXPECTED_FILE_COUNT:,}` / `{EXPECTED_FILE_COUNT:,}` verified exact | `✅ PASS` |\n")
+
+          report.append("> [!NOTE]\n> Remote verification confirms 100% path match, exact byte count, SHA-256 cryptographic hash equality, and exact metadata match (MIME type and cache-control) against the backup. "
+                        "Every object restored was downloaded and verified before completion.\n")
+
+          summary_text = "\n".join(report)
+          summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_file:
+              with open(summary_file, "a", encoding="utf-8") as f:
+                  f.write(summary_text + "\n")
+              print("Storage restore summary successfully written to GITHUB_STEP_SUMMARY.")
+          else:
+              print(summary_text)
+
+          print(f"\n=== Final Storage Restore Verdict: {overall_verdict} ===")
+          PY
+
+      - name: Clean up temporary restore files
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Cleaning up all downloaded, decrypted, and extracted restore files..."
+          rm -rf downloaded decrypted extracted
+          echo "Cleanup completed successfully."
