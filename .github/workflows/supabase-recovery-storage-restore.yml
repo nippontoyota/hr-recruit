@@ -219,8 +219,8 @@ jobs:
         env:
           INPUT_RUN_ID: ${{ inputs.run_id }}
           CONFIRM_RESTORE: ${{ inputs.confirm_restore }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RECOVERY_SUPABASE_URL: ${{ secrets.RECOVERY_SUPABASE_URL }}
+          RECOVERY_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.RECOVERY_SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
 
@@ -240,8 +240,8 @@ jobs:
 
           RUN_ID = os.environ.get("INPUT_RUN_ID", "43843597091").strip()
           CONFIRM_RESTORE = os.environ.get("CONFIRM_RESTORE", "false").strip().lower() == "true"
-          SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
-          SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+          SUPABASE_URL = os.environ.get("RECOVERY_SUPABASE_URL", "").strip()
+          SERVICE_ROLE_KEY = os.environ.get("RECOVERY_SUPABASE_SERVICE_ROLE_KEY", "").strip()
 
           EXPECTED_PROJECT_REF = "ozhaqdcgaormjrxyvhun"
           EXPECTED_HOSTNAME = "ozhaqdcgaormjrxyvhun.supabase.co"
@@ -258,41 +258,41 @@ jobs:
           print("PHASE 1: ENVIRONMENT & STRICT HOSTNAME PREFLIGHT")
           print("==================================================================")
 
-          # 1.1 Strict SUPABASE_URL validation
+          # 1.1 Strict RECOVERY_SUPABASE_URL validation
           if not SUPABASE_URL:
-              raise RuntimeError("SUPABASE_URL secret is not configured or empty.")
+              raise RuntimeError("RECOVERY_SUPABASE_URL secret is not configured or empty.")
 
           parsed_url = urllib.parse.urlparse(SUPABASE_URL)
           if parsed_url.scheme != "https":
-              raise RuntimeError(f"SUPABASE_URL must use secure HTTPS protocol, got '{parsed_url.scheme}'.")
+              raise RuntimeError(f"RECOVERY_SUPABASE_URL must use secure HTTPS protocol, got '{parsed_url.scheme}'.")
 
           hostname = (parsed_url.hostname or "").lower()
           if not hostname:
-              raise RuntimeError(f"Unable to parse hostname from SUPABASE_URL: '{SUPABASE_URL}'.")
+              raise RuntimeError(f"Unable to parse hostname from RECOVERY_SUPABASE_URL: '{SUPABASE_URL}'.")
 
           # Strict security checks on project ref and forbidden targets
           if FORBIDDEN_PROJECT_REF in hostname or FORBIDDEN_PROJECT_REF in SUPABASE_URL:
               raise RuntimeError(
-                  f"CRITICAL SECURITY GATE: SUPABASE_URL references the deleted project '{FORBIDDEN_PROJECT_REF}'. "
+                  f"CRITICAL SECURITY GATE: RECOVERY_SUPABASE_URL references the deleted project '{FORBIDDEN_PROJECT_REF}'. "
                   "Restoration to or connecting with the deleted project is strictly forbidden."
               )
 
           if hostname != EXPECTED_HOSTNAME:
               raise RuntimeError(
                   f"CRITICAL SECURITY GATE: Target hostname mismatch! "
-                  f"Expected exact hostname '{EXPECTED_HOSTNAME}', but SUPABASE_URL resolved to '{hostname}'."
+                  f"Expected exact hostname '{EXPECTED_HOSTNAME}', but RECOVERY_SUPABASE_URL resolved to '{hostname}'."
               )
 
           if parsed_url.port not in (None, 443):
-              raise RuntimeError(f"CRITICAL SECURITY GATE: Unexpected non-standard port in SUPABASE_URL: {parsed_url.port}")
+              raise RuntimeError(f"CRITICAL SECURITY GATE: Unexpected non-standard port in RECOVERY_SUPABASE_URL: {parsed_url.port}")
 
           print(f"Target recovery host strictly verified: '{EXPECTED_HOSTNAME}' (HTTPS).")
 
-          # 1.2 Verify SUPABASE_SERVICE_ROLE_KEY
+          # 1.2 Verify RECOVERY_SUPABASE_SERVICE_ROLE_KEY
           if not SERVICE_ROLE_KEY:
-              raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY secret is not configured or empty.")
+              raise RuntimeError("RECOVERY_SUPABASE_SERVICE_ROLE_KEY secret is not configured or empty.")
           if len(SERVICE_ROLE_KEY) < 20:
-              raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY appears invalid or truncated (length < 20).")
+              raise RuntimeError("RECOVERY_SUPABASE_SERVICE_ROLE_KEY appears invalid or truncated (length < 20).")
 
           print("Supabase service role authentication credentials verified.")
 
@@ -308,12 +308,10 @@ jobs:
                   raise
 
           auth_headers = {
-              "Authorization": f"Bearer {SERVICE_ROLE_KEY}",
-              "apiKey": SERVICE_ROLE_KEY,
+              "apikey": SERVICE_ROLE_KEY,
           }
           json_headers = {
-              "Authorization": f"Bearer {SERVICE_ROLE_KEY}",
-              "apiKey": SERVICE_ROLE_KEY,
+              "apikey": SERVICE_ROLE_KEY,
               "Content-Type": "application/json",
           }
 
@@ -657,7 +655,7 @@ jobs:
           if bl_status in (401, 403):
               raise RuntimeError(
                   f"SAFETY PREFLIGHT GATE FAILED: Authentication failure (HTTP {bl_status}) communicating with Supabase Storage API. "
-                  "Verify that SUPABASE_SERVICE_ROLE_KEY has administrative permissions."
+                  "Verify that RECOVERY_SUPABASE_SERVICE_ROLE_KEY has administrative permissions."
               )
           if bl_status != 200:
               err_text = bl_body.decode("utf-8", errors="replace")[:300]
@@ -687,8 +685,7 @@ jobs:
           def list_remote_objects(base_url, key, bucket, prefix=""):
               list_endpoint = f"{base_url.rstrip('/')}/storage/v1/object/list/{bucket}"
               headers = {
-                  "Authorization": f"Bearer {key}",
-                  "apiKey": key,
+                  "apikey": key,
                   "Content-Type": "application/json",
               }
               items = []
@@ -986,8 +983,7 @@ jobs:
                       upload_endpoint = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/{EXPECTED_BUCKET}/{quoted_path}"
 
                       upload_headers = {
-                          "Authorization": f"Bearer {SERVICE_ROLE_KEY}",
-                          "apiKey": SERVICE_ROLE_KEY,
+                          "apikey": SERVICE_ROLE_KEY,
                           "Content-Type": obj_mime,
                           "cache-control": obj_cache,
                           "x-upsert": "false",  # Strict safety: never overwrite
