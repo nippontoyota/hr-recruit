@@ -739,16 +739,21 @@ jobs:
                           child_pref = f"{prefix.rstrip('/')}/{n}/" if prefix else f"{n}/"
                           items.extend(list_remote_objects(base_url, key, bucket, child_pref))
                       else:
-                          full_p = f"{prefix.rstrip('/')}/{n}" if prefix else n
+                          if prefix and n.startswith(prefix.rstrip('/') + '/'):
+                              full_p = n
+                          else:
+                              full_p = f"{prefix.rstrip('/')}/{n}" if prefix else n
                           meta = entry.get("metadata") or {}
-                          sz = meta.get("size")
+                          sz = meta.get("size") if meta.get("size") is not None else meta.get("contentLength")
                           if sz is None:
-                              sz = meta.get("contentLength")
+                              sz = entry.get("size") if entry.get("size") is not None else entry.get("contentLength")
+                          mime = meta.get("mimetype") or meta.get("contentType") or entry.get("mimetype") or entry.get("contentType")
+                          cache = meta.get("cacheControl") or meta.get("cache_control") or entry.get("cacheControl") or entry.get("cache_control")
                           items.append({
                               "path": full_p,
                               "size": int(sz) if sz is not None else None,
-                              "mimetype": meta.get("mimetype"),
-                              "cacheControl": meta.get("cacheControl"),
+                              "mimetype": mime,
+                              "cacheControl": cache,
                           })
 
                   if len(entries) < page_size:
@@ -756,6 +761,136 @@ jobs:
                   offset += page_size
 
               return items
+
+          # Helper: strictly verify stored metadata Cache-Control (Rule A: exact normalized equality)
+          def verify_stored_cache_control(actual_stored, expected_dump):
+              if not actual_stored or not expected_dump:
+                  return False, f"Missing stored metadata or expected value: actual='{actual_stored}', expected='{expected_dump}'"
+              act_norm = actual_stored.strip().lower()
+              exp_norm = expected_dump.strip().lower()
+              if act_norm != exp_norm:
+                  return False, f"Stored metadata mismatch: actual='{actual_stored}', expected='{expected_dump}'"
+              return True, ""
+
+          # Helper: strictly verify HTTP Cache-Control response headers without substring matching (Rule B: transport security)
+          def verify_http_cache_control(actual_header, expected_dump_val, is_private_bucket=True):
+              if not actual_header or not expected_dump_val:
+                  return False, f"Missing header or expected value: actual='{actual_header}', expected='{expected_dump_val}'"
+              actual_tokens = {t.strip().lower() for t in actual_header.split(",") if t.strip()}
+              expected_tokens = {t.strip().lower() for t in expected_dump_val.split(",") if t.strip()}
+              if is_private_bucket:
+                  if "private" not in actual_tokens:
+                      return False, f"Missing mandatory 'private' directive on private bucket response: '{actual_header}'"
+                  if (actual_tokens - {"private"}) != (expected_tokens - {"private"}):
+                      return False, f"Directive mismatch: actual={actual_tokens}, expected={expected_tokens}"
+              else:
+                  if actual_tokens != expected_tokens:
+                      return False, f"Directive mismatch: actual={actual_tokens}, expected={expected_tokens}"
+              return True, ""
+
+          # Helper: parse object metadata from API JSON responses (checks root fields, nested metadata, and array wrappers)
+          def parse_object_info_payload(body_bytes):
+              if not body_bytes:
+                  return None
+              try:
+                  data = json.loads(body_bytes)
+              except Exception:
+                  return None
+
+              if isinstance(data, list):
+                  if not data:
+                      return None
+                  data = data[0]
+
+              if not isinstance(data, dict):
+                  return None
+
+              # Root-level fields (camelCase, snake_case, standard HTTP headers)
+              mime = data.get("mimetype") or data.get("contentType") or data.get("content_type")
+              cache = data.get("cacheControl") or data.get("cache_control")
+              sz = data.get("size") if data.get("size") is not None else data.get("contentLength")
+              if sz is None:
+                  sz = data.get("content_length")
+
+              # Nested metadata (dict or JSON string)
+              meta = data.get("metadata")
+              if isinstance(meta, str):
+                  try:
+                      meta = json.loads(meta)
+                  except Exception:
+                      meta = None
+
+              if isinstance(meta, dict):
+                  if not mime:
+                      mime = meta.get("mimetype") or meta.get("contentType") or meta.get("content_type")
+                  if not cache:
+                      cache = meta.get("cacheControl") or meta.get("cache_control")
+                  if sz is None:
+                      sz = meta.get("size") if meta.get("size") is not None else meta.get("contentLength")
+                      if sz is None:
+                          sz = meta.get("content_length")
+
+              try:
+                  int_sz = int(sz) if sz is not None else None
+              except (ValueError, TypeError):
+                  int_sz = None
+
+              return {
+                  "mimetype": str(mime).strip() if mime else None,
+                  "cacheControl": str(cache).strip() if cache else None,
+                  "size": int_sz,
+              }
+
+          # Helper: retrieve stored object metadata directly via Supabase Storage object info or listing API
+          def get_remote_object_metadata(path_str):
+              quoted = urllib.parse.quote(path_str, safe="/")
+              # 1. Try authenticated object info endpoint
+              info_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/info/authenticated/{EXPECTED_BUCKET}/{quoted}"
+              st, body, _ = api_request(info_url, method="GET", headers=auth_headers, timeout=30)
+              if st == 200:
+                  parsed = parse_object_info_payload(body)
+                  if parsed and (parsed["mimetype"] or parsed["cacheControl"]):
+                      return parsed
+
+              # 1b. Try standard object info endpoint
+              info_url_std = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/info/{EXPECTED_BUCKET}/{quoted}"
+              st, body, _ = api_request(info_url_std, method="GET", headers=auth_headers, timeout=30)
+              if st == 200:
+                  parsed = parse_object_info_payload(body)
+                  if parsed and (parsed["mimetype"] or parsed["cacheControl"]):
+                      return parsed
+
+              # 2. Fallback to listing API with prefix and full relative path match
+              posix_p = PurePosixPath(path_str)
+              parent_str = posix_p.parent.as_posix()
+              prefix = "" if parent_str == "." else parent_str
+              list_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/list/{EXPECTED_BUCKET}"
+              payload = json.dumps({
+                  "prefix": prefix,
+                  "search": posix_p.name,
+                  "limit": 100,
+                  "offset": 0,
+              }).encode("utf-8")
+              l_status, l_body, _ = api_request(list_url, method="POST", headers=json_headers, data=payload, timeout=30)
+              if l_status == 200:
+                  try:
+                      items = json.loads(l_body)
+                      if isinstance(items, list):
+                          for it in items:
+                              if not isinstance(it, dict) or it.get("id") is None:
+                                  continue
+                              item_name = str(it.get("name") or "").strip()
+                              if not item_name:
+                                  continue
+                              item_full_path = f"{prefix.rstrip('/')}/{item_name}" if prefix else item_name
+                              if item_name == path_str or item_full_path == path_str:
+                                  parsed = parse_object_info_payload(json.dumps(it).encode("utf-8"))
+                                  if parsed and (parsed["mimetype"] or parsed["cacheControl"]):
+                                      return parsed
+                  except Exception:
+                      pass
+
+              return None
 
           # Helper: check individual remote object existence and verified integer size (never accepts unknown size)
           def check_remote_object(path_str):
@@ -791,14 +926,16 @@ jobs:
                       items = json.loads(l_body)
                       if isinstance(items, list):
                           for it in items:
-                              if isinstance(it, dict) and it.get("name") == posix_p.name and it.get("id") is not None:
-                                  meta = it.get("metadata") or {}
-                                  sz = meta.get("size") if meta.get("size") is not None else meta.get("contentLength")
-                                  if sz is not None:
-                                      try:
-                                          return True, int(sz)
-                                      except (ValueError, TypeError):
-                                          pass
+                              if not isinstance(it, dict) or it.get("id") is None:
+                                  continue
+                              item_name = str(it.get("name") or "").strip()
+                              if not item_name:
+                                  continue
+                              item_full_path = f"{prefix.rstrip('/')}/{item_name}" if prefix else item_name
+                              if item_name == path_str or item_full_path == path_str:
+                                  parsed = parse_object_info_payload(json.dumps(it).encode("utf-8"))
+                                  if parsed and parsed["size"] is not None:
+                                      return True, parsed["size"]
                   except Exception:
                       pass
               return False, None
@@ -863,13 +1000,26 @@ jobs:
                           "Overwriting is forbidden. Halting immediately to prevent corruption."
                       )
 
-                  # Verify metadata on existing objects during resumption audit (listing metadata or GET response headers)
+                  # Verify metadata on existing objects during resumption audit (listing metadata, object info API, or GET response headers)
                   ex_mime = entry.get("mimetype")
                   ex_cache = entry.get("cacheControl")
+                  cache_source = "stored" if ex_cache else None
+
+                  if not ex_mime or not ex_cache:
+                      stored_meta = get_remote_object_metadata(p)
+                      if stored_meta:
+                          if not ex_mime:
+                              ex_mime = stored_meta.get("mimetype")
+                          if not ex_cache and stored_meta.get("cacheControl"):
+                              ex_cache = stored_meta.get("cacheControl")
+                              cache_source = "stored"
+
                   if not ex_mime and d_hdrs:
                       ex_mime = d_hdrs.get("Content-Type")
                   if not ex_cache and d_hdrs:
                       ex_cache = d_hdrs.get("Cache-Control")
+                      if ex_cache:
+                          cache_source = "http_header"
 
                   if not ex_mime:
                       raise RuntimeError(
@@ -893,14 +1043,30 @@ jobs:
                           "Halting immediately to prevent partial restore."
                       )
 
-                  ex_cache_norm = ex_cache.strip().lower()
-                  exp_cache_norm = exp_cache.strip().lower()
-                  if ex_cache_norm != exp_cache_norm:
+                  # Rule A (stored metadata: exact normalized equality) vs Rule B (HTTP headers: transport security)
+                  if cache_source == "stored":
+                      ok, err = verify_stored_cache_control(ex_cache, exp_cache)
+                      if not ok:
+                          raise RuntimeError(
+                              f"RESUMPTION SAFETY ABORT: Existing remote object '{p}' stored cacheControl mismatch:\n"
+                              f"  Observed: '{ex_cache}'\n"
+                              f"  Expected: '{exp_cache}'\n"
+                              f"  Error: {err}\n"
+                              "Halting immediately to prevent partial restore."
+                          )
+                  elif cache_source == "http_header":
+                      ok, err = verify_http_cache_control(ex_cache, exp_cache, is_private_bucket=True)
+                      if not ok:
+                          raise RuntimeError(
+                              f"RESUMPTION SAFETY ABORT: Existing remote object '{p}' HTTP Cache-Control header invalid:\n"
+                              f"  Observed: '{ex_cache}'\n"
+                              f"  Expected: '{exp_cache}'\n"
+                              f"  Validation error: {err}\n"
+                              "Halting immediately to prevent partial restore."
+                          )
+                  else:
                       raise RuntimeError(
-                          f"RESUMPTION SAFETY ABORT: Existing remote object '{p}' cache-control mismatch:\n"
-                          f"  Observed: '{ex_cache}'\n"
-                          f"  Expected: '{exp_cache}'\n"
-                          "Halting immediately to prevent partial restore."
+                          f"RESUMPTION SAFETY ABORT: Existing remote object '{p}' cacheControl source could not be determined."
                       )
 
                   existing_remote_paths.add(p)
@@ -1113,18 +1279,54 @@ jobs:
                                   "Uploaded content was corrupted in transit. Restoration halted immediately."
                               )
 
-                          # Immediate metadata header check
+                          # Immediate metadata verification (Stored metadata API + HTTP transport response headers)
+                          # 1. Stored metadata verification via Storage metadata API (Requirement 4)
+                          stored_meta = get_remote_object_metadata(rel_path)
+                          if not stored_meta:
+                              raise RuntimeError(
+                                  f"POST-UPLOAD VERIFICATION FAILED: Could not retrieve stored object metadata for '{rel_path}' via Storage info/listing API."
+                              )
+                          stored_mime = stored_meta.get("mimetype")
+                          stored_cache = stored_meta.get("cacheControl")
+                          stored_sz = stored_meta.get("size")
+
+                          if not stored_mime:
+                              raise RuntimeError(
+                                  f"POST-UPLOAD VERIFICATION FAILED: Stored metadata missing MIME type for '{rel_path}'."
+                              )
+                          if not stored_cache:
+                              raise RuntimeError(
+                                  f"POST-UPLOAD VERIFICATION FAILED: Stored metadata missing cacheControl for '{rel_path}'."
+                              )
+                          if stored_sz is not None and stored_sz != expected_size:
+                              raise RuntimeError(
+                                  f"POST-UPLOAD VERIFICATION FAILED: Stored size mismatch for '{rel_path}': stored={stored_sz}, expected={expected_size}."
+                              )
+
+                          if stored_mime.strip().lower().split(";")[0] != obj_mime.strip().lower().split(";")[0]:
+                              raise RuntimeError(
+                                  f"POST-UPLOAD VERIFICATION FAILED: Stored MIME mismatch for '{rel_path}': stored='{stored_mime}', expected='{obj_mime}'."
+                              )
+                          ok, err = verify_stored_cache_control(stored_cache, obj_cache)
+                          if not ok:
+                              raise RuntimeError(
+                                  f"POST-UPLOAD VERIFICATION FAILED: Stored Cache-Control mismatch for '{rel_path}': {err}."
+                              )
+
+                          # 2. HTTP response header check on downloaded content (Requirement 5)
                           if d_hdrs:
                               up_mime = d_hdrs.get("Content-Type")
                               up_cache = d_hdrs.get("Cache-Control")
                               if up_mime and up_mime.strip().lower().split(";")[0] != obj_mime.strip().lower().split(";")[0]:
                                   raise RuntimeError(
-                                      f"POST-UPLOAD VERIFICATION FAILED: Content-Type mismatch for '{rel_path}': remote='{up_mime}', expected='{obj_mime}'."
+                                      f"POST-UPLOAD VERIFICATION FAILED: Content-Type header mismatch for '{rel_path}': remote='{up_mime}', expected='{obj_mime}'."
                                   )
-                              if up_cache and up_cache.strip().lower() != obj_cache.strip().lower():
-                                  raise RuntimeError(
-                                      f"POST-UPLOAD VERIFICATION FAILED: Cache-Control mismatch for '{rel_path}': remote='{up_cache}', expected='{obj_cache}'."
-                                  )
+                              if up_cache:
+                                  ok, err = verify_http_cache_control(up_cache, obj_cache, is_private_bucket=True)
+                                  if not ok:
+                                      raise RuntimeError(
+                                          f"POST-UPLOAD VERIFICATION FAILED: Cache-Control response header invalid for '{rel_path}': {err}"
+                                      )
 
                           newly_uploaded_files_count += 1
                           newly_uploaded_bytes += len(file_bytes)
@@ -1194,9 +1396,19 @@ jobs:
                       remote_size_mismatches.append(f"'{p}': remote={act_sz}, expected={exp_sz}")
                   remote_final_bytes += act_sz
 
-                  # Retrieve remote metadata from listing, with HEAD fallback if missing
+                  # Retrieve remote metadata from listing, with info API and HEAD fallback if missing
                   r_mime = it.get("mimetype")
                   r_cache = it.get("cacheControl")
+                  r_cache_source = "stored" if r_cache else None
+
+                  if not r_mime or not r_cache:
+                      f_meta = get_remote_object_metadata(p)
+                      if f_meta:
+                          if not r_mime:
+                              r_mime = f_meta.get("mimetype")
+                          if not r_cache and f_meta.get("cacheControl"):
+                              r_cache = f_meta.get("cacheControl")
+                              r_cache_source = "stored"
 
                   if not r_mime or not r_cache:
                       quoted = urllib.parse.quote(p, safe="/")
@@ -1205,8 +1417,9 @@ jobs:
                       if h_st == 200:
                           if not r_mime:
                               r_mime = h_hdrs.get("Content-Type")
-                          if not r_cache:
+                          if not r_cache and h_hdrs.get("Cache-Control"):
                               r_cache = h_hdrs.get("Cache-Control")
+                              r_cache_source = "http_header"
 
                   if not r_mime:
                       missing_metadata_objects.append(f"'{p}' (missing mimetype)")
@@ -1224,10 +1437,24 @@ jobs:
                           remote_mime_mismatches.append(f"'{p}': remote='{r_mime}', expected='{exp_mime}'")
 
                   if r_cache:
-                      r_cache_norm = r_cache.strip().lower()
-                      exp_cache_norm = exp_cache.strip().lower()
-                      if r_cache_norm != exp_cache_norm:
-                          remote_cache_mismatches.append(f"'{p}': remote='{r_cache}', expected='{exp_cache}'")
+                      if r_cache_source == "stored":
+                          # Rule A: Stored metadata requires exact normalized equality
+                          ok, err = verify_stored_cache_control(r_cache, exp_cache)
+                          if not ok:
+                              remote_cache_mismatches.append(
+                                  f"'{p}': stored remote='{r_cache}', expected='{exp_cache}' ({err})"
+                              )
+                      elif r_cache_source == "http_header":
+                          # Rule B: HTTP transport headers verified with verify_http_cache_control()
+                          ok, err = verify_http_cache_control(r_cache, exp_cache, is_private_bucket=True)
+                          if not ok:
+                              remote_cache_mismatches.append(
+                                  f"'{p}': HTTP header='{r_cache}', expected='{exp_cache}' ({err})"
+                              )
+                      else:
+                          remote_cache_mismatches.append(
+                              f"'{p}': remote='{r_cache}', expected='{exp_cache}' (unknown cacheControl source)"
+                          )
 
               # Strict assertions: abort immediately if any size, metadata presence, or metadata value mismatch exists
               if remote_size_mismatches:
