@@ -95,9 +95,13 @@ export const scheduleEvaluation = async (
 
 export const generateEvaluationToken = async (
   evalId: string,
-  position?: string
+  position?: string,
+  regenerate?: boolean
 ): Promise<EvaluationToken> => {
-  const qs = position ? `?position=${encodeURIComponent(position)}` : '';
+  const params = new URLSearchParams();
+  if (position) params.append('position', position);
+  if (regenerate) params.append('regenerate', 'true');
+  const qs = params.toString() ? `?${params.toString()}` : '';
   const response = await request('POST', `/evaluations/${evalId}/token${qs}`);
   return response.data;
 };

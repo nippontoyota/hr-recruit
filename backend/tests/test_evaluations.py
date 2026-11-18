@@ -454,4 +454,89 @@ def test_questions_ignore_unknown_stored_position_until_designation_selected():
         app.dependency_overrides.clear()
 
 
+def test_generate_evaluation_token_regenerate_inactivates_old_token():
+    from app.api.v1.evaluations import generate_evaluation_token
+    from app.core.positions import POS_GEM
+
+    eval_id = uuid4()
+    candidate_id = uuid4()
+    evaluation = Evaluation(
+        id=eval_id,
+        candidate_id=candidate_id,
+        type=EvaluationType.TECHNICAL_TEST,
+        status=InterviewStatus.SCHEDULED,
+    )
+    candidate = Candidate(
+        id=candidate_id,
+        department="Sales",
+        position_applied_for=POS_GEM,
+        experience="Fresher",
+    )
+
+    old_token = EvaluationToken(
+        id=uuid4(),
+        evaluation_id=eval_id,
+        token="old-token-abc",
+        is_used=False,
+        expires_at=datetime.now(UTC) + timedelta(days=7),
+    )
+
+    db = MagicMock()
+    db.get.side_effect = lambda model, value: evaluation if model is Evaluation else candidate
+    scalars_mock = MagicMock()
+    scalars_mock.all.return_value = [old_token]
+    db.scalars.return_value = scalars_mock
+
+    user = _admin_user()
+
+    with patch("app.api.v1.evaluations.get_candidate_for_user", return_value=candidate), patch(
+        "app.api.v1.evaluations.assemble_for_candidate", return_value=[]
+    ), patch(
+        "app.api.v1.evaluations.to_test_data", return_value={"questions": [], "answers": {}}
+    ), patch(
+        "app.api.v1.evaluations.generate_secure_token", return_value="new-token-xyz"
+    ):
+        new_token = generate_evaluation_token(
+            eval_id=eval_id,
+            position=POS_GEM,
+            regenerate=True,
+            db=db,
+            current_user=user,
+        )
+
+    assert old_token.is_used is True
+    assert old_token.expires_at <= datetime.now(UTC)
+    assert new_token.token == "new-token-xyz"
+    assert new_token.is_used is False
+    assert db.add.call_count >= 2
+
+
+def test_generate_evaluation_token_regenerate_blocked_when_evaluated():
+    from app.api.v1.evaluations import generate_evaluation_token
+
+    eval_id = uuid4()
+    candidate_id = uuid4()
+    evaluation = Evaluation(
+        id=eval_id,
+        candidate_id=candidate_id,
+        type=EvaluationType.TECHNICAL_TEST,
+        status=InterviewStatus.EVALUATED,
+    )
+    db = MagicMock()
+    db.get.return_value = evaluation
+    user = _admin_user()
+
+    with pytest.raises(HTTPException) as exc_info:
+        generate_evaluation_token(
+            eval_id=eval_id,
+            position="Sales Consultant",
+            regenerate=True,
+            db=db,
+            current_user=user,
+        )
+    assert exc_info.value.status_code == 400
+    assert "already evaluated" in exc_info.value.detail
+
+
+
 

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Link, FileDown, FileText, CheckCircle, Loader2 } from 'lucide-react';
+import { Link, FileDown, FileText, CheckCircle, Loader2, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, LoadingSpinner, EmptyState, Select } from '../ui';
+import { Button, LoadingSpinner, EmptyState, Select, Modal } from '../ui';
 import { InterviewFormCard } from './InterviewFormCard';
 import {
   getCandidateEvaluations,
@@ -58,6 +58,9 @@ export function EvaluationStageWidget({
     catalogPosition(candidate.department, candidate.position_applied_for) || candidate.position_applied_for || ''
   );
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [regeneratingLinkId, setRegeneratingLinkId] = useState<string | null>(null);
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
+  const [regenerateTargetEv, setRegenerateTargetEv] = useState<Evaluation | null>(null);
   const [waShareEv, setWaShareEv] = useState<Evaluation | null>(null);
   const [waShareLink, setWaShareLink] = useState('');
   const [waSending, setWaSending] = useState(false);
@@ -196,6 +199,40 @@ export function EvaluationStageWidget({
       toast.error('Failed to generate secure link');
     } finally {
       setGeneratingLinkId(null);
+    }
+  };
+
+  const handleOpenRegenerateModal = (ev: Evaluation) => {
+    if (!requireDesignation()) return;
+    setRegenerateTargetEv(ev);
+    setShowRegenerateModal(true);
+  };
+
+  const handleConfirmRegenerate = async () => {
+    if (!regenerateTargetEv || regeneratingLinkId) return;
+    setRegeneratingLinkId(regenerateTargetEv.id);
+    try {
+      const tokenData = await generateEvaluationToken(regenerateTargetEv.id, designation, true);
+      const path = regenerateTargetEv.type === 'TECHNICAL_TEST' ? 'test' : 'eval';
+      const url = `${window.location.origin}/${path}/${tokenData.token}`;
+      const copiedOk = await copyTextToClipboard(url);
+      if (copiedOk) {
+        toast.success('New test link regenerated and copied to clipboard!');
+        setCopiedId(regenerateTargetEv.id);
+        setTimeout(() => setCopiedId(null), 2000);
+      } else {
+        toast.success('New test link regenerated successfully!');
+      }
+      if (waShareEv?.id === regenerateTargetEv.id) {
+        setWaShareLink(url);
+      }
+      setShowRegenerateModal(false);
+      setRegenerateTargetEv(null);
+    } catch (err) {
+      console.error(err);
+      toast.error(extractError(err, 'Failed to regenerate test link'));
+    } finally {
+      setRegeneratingLinkId(null);
     }
   };
 
@@ -350,6 +387,8 @@ export function EvaluationStageWidget({
                     handleCopyLink={handleCopyLink}
                     copiedId={copiedId}
                     generatingLinkId={generatingLinkId}
+                    handleOpenRegenerateModal={handleOpenRegenerateModal}
+                    regeneratingLinkId={regeneratingLinkId}
                     isReadOnly={isReadOnly}
                   />
                 </motion.div>
@@ -387,12 +426,54 @@ export function EvaluationStageWidget({
         onOpenWhatsApp={openTechnicalTestWhatsApp}
         doubleTickLoading={waSending}
       />
+
+      <Modal
+        isOpen={showRegenerateModal}
+        onClose={() => {
+          if (!regeneratingLinkId) {
+            setShowRegenerateModal(false);
+            setRegenerateTargetEv(null);
+          }
+        }}
+        title="Regenerate Technical Test Link?"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-foreground">
+            Regenerating will <strong className="text-destructive font-semibold">permanently invalidate</strong> any existing test link for <span className="font-semibold">{candidate.full_name}</span>.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            If the candidate is currently taking the test, their active session will end and they will need to start over using the new link.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!!regeneratingLinkId}
+              onClick={() => {
+                setShowRegenerateModal(false);
+                setRegenerateTargetEv(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              isLoading={!!regeneratingLinkId}
+              onClick={() => void handleConfirmRegenerate()}
+            >
+              Yes, Regenerate Link
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
 
-function TechnicalTestPaperWidget({ ev, candidate, designation, onDesignationChange, technicalQuestions, loadingQuestions, handleInstantWhatsAppShare, handleCopyLink, copiedId, generatingLinkId, isReadOnly }: any) {
+function TechnicalTestPaperWidget({ ev, candidate, designation, onDesignationChange, technicalQuestions, loadingQuestions, handleInstantWhatsAppShare, handleCopyLink, copiedId, generatingLinkId, handleOpenRegenerateModal, regeneratingLinkId, isReadOnly }: any) {
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = usePrint({
     contentRef: printRef,
@@ -444,8 +525,8 @@ function TechnicalTestPaperWidget({ ev, candidate, designation, onDesignationCha
               <button
                 type="button"
                 onClick={() => handleCopyLink(ev.id, true)}
-                disabled={generatingLinkId === ev.id}
-                className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-foreground bg-background border border-border hover:bg-muted rounded-sm shadow-sm transition-colors whitespace-nowrap ${generatingLinkId === ev.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={generatingLinkId === ev.id || regeneratingLinkId === ev.id}
+                className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-foreground bg-background border border-border hover:bg-muted rounded-sm shadow-sm transition-colors whitespace-nowrap ${(generatingLinkId === ev.id || regeneratingLinkId === ev.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {generatingLinkId === ev.id ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -458,8 +539,18 @@ function TechnicalTestPaperWidget({ ev, candidate, designation, onDesignationCha
               </button>
               <button
                 type="button"
+                onClick={() => handleOpenRegenerateModal(ev)}
+                disabled={generatingLinkId === ev.id || regeneratingLinkId === ev.id}
+                className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-sm shadow-sm transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${regeneratingLinkId === ev.id ? 'animate-spin' : ''}`} />
+                {regeneratingLinkId === ev.id ? 'Regenerating...' : 'Regenerate Link'}
+              </button>
+              <button
+                type="button"
                 onClick={() => handleInstantWhatsAppShare(ev)}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded-sm shadow-md transition-colors whitespace-nowrap"
+                disabled={generatingLinkId === ev.id || regeneratingLinkId === ev.id}
+                className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-[#075E54] hover:bg-[#064c44] rounded-sm shadow-md transition-colors whitespace-nowrap disabled:opacity-50"
               >
                 <img src={whatsappLogo} alt="WhatsApp" className="w-3.5 h-3.5 object-contain" /> Send Link
               </button>
