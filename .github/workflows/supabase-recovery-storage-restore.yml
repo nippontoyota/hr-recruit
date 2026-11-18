@@ -633,7 +633,7 @@ jobs:
                       f"expected None (NULL / all types allowed), got {amt}."
                   )
 
-          # 4.1 Strict specific bucket check (require 200 or 404, fail on all other statuses)
+          # 4.1 Strict specific bucket check (require 200, 404, or 400 with NoSuchBucket)
           bucket_check_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/bucket/{EXPECTED_BUCKET}"
           b_status, b_body, _ = api_request(bucket_check_url, method="GET", headers=auth_headers)
 
@@ -641,10 +641,30 @@ jobs:
               bucket_exists = True
           elif b_status == 404:
               bucket_exists = False
+          elif b_status == 400:
+              # Supabase Storage API returns HTTP 400 with JSON payload when bucket does not exist
+              is_no_such_bucket = False
+              try:
+                  b_json = json.loads(b_body)
+                  if isinstance(b_json, dict):
+                      code_val = b_json.get("code")
+                      status_code_val = str(b_json.get("statusCode"))
+                      if code_val == "NoSuchBucket" and status_code_val == "404":
+                          is_no_such_bucket = True
+              except Exception:
+                  pass
+
+              if is_no_such_bucket:
+                  bucket_exists = False
+              else:
+                  err_text = b_body.decode("utf-8", errors="replace")[:300]
+                  raise RuntimeError(
+                      f"STRICT BUCKET CHECK FAILED: HTTP 400 querying bucket '{EXPECTED_BUCKET}' does not match NoSuchBucket: {err_text}"
+                  )
           else:
               err_text = b_body.decode("utf-8", errors="replace")[:300]
               raise RuntimeError(
-                  f"STRICT BUCKET CHECK FAILED: Expected HTTP 200 or 404 when querying bucket '{EXPECTED_BUCKET}', "
+                  f"STRICT BUCKET CHECK FAILED: Expected HTTP 200, 404, or 400 (NoSuchBucket) when querying bucket '{EXPECTED_BUCKET}', "
                   f"but received unexpected HTTP {b_status}: {err_text}"
               )
 
@@ -676,7 +696,7 @@ jobs:
               )
           if not bucket_exists and in_list:
               raise RuntimeError(
-                  f"Inconsistent bucket state: GET /bucket/{EXPECTED_BUCKET} returned HTTP 404, but bucket was found in bucket list."
+                  f"Inconsistent bucket state: GET /bucket/{EXPECTED_BUCKET} reported bucket absent, but bucket was found in bucket list."
               )
 
           print(f"Bucket existence status strictly verified: exists={bucket_exists}")
