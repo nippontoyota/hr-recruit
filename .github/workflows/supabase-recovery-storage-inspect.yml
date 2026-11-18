@@ -1,0 +1,1381 @@
+name: Supabase Recovery Storage Metadata Inspection
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Original successful backup workflow run ID"
+        required: true
+        default: "43843597091"
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  storage-inspect:
+    name: Inspect Storage Metadata from Backup
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate run ID input
+        shell: bash
+        env:
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$INPUT_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Invalid run_id: '$INPUT_RUN_ID'. Must be a strictly positive integer."
+            exit 1
+          fi
+
+          echo "=================================================================="
+          echo "SUPABASE RECOVERY STORAGE METADATA INSPECTION"
+          echo "Target backup workflow run ID: $INPUT_RUN_ID"
+          echo "Mode: STRICTLY READ-ONLY (Zero Supabase connections, zero writes)"
+          echo "=================================================================="
+
+      - name: Download original backup artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: supabase-backup-${{ inputs.run_id }}
+          path: downloaded
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id }}
+
+      - name: Install PostgreSQL 17 client and OpenSSL
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates gnupg openssl
+
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /tmp/ACCC4CF8.asc
+          sudo gpg --no-tty --batch --yes --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg /tmp/ACCC4CF8.asc
+          rm -f /tmp/ACCC4CF8.asc
+
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo "$VERSION_CODENAME")-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          pg_restore --version
+          openssl version
+
+      - name: Decrypt, extract and validate backup archive
+        shell: bash
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BACKUP_ENCRYPTION_KEY:-}" ]; then
+            echo "::error::BACKUP_ENCRYPTION_KEY secret is not configured or empty."
+            exit 1
+          fi
+
+          mapfile -t encrypted_files < <(
+            find downloaded -type f -name "*.enc"
+          )
+
+          if [ "${#encrypted_files[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one encrypted backup file (.enc) in downloaded artifact, found ${#encrypted_files[@]}."
+            exit 1
+          fi
+
+          mkdir -p extracted decrypted
+
+          echo "Decrypting backup archive with OpenSSL AES-256-CBC PBKDF2..."
+          openssl enc -d -aes-256-cbc -pbkdf2 -salt \
+            -in "${encrypted_files[0]}" \
+            -out decrypted/backup.tar.gz \
+            -pass env:BACKUP_ENCRYPTION_KEY
+
+          echo "Decryption completed successfully."
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path, PurePosixPath
+          import shutil
+          import sys
+          import tarfile
+
+          archive = Path("decrypted/backup.tar.gz")
+          destination = Path("extracted").resolve()
+
+          # Safe tar extraction with path bounds, normalization, ancestor-conflict, and duplicate destination checking
+          with tarfile.open(archive, "r:gz") as tar:
+              seen_destinations = set()
+              file_targets = set()
+              dir_targets = set()
+              validated_members = []
+
+              # Pass 1: Pre-validation of all archive members before extracting anything
+              for member in tar.getmembers():
+                  raw_name = member.name
+                  if not raw_name or not raw_name.strip():
+                      raise RuntimeError("Archive entry with empty name detected.")
+
+                  if not (member.isfile() or member.isdir()):
+                      raise RuntimeError(f"Unsupported archive entry (symlink/device): {raw_name}")
+
+                  posix_path = PurePosixPath(raw_name)
+
+                  if posix_path.is_absolute() or raw_name.startswith("/"):
+                      raise RuntimeError(f"Absolute archive path rejected: {raw_name}")
+
+                  if ".." in posix_path.parts:
+                      raise RuntimeError(f"Path traversal '..' rejected: {raw_name}")
+
+                  if "." in posix_path.parts:
+                      raise RuntimeError(f"Ambiguous '.' component rejected: {raw_name}")
+
+                  if "//" in raw_name:
+                      raise RuntimeError(f"Repeated path separators rejected: {raw_name}")
+
+                  norm_posix = posix_path.as_posix()
+                  # Strict check: the raw member name must match normalized form (ignoring trailing slash on dirs)
+                  if norm_posix != raw_name and norm_posix != raw_name.rstrip("/"):
+                      raise RuntimeError(f"Ambiguous or non-normalized archive path rejected: '{raw_name}' != '{norm_posix}'")
+
+                  target = (destination / Path(*posix_path.parts)).resolve()
+                  if target != destination and destination not in target.parents:
+                      raise RuntimeError(f"Path traversal escape detected: {raw_name}")
+
+                  if target in seen_destinations:
+                      raise RuntimeError(f"Duplicate normalized destination detected in archive: {raw_name} -> {target}")
+
+                  # Type-specific conflict detection
+                  if member.isdir():
+                      if target in file_targets:
+                          raise RuntimeError(f"Archive entry conflict: directory '{raw_name}' conflicts with existing file target '{target}'")
+                      dir_targets.add(target)
+                  else:
+                      if target in dir_targets:
+                          raise RuntimeError(f"Archive entry conflict: regular file '{raw_name}' conflicts with existing directory target '{target}'")
+                      file_targets.add(target)
+
+                  seen_destinations.add(target)
+                  validated_members.append((member, target))
+
+              # Check for file/directory ancestor conflicts:
+              # No regular file target can be an ancestor directory of any other target
+              for member, target in validated_members:
+                  for parent in target.parents:
+                      if parent == destination:
+                          break
+                      if parent in file_targets:
+                          raise RuntimeError(
+                              f"Archive entry ancestor conflict: regular file target '{parent}' is an ancestor directory of '{member.name}' ({target})"
+                          )
+
+              # Pass 2: Extract verified members to validated destination targets
+              for member, target in validated_members:
+                  if member.isdir():
+                      target.mkdir(parents=True, exist_ok=True)
+                  else:
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      source = tar.extractfile(member)
+                      if source is None:
+                          raise RuntimeError(f"Cannot read archive member: {member.name}")
+                      with source, target.open("wb") as output:
+                          shutil.copyfileobj(source, output)
+
+          print("Archive pre-validated and safely extracted with strict normalization, ancestor-conflict checks, and bounds verification.")
+          PY
+
+          # Immediately remove decrypted tarball to minimize plaintext disk footprint
+          rm -f decrypted/backup.tar.gz
+
+      - name: Inspect storage configuration and metadata offline
+        shell: bash
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import collections
+          import json
+          import mimetypes
+          import os
+          from pathlib import Path, PurePosixPath
+          import re
+          import subprocess
+          import sys
+
+          RUN_ID = os.environ.get("RUN_ID", "43843597091")
+          EXPECTED_BUCKET = "candidate-documents"
+          EXPECTED_FILE_COUNT = 1218
+          EXPECTED_TOTAL_SIZE = 583477130
+
+          dump_path = Path("extracted/database.dump")
+          manifest_path = Path("extracted/manifest.json")
+          storage_dir = Path("extracted/storage")
+
+          if not dump_path.is_file():
+              raise RuntimeError("database.dump is missing from the extracted backup archive.")
+          if not manifest_path.is_file():
+              raise RuntimeError("manifest.json is missing from the extracted backup archive.")
+          if not storage_dir.is_dir():
+              raise RuntimeError("storage directory is missing from the extracted backup archive.")
+
+          print("Verified backup components: database.dump, manifest.json, and storage/ directory are present.")
+
+          # ====================================================================
+          # 1. Archive Table of Contents (TOC) Inspection via pg_restore -l
+          # ====================================================================
+          toc_proc = subprocess.run(
+              ["pg_restore", "-l", str(dump_path)],
+              capture_output=True,
+              text=True
+          )
+          if toc_proc.returncode != 0:
+              raise RuntimeError(f"pg_restore -l failed to inspect database.dump: {toc_proc.stderr.strip()}")
+
+          toc_lines = toc_proc.stdout.splitlines()
+          print(f"Archive TOC read successfully: {len(toc_lines)} lines cataloged.")
+
+          storage_toc_entries = []
+          has_storage_schema = False
+          has_buckets_table = False
+          has_buckets_data = False
+          has_objects_table = False
+          has_objects_data = False
+
+          for line in toc_lines:
+              clean = line.strip()
+              if not clean or clean.startswith(";"):
+                  continue
+              parts = clean.split(";", 1)
+              if len(parts) != 2:
+                  continue
+              entry_id = parts[0].strip()
+              fields = parts[1].strip().split()
+              if len(fields) < 3:
+                  continue
+
+              # Handle multi-word descriptions like "TABLE DATA" and "DEFAULT PRIVILEGES"
+              if fields[2] == "TABLE" and len(fields) >= 4 and fields[3] == "DATA":
+                  desc = "TABLE DATA"
+                  schema = fields[4] if len(fields) > 4 else ""
+                  name = fields[5] if len(fields) > 5 else ""
+                  owner = fields[6] if len(fields) > 6 else ""
+              elif fields[2] == "DEFAULT" and len(fields) >= 4 and fields[3] == "PRIVILEGES":
+                  desc = "DEFAULT PRIVILEGES"
+                  schema = fields[4] if len(fields) > 4 else ""
+                  name = fields[5] if len(fields) > 5 else ""
+                  owner = fields[6] if len(fields) > 6 else ""
+              else:
+                  desc = fields[2]
+                  schema = fields[3] if len(fields) > 3 else ""
+                  name = fields[4] if len(fields) > 4 else ""
+                  owner = fields[5] if len(fields) > 5 else ""
+
+              if schema == "storage" or name == "storage" or (desc == "SCHEMA" and name == "storage"):
+                  storage_toc_entries.append({
+                      "id": entry_id,
+                      "desc": desc,
+                      "schema": schema,
+                      "name": name,
+                      "owner": owner
+                  })
+
+              if desc == "SCHEMA" and (name == "storage" or schema == "storage"):
+                  has_storage_schema = True
+              if schema == "storage" and name == "buckets":
+                  if desc == "TABLE":
+                      has_buckets_table = True
+                  elif desc == "TABLE DATA":
+                      has_buckets_data = True
+              if schema == "storage" and name == "objects":
+                  if desc == "TABLE":
+                      has_objects_table = True
+                  elif desc == "TABLE DATA":
+                      has_objects_data = True
+
+          buckets_toc_data_count = sum(
+              1 for e in storage_toc_entries
+              if e["schema"] == "storage" and e["name"] == "buckets" and e["desc"] == "TABLE DATA"
+          )
+          objects_toc_data_count = sum(
+              1 for e in storage_toc_entries
+              if e["schema"] == "storage" and e["name"] == "objects" and e["desc"] == "TABLE DATA"
+          )
+          has_buckets_data = (buckets_toc_data_count > 0)
+          has_objects_data = (objects_toc_data_count > 0)
+
+          print(f"Storage TOC entries identified ({len(storage_toc_entries)}):")
+          print(f"  - storage schema defined: {has_storage_schema}")
+          print(f"  - storage.buckets table: {has_buckets_table}, data blocks in TOC: {buckets_toc_data_count}")
+          print(f"  - storage.objects table: {has_objects_table}, data blocks in TOC: {objects_toc_data_count}")
+
+          # ====================================================================
+          # 2. Extract DDL for storage schema (Schema-Only, No database involved)
+          # ====================================================================
+          storage_ddl_proc = subprocess.run(
+              ["pg_restore", "-s", "-n", "storage", "-f", "-", str(dump_path)],
+              capture_output=True,
+              text=True
+          )
+          if storage_ddl_proc.returncode != 0:
+              raise RuntimeError(f"pg_restore -s -n storage failed with error: {storage_ddl_proc.stderr.strip()}")
+          storage_ddl = storage_ddl_proc.stdout
+
+          # Parse column definitions for storage.buckets
+          buckets_columns = []
+          buckets_ddl_match = re.search(r"CREATE TABLE (?:storage\.)?buckets\s*\((.*?)\);", storage_ddl, re.DOTALL | re.IGNORECASE)
+          if buckets_ddl_match:
+              for line in buckets_ddl_match.group(1).splitlines():
+                  line = line.strip().rstrip(",")
+                  if line and not line.startswith("--") and not line.upper().startswith("CONSTRAINT"):
+                      col_parts = line.split()
+                      if len(col_parts) >= 2:
+                          buckets_columns.append(col_parts[0].strip('"'))
+
+          # Parse column definitions for storage.objects
+          objects_columns = []
+          objects_ddl_match = re.search(r"CREATE TABLE (?:storage\.)?objects\s*\((.*?)\);", storage_ddl, re.DOTALL | re.IGNORECASE)
+          if objects_ddl_match:
+              for line in objects_ddl_match.group(1).splitlines():
+                  line = line.strip().rstrip(",")
+                  if line and not line.startswith("--") and not line.upper().startswith("CONSTRAINT"):
+                      col_parts = line.split()
+                      if len(col_parts) >= 2:
+                          objects_columns.append(col_parts[0].strip('"'))
+
+          print(f"DDL column discovery:")
+          print(f"  - storage.buckets columns ({len(buckets_columns)}): {', '.join(buckets_columns) if buckets_columns else 'None found in DDL'}")
+          print(f"  - storage.objects columns ({len(objects_columns)}): {', '.join(objects_columns) if objects_columns else 'None found in DDL'}")
+
+          # ====================================================================
+          # 3. Extract and Parse Data for storage.buckets & storage.objects
+          # ====================================================================
+          storage_data_proc = subprocess.run(
+              ["pg_restore", "-a", "-n", "storage", "-f", "-", str(dump_path)],
+              capture_output=True,
+              text=True
+          )
+          if storage_data_proc.returncode != 0:
+              raise RuntimeError(f"pg_restore -a -n storage failed with error: {storage_data_proc.stderr.strip()}")
+          storage_data_sql = storage_data_proc.stdout
+
+          # Robust byte-level PostgreSQL COPY text-format field decoder
+          # Decodes escapes into bytes first, then decodes the resulting sequence as UTF-8
+          def decode_pg_copy_field(s):
+              if s == r"\N":
+                  return None
+              raw_bytes = s.encode("utf-8")
+              out = bytearray()
+              i = 0
+              n = len(raw_bytes)
+              while i < n:
+                  b = raw_bytes[i]
+                  if b == 0x5C and i + 1 < n:  # Backslash '\'
+                      nxt = raw_bytes[i + 1]
+                      if nxt == ord("b"):
+                          out.append(0x08)
+                          i += 2
+                      elif nxt == ord("f"):
+                          out.append(0x0C)
+                          i += 2
+                      elif nxt == ord("n"):
+                          out.append(0x0A)
+                          i += 2
+                      elif nxt == ord("r"):
+                          out.append(0x0D)
+                          i += 2
+                      elif nxt == ord("t"):
+                          out.append(0x09)
+                          i += 2
+                      elif nxt == ord("v"):
+                          out.append(0x0B)
+                          i += 2
+                      elif nxt == ord("\\"):
+                          out.append(0x5C)
+                          i += 2
+                      elif ord("0") <= nxt <= ord("7"):
+                          # Octal byte escape \0 to \377 (1 to 3 octal digits)
+                          oct_bytes = bytearray([nxt])
+                          j = i + 2
+                          while j < n and j < i + 4 and ord("0") <= raw_bytes[j] <= ord("7"):
+                              oct_bytes.append(raw_bytes[j])
+                              j += 1
+                          val = int(oct_bytes.decode("ascii"), 8)
+                          out.append(val)
+                          i = j
+                      elif nxt == ord("x"):
+                          # Hex byte escape \xXX (1 to 2 hex digits)
+                          hex_bytes = bytearray()
+                          j = i + 2
+                          while j < n and j < i + 4 and chr(raw_bytes[j]) in "0123456789abcdefABCDEF":
+                              hex_bytes.append(raw_bytes[j])
+                              j += 1
+                          if hex_bytes:
+                              val = int(hex_bytes.decode("ascii"), 16)
+                              out.append(val)
+                              i = j
+                          else:
+                              out.append(ord("x"))
+                              i += 2
+                      else:
+                          out.append(nxt)
+                          i += 2
+                  else:
+                      out.append(b)
+                      i += 1
+              return out.decode("utf-8")
+
+          # Parse COPY ... FROM stdin blocks with strict detection, termination, multi-block consistency,
+          # and dedicated integer counter for row-level parsing errors
+          def parse_copy_data(sql_text, target_table):
+              copy_re = re.compile(
+                  rf"^COPY\s+(?:\"?storage\"?\.)?\"?{target_table}\"?\s*\((.*?)\)\s+FROM\s+stdin;",
+                  re.IGNORECASE
+              )
+              all_rows = []
+              in_copy = False
+              current_columns = []
+              all_block_columns = []
+              blocks_detected = 0
+              blocks_terminated = 0
+              total_raw_lines = 0
+              row_errors_count = 0
+              row_errors = []
+              block_errors = []
+
+              for line_num, line in enumerate(sql_text.splitlines(), start=1):
+                  if not in_copy:
+                      m = copy_re.match(line.strip())
+                      if m:
+                          in_copy = True
+                          blocks_detected += 1
+                          current_columns = [c.strip().strip('"') for c in m.group(1).split(",")]
+                          all_block_columns.append(current_columns)
+                  else:
+                      clean_line = line.strip()
+                      if clean_line == r"\.":
+                          in_copy = False
+                          blocks_terminated += 1
+                          current_columns = []
+                      else:
+                          total_raw_lines += 1
+                          raw_vals = line.split("\t")
+                          if len(raw_vals) != len(current_columns):
+                              row_errors_count += 1
+                              row_errors.append(
+                                  f"Line {line_num}: expected {len(current_columns)} columns, got {len(raw_vals)}"
+                              )
+                              continue
+                          try:
+                              decoded_vals = [decode_pg_copy_field(v) for v in raw_vals]
+                              all_rows.append(dict(zip(current_columns, decoded_vals)))
+                          except Exception as e:
+                              row_errors_count += 1
+                              row_errors.append(f"Line {line_num}: decode error: {e}")
+
+              # Block check 1: Stream truncation / unterminated block
+              if in_copy:
+                  block_errors.append(
+                      f"COPY block for storage.{target_table} was not terminated with '\\.' (stream truncated before end)"
+                  )
+
+              # Block check 2: Strict termination equality
+              if blocks_detected != blocks_terminated:
+                  block_errors.append(
+                      f"COPY block termination mismatch for storage.{target_table}: {blocks_detected} block(s) detected, but only {blocks_terminated} properly terminated"
+                  )
+
+              # Block check 3: Multi-block column consistency
+              if blocks_detected > 1:
+                  base_cols = [c.lower() for c in all_block_columns[0]]
+                  for blk_idx, blk_cols in enumerate(all_block_columns[1:], start=2):
+                      cmp_cols = [c.lower() for c in blk_cols]
+                      if cmp_cols != base_cols:
+                          block_errors.append(
+                              f"Inconsistent column definitions across COPY blocks for storage.{target_table}: block 1 columns != block {blk_idx} columns ({base_cols} vs {cmp_cols})"
+                          )
+
+              # Check 4: Strict row-count consistency using dedicated integer counter
+              if len(all_rows) + row_errors_count != total_raw_lines:
+                  block_errors.append(
+                      f"Row count inconsistency in storage.{target_table}: {len(all_rows)} parsed rows + {row_errors_count} row error(s) != {total_raw_lines} raw lines"
+                  )
+
+              columns = all_block_columns[0] if all_block_columns else []
+              all_errors = block_errors + row_errors
+
+              return {
+                  "blocks_detected": blocks_detected,
+                  "blocks_terminated": blocks_terminated,
+                  "columns": columns,
+                  "rows": all_rows,
+                  "raw_lines": total_raw_lines,
+                  "row_errors_count": row_errors_count,
+                  "errors": all_errors
+              }
+
+          copy_parse_errors = []
+
+          # Parse storage.buckets
+          buckets_res = parse_copy_data(storage_data_sql, "buckets")
+          buckets_copy_cols = buckets_res["columns"]
+          buckets_rows = buckets_res["rows"]
+          if buckets_res["errors"]:
+              copy_parse_errors.extend([f"storage.buckets: {err}" for err in buckets_res["errors"]])
+
+          # Verify storage.buckets COPY block completeness against archive TOC
+          if buckets_toc_data_count > 0:
+              if buckets_res["blocks_detected"] == 0:
+                  copy_parse_errors.append(
+                      f"Missing COPY block for storage.buckets: TOC cataloged {buckets_toc_data_count} TABLE DATA entry(ies), but pg_restore -a extracted 0 COPY blocks."
+                  )
+              elif buckets_res["blocks_detected"] < buckets_toc_data_count:
+                  copy_parse_errors.append(
+                      f"Incomplete COPY extraction for storage.buckets: TOC expected {buckets_toc_data_count} TABLE DATA block(s), but only {buckets_res['blocks_detected']} detected."
+                  )
+              elif buckets_res["blocks_detected"] > buckets_toc_data_count:
+                  copy_parse_errors.append(
+                      f"Unexpected duplicate COPY blocks for storage.buckets: TOC expected {buckets_toc_data_count} block(s), but detected {buckets_res['blocks_detected']}."
+                  )
+              if buckets_res["blocks_detected"] != buckets_res["blocks_terminated"]:
+                  copy_parse_errors.append(
+                      f"Unterminated COPY block for storage.buckets: {buckets_res['blocks_detected']} block(s) detected, but only {buckets_res['blocks_terminated']} properly terminated."
+                  )
+          else:
+              if buckets_res["blocks_detected"] > 0:
+                  copy_parse_errors.append(
+                      f"Unexpected COPY block detected for storage.buckets ({buckets_res['blocks_detected']} block(s)), but no TABLE DATA entry was cataloged in the archive TOC."
+                  )
+
+          # Parse storage.objects
+          objects_res = parse_copy_data(storage_data_sql, "objects")
+          objects_copy_cols = objects_res["columns"]
+          objects_rows = objects_res["rows"]
+          if objects_res["errors"]:
+              copy_parse_errors.extend([f"storage.objects: {err}" for err in objects_res["errors"]])
+
+          # Verify storage.objects COPY block completeness against archive TOC
+          if objects_toc_data_count > 0:
+              if objects_res["blocks_detected"] == 0:
+                  copy_parse_errors.append(
+                      f"Missing COPY block for storage.objects: TOC cataloged {objects_toc_data_count} TABLE DATA entry(ies), but pg_restore -a extracted 0 COPY blocks."
+                  )
+              elif objects_res["blocks_detected"] < objects_toc_data_count:
+                  copy_parse_errors.append(
+                      f"Incomplete COPY extraction for storage.objects: TOC expected {objects_toc_data_count} TABLE DATA block(s), but only {objects_res['blocks_detected']} detected."
+                  )
+              elif objects_res["blocks_detected"] > objects_toc_data_count:
+                  copy_parse_errors.append(
+                      f"Unexpected duplicate COPY blocks for storage.objects: TOC expected {objects_toc_data_count} block(s), but detected {objects_res['blocks_detected']}."
+                  )
+              if objects_res["blocks_detected"] != objects_res["blocks_terminated"]:
+                  copy_parse_errors.append(
+                      f"Unterminated COPY block for storage.objects: {objects_res['blocks_detected']} block(s) detected, but only {objects_res['blocks_terminated']} properly terminated."
+                  )
+          else:
+              if objects_res["blocks_detected"] > 0:
+                  copy_parse_errors.append(
+                      f"Unexpected COPY block detected for storage.objects ({objects_res['blocks_detected']} block(s)), but no TABLE DATA entry was cataloged in the archive TOC."
+                  )
+
+          print(f"TABLE DATA parsing:")
+          print(f"  - storage.buckets: TOC blocks={buckets_toc_data_count}, extracted={buckets_res['blocks_detected']} (terminated: {buckets_res['blocks_terminated']}), rows={len(buckets_rows)} (raw lines: {buckets_res['raw_lines']}, row errors: {buckets_res['row_errors_count']})")
+          print(f"  - storage.objects: TOC blocks={objects_toc_data_count}, extracted={objects_res['blocks_detected']} (terminated: {objects_res['blocks_terminated']}), rows={len(objects_rows)} (raw lines: {objects_res['raw_lines']}, row errors: {objects_res['row_errors_count']})")
+          if copy_parse_errors:
+              print(f"  - COPY data parse errors: {len(copy_parse_errors)}")
+              for err in copy_parse_errors[:5]:
+                  print(f"    * {err}")
+
+          # ====================================================================
+          # Target Bucket Configuration Identification & Duplicate Row Detection
+          # ====================================================================
+          matching_name_rows = [r for r in buckets_rows if r.get("name") == EXPECTED_BUCKET]
+          matching_id_rows = [r for r in buckets_rows if r.get("id") == EXPECTED_BUCKET and r.get("name") != EXPECTED_BUCKET]
+
+          target_bucket_row = None
+          duplicate_bucket_rows = False
+          id_only_match = False
+
+          if len(matching_name_rows) == 1:
+              target_bucket_row = matching_name_rows[0]
+          elif len(matching_name_rows) > 1:
+              duplicate_bucket_rows = True
+              target_bucket_row = matching_name_rows[0]
+          elif len(matching_id_rows) >= 1:
+              id_only_match = True
+              target_bucket_row = matching_id_rows[0]
+
+          # Column sets from DDL and COPY
+          buckets_ddl_set = {c.lower() for c in buckets_columns}
+          buckets_copy_set = {c.lower() for c in buckets_copy_cols}
+
+          REQUIRED_BUCKET_CONFIG_COLS = ["id", "name", "public", "file_size_limit", "allowed_mime_types"]
+          missing_ddl_cols = [col for col in REQUIRED_BUCKET_CONFIG_COLS if col.lower() not in buckets_ddl_set]
+          missing_copy_cols = [col for col in REQUIRED_BUCKET_CONFIG_COLS if col.lower() not in buckets_copy_set]
+
+          # Strict value validation for each configuration dimension separately:
+          # 1. Bucket ID
+          bucket_id_val = "UNAVAILABLE"
+          bucket_id_status = "UNAVAILABLE"
+          if target_bucket_row is not None:
+              if "id" in buckets_ddl_set and "id" in buckets_copy_set:
+                  val = target_bucket_row.get("id")
+                  if val is not None and val.strip():
+                      bucket_id_val = val
+                      bucket_id_status = "PASS"
+                  else:
+                      bucket_id_val = f"'{val}' (Invalid or empty bucket ID)"
+                      bucket_id_status = "FAIL"
+              elif "id" not in buckets_ddl_set:
+                  bucket_id_val = "UNAVAILABLE (Column 'id' missing from table DDL)"
+              else:
+                  bucket_id_val = "UNAVAILABLE (Column 'id' missing from COPY data)"
+
+          # 2. Bucket Name (Strictly require exactly one row with name == EXPECTED_BUCKET; never substitute ID)
+          bucket_name_val = "UNAVAILABLE"
+          bucket_name_status = "UNAVAILABLE"
+          if target_bucket_row is not None:
+              if duplicate_bucket_rows:
+                  bucket_name_val = f"'{EXPECTED_BUCKET}' ({len(matching_name_rows)} duplicate rows found)"
+                  bucket_name_status = "FAIL"
+              elif "name" in buckets_ddl_set and "name" in buckets_copy_set:
+                  val = target_bucket_row.get("name")
+                  if val == EXPECTED_BUCKET:
+                      bucket_name_val = val
+                      bucket_name_status = "PASS"
+                  elif val is not None:
+                      bucket_name_val = f"'{val}' (Mismatch: expected '{EXPECTED_BUCKET}')"
+                      bucket_name_status = "FAIL"
+                  else:
+                      bucket_name_val = "NULL (Explicitly NULL in database; expected '" + EXPECTED_BUCKET + "')"
+                      bucket_name_status = "FAIL"
+              elif "name" not in buckets_ddl_set:
+                  bucket_name_val = "UNAVAILABLE (Column 'name' missing from table DDL)"
+              else:
+                  bucket_name_val = "UNAVAILABLE (Column 'name' missing from COPY data)"
+
+          # 3. Public / Private Setting (Validate explicit booleans; do not silently treat unexpected or NULL as private)
+          public_val = "UNAVAILABLE"
+          public_status = "UNAVAILABLE"
+          if target_bucket_row is not None:
+              if "public" in buckets_ddl_set and "public" in buckets_copy_set:
+                  val = target_bucket_row.get("public")
+                  if val is not None:
+                      v_clean = val.lower().strip()
+                      if v_clean in ("t", "true"):
+                          public_val = "True (Public)"
+                          public_status = "PASS"
+                      elif v_clean in ("f", "false"):
+                          public_val = "False (Private)"
+                          public_status = "PASS"
+                      else:
+                          public_val = f"'{val}' (Invalid boolean value: expected 't'/'true' or 'f'/'false')"
+                          public_status = "FAIL"
+                  else:
+                      public_val = "NULL (Explicitly NULL in database; visibility undefined)"
+                      public_status = "WARNING"
+              elif "public" not in buckets_ddl_set:
+                  public_val = "UNAVAILABLE (Column 'public' missing from table DDL)"
+              else:
+                  public_val = "UNAVAILABLE (Column 'public' missing from COPY data)"
+
+          # 4. File Size Limit (Strictly validate non-negative integer when not NULL)
+          file_size_limit_val = "UNAVAILABLE"
+          file_size_limit_status = "UNAVAILABLE"
+          if target_bucket_row is not None:
+              if "file_size_limit" in buckets_ddl_set and "file_size_limit" in buckets_copy_set:
+                  val = target_bucket_row.get("file_size_limit")
+                  if val is None:
+                      file_size_limit_val = "NULL (No file size limit configured in database)"
+                      file_size_limit_status = "PASS"
+                  elif re.match(r"^\d+$", str(val).strip()):
+                      int_size = int(str(val).strip())
+                      file_size_limit_val = f"{int_size} bytes"
+                      file_size_limit_status = "PASS"
+                  else:
+                      file_size_limit_val = f"'{val}' (Invalid size limit: must be a non-negative integer)"
+                      file_size_limit_status = "FAIL"
+              elif "file_size_limit" not in buckets_ddl_set:
+                  file_size_limit_val = "UNAVAILABLE (Column 'file_size_limit' missing from table DDL)"
+              else:
+                  file_size_limit_val = "UNAVAILABLE (Column 'file_size_limit' missing from COPY data)"
+
+          # 5. Allowed MIME Types (Validate PostgreSQL text[] array format when not NULL)
+          allowed_mime_types_val = "UNAVAILABLE"
+          allowed_mime_status = "UNAVAILABLE"
+          if target_bucket_row is not None:
+              if "allowed_mime_types" in buckets_ddl_set and "allowed_mime_types" in buckets_copy_set:
+                  val = target_bucket_row.get("allowed_mime_types")
+                  if val is None:
+                      allowed_mime_types_val = "NULL (No MIME restrictions configured in database)"
+                      allowed_mime_status = "PASS"
+                  elif str(val).startswith("{") and str(val).endswith("}"):
+                      allowed_mime_types_val = val
+                      allowed_mime_status = "PASS"
+                  else:
+                      allowed_mime_types_val = f"'{val}' (Invalid PostgreSQL array format: expected '{{...}}')"
+                      allowed_mime_status = "FAIL"
+              elif "allowed_mime_types" not in buckets_ddl_set:
+                  allowed_mime_types_val = "UNAVAILABLE (Column 'allowed_mime_types' missing from table DDL)"
+              else:
+                  allowed_mime_types_val = "UNAVAILABLE (Column 'allowed_mime_types' missing from COPY data)"
+
+          # Complete recovery requires:
+          # - Exactly one matching row by name (no duplicate rows, not ID-only)
+          # - All 5 required columns present in DDL and COPY
+          # - All field statuses == PASS
+          all_bucket_fields_recovered = (
+              target_bucket_row is not None and
+              not duplicate_bucket_rows and
+              not id_only_match and
+              len(missing_ddl_cols) == 0 and
+              len(missing_copy_cols) == 0 and
+              bucket_id_status == "PASS" and
+              bucket_name_status == "PASS" and
+              public_status == "PASS" and
+              file_size_limit_status == "PASS" and
+              allowed_mime_status == "PASS"
+          )
+
+          if all_bucket_fields_recovered:
+              bucket_config_status = "PASS"
+          elif duplicate_bucket_rows:
+              bucket_config_status = f"WARNING (Ambiguous configuration: {len(matching_name_rows)} duplicate rows matched name '{EXPECTED_BUCKET}')"
+          elif target_bucket_row is not None:
+              issues = []
+              if id_only_match:
+                  issues.append("Matched on ID only; bucket name did not equal '" + EXPECTED_BUCKET + "'")
+              if missing_ddl_cols:
+                  issues.append(f"Missing from DDL: {', '.join(missing_ddl_cols)}")
+              if missing_copy_cols:
+                  issues.append(f"Missing from COPY: {', '.join(missing_copy_cols)}")
+              if public_status != "PASS":
+                  issues.append(f"Visibility status: {public_status} ({public_val})")
+              if file_size_limit_status != "PASS":
+                  issues.append(f"Size limit status: {file_size_limit_status} ({file_size_limit_val})")
+              if allowed_mime_status != "PASS":
+                  issues.append(f"Allowed MIME status: {allowed_mime_status} ({allowed_mime_types_val})")
+              bucket_config_status = f"WARNING (Incomplete bucket configuration: {'; '.join(issues)})"
+          elif has_buckets_data:
+              bucket_config_status = "UNAVAILABLE (TABLE DATA storage.buckets present in dump, but 0 rows matched '" + EXPECTED_BUCKET + "')"
+          else:
+              bucket_config_status = "UNAVAILABLE (TABLE DATA for storage.buckets was not included in database.dump)"
+
+          # ====================================================================
+          # Object Matching Using Verified Bucket ID (Never Guess or Assume ID=Name)
+          # ====================================================================
+          verified_bucket_id = None
+          if len(matching_name_rows) == 1 and bucket_id_status == "PASS":
+              verified_bucket_id = bucket_id_val
+
+          metadata_fields_discovered = set()
+          mimetypes_discovered = collections.Counter()
+          cache_controls_discovered = collections.Counter()
+          metadata_parse_errors = 0
+          dump_object_paths = []
+          dump_null_or_invalid_name_rows = 0
+
+          if verified_bucket_id is None:
+              # Bucket ID could not be reliably verified; do not guess
+              bucket_objects = []
+              if duplicate_bucket_rows:
+                  object_metadata_status = f"UNAVAILABLE (Bucket configuration is ambiguous: {len(matching_name_rows)} duplicate rows matched name '{EXPECTED_BUCKET}'; objects cannot be matched without guessing)"
+              elif has_objects_data:
+                  object_metadata_status = "UNAVAILABLE (Original bucket ID was not verified from storage.buckets; objects cannot be matched without guessing)"
+              else:
+                  object_metadata_status = "UNAVAILABLE (TABLE DATA for storage.objects was not included in database.dump)"
+          else:
+              # Identify storage.objects rows using the verified bucket ID
+              bucket_objects = [
+                  o for o in objects_rows
+                  if o.get("bucket_id") == verified_bucket_id
+              ]
+              for obj in bucket_objects:
+                  obj_name = obj.get("name")
+                  if obj_name is not None and isinstance(obj_name, str):
+                      dump_object_paths.append(obj_name)
+                  else:
+                      dump_null_or_invalid_name_rows += 1
+
+                  meta_raw = obj.get("metadata")
+                  if meta_raw:
+                      try:
+                          meta_dict = json.loads(meta_raw, strict=False)
+                          if isinstance(meta_dict, dict):
+                              for k in meta_dict.keys():
+                                  metadata_fields_discovered.add(k)
+                              if "mimetype" in meta_dict and meta_dict["mimetype"]:
+                                  mimetypes_discovered[meta_dict["mimetype"]] += 1
+                              if "cacheControl" in meta_dict and meta_dict["cacheControl"]:
+                                  cache_controls_discovered[meta_dict["cacheControl"]] += 1
+                          else:
+                              metadata_parse_errors += 1
+                      except Exception:
+                          metadata_parse_errors += 1
+
+              if bucket_objects:
+                  if metadata_parse_errors > 0:
+                      object_metadata_status = f"WARNING ({len(bucket_objects):,} rows matched verified bucket ID '{verified_bucket_id}', but {metadata_parse_errors} parse error(s))"
+                  else:
+                      object_metadata_status = f"PASS ({len(bucket_objects):,} rows matched verified bucket ID '{verified_bucket_id}')"
+              elif has_objects_data:
+                  if len(copy_parse_errors) > 0:
+                      object_metadata_status = f"FAIL (storage.objects TABLE DATA parsing failed with {len(copy_parse_errors)} error(s))"
+                  else:
+                      object_metadata_status = f"WARNING (TABLE DATA storage.objects present in dump, but 0 rows matched verified bucket ID '{verified_bucket_id}')"
+              else:
+                  object_metadata_status = "UNAVAILABLE (TABLE DATA for storage.objects was not included in database.dump)"
+
+          # ====================================================================
+          # 4. Storage Manifest (manifest.json) & Individual File Verification
+          # ====================================================================
+          manifest_validation_errors = []
+          try:
+              with open(manifest_path, "r", encoding="utf-8") as f:
+                  manifest = json.load(f)
+          except Exception as e:
+              manifest = None
+              manifest_validation_errors.append(f"Failed to parse manifest.json: {e}")
+
+          if not isinstance(manifest, dict):
+              manifest_validation_errors.append("manifest.json root must be a JSON object")
+              manifest_bucket = ""
+              manifest_objects = []
+          else:
+              manifest_bucket = manifest.get("bucket", "")
+              if manifest_bucket != EXPECTED_BUCKET:
+                  manifest_validation_errors.append(
+                      f"manifest.bucket is '{manifest_bucket}', expected '{EXPECTED_BUCKET}'"
+                  )
+              raw_objs = manifest.get("objects")
+              if not isinstance(raw_objs, list):
+                  manifest_validation_errors.append("manifest.objects must be a list")
+                  manifest_objects = []
+              else:
+                  manifest_objects = raw_objs
+
+          storage_dir_resolved = storage_dir.resolve()
+          seen_normalized_paths = set()
+          duplicate_manifest_paths = []
+          malformed_manifest_entries = []
+          missing_files = []
+          size_mismatches = []
+          manifest_total_bytes = 0
+          raw_manifest_paths = []
+
+          extension_counts = collections.Counter()
+          guessed_mimetypes = collections.Counter()
+
+          for idx, obj in enumerate(manifest_objects):
+              if not isinstance(obj, dict):
+                  malformed_manifest_entries.append(f"Entry {idx}: object is not a JSON dictionary")
+                  continue
+
+              p_raw = obj.get("path")
+              size_raw = obj.get("size")
+
+              # 1. Validate path string type
+              if not isinstance(p_raw, str):
+                  malformed_manifest_entries.append(f"Entry {idx}: path is not a string ({type(p_raw).__name__})")
+                  continue
+
+              raw_manifest_paths.append(p_raw)
+
+              # 2. Reject empty path
+              if not p_raw:
+                  malformed_manifest_entries.append(f"Entry {idx}: path is empty")
+                  continue
+
+              # 3. Reject leading or trailing whitespace (DO NOT SILENTLY STRIP)
+              if p_raw != p_raw.strip():
+                  malformed_manifest_entries.append(f"Entry {idx}: path has leading or trailing whitespace: '{p_raw}'")
+                  continue
+
+              # 4. Reject null bytes
+              if "\0" in p_raw:
+                  malformed_manifest_entries.append(f"Entry {idx}: path contains null byte")
+                  continue
+
+              # 5. Reject repeated path separators
+              if "//" in p_raw:
+                  malformed_manifest_entries.append(f"Entry {idx}: path contains repeated separators: '{p_raw}'")
+                  continue
+
+              # 6. Parse with PurePosixPath
+              try:
+                  posix_path = PurePosixPath(p_raw)
+              except Exception as e:
+                  malformed_manifest_entries.append(f"Entry {idx}: invalid POSIX path syntax '{p_raw}': {e}")
+                  continue
+
+              # 7. Reject absolute paths
+              if posix_path.is_absolute() or p_raw.startswith("/"):
+                  malformed_manifest_entries.append(f"Entry {idx}: absolute path rejected: '{p_raw}'")
+                  continue
+
+              # 8. Reject traversal '..' components
+              if ".." in posix_path.parts:
+                  malformed_manifest_entries.append(f"Entry {idx}: path traversal '..' rejected: '{p_raw}'")
+                  continue
+
+              # 9. Reject ambiguous '.' components
+              if "." in posix_path.parts:
+                  malformed_manifest_entries.append(f"Entry {idx}: ambiguous '.' component rejected: '{p_raw}'")
+                  continue
+
+              # 10. Strict canonical representation check (DO NOT SILENTLY NORMALIZE)
+              norm_posix = posix_path.as_posix()
+              if norm_posix != p_raw:
+                  malformed_manifest_entries.append(
+                      f"Entry {idx}: non-canonical path representation rejected ('{p_raw}' != '{norm_posix}')"
+                  )
+                  continue
+
+              # 11. Duplicate normalized path check (exact canonical relative path)
+              if p_raw in seen_normalized_paths:
+                  duplicate_manifest_paths.append(p_raw)
+              seen_normalized_paths.add(p_raw)
+
+              # 12. Validate size: non-negative integer (not boolean)
+              if isinstance(size_raw, bool) or not isinstance(size_raw, int) or size_raw < 0:
+                  malformed_manifest_entries.append(f"Entry {idx} ('{p_raw}'): invalid size {size_raw!r} (must be non-negative integer)")
+                  continue
+
+              # 13. Filesystem bounds check: candidate path must resolve strictly inside storage_dir
+              candidate_file_path = (storage_dir / Path(*posix_path.parts)).resolve()
+              if candidate_file_path == storage_dir_resolved or storage_dir_resolved not in candidate_file_path.parents:
+                  malformed_manifest_entries.append(f"Entry {idx}: path escapes storage boundary: '{p_raw}' -> '{candidate_file_path}'")
+                  continue
+
+              # 14. Individual file verification on disk using exact canonical relative path
+              if not candidate_file_path.is_file():
+                  missing_files.append(p_raw)
+              else:
+                  act_size = candidate_file_path.stat().st_size
+                  if act_size != size_raw:
+                      size_mismatches.append({
+                          "path": p_raw,
+                          "expected": size_raw,
+                          "actual": act_size
+                      })
+
+              manifest_total_bytes += size_raw
+              ext = Path(p_raw).suffix.lower() if Path(p_raw).suffix else "(no extension)"
+              extension_counts[ext] += 1
+              guessed_type, _ = mimetypes.guess_type(p_raw)
+              guessed_mimetypes[guessed_type or "application/octet-stream"] += 1
+
+          # Detect unexpected files on disk (files in storage/ not listed in manifest)
+          unexpected_files = []
+          all_disk_files = []
+          disk_total_bytes = 0
+
+          for disk_p in storage_dir.rglob("*"):
+              if disk_p.is_file():
+                  all_disk_files.append(disk_p)
+                  disk_total_bytes += disk_p.stat().st_size
+                  rel_path = disk_p.relative_to(storage_dir).as_posix()
+                  if rel_path not in seen_normalized_paths:
+                      unexpected_files.append(rel_path)
+
+          total_manifest_count = len(manifest_objects)
+          print(f"Manifest inspection: bucket='{manifest_bucket}', objects={total_manifest_count}")
+          print(f"File verification results:")
+          print(f"  - Missing files: {len(missing_files)}")
+          print(f"  - Size mismatches: {len(size_mismatches)}")
+          print(f"  - Unexpected files: {len(unexpected_files)}")
+          print(f"  - Duplicate manifest paths: {len(duplicate_manifest_paths)}")
+          print(f"  - Malformed manifest entries: {len(malformed_manifest_entries)}")
+          print(f"  - Manifest validation errors: {len(manifest_validation_errors)}")
+          print(f"  - Total on-disk files verified: {len(all_disk_files)} (bytes: {disk_total_bytes})")
+
+          # ====================================================================
+          # 5. Object Path Comparison (storage.objects.name vs manifest.json)
+          # ====================================================================
+          paths_missing_in_dump = []
+          paths_unexpected_in_dump = []
+          dump_duplicate_paths = []
+          manifest_duplicate_paths = []
+          count_difference = 0
+
+          if verified_bucket_id is None:
+              path_comparison_status = "UNAVAILABLE"
+              if duplicate_bucket_rows:
+                  path_comparison_detail = f"UNAVAILABLE (Bucket configuration is ambiguous: {len(matching_name_rows)} duplicate rows matched name '{EXPECTED_BUCKET}'; object paths cannot be compared without guessing)"
+              elif has_objects_data:
+                  path_comparison_detail = "UNAVAILABLE (Original bucket ID was not verified from storage.buckets; object paths cannot be compared without guessing)"
+              else:
+                  path_comparison_detail = "UNAVAILABLE (TABLE DATA for storage.objects was not included in database.dump)"
+          elif len(bucket_objects) == 0:
+              path_comparison_status = "UNAVAILABLE"
+              if has_objects_data:
+                  path_comparison_detail = f"UNAVAILABLE (0 rows in storage.objects matched verified bucket ID '{verified_bucket_id}')"
+              else:
+                  path_comparison_detail = "UNAVAILABLE (TABLE DATA for storage.objects was not included in database.dump)"
+          else:
+              dump_path_counts = collections.Counter(dump_object_paths)
+              dump_duplicate_paths = [p for p, c in dump_path_counts.items() if c > 1]
+
+              manifest_path_counts = collections.Counter(raw_manifest_paths)
+              manifest_duplicate_paths = [p for p, c in manifest_path_counts.items() if c > 1]
+
+              dump_paths_set = set(dump_object_paths)
+              manifest_paths_set = set(raw_manifest_paths)
+
+              paths_missing_in_dump = sorted(list(manifest_paths_set - dump_paths_set))
+              paths_unexpected_in_dump = sorted(list(dump_paths_set - manifest_paths_set))
+              count_difference = len(dump_object_paths) - len(raw_manifest_paths)
+
+              if dump_null_or_invalid_name_rows > 0:
+                  path_comparison_status = "FAIL"
+                  path_comparison_detail = f"FAIL ({dump_null_or_invalid_name_rows} storage.objects row(s) had NULL or non-string 'name' values)"
+              elif paths_missing_in_dump or paths_unexpected_in_dump or dump_duplicate_paths or manifest_duplicate_paths or count_difference != 0:
+                  path_comparison_status = "FAIL"
+                  diff_parts = []
+                  if paths_missing_in_dump:
+                      diff_parts.append(f"{len(paths_missing_in_dump):,} missing in dump")
+                  if paths_unexpected_in_dump:
+                      diff_parts.append(f"{len(paths_unexpected_in_dump):,} unexpected in dump")
+                  if dump_duplicate_paths:
+                      diff_parts.append(f"{len(dump_duplicate_paths):,} duplicate path(s) in dump")
+                  if manifest_duplicate_paths:
+                      diff_parts.append(f"{len(manifest_duplicate_paths):,} duplicate path(s) in manifest")
+                  if count_difference != 0:
+                      diff_parts.append(f"count difference: {count_difference:+d} (dump: {len(dump_object_paths):,}, manifest: {len(raw_manifest_paths):,})")
+                  path_comparison_detail = f"FAIL (Path mismatch: {'; '.join(diff_parts)})"
+              else:
+                  path_comparison_status = "PASS"
+                  path_comparison_detail = f"PASS (100% exact match across all {len(dump_object_paths):,} paths; 0 missing, 0 unexpected, 0 duplicates)"
+
+          print(f"Object path comparison: {path_comparison_status}")
+          print(f"  - Detail: {path_comparison_detail}")
+
+          # ====================================================================
+          # 6. Determine Inspection Statuses (PASS, WARNING, FAIL)
+          # ====================================================================
+          archive_decryption_status = "PASS"
+          dump_readability_status = "PASS" if len(toc_lines) > 0 else "FAIL"
+
+          manifest_validation_status = (
+              "PASS" if (
+                  len(manifest_validation_errors) == 0 and
+                  manifest_bucket == EXPECTED_BUCKET and
+                  len(malformed_manifest_entries) == 0 and
+                  len(duplicate_manifest_paths) == 0 and
+                  total_manifest_count == EXPECTED_FILE_COUNT and
+                  manifest_total_bytes == EXPECTED_TOTAL_SIZE
+              ) else "FAIL"
+          )
+
+          # File verification status: requires 100% individual file match
+          files_all_match = (
+              manifest_validation_status == "PASS" and
+              len(all_disk_files) == EXPECTED_FILE_COUNT and
+              disk_total_bytes == EXPECTED_TOTAL_SIZE and
+              len(missing_files) == 0 and
+              len(size_mismatches) == 0 and
+              len(unexpected_files) == 0
+          )
+          file_verification_status = "PASS" if files_all_match else "FAIL"
+
+          # Clean data parsing check: zero COPY errors and zero JSON metadata parse errors
+          data_parsing_clean = (len(copy_parse_errors) == 0 and metadata_parse_errors == 0)
+
+          # Object metadata verified status check: requires PASS status, expected count, AND 100% path match
+          object_metadata_verified = (
+              object_metadata_status.startswith("PASS") and
+              len(bucket_objects) == EXPECTED_FILE_COUNT and
+              path_comparison_status == "PASS"
+          )
+
+          # Overall status determination:
+          # - Clearly distinguish File Integrity Verification from Storage Metadata Verification
+          # - PASS: archive readable, all 1,218 files match on disk, bucket config verified, AND original object metadata verified
+          # - WARNING: file integrity verified, but bucket configuration or object metadata is unavailable/incomplete
+          # - FAIL: any file mismatch, path security, manifest validation, parsing, or dump integrity check fails
+          if not files_all_match or dump_readability_status != "PASS" or not data_parsing_clean or path_comparison_status == "FAIL":
+              overall_verdict = "FAIL"
+              fail_reasons = []
+              if dump_readability_status != "PASS":
+                  fail_reasons.append("database.dump is unreadable or empty")
+              if manifest_validation_status != "PASS":
+                  fail_reasons.append("manifest.json validation failed")
+              if len(missing_files) > 0:
+                  fail_reasons.append(f"{len(missing_files):,} missing file(s)")
+              if len(size_mismatches) > 0:
+                  fail_reasons.append(f"{len(size_mismatches):,} size mismatch(es)")
+              if len(unexpected_files) > 0:
+                  fail_reasons.append(f"{len(unexpected_files):,} unexpected file(s)")
+              if len(duplicate_manifest_paths) > 0:
+                  fail_reasons.append(f"{len(duplicate_manifest_paths):,} duplicate manifest path(s)")
+              if len(malformed_manifest_entries) > 0:
+                  fail_reasons.append(f"{len(malformed_manifest_entries):,} malformed manifest entry(ies)")
+              if len(copy_parse_errors) > 0:
+                  fail_reasons.append(f"{len(copy_parse_errors):,} PostgreSQL COPY parse error(s)")
+              if metadata_parse_errors > 0:
+                  fail_reasons.append(f"{metadata_parse_errors} metadata JSON parse error(s)")
+              if path_comparison_status == "FAIL":
+                  fail_reasons.append(f"object path mismatch ({path_comparison_detail})")
+              verdict_summary = "One or more critical backup integrity, path security, manifest validation, parsing, or file verification checks failed: " + "; ".join(fail_reasons)
+          elif not all_bucket_fields_recovered:
+              overall_verdict = "WARNING"
+              if duplicate_bucket_rows:
+                  verdict_summary = f"File integrity verified (1,218 files, 583,477,130 bytes), but bucket configuration is ambiguous ({len(matching_name_rows)} duplicate rows matched name '{EXPECTED_BUCKET}')."
+              elif target_bucket_row is not None:
+                  verdict_summary = "File integrity verified (1,218 files, 583,477,130 bytes), but bucket configuration was incomplete in database.dump: " + bucket_config_status
+              else:
+                  verdict_summary = "File integrity verified (1,218 files, 583,477,130 bytes), but original bucket configuration from storage.buckets was unavailable in database.dump."
+          elif not object_metadata_verified:
+              overall_verdict = "WARNING"
+              if object_metadata_status.startswith("PASS") and len(bucket_objects) != EXPECTED_FILE_COUNT:
+                  verdict_summary = f"File integrity verified (1,218 files, 583,477,130 bytes) and bucket configuration verified from storage.buckets, but object metadata count in dump ({len(bucket_objects):,}) differed from expected file count ({EXPECTED_FILE_COUNT})."
+              elif path_comparison_status == "PASS":
+                  verdict_summary = "File integrity verified (1,218 files, 583,477,130 bytes) and bucket configuration verified from storage.buckets, but object metadata was incomplete."
+              else:
+                  verdict_summary = "File integrity verified (1,218 files, 583,477,130 bytes) and bucket configuration verified from storage.buckets, but original storage.objects metadata was unavailable in database.dump (metadata verified via manifest.json)."
+          else:
+              overall_verdict = "PASS"
+              verdict_summary = "All 1,218 storage files, manifest integrity, original bucket configuration, and full object metadata were successfully recovered and verified."
+
+          # ====================================================================
+          # 7. Generate GitHub Actions Step Summary Report
+          # ====================================================================
+          def format_bytes(n):
+              for u in ["bytes", "KB", "MB", "GB"]:
+                  if abs(n) < 1024.0:
+                      return f"{n:,.2f} {u}" if u != "bytes" else f"{n:,} bytes"
+                  n /= 1024.0
+              return f"{n:.2f} TB"
+
+          file_verify_finding = (
+              f"{len(all_disk_files):,} of {EXPECTED_FILE_COUNT} files verified individually "
+              f"({len(missing_files):,} missing, {len(size_mismatches):,} size mismatches, "
+              f"{len(unexpected_files):,} unexpected, {len(duplicate_manifest_paths):,} duplicate paths, "
+              f"{len(malformed_manifest_entries):,} malformed entries)"
+          )
+
+          manifest_finding = (
+              f"bucket='{manifest_bucket}', {total_manifest_count:,} entries cataloged "
+              f"({len(manifest_validation_errors):,} validation errors, "
+              f"{len(malformed_manifest_entries):,} malformed, {len(duplicate_manifest_paths):,} duplicates)"
+          )
+
+          bucket_finding = (
+              "Complete configuration verified in both DDL & COPY data"
+              if all_bucket_fields_recovered else bucket_config_status
+          )
+
+          report = []
+          report.append("# Supabase Recovery Storage Metadata Inspection Report\n")
+          report.append(f"**Target Backup Workflow Run ID:** `{RUN_ID}`  ")
+          report.append(f"**Target Storage Bucket:** `{EXPECTED_BUCKET}`  ")
+          report.append("**Execution Mode:** `STRICTLY READ-ONLY (No database or Supabase Storage resources were modified)`\n")
+
+          report.append("> [!NOTE]\n> **READ-ONLY INSPECTION**: No database or Supabase Storage resources were modified. All inspection operations ran locally on the runner using `pg_restore`, `manifest.json`, and extracted backup components.\n")
+
+          report.append("## Executive Summary Status Matrix\n")
+          report.append("| Inspection Dimension | Status | Verified Finding |")
+          report.append("|---|---|---|")
+          report.append(f"| **1. Backup Run ID** | `PASS` | `{RUN_ID}` (Validated positive integer) |")
+          report.append(f"| **2. Archive Decryption** | `PASS` | Successfully decrypted with AES-256-CBC PBKDF2 |")
+          report.append(f"| **3. Database Dump Readability** | `{dump_readability_status}` | `{dump_path.name}` readable (`{len(toc_lines):,}` TOC entries cataloged) |")
+          report.append(f"| **4. Storage Manifest Validation** | `{manifest_validation_status}` | {manifest_finding} |")
+          report.append(f"| **5. Bucket Configuration Recovery** | `{bucket_config_status}` | {bucket_finding} |")
+          report.append(f"| **6. Original Bucket Identifier (`id` / `name`)** | `{bucket_name_status}` | `id='{bucket_id_val}', name='{bucket_name_val}'` |")
+          report.append(f"| **7. Original Bucket Public/Private** | `{public_status}` | `{public_val}` |")
+          report.append(f"| **8. Original File Size Limit** | `{file_size_limit_status}` | `{file_size_limit_val}` |")
+          report.append(f"| **9. Original Allowed MIME Types** | `{allowed_mime_status}` | `{allowed_mime_types_val}` |")
+          report.append(f"| **10. Available Object Metadata Fields** | `{object_metadata_status}` | `{'Found ' + str(len(metadata_fields_discovered)) + ' fields in dump' if metadata_fields_discovered else 'Available in manifest.json: path, size, extension'}` |")
+          report.append(f"| **11. Object Paths vs Manifest Comparison** | `{path_comparison_status}` | {path_comparison_detail} |")
+          report.append(f"| **12. Storage Files Individual Verification** | `{file_verification_status}` | {file_verify_finding} |")
+          report.append(f"| **13. Overall Inspection Verdict** | `{overall_verdict}` | {verdict_summary} |\n")
+
+          report.append("## 1. Original Bucket Configuration (`candidate-documents`)\n")
+          if all_bucket_fields_recovered:
+              report.append("Complete configuration recovered and verified in both table DDL and COPY data:\n")
+              report.append("| Approved Configuration Field | DDL Column | COPY Column | Recovered Value | Audit Finding |")
+              report.append("|---|---|---|---|---|")
+              report.append(f"| **Bucket ID** | `id` (Found) | `id` (Found) | `{bucket_id_val}` | Target bucket primary key identifier |")
+              report.append(f"| **Bucket Name** | `name` (Found) | `name` (Found) | `{bucket_name_val}` | Target bucket name (matches expected) |")
+              report.append(f"| **Public / Private Setting** | `public` (Found) | `public` (Found) | `{public_val}` | Target bucket visibility |")
+              report.append(f"| **File Size Limit** | `file_size_limit` (Found) | `file_size_limit` (Found) | `{file_size_limit_val}` | Maximum upload size restriction |")
+              report.append(f"| **Allowed MIME Types** | `allowed_mime_types` (Found) | `allowed_mime_types` (Found) | `{allowed_mime_types_val}` | Permitted file format whitelist |\n")
+          elif target_bucket_row is not None:
+              report.append("> [!WARNING]\n> **Original bucket configuration is INCOMPLETE or AMBIGUOUS in `database.dump`.**\n>")
+              if duplicate_bucket_rows:
+                  report.append(f"> Found `{len(matching_name_rows)}` duplicate rows matching bucket name `{EXPECTED_BUCKET}` in `storage.buckets`. Configuration is ambiguous.\n>")
+              if id_only_match:
+                  report.append(f"> A row was found with `id='{bucket_id_val}'`, but its `name` column did not equal `{EXPECTED_BUCKET}`.\n>")
+              if missing_ddl_cols:
+                  report.append(f"> Missing required column(s) from table DDL: `{', '.join(missing_ddl_cols)}`.\n>")
+              if missing_copy_cols:
+                  report.append(f"> Missing required column(s) from COPY data: `{', '.join(missing_copy_cols)}`.\n>")
+              if public_status != "PASS":
+                  report.append(f"> Visibility status: `{public_status}` (`{public_val}`).\n>")
+              if file_size_limit_status != "PASS":
+                  report.append(f"> Size limit status: `{file_size_limit_status}` (`{file_size_limit_val}`).\n>")
+              if allowed_mime_status != "PASS":
+                  report.append(f"> Allowed MIME status: `{allowed_mime_status}` (`{allowed_mime_types_val}`).\n>")
+              report.append("\n| Approved Configuration Field | DDL Status | COPY Status | Recovered Value / Detail |")
+              report.append("|---|---|---|---|")
+              report.append(f"| **Bucket ID** | `{'Found' if 'id' in buckets_ddl_set else 'MISSING'}` | `{'Found' if 'id' in buckets_copy_set else 'MISSING'}` | `{bucket_id_val}` |")
+              report.append(f"| **Bucket Name** | `{'Found' if 'name' in buckets_ddl_set else 'MISSING'}` | `{'Found' if 'name' in buckets_copy_set else 'MISSING'}` | `{bucket_name_val}` |")
+              report.append(f"| **Public / Private Setting** | `{'Found' if 'public' in buckets_ddl_set else 'MISSING'}` | `{'Found' if 'public' in buckets_copy_set else 'MISSING'}` | `{public_val}` |")
+              report.append(f"| **File Size Limit** | `{'Found' if 'file_size_limit' in buckets_ddl_set else 'MISSING'}` | `{'Found' if 'file_size_limit' in buckets_copy_set else 'MISSING'}` | `{file_size_limit_val}` |")
+              report.append(f"| **Allowed MIME Types** | `{'Found' if 'allowed_mime_types' in buckets_ddl_set else 'MISSING'}` | `{'Found' if 'allowed_mime_types' in buckets_copy_set else 'MISSING'}` | `{allowed_mime_types_val}` |\n")
+          else:
+              report.append("> [!WARNING]\n> **Original bucket configuration is UNAVAILABLE in `database.dump`.**\n>")
+              if has_buckets_data:
+                  report.append(f"> `TABLE DATA` for `storage.buckets` was present in `database.dump`, but 0 rows matched bucket `{EXPECTED_BUCKET}`.\n>")
+              else:
+                  report.append("> `TABLE DATA` for `storage.buckets` was not included in the PostgreSQL dump.\n>")
+              report.append("> The workflow will not assume or infer default values (such as private access or size limits) for production HR storage.\n")
+              report.append("| Approved Configuration Field | Status | Detail |")
+              report.append("|---|---|---|")
+              report.append(f"| **Bucket Name / ID** | `IDENTIFIED` | `{EXPECTED_BUCKET}` (from `manifest.json` and backup script) |")
+              report.append("| **Public / Private Setting** | `UNAVAILABLE` | Row not found in dump; must not be assumed |")
+              report.append("| **File Size Limit** | `UNAVAILABLE` | Row not found in dump; must not be assumed |")
+              report.append("| **Allowed MIME Types** | `UNAVAILABLE` | Row not found in dump; must not be assumed |\n")
+
+          report.append("## 2. Storage Objects Metadata Audit (`storage.objects`)\n")
+          if bucket_objects:
+              report.append(f"Extracted `{len(bucket_objects):,}` metadata rows matching verified bucket ID `{verified_bucket_id}` from `storage.objects` in `database.dump`:\n")
+              report.append(f"- **Discovered Metadata Attributes:** `{', '.join(sorted(metadata_fields_discovered)) if metadata_fields_discovered else 'None'}`")
+              if metadata_parse_errors > 0:
+                  report.append(f"- **Metadata Parsing Failures:** `{metadata_parse_errors}` objects could not be parsed as valid JSON.")
+              if mimetypes_discovered:
+                  report.append("- **MIME Types Cataloged in Database:**")
+                  for mt, cnt in mimetypes_discovered.most_common():
+                      report.append(f"  - `{mt}`: {cnt:,} objects")
+              if cache_controls_discovered:
+                  report.append("- **Cache-Control Directives Cataloged:**")
+                  for cc, cnt in cache_controls_discovered.most_common():
+                      report.append(f"  - `{cc}`: {cnt:,} objects")
+              report.append("")
+          elif verified_bucket_id is None:
+              if duplicate_bucket_rows:
+                  report.append(f"> [!WARNING]\n> **Bucket configuration is AMBIGUOUS (`{len(matching_name_rows)}` duplicate rows matched name `{EXPECTED_BUCKET}`).**\n>")
+                  report.append("> Original bucket ID cannot be verified without ambiguity; `storage.objects` rows cannot be matched without guessing.\n>")
+              else:
+                  report.append("> [!NOTE]\n> **Original bucket ID could not be verified from `storage.buckets`.**\n>")
+                  report.append("> `storage.objects` rows cannot be attributed to the target bucket without guessing or assuming the ID equals the bucket name.\n>")
+              report.append("> Object metadata was instead verified using `manifest.json` from backup execution.\n")
+              report.append(f"- **Manifest Attributes Available:** `path` (relative file key) and `size` (exact byte count).")
+              report.append(f"- **Total Storage Objects in Manifest:** `{total_manifest_count:,}`")
+              report.append(f"- **Total Stored Data Volume:** `{format_bytes(manifest_total_bytes)}` (`{manifest_total_bytes:,}` bytes)")
+              if total_manifest_count > 0:
+                  report.append("- **Inferred MIME Type Distribution (from file extensions):**")
+                  for mt, cnt in guessed_mimetypes.most_common():
+                      pct = f"{cnt / total_manifest_count * 100:.1f}%"
+                      report.append(f"  - `{mt}`: {cnt:,} files ({pct})")
+              report.append("")
+          elif has_objects_data:
+              report.append(f"> [!WARNING]\n> **`TABLE DATA` for `storage.objects` was present in `database.dump`, but 0 rows matched verified bucket ID `{verified_bucket_id}`** (total rows in table: `{len(objects_rows):,}`).\n>")
+              report.append("> Object metadata was instead verified using `manifest.json` from backup execution.\n")
+              report.append(f"- **Manifest Attributes Available:** `path` (relative file key) and `size` (exact byte count).")
+              report.append(f"- **Total Storage Objects in Manifest:** `{total_manifest_count:,}`")
+              report.append(f"- **Total Stored Data Volume:** `{format_bytes(manifest_total_bytes)}` (`{manifest_total_bytes:,}` bytes)")
+              if total_manifest_count > 0:
+                  report.append("- **Inferred MIME Type Distribution (from file extensions):**")
+                  for mt, cnt in guessed_mimetypes.most_common():
+                      pct = f"{cnt / total_manifest_count * 100:.1f}%"
+                      report.append(f"  - `{mt}`: {cnt:,} files ({pct})")
+              report.append("")
+          else:
+              report.append("> [!NOTE]\n> **`TABLE DATA` for `storage.objects` was not included in `database.dump`.** Object metadata was instead recorded in `manifest.json` during backup execution.\n")
+              report.append(f"- **Manifest Attributes Available:** `path` (relative file key) and `size` (exact byte count).")
+              report.append(f"- **Total Storage Objects in Manifest:** `{total_manifest_count:,}`")
+              report.append(f"- **Total Stored Data Volume:** `{format_bytes(manifest_total_bytes)}` (`{manifest_total_bytes:,}` bytes)")
+              if total_manifest_count > 0:
+                  report.append("- **Inferred MIME Type Distribution (from file extensions):**")
+                  for mt, cnt in guessed_mimetypes.most_common():
+                      pct = f"{cnt / total_manifest_count * 100:.1f}%"
+                      report.append(f"  - `{mt}`: {cnt:,} files ({pct})")
+              report.append("")
+
+          report.append("### Object Path Comparison (`storage.objects.name` vs `manifest.json`)\n")
+          if path_comparison_status == "PASS":
+              report.append(f"✅ **100% Exact Path Match:** All `{len(dump_object_paths):,}` object paths from `storage.objects` match `manifest.json` exactly.\n")
+              report.append("| Comparison Metric | Baseline (`manifest.json`) | Database Dump (`storage.objects`) | Match Finding |")
+              report.append("|---|---|---|---|")
+              report.append(f"| **Matching Object Paths** | `{len(raw_manifest_paths):,}` paths | `{len(dump_object_paths):,}` paths | `✅ PASS` (All paths matched) |")
+              report.append(f"| **Missing in Database Dump** | `0` expected | `{len(paths_missing_in_dump):,}` missing | `✅ PASS` |")
+              report.append(f"| **Unexpected in Database Dump** | `0` expected | `{len(paths_unexpected_in_dump):,}` unexpected | `✅ PASS` |")
+              report.append(f"| **Duplicate Paths in Dump** | `0` expected | `{len(dump_duplicate_paths):,}` duplicates | `✅ PASS` |")
+              report.append(f"| **Duplicate Paths in Manifest** | `0` expected | `{len(manifest_duplicate_paths):,}` duplicates | `✅ PASS` |")
+              report.append(f"| **Total Count Difference** | `{len(raw_manifest_paths):,}` | `{len(dump_object_paths):,}` | `✅ PASS` (Difference: `0`) |\n")
+          elif path_comparison_status == "FAIL":
+              report.append(f"> [!WARNING]\n> **Object path mismatch detected between `storage.objects` and `manifest.json`!**\n>\n> {path_comparison_detail}\n")
+              report.append("| Comparison Metric | Baseline (`manifest.json`) | Database Dump (`storage.objects`) | Match Finding |")
+              report.append("|---|---|---|---|")
+              report.append(f"| **Matching Object Paths** | `{len(raw_manifest_paths):,}` paths | `{len(dump_object_paths):,}` paths | `{len(dump_paths_set & manifest_paths_set):,}` matched |")
+              report.append(f"| **Missing in Database Dump** | `0` expected | `{len(paths_missing_in_dump):,}` missing | `{'✅ PASS' if len(paths_missing_in_dump) == 0 else '❌ FAIL'}` |")
+              report.append(f"| **Unexpected in Database Dump** | `0` expected | `{len(paths_unexpected_in_dump):,}` unexpected | `{'✅ PASS' if len(paths_unexpected_in_dump) == 0 else '❌ FAIL'}` |")
+              report.append(f"| **Duplicate Paths in Dump** | `0` expected | `{len(dump_duplicate_paths):,}` duplicates | `{'✅ PASS' if len(dump_duplicate_paths) == 0 else '❌ FAIL'}` |")
+              report.append(f"| **Duplicate Paths in Manifest** | `0` expected | `{len(manifest_duplicate_paths):,}` duplicates | `{'✅ PASS' if len(manifest_duplicate_paths) == 0 else '❌ FAIL'}` |")
+              report.append(f"| **Total Count Difference** | `{len(raw_manifest_paths):,}` | `{len(dump_object_paths):,}` | `{'✅ PASS' if count_difference == 0 else '❌ FAIL'}` (Difference: `{count_difference:+d}`) |\n")
+          else:
+              report.append(f"> [!NOTE]\n> **Object path comparison is UNAVAILABLE.**\n>\n> {path_comparison_detail}\n")
+
+          report.append("## 3. Storage Manifest & Individual File Verification\n")
+          report.append("| Verification Metric | Manifest Baseline | On-Disk Extracted Files | Match Status |")
+          report.append("|---|---|---|---|")
+          report.append(f"| **Total Files Count** | `{total_manifest_count:,}` files | `{len(all_disk_files):,}` files | `{'✅ PASS' if total_manifest_count == len(all_disk_files) and total_manifest_count == EXPECTED_FILE_COUNT else '❌ FAIL'}` |")
+          report.append(f"| **Total Stored Size** | `{format_bytes(manifest_total_bytes)}` | `{format_bytes(disk_total_bytes)}` | `{'✅ PASS' if manifest_total_bytes == disk_total_bytes and manifest_total_bytes == EXPECTED_TOTAL_SIZE else '❌ FAIL'}` |")
+          report.append(f"| **Missing Files** | `0` expected | `{len(missing_files):,}` missing | `{'✅ PASS' if len(missing_files) == 0 else '❌ FAIL'}` |")
+          report.append(f"| **Size Mismatches** | `0` expected | `{len(size_mismatches):,}` mismatched | `{'✅ PASS' if len(size_mismatches) == 0 else '❌ FAIL'}` |")
+          report.append(f"| **Unexpected Files** | `0` expected | `{len(unexpected_files):,}` unexpected | `{'✅ PASS' if len(unexpected_files) == 0 else '❌ FAIL'}` |")
+          report.append(f"| **Duplicate Manifest Paths** | `0` expected | `{len(duplicate_manifest_paths):,}` duplicates | `{'✅ PASS' if len(duplicate_manifest_paths) == 0 else '❌ FAIL'}` |")
+          report.append(f"| **Malformed Manifest Entries** | `0` expected | `{len(malformed_manifest_entries):,}` malformed | `{'✅ PASS' if len(malformed_manifest_entries) == 0 else '❌ FAIL'}` |\n")
+
+          report.append("### File Extension Distribution (Aggregate / No PII)\n")
+          report.append("| Extension | Object Count | Percentage | Primary Document Purpose |")
+          report.append("|---|---|---|---|")
+          for ext, count in extension_counts.most_common():
+              pct = f"{count / total_manifest_count * 100:.1f}%" if total_manifest_count > 0 else "0.0%"
+              purpose = "Resumes / Application PDFs" if ext == ".pdf" else ("Images / Scanned Documents" if ext in (".jpg", ".jpeg", ".png") else "Candidate Attachments")
+              report.append(f"| `{ext}` | {count:,} | {pct} | {purpose} |")
+          report.append("")
+
+          report.append("## 4. Database Dump Catalog Analysis for `storage` Schema\n")
+          report.append(f"- **Schema `storage` in TOC:** `{'YES' if has_storage_schema else 'NO'}`")
+          report.append(f"- **Table `storage.buckets` DDL in TOC:** `{'YES' if has_buckets_table else 'NO'}`")
+          report.append(f"- **Table Data for `storage.buckets` in TOC:** `{'YES (' + str(buckets_toc_data_count) + ' block(s))' if has_buckets_data else 'NO'}`")
+          report.append(f"- **Extracted COPY Blocks for `storage.buckets`:** `{buckets_res['blocks_detected']}` detected (terminated: `{buckets_res['blocks_terminated']}`)")
+          report.append(f"- **Table `storage.objects` DDL in TOC:** `{'YES' if has_objects_table else 'NO'}`")
+          report.append(f"- **Table Data for `storage.objects` in TOC:** `{'YES (' + str(objects_toc_data_count) + ' block(s))' if has_objects_data else 'NO'}`")
+          report.append(f"- **Extracted COPY Blocks for `storage.objects`:** `{objects_res['blocks_detected']}` detected (terminated: `{objects_res['blocks_terminated']}`)")
+          report.append(f"- **Total `storage` Schema Objects in TOC:** `{len(storage_toc_entries)}`\n")
+
+          summary_content = "\n".join(report)
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write(summary_content + "\n")
+              print("Storage inspection summary successfully written to GITHUB_STEP_SUMMARY.")
+          else:
+              print(summary_content)
+
+          print(f"\n=== Storage Metadata Inspection Verdict: {overall_verdict} ===")
+          if overall_verdict == "FAIL":
+              print(f"::error::Storage inspection failed: {verdict_summary}", file=sys.stderr)
+              sys.exit(1)
+          PY
+
+      - name: Clean up temporary inspection files
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Cleaning up all downloaded, decrypted, and extracted files..."
+          rm -rf downloaded decrypted extracted
+          echo "Cleanup completed successfully."
