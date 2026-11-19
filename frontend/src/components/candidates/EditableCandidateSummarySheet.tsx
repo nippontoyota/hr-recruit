@@ -771,11 +771,11 @@ export function EditableCandidateSummarySheet({
             {/* Comments & Marks */}
             <tr>
               <Cell label>Joining Time</Cell>
-              <Cell>
+              <Cell colSpan={2}>
                 <InlineInput value={form.joiningDays as string} onChange={(v) => update('joiningDays', v)} />
               </Cell>
               <Cell label>Days</Cell>
-              <Cell colSpan={7}></Cell>
+              <Cell colSpan={6}></Cell>
               <Cell label>Grade</Cell>
               <Cell label>Marks (Maximum 10)</Cell>
             </tr>
@@ -787,10 +787,10 @@ export function EditableCandidateSummarySheet({
               return (
                 <tr key={`iv-${n}`} className="h-[9.5mm]">
                   {idx === 0 ? <Cell label rowSpan={5}>Interview Comments</Cell> : null}
-                  <Cell>
+                  <Cell colSpan={3}>
                     <InlineInput value={form[`iv${n}Interviewer`] as string} onChange={(v) => update(`iv${n}Interviewer`, v)} placeholder={`Interviewer ${n}`} />
                   </Cell>
-                  <Cell colSpan={8}>
+                  <Cell colSpan={6}>
                     <InlineInput value={form[`iv${n}Remarks`] as string} onChange={(v) => update(`iv${n}Remarks`, v)} placeholder={`Remarks for Round ${n}`} />
                   </Cell>
                   <Cell className="text-center font-bold">

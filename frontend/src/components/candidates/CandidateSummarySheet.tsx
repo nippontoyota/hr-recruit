@@ -624,8 +624,8 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
           {/* ── Interview Comments header ── */}
           <tr className="h-[6mm]">
             <Cell label className="py-0.5"></Cell>
-            <Cell label className="py-0.5 text-center">Name</Cell>
-            <Cell label colSpan={8} className="py-0.5 text-center">Remarks</Cell>
+            <Cell label colSpan={3} className="py-0.5 text-center">Name</Cell>
+            <Cell label colSpan={6} className="py-0.5 text-center">Remarks</Cell>
             <Cell label className="py-0.5 text-center">Grade</Cell>
             <Cell label className="py-0.5 text-center leading-tight">Marks</Cell>
           </tr>
@@ -637,8 +637,8 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             return (
               <tr key={`iv-${i}`} className={visibleRounds.length > 3 ? "h-[8.5mm]" : "h-[10mm]"}>
                 {i === 0 ? <Cell label rowSpan={visibleRounds.length}>Interview Comments</Cell> : null}
-                <Cell>{ivInterviewer[i]}</Cell>
-                <Cell colSpan={8}>{ivRemarks[i]}</Cell>
+                <Cell colSpan={3} className="leading-snug text-[9.5px] py-0.5 break-words">{ivInterviewer[i]}</Cell>
+                <Cell colSpan={6} className="leading-snug text-[9.5px] py-0.5 break-words">{ivRemarks[i]}</Cell>
                 <Cell className="text-center">{has ? gradeFromTen(score) : ''}</Cell>
                 <Cell className="text-center font-bold">{has ? String(score) : ''}</Cell>
               </tr>
