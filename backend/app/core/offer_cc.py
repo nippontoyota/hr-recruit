@@ -22,9 +22,10 @@ _REJECT_HOLD_CC = (
 )
 
 
-def head_office_forwarding_cc_emails() -> list[str]:
+def head_office_forwarding_cc_emails(db: Session | None = None, candidate: Candidate | None = None) -> list[str]:
     """Internal recipients who should receive the branch-to-HO update copy."""
-    return list(_HEAD_OFFICE_FORWARDING_CC)
+    branch_emails = _resolve_all_branch_hr_emails(db, candidate) if (db is not None and candidate is not None) else []
+    return _dedupe_emails(_HEAD_OFFICE_FORWARDING_CC, tuple(branch_emails))
 
 
 def _is_irinjalakuda_candidate(candidate: Candidate) -> bool:
@@ -53,9 +54,12 @@ def _resolve_branch_hr_email(db: Session, candidate: Candidate) -> str | None:
     if _is_irinjalakuda_candidate(candidate):
         return _IRINJALAKUDA_HR
 
+    if db is None or not hasattr(db, "scalar"):
+        return None
+
     # Check assigned HR user first
     assigned_id = getattr(candidate, "assigned_hr_user_id", None)
-    if assigned_id and db is not None:
+    if assigned_id:
         assigned_email = db.scalar(
             select(User.email).where(
                 User.id == assigned_id,

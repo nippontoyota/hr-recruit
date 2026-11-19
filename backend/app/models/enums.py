@@ -71,6 +71,7 @@ class SourceChannel(str, enum.Enum):
     REFERRAL = "REFERRAL"
     CAMPUS = "CAMPUS"
     OTHER = "OTHER"
+    REJOINING = "REJOINING"
 
 
 class DocumentType(str, enum.Enum):

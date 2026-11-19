@@ -12,7 +12,7 @@ DL_RE = re.compile(r"^[A-Z0-9]{8,20}$", re.IGNORECASE)
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 FULL_NAME_RE = re.compile(r"^[a-zA-Z\s.'-]{2,100}$")
 
-SOURCES = {"WALK_IN", "INDEED", "REFERRAL", "CAMPUS", "OTHER"}
+SOURCES = {"WALK_IN", "INDEED", "REFERRAL", "CAMPUS", "OTHER", "REJOINING"}
 GENDERS = {"Male", "Female", "Other"}
 MARITAL_STATUSES = {"Single", "Married", "Divorced", "Widowed"}
 BLOOD_GROUPS = {"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"}

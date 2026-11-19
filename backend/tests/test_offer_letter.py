@@ -206,6 +206,14 @@ def test_head_office_forwarding_email_uses_candidate_name_and_template():
     assert "five working days" in preview
 
 
+def test_head_office_forwarding_email_includes_branch_name():
+    candidate = SimpleNamespace(full_name="Rahul V", branch_location="Kalamassery")
+    subject, body_html, _ = _head_office_forwarding_email_content(candidate)
+    assert subject == "Update Regarding Interview – Nippon Toyota Kalamassery"
+    assert "attend the interview at Nippon Toyota Kalamassery" in body_html
+    assert "Talent Acquisition Team<br>Nippon Toyota</p>" in body_html
+
+
 def test_head_office_forwarding_email_records_failure_for_retry(monkeypatch):
     db = _FakeDb()
     candidate = SimpleNamespace(id=uuid4(), full_name="Anu Nithin", email="anu@example.com", profile=None)

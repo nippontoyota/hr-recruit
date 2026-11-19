@@ -242,6 +242,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
     txt(candidate.profile?.total_experience) ||
     (candidate.experience && candidate.experience !== 'Fresher' ? candidate.experience : '') ||
     (candidate.experience === 'Fresher' ? 'Fresher' : '');
+  const isFresher = Boolean(rawGet(raw, 'isFresher')) || candidate.experience === 'Fresher';
   const relevantExp = rawGet(raw, 'relevantExperience');
   const currentSalary =
     rawGet(raw, 'currentSalary') ||
@@ -460,22 +461,32 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             </Cell>
           </tr>
           <tr>
-            <Cell label rowSpan={2}>Contact No:</Cell>
-            <Cell colSpan={4} rowSpan={2} className="align-middle">{phones.filter(Boolean).join(', ')}</Cell>
-            <Cell label colSpan={3} className="bg-neutral-200 text-center whitespace-nowrap">Experience</Cell>
-            <Cell colSpan={2} className="bg-neutral-200 text-center font-bold">Years</Cell>
+            <Cell label rowSpan={isFresher ? 1 : 2}>Contact No:</Cell>
+            <Cell colSpan={isFresher ? 9 : 4} rowSpan={isFresher ? 1 : 2} className="align-middle">{phones.filter(Boolean).join(', ')}</Cell>
+            {!isFresher && (
+              <>
+                <Cell label colSpan={3} className="bg-neutral-200 text-center whitespace-nowrap">Experience</Cell>
+                <Cell colSpan={2} className="bg-neutral-200 text-center font-bold">Years</Cell>
+              </>
+            )}
           </tr>
-          <tr>
-            <Cell label colSpan={3} className="whitespace-nowrap">Total Work Experience</Cell>
-            <Cell colSpan={2} className="text-center align-middle">{totalExp}</Cell>
-          </tr>
+          {!isFresher && (
+            <tr>
+              <Cell label colSpan={3} className="whitespace-nowrap">Total Work Experience</Cell>
+              <Cell colSpan={2} className="text-center align-middle">{totalExp}</Cell>
+            </tr>
+          )}
           <tr>
             <Cell label>Contact Address</Cell>
-            <Cell colSpan={4} className="whitespace-normal leading-tight text-[9px] py-1">
+            <Cell colSpan={isFresher ? 9 : 4} className="whitespace-normal leading-tight text-[9px] py-1">
               {addr.filter(Boolean).join(', ')}
             </Cell>
-            <Cell label colSpan={3} className="bg-neutral-200 italic whitespace-nowrap">Relevant Experience</Cell>
-            <Cell colSpan={2} className="text-center align-middle">{relevantExp}</Cell>
+            {!isFresher && (
+              <>
+                <Cell label colSpan={3} className="bg-neutral-200 italic whitespace-nowrap">Relevant Experience</Cell>
+                <Cell colSpan={2} className="text-center align-middle">{relevantExp}</Cell>
+              </>
+            )}
           </tr>
 
           {/* ── Education & Family ── */}
@@ -560,18 +571,26 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell label>From</Cell>
             <Cell label>To</Cell>
           </tr>
-          {finalJobs.map((job, i) => (
-            <tr key={`job-${i}`} className="h-[8mm]">
-              <Cell>{job.company}</Cell>
-              <Cell>{shortDate(job.fromDate) || job.fromDate}</Cell>
-              <Cell>{shortDate(job.toDate) || job.toDate}</Cell>
-              <Cell>{job.company ? yearsBetween(job.fromDate, job.toDate) : ''}</Cell>
-              <Cell colSpan={2}>{job.position}</Cell>
-              <Cell colSpan={3}>{job.reason}</Cell>
-              <Cell>{job.salary}</Cell>
-              <Cell colSpan={2}></Cell>
+          {isFresher ? (
+            <tr className="h-[8mm]">
+              <Cell colSpan={12} className="text-center italic text-neutral-500 py-2">
+                Fresher — No Prior Employment Record
+              </Cell>
             </tr>
-          ))}
+          ) : (
+            finalJobs.map((job, i) => (
+              <tr key={`job-${i}`} className="h-[8mm]">
+                <Cell>{job.company}</Cell>
+                <Cell>{shortDate(job.fromDate) || job.fromDate}</Cell>
+                <Cell>{shortDate(job.toDate) || job.toDate}</Cell>
+                <Cell>{job.company ? yearsBetween(job.fromDate, job.toDate) : ''}</Cell>
+                <Cell colSpan={2}>{job.position}</Cell>
+                <Cell colSpan={3}>{job.reason}</Cell>
+                <Cell>{job.salary}</Cell>
+                <Cell colSpan={2}></Cell>
+              </tr>
+            ))
+          )}
 
           {/* ── Salary Summary ── */}
           <tr>

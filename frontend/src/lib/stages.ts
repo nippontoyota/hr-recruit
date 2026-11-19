@@ -50,6 +50,7 @@ const SOURCE_LABELS: Record<string, string> = {
   NAUKRI: 'Naukri',
   REFERRAL: 'Referral',
   CAMPUS: 'Campus',
+  REJOINING: 'Rejoining',
   LINKEDIN: 'LinkedIn',
   OTHER: 'Other',
 };

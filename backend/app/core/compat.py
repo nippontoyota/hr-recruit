@@ -27,6 +27,8 @@ _SOURCE_ALIASES: dict[str, SourceChannel] = {
     "website": SourceChannel.OTHER,
     "web": SourceChannel.OTHER,
     "naukri": SourceChannel.OTHER,
+    "rejoining": SourceChannel.REJOINING,
+    "rejoin": SourceChannel.REJOINING,
 }
 
 

@@ -674,15 +674,26 @@ def _offer_acceptance_email_content(candidate: Candidate) -> tuple[str, str, str
     return OFFER_ACCEPTANCE_EMAIL_SUBJECT, body_html, preview
 
 
+def _candidate_branch_brand_label(candidate: Candidate) -> str:
+    brand = _candidate_brand_label(candidate)
+    branch = (getattr(candidate, "branch_location", "") or "").strip()
+    if not branch:
+        return brand
+    if branch.casefold().startswith(brand.casefold()):
+        return branch
+    return f"{brand} {branch}"
+
+
 def _head_office_forwarding_email_content(candidate: Candidate) -> tuple[str, str, str]:
     name = escape(getattr(candidate, "full_name", None) or "Candidate")
     brand_name = _candidate_brand_label(candidate)
-    subject = f"Update Regarding Interview – {brand_name}"
+    branch_brand_name = _candidate_branch_brand_label(candidate)
+    subject = f"Update Regarding Interview – {branch_brand_name}"
     body_html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.55;">
         <p>Dear {name},</p>
-        <p>Thank you for taking the time to attend the interview at {brand_name}.</p>
+        <p>Thank you for taking the time to attend the interview at {escape(branch_brand_name)}.</p>
         <p>We are pleased to inform you that you have been shortlisted for the next stage of our selection process, and your application has been forwarded to our Head Office for further review.</p>
         <p>Further details regarding the upcoming steps in the selection process will be communicated to you by the {brand_name} Head Office Team within the next five working days.</p>
         <p>We appreciate your interest in joining {brand_name} and look forward to staying in touch with you.</p>
@@ -716,7 +727,7 @@ def _send_head_office_forwarding_email(
                 to_email=candidate.email,
                 subject=subject,
                 body_html=body_html,
-                cc_emails=head_office_forwarding_cc_emails(),
+                cc_emails=head_office_forwarding_cc_emails(db, candidate),
                 from_name=f"{_candidate_brand_label(candidate)} HR",
             )
         except EmailSendError as e:

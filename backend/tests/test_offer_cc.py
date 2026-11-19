@@ -57,6 +57,17 @@ def test_head_office_forwarding_cc_includes_internal_recipients():
     ]
 
 
+def test_head_office_forwarding_cc_includes_branch_hr():
+    db = MagicMock()
+    cand = _candidate("Kalamassery")
+    assert head_office_forwarding_cc_emails(db, cand) == [
+        "recruitment@nippontoyota.com",
+        "naveen@nippontoyota.com",
+        "jerry@nippontoyota.com",
+        "hrkly@nippontoyota.com",
+    ]
+
+
 def test_offer_cc_uses_fixed_irinjalakuda_hr_address():
     db = MagicMock()
     for branch_name in ("Irinjalakuda", "Vellangallur (Irinjalakuda)", "iranjalakuda"):

@@ -3,6 +3,7 @@ export const SOURCE_OPTIONS = [
   { value: 'INDEED', label: 'Indeed' },
   { value: 'REFERRAL', label: 'Referral' },
   { value: 'CAMPUS', label: 'Campus' },
+  { value: 'REJOINING', label: 'Rejoining' },
   { value: 'OTHER', label: 'Other / LinkedIn' },
 ] as const;
 

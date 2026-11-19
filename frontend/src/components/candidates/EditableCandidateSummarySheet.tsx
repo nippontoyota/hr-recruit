@@ -190,6 +190,7 @@ export function EditableCandidateSummarySheet({
     age: rawGet(initialRaw, 'age') || '',
     mobileNumber: candidate.phone || rawGet(initialRaw, 'mobileNumber') || '',
     phone2: rawGet(initialRaw, 'contactNumber2', 'phone2') || '',
+    isFresher: Boolean(rawGet(initialRaw, 'isFresher')) || candidate.experience === 'Fresher',
     totalExperience: rawGet(initialRaw, 'totalExperience') || txt(candidate.profile?.total_experience) || candidate.experience || '',
     relevantExperience: rawGet(initialRaw, 'relevantExperience') || '',
     // Address
@@ -336,10 +337,22 @@ export function EditableCandidateSummarySheet({
     <div className="space-y-4">
       {/* Sticky Action Bar */}
       <div className="sticky top-2 z-30 flex items-center justify-between gap-3 bg-white p-3 rounded-lg border border-border shadow-md no-print">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-xs font-bold text-slate-800">Editing Candidate Summary Sheet</span>
-          <span className="text-xs text-muted-foreground hidden sm:inline">— edit cells inline below</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-bold text-slate-800">Editing Candidate Summary Sheet</span>
+            <span className="text-xs text-muted-foreground hidden sm:inline">— edit cells inline below</span>
+          </div>
+
+          <label className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-300 cursor-pointer transition-colors select-none">
+            <input
+              type="checkbox"
+              checked={Boolean(form.isFresher)}
+              onChange={(e) => update('isFresher', e.target.checked)}
+              className="w-3.5 h-3.5 rounded-xs accent-emerald-600 cursor-pointer"
+            />
+            <span className="text-xs font-bold text-slate-700">Fresher</span>
+          </label>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -490,44 +503,56 @@ export function EditableCandidateSummarySheet({
               </Cell>
             </tr>
             <tr>
-              <Cell colSpan={4}>
+              <Cell colSpan={form.isFresher ? 9 : 4}>
                 <InlineInput value={form.phone2 as string} onChange={(v) => update('phone2', v)} placeholder="Alt Phone" />
               </Cell>
-              <Cell label colSpan={2}>Experience</Cell>
-              <Cell colSpan={3}>Years</Cell>
+              {!form.isFresher && (
+                <>
+                  <Cell label colSpan={2}>Experience</Cell>
+                  <Cell colSpan={3}>Years</Cell>
+                </>
+              )}
             </tr>
             <tr>
               <Cell label rowSpan={5}>Contact Address</Cell>
-              <Cell colSpan={4}>
+              <Cell colSpan={form.isFresher ? 9 : 4}>
                 <InlineInput value={form.presHouseName as string} onChange={(v) => update('presHouseName', v)} placeholder="House Name" />
               </Cell>
-              <Cell colSpan={2}>Total Work Experience</Cell>
-              <Cell colSpan={3} rowSpan={2}>
-                <InlineInput value={form.totalExperience as string} onChange={(v) => update('totalExperience', v)} />
-              </Cell>
+              {!form.isFresher && (
+                <>
+                  <Cell colSpan={2}>Total Work Experience</Cell>
+                  <Cell colSpan={3} rowSpan={2}>
+                    <InlineInput value={form.totalExperience as string} onChange={(v) => update('totalExperience', v)} />
+                  </Cell>
+                </>
+              )}
             </tr>
             <tr>
-              <Cell colSpan={4}>
+              <Cell colSpan={form.isFresher ? 9 : 4}>
                 <InlineInput value={form.presLandmark as string} onChange={(v) => update('presLandmark', v)} placeholder="Landmark / Street" />
               </Cell>
-              <Cell colSpan={2}></Cell>
+              {!form.isFresher && <Cell colSpan={2}></Cell>}
             </tr>
             <tr>
-              <Cell colSpan={4}>
+              <Cell colSpan={form.isFresher ? 9 : 4}>
                 <InlineInput value={form.presPostOffice as string} onChange={(v) => update('presPostOffice', v)} placeholder="Post Office" />
               </Cell>
-              <Cell label colSpan={2} className="italic">Relevant Experience</Cell>
-              <Cell colSpan={3} rowSpan={3}>
-                <InlineInput value={form.relevantExperience as string} onChange={(v) => update('relevantExperience', v)} />
-              </Cell>
+              {!form.isFresher && (
+                <>
+                  <Cell label colSpan={2} className="italic">Relevant Experience</Cell>
+                  <Cell colSpan={3} rowSpan={3}>
+                    <InlineInput value={form.relevantExperience as string} onChange={(v) => update('relevantExperience', v)} />
+                  </Cell>
+                </>
+              )}
             </tr>
             <tr>
-              <Cell colSpan={4}>
+              <Cell colSpan={form.isFresher ? 9 : 4}>
                 <InlineInput value={form.presDistrict as string} onChange={(v) => update('presDistrict', v)} placeholder="District" />
               </Cell>
             </tr>
             <tr>
-              <Cell colSpan={4}>
+              <Cell colSpan={form.isFresher ? 9 : 4}>
                 <InlineInput value={form.presPinCode as string} onChange={(v) => update('presPinCode', v)} placeholder="Pin Code" />
               </Cell>
             </tr>
@@ -663,32 +688,40 @@ export function EditableCandidateSummarySheet({
               <Cell label>From</Cell>
               <Cell label>To</Cell>
             </tr>
-            {jobs.map((job, i) => (
-              <tr key={`job-${i}`} className="h-[9mm]">
-                <Cell>
-                  <InlineInput value={job.company} onChange={(v) => updateJob(i, 'company', v)} />
+            {form.isFresher ? (
+              <tr className="h-[9mm]">
+                <Cell colSpan={12} className="text-center italic text-slate-500 py-3">
+                  Fresher — No Prior Employment Record
                 </Cell>
-                <Cell>
-                  <InlineInput value={job.fromDate} onChange={(v) => updateJob(i, 'fromDate', v)} />
-                </Cell>
-                <Cell>
-                  <InlineInput value={job.toDate} onChange={(v) => updateJob(i, 'toDate', v)} />
-                </Cell>
-                <Cell>
-                  {yearsBetween(job.fromDate, job.toDate)}
-                </Cell>
-                <Cell colSpan={2}>
-                  <InlineInput value={job.position} onChange={(v) => updateJob(i, 'position', v)} />
-                </Cell>
-                <Cell colSpan={3}>
-                  <InlineInput value={job.reason} onChange={(v) => updateJob(i, 'reason', v)} />
-                </Cell>
-                <Cell colSpan={2}>
-                  <InlineInput value={job.salary} onChange={(v) => updateJob(i, 'salary', v)} />
-                </Cell>
-                <Cell></Cell>
               </tr>
-            ))}
+            ) : (
+              jobs.map((job, i) => (
+                <tr key={`job-${i}`} className="h-[9mm]">
+                  <Cell>
+                    <InlineInput value={job.company} onChange={(v) => updateJob(i, 'company', v)} />
+                  </Cell>
+                  <Cell>
+                    <InlineInput value={job.fromDate} onChange={(v) => updateJob(i, 'fromDate', v)} />
+                  </Cell>
+                  <Cell>
+                    <InlineInput value={job.toDate} onChange={(v) => updateJob(i, 'toDate', v)} />
+                  </Cell>
+                  <Cell>
+                    {yearsBetween(job.fromDate, job.toDate)}
+                  </Cell>
+                  <Cell colSpan={2}>
+                    <InlineInput value={job.position} onChange={(v) => updateJob(i, 'position', v)} />
+                  </Cell>
+                  <Cell colSpan={3}>
+                    <InlineInput value={job.reason} onChange={(v) => updateJob(i, 'reason', v)} />
+                  </Cell>
+                  <Cell colSpan={2}>
+                    <InlineInput value={job.salary} onChange={(v) => updateJob(i, 'salary', v)} />
+                  </Cell>
+                  <Cell></Cell>
+                </tr>
+              ))
+            )}
 
             {/* Salary Summary */}
             <tr>
@@ -860,13 +893,15 @@ export function EditableCandidateSummarySheet({
             </tr>
           </tbody>
         </table>
-        <button
-          type="button"
-          onClick={addJob}
-          className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#1e3a5f] hover:underline"
-        >
-          <Plus className="w-3.5 h-3.5" /> Add experience row
-        </button>
+        {!form.isFresher && (
+          <button
+            type="button"
+            onClick={addJob}
+            className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-[#1e3a5f] hover:underline"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add experience row
+          </button>
+        )}
       </div>
     </div>
   );
