@@ -97,8 +97,19 @@ def document_out(document: Document) -> DocumentOut:
 
 
 def process_photo_url(photo_url: str | None) -> str | None:
-    if not photo_url or photo_url.startswith(("http://", "https://", "data:")):
+    if not photo_url:
+        return None
+    # If the URL is a legacy Supabase storage URL (e.g. from the deleted project or a public bucket),
+    # extract the relative storage path so we can generate a fresh signed URL from the recovered project.
+    if "supabase.co/storage/v1/object/" in photo_url:
+        marker = f"{settings.supabase_storage_bucket}/"
+        if marker in photo_url:
+            photo_url = photo_url.split(marker, 1)[1].split("?")[0]
+        else:
+            return None
+    elif photo_url.startswith(("http://", "https://", "data:")):
         return photo_url
+
     try:
         return storage.create_signed_url(photo_url)
     except Exception:

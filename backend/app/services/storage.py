@@ -35,9 +35,13 @@ def _require_storage_config() -> tuple[str, str, str]:
 
 def _headers(key: str, *, content_type: str | None = None) -> dict[str, str]:
     headers = {
-        "Authorization": f"Bearer {key}",
         "apikey": key,
     }
+    # Supabase new secret keys (sb_secret_...) are opaque API tokens and must
+    # NOT be sent in Authorization: Bearer, which Kong tries to parse as a JWT.
+    # Legacy service_role keys (starting with 'ey') are JWTs and can be sent as Bearer.
+    if not key.startswith("sb_secret_"):
+        headers["Authorization"] = f"Bearer {key}"
     if content_type:
         headers["Content-Type"] = content_type
     return headers
@@ -248,6 +252,9 @@ def create_signed_url(path: str, expires_in: int | None = None) -> str:
     if not signed:
         raise _storage_failure("sign")
     if not signed.startswith("http"):
-        signed = f"{base}/storage/v1{signed}"
+        if signed.startswith("/storage/v1/"):
+            signed = f"{base}{signed}"
+        else:
+            signed = f"{base}/storage/v1{signed if signed.startswith('/') else '/' + signed}"
     _signed_url_cache[path] = (signed, time.monotonic() + max(expires - 60, 60))
     return signed
