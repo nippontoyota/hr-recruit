@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     db_schema: str = "recruitment"
     secret_key: str = "change-me-use-long-random-string"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 480
+    access_token_expire_minutes: int = 43200
 
     supabase_url: str = ""
     supabase_service_role_key: str = ""

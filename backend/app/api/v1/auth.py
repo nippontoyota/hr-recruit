@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.compat import role_for_frontend
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.deps import get_current_active_user
+from app.core.deps import get_current_active_user, get_user_for_refresh
 from app.core.security import create_access_token, verify_password
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenResponse, UserOut
@@ -145,6 +145,32 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_active_user)) -> UserOut:
     return UserOut.from_user(user)
+
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh_token(
+    response: Response,
+    current_user: User = Depends(get_user_for_refresh),
+) -> TokenResponse:
+    frontend_role = role_for_frontend(current_user.role)
+    token = create_access_token(
+        user_id=current_user.id,
+        email=current_user.email,
+        role=frontend_role,
+    )
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=settings.is_production,
+        samesite="lax",
+        max_age=settings.access_token_expire_minutes * 60,
+    )
+    return TokenResponse(
+        access_token=token,
+        token=token,
+        user=UserOut.from_user(current_user),
+    )
 
 
 from uuid import UUID

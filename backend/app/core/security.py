@@ -44,6 +44,32 @@ def decode_token(token: str) -> dict[str, Any]:
         raise ValueError("Invalid token") from exc
 
 
+def decode_token_for_refresh(token: str, max_expired_seconds: int = 7 * 86400) -> dict[str, Any]:
+    """Decode a token for session refresh, allowing a grace window after expiration.
+
+    Signature verification is always strictly enforced.
+    """
+    try:
+        return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+    except jwt.ExpiredSignatureError:
+        try:
+            payload = jwt.decode(
+                token,
+                settings.secret_key,
+                algorithms=[settings.algorithm],
+                options={"verify_exp": False},
+            )
+        except JWTError as exc:
+            raise ValueError("Invalid token") from exc
+        exp = payload.get("exp")
+        now = datetime.now(UTC).timestamp()
+        if exp is not None and (now - exp) > max_expired_seconds:
+            raise ValueError("Token expired beyond refresh window")
+        return payload
+    except JWTError as exc:
+        raise ValueError("Invalid token") from exc
+
+
 def generate_secure_token() -> str:
     """Create a URL-safe token with 32 bytes of entropy."""
     import secrets

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '../types';
-import { login as apiLogin, logoutApi, AUTH_EXPIRED_EVENT, setAccessToken } from '../api/client';
+import { login as apiLogin, logoutApi, AUTH_EXPIRED_EVENT, setAccessToken, refreshAccessToken } from '../api/client';
 import { toast } from 'sonner';
 import { AuthContext } from './auth-context';
 export { useAuth } from './useAuth';
@@ -72,6 +72,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
   }, [logout]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const checkAndSlideSession = () => {
+      const savedAtStr = localStorage.getItem('token_saved_at');
+      const token = localStorage.getItem('access_token');
+      if (!token) return;
+
+      const savedAt = savedAtStr ? parseInt(savedAtStr, 10) : 0;
+      const hoursSinceSave = (Date.now() - savedAt) / (1000 * 60 * 60);
+
+      if (hoursSinceSave >= 24) {
+        refreshAccessToken().then((newToken) => {
+          if (newToken) {
+            const stored = readStoredUser();
+            if (stored) setUser(stored);
+          }
+        });
+      }
+    };
+
+    checkAndSlideSession();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkAndSlideSession();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', checkAndSlideSession);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', checkAndSlideSession);
+    };
+  }, [user]);
 
   const contextValue = React.useMemo(() => ({
     user,

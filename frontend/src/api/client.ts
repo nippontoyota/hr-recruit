@@ -25,6 +25,7 @@ export function getApiBaseUrl(): string {
 
 export const AUTH_EXPIRED_EVENT = 'auth:expired';
 const ACCESS_TOKEN_KEY = 'access_token';
+const TOKEN_SAVED_AT_KEY = 'token_saved_at';
 
 function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -33,9 +34,59 @@ function getAccessToken(): string | null {
 export function setAccessToken(token: string | null) {
   if (token) {
     localStorage.setItem(ACCESS_TOKEN_KEY, token);
+    localStorage.setItem(TOKEN_SAVED_AT_KEY, String(Date.now()));
   } else {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(TOKEN_SAVED_AT_KEY);
   }
+}
+
+let refreshPromise: Promise<string | null> | null = null;
+
+export async function refreshAccessToken(): Promise<string | null> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  const token = getAccessToken();
+  if (!token) {
+    return null;
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const url = `${baseURL}/auth/refresh`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      const newToken = data.access_token || data.token;
+      if (newToken) {
+        setAccessToken(newToken);
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+        }
+        return newToken;
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export function getAuthHeaders(extra?: Record<string, string>): Record<string, string> {
@@ -101,6 +152,7 @@ type RequestConfig = {
   signal?: AbortSignal;
   responseType?: 'json' | 'blob';
   timeoutMs?: number;
+  _isRetry?: boolean;
 };
 
 export async function request(method: string, endpoint: string, body?: any, config?: RequestConfig) {
@@ -178,7 +230,21 @@ async function executeRequest(method: string, endpoint: string, body?: any, conf
     config?.signal?.removeEventListener('abort', onCallerAbort);
   }
 
-  if (response.status === 401 && endpoint !== '/auth/login') {
+  if (response.status === 401 && endpoint !== '/auth/login' && endpoint !== '/auth/refresh') {
+    if (!config?._isRetry) {
+      const refreshedToken = await refreshAccessToken();
+      if (refreshedToken) {
+        const retryHeaders = { ...(config?.headers || {}) };
+        if (retryHeaders.Authorization) {
+          retryHeaders.Authorization = `Bearer ${refreshedToken}`;
+        }
+        return executeRequest(method, endpoint, body, {
+          ...config,
+          headers: retryHeaders,
+          _isRetry: true,
+        });
+      }
+    }
     localStorage.removeItem('user');
     setAccessToken(null);
     window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
