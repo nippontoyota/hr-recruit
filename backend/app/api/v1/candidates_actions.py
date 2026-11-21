@@ -412,15 +412,22 @@ def send_whatsapp_invite(
 ):
     candidate = get_candidate_for_user(db, id, user, write=True)
     vars_map = dict(body.variables or {})
+    is_online = (vars_map.get("mode") or "").strip().upper() == "ONLINE"
     if vars_map.get("visitDate"):
         vars_map["visitDate"] = format_date_dmy(vars_map["visitDate"])
     if not (vars_map.get("visitDate") or "").strip():
         raise HTTPException(status_code=400, detail="Visit date is required before sending.")
-    if not (vars_map.get("branchName") or "").strip() or not (vars_map.get("mapsLink") or "").strip():
+    if not is_online and (not (vars_map.get("branchName") or "").strip() or not (vars_map.get("mapsLink") or "").strip()):
         raise HTTPException(status_code=400, detail="Location and maps link are required before sending.")
     position = (vars_map.get("position") or "").strip()
     if not position or position.lower() in {"unknown", "unknown position", "the applied"}:
         raise HTTPException(status_code=400, detail="Position is required before sending.")
+
+    if is_online:
+        vars_map.setdefault("branchName", "Online")
+        vars_map.setdefault("mapsLink", (vars_map.get("meetingLink") or "Online").strip() or "Online")
+        vars_map.setdefault("meetingPoint", "Online")
+        vars_map.setdefault("touchPoint1", f"Recruiter ({user.full_name or 'HR'})")
 
     meeting_point = (vars_map.get("meetingPoint") or "").strip()
     touch_point_1 = (vars_map.get("touchPoint1") or "").strip()

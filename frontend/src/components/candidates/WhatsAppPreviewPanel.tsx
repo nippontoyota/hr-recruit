@@ -394,12 +394,14 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
   };
 
   const saveDraft = async () => {
-    const next = {
+    const next: WhatsAppTemplateVars = {
       ...draft,
       position: sanitizeWhatsAppPosition(draft.position),
       branchName: draft.branchName.trim(),
       mapsLink: draft.mapsLink.trim(),
       formLink: candidate.share_url || draft.formLink,
+      mode: draft.mode || 'IN_PERSON',
+      meetingLink: (draft.meetingLink || '').trim(),
     };
     setIsSaving(true);
     try {
@@ -414,7 +416,7 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
       setIsSaving(false);
     }
 
-    if (next.branchName && next.mapsLink) {
+    if (next.mode !== 'ONLINE' && next.branchName && next.mapsLink) {
       const alreadySaved = places.some(
         (place) =>
           place.name.toLowerCase() === next.branchName.toLowerCase() &&
@@ -493,7 +495,15 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
       >
         <div className="shrink-0 px-6 pt-5 pb-4 flex items-center justify-between bg-white/80 backdrop-blur-xl border-b border-black/5">
           <div>
-            <h2 className="text-xl font-bold text-foreground">Send Call Letter</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold text-foreground">Send Call Letter</h2>
+              <span className={cn(
+                'inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider',
+                vars.mode === 'ONLINE' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-700 border border-gray-200'
+              )}>
+                {vars.mode === 'ONLINE' ? 'Online' : 'In-Person'}
+              </span>
+            </div>
             <p className="mt-0.5 text-sm text-muted-foreground font-medium">
               Candidate&apos;s perspective
             </p>
@@ -645,8 +655,40 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
       >
         <div className="max-h-[72vh] overflow-y-auto p-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="form-label form-label-required">Interview Mode</label>
+              <div className="flex gap-2 p-1 bg-muted/60 rounded-lg border border-border">
+                <button
+                  type="button"
+                  className={cn(
+                    'flex-1 py-1.5 px-3 text-xs font-semibold rounded-md transition-all cursor-pointer',
+                    draft.mode !== 'ONLINE'
+                      ? 'bg-white text-foreground shadow-sm border border-border/80'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  onClick={() => updateDraft('mode', 'IN_PERSON')}
+                >
+                  In-Person (Showroom)
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'flex-1 py-1.5 px-3 text-xs font-semibold rounded-md transition-all cursor-pointer',
+                    draft.mode === 'ONLINE'
+                      ? 'bg-white text-blue-700 shadow-sm border border-blue-200'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  onClick={() => updateDraft('mode', 'ONLINE')}
+                >
+                  Online Interview
+                </button>
+              </div>
+            </div>
+
             <div>
-              <label className="form-label form-label-required">{FIELD_LABELS.visitDate}</label>
+              <label className="form-label form-label-required">
+                {draft.mode === 'ONLINE' ? 'Interview date' : FIELD_LABELS.visitDate}
+              </label>
               <Input
                 type="date"
                 error={!!draftErrors.visitDate}
@@ -662,12 +704,15 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
             {EDITABLE_FIELDS.map((key) => {
               const required = key === 'position';
               const fieldError = required ? draftErrors.position : undefined;
+              const fieldLabel = key === 'arrivalTime' && draft.mode === 'ONLINE'
+                ? 'Interview time'
+                : FIELD_LABELS[key];
               return (
               <div
                 key={key}
                 className={key === 'extraInstructions' ? 'sm:col-span-2' : undefined}
               >
-                <label className={cn('form-label', required && 'form-label-required')}>{FIELD_LABELS[key]}</label>
+                <label className={cn('form-label', required && 'form-label-required')}>{fieldLabel}</label>
                 {key === 'extraInstructions' ? (
                   <textarea
                     value={draft[key]}
@@ -687,6 +732,20 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
               );
             })}
 
+            {draft.mode === 'ONLINE' ? (
+              <div className="sm:col-span-2 space-y-2 rounded-lg border border-border p-3 bg-muted/20">
+                <label className="form-label">Meeting Link (Google Meet, Zoom, Teams, etc.)</label>
+                <Input
+                  placeholder="https://meet.google.com/... (optional: leave empty if sharing shortly)"
+                  value={draft.meetingLink || ''}
+                  onChange={(event) => updateDraft('meetingLink', event.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter the meeting URL or leave blank to automatically display: &quot;Joining details will be shared with you shortly.&quot;
+                </p>
+              </div>
+            ) : (
+              <>
             <div className={cn(
               'sm:col-span-2 space-y-3 rounded-lg border p-3',
               draftErrors.branchName ? 'border-danger' : 'border-border'
@@ -842,6 +901,8 @@ export function WhatsAppPreviewPanel({ candidate, className, onUpdate, isReadOnl
                 Save remembers Meeting Point + Touch Points for this branch — pick it instantly next time. Leave Touch Point 2 out if there's only one contact.
               </p>
             </div>
+              </>
+            )}
 
             <div className="sm:col-span-2">
               <label className="form-label flex items-center gap-1.5">

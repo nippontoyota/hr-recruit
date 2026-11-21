@@ -55,6 +55,36 @@ def test_apply_whatsapp_template_persists_visit_and_raw_data():
     assert "whatsapp_invite" not in candidate.profile.raw_data
 
 
+def test_apply_whatsapp_template_persists_online_mode_and_meeting_link():
+    db = MagicMock()
+    candidate = SimpleNamespace(
+        id=uuid4(),
+        position_applied_for="Unknown",
+        visit_branch=None,
+        visit_date=None,
+        visit_time=None,
+        visit_maps_link=None,
+        visit_instructions=None,
+        profile=SimpleNamespace(raw_data=None),
+    )
+    apply_whatsapp_template(
+        db,
+        candidate,
+        {
+            "position": "Service Advisor",
+            "visitDate": "2026-11-25",
+            "arrivalTime": "10:00 AM",
+            "recruiterName": "Anu",
+            "mode": "ONLINE",
+            "meetingLink": "https://meet.google.com/test-meet-123",
+        },
+    )
+    tpl = candidate.profile.raw_data["whatsapp_template"]
+    assert tpl["mode"] == "ONLINE"
+    assert tpl["meetingLink"] == "https://meet.google.com/test-meet-123"
+    assert tpl["position"] == "Service Advisor"
+
+
 def test_apply_whatsapp_template_sent_records_invite():
     db = MagicMock()
     user = SimpleNamespace(id=uuid4())

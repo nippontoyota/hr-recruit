@@ -18,6 +18,8 @@ export interface WhatsAppTemplateVars {
   meetingPoint: string;
   touchPoint1: string;
   touchPoint2: string;
+  mode?: 'IN_PERSON' | 'ONLINE';
+  meetingLink?: string;
 }
 
 const DEFAULT_EXTRA =
@@ -65,10 +67,41 @@ export function positionForWhatsApp(input: {
 export function buildWhatsAppMessage(vars: WhatsAppTemplateVars): string {
   const brand = getBrandConfig(vars.brand);
   const dateLabel = vars.visitDate.trim() || '(select visit date)';
+  const positionLabel = sanitizeWhatsAppPosition(vars.position) || '(select position)';
+  const isOnline = vars.mode === 'ONLINE';
+
+  if (isOnline) {
+    const meetingInfo = vars.meetingLink?.trim()
+      ? `Meeting Link – ${vars.meetingLink.trim()}`
+      : 'Meeting Link – Joining details will be shared with you shortly.';
+
+    return [
+      `Dear ${vars.candidateName},`,
+      '',
+      `"Greetings from ${brand.name} HRD"`,
+      '',
+      `This is to inform you that, pertaining to your application for *${positionLabel}*, we have scheduled an online interview on *${dateLabel}*.`,
+      '',
+      'Also complete the Job Application Form using the link below without fail:',
+      vars.formLink,
+      '',
+      `Interview Time – *${vars.arrivalTime}*`,
+      'Mode – Online',
+      meetingInfo,
+      'Dress Code – Formal Wear with Proper Grooming (Mandatory)',
+      '',
+      'Please ensure a stable internet connection and be ready at the scheduled time.',
+      '',
+      'Regards',
+      vars.recruiterName,
+      'Talent Acquisition Team',
+      brand.name,
+    ].join('\n');
+  }
+
   const branchLabel = vars.branchName.trim() || '(select location)';
   const maps = vars.mapsLink.trim() || '(select location link)';
   const extra = composeExtraInstructions(vars);
-  const positionLabel = sanitizeWhatsAppPosition(vars.position) || '(select position)';
 
   return [
     `Dear ${vars.candidateName},`,
@@ -131,8 +164,10 @@ export function whatsappInviteFieldErrors(
   if (!vars.visitDate.trim()) {
     errors.visitDate = 'Visit date is required.';
   }
-  if (!vars.branchName.trim() || !vars.mapsLink.trim()) {
-    errors.branchName = 'Location is required.';
+  if (vars.mode !== 'ONLINE') {
+    if (!vars.branchName.trim() || !vars.mapsLink.trim()) {
+      errors.branchName = 'Location is required.';
+    }
   }
   return errors;
 }
@@ -155,6 +190,8 @@ export function defaultTemplateVars(input: {
   meetingPoint?: string;
   touchPoint1?: string;
   touchPoint2?: string;
+  mode?: 'IN_PERSON' | 'ONLINE';
+  meetingLink?: string;
 }): WhatsAppTemplateVars {
   const visitDate =
     input.visitDate == null || input.visitDate === ''
@@ -176,6 +213,8 @@ export function defaultTemplateVars(input: {
     meetingPoint: input.meetingPoint?.trim() || '',
     touchPoint1: input.touchPoint1?.trim() || '',
     touchPoint2: input.touchPoint2?.trim() || '',
+    mode: input.mode || 'IN_PERSON',
+    meetingLink: input.meetingLink?.trim() || '',
   };
 }
 
@@ -262,6 +301,8 @@ export function mergeWhatsAppVars(input: {
     touchPoint1: filled(stored.touchPoint1) || filled(local.touchPoint1) || defaults.touchPoint1,
     touchPoint2: filled(stored.touchPoint2) || filled(local.touchPoint2) || defaults.touchPoint2,
     recruiterName: filled(stored.recruiterName) || filled(local.recruiterName) || defaults.recruiterName,
+    mode: (stored.mode === 'ONLINE' || local.mode === 'ONLINE' ? 'ONLINE' : 'IN_PERSON') as 'IN_PERSON' | 'ONLINE',
+    meetingLink: filled(stored.meetingLink) || filled(local.meetingLink) || '',
   };
 }
 

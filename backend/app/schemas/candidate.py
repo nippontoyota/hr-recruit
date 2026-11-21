@@ -1024,6 +1024,8 @@ class WhatsAppTemplateSave(BaseModel):
     meetingPoint: str | None = None
     touchPoint1: str | None = None
     touchPoint2: str | None = None
+    mode: str | None = None
+    meetingLink: str | None = None
 
 
 class CandidatePaginatedOut(BaseModel):

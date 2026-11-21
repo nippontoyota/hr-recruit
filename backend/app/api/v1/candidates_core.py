@@ -209,9 +209,13 @@ def apply_whatsapp_template(
         "meetingPoint",
         "touchPoint1",
         "touchPoint2",
+        "mode",
+        "meetingLink",
     ):
         if vars_in.get(key) not in (None, ""):
             template[key] = vars_in[key]
+        elif key == "meetingLink":
+            template.pop(key, None)
     if template:
         raw_data["whatsapp_template"] = template
     if sent:
