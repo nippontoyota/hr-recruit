@@ -8,6 +8,7 @@ import { Search, Building2, MapPin, CheckCircle, XCircle, ExternalLink, Calendar
 import { getStageBadgeVariant, stageLabel } from '../../../lib/stages';
 import { formatDate } from '../../../lib/dateTime';
 import type { PipelineStage } from '../../../types';
+import { formatBranchName } from '../../../lib/branding';
 
 type FilterMode = 'ALL' | 'HIRED' | 'REJECTED';
 
@@ -188,7 +189,7 @@ export default function AdminOutcomesList() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
-                        <MapPin size={14} className="text-gray-400" /> {candidate.branch_location || 'Head Office'}
+                        <MapPin size={14} className="text-gray-400" /> {formatBranchName(candidate.branch_location) || 'Head Office'}
                       </div>
                       <div className="text-xs font-medium text-gray-500 flex items-center gap-1.5 mt-1">
                         <Building2 size={12} className="text-gray-400" /> {candidate.department || 'Unspecified'}

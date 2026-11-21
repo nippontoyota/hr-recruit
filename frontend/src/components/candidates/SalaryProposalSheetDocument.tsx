@@ -1,6 +1,6 @@
 import type { Candidate } from '../../types';
 import { formatDate } from '../../lib/dateTime';
-import { getBrandConfig } from '../../lib/branding';
+import { getBrandConfig, formatBranchName } from '../../lib/branding';
 
 interface SalaryProposalSheetDocumentProps {
   candidate: Candidate;
@@ -64,7 +64,7 @@ export function SalaryProposalSheetDocument({ candidate, className = '' }: Salar
   const proposedDoj = rawDoj ? formatDate(rawDoj) : '—';
   const department = getStr(sal, 'department', 'Department') || candidate.department || '—';
   const designation = getStr(sal, 'designation', 'Designation') || candidate.position_applied_for || '—';
-  const branch = getStr(sal, 'branch', 'Branch') || candidate.branch_location || brand.name;
+  const branch = formatBranchName(getStr(sal, 'branch', 'Branch') || candidate.branch_location) || brand.name;
   const lastSalary = getNum(sal, 'last salary', 'last_salary', 'Last Salary') ?? (candidate.profile?.current_salary ? Number(candidate.profile.current_salary) : null);
   const expectedSalary = getStr(sal, 'candidate expected salary', 'candidate_expected_salary', 'Candidate Expected Salary') || (candidate.profile?.expected_salary ? String(candidate.profile.expected_salary) : '—');
   const totalExp = getStr(sal, 'total experience', 'total_experience', 'Total Experience ') || (raw.totalWorkExperience ? `${raw.totalWorkExperience} Year(s)` : '—');

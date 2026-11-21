@@ -7,6 +7,7 @@ import { PublicShell } from '../../components/layout/PublicShell';
 import { PublicStatusPanel } from '../../components/candidates/PublicStatusPanel';
 import { extractError, extractDiagnosticInfo, type DiagnosticErrorInfo, isAbortError } from '../../lib/utils';
 import { formatDateTime } from '../../lib/dateTime';
+import { formatBranchName } from '../../lib/branding';
 
 function formatDate(value: string | null) {
   return value ? formatDateTime(value) : 'To be decided';
@@ -108,7 +109,7 @@ export default function CandidatePortalPage() {
           <div className="mt-4 grid gap-2 text-sm text-text-secondary sm:grid-cols-2">
             <span className="flex items-center gap-2"><Phone className="h-4 w-4" />{portalData.phone}</span>
             {portalData.email && <span className="flex items-center gap-2"><Mail className="h-4 w-4" />{portalData.email}</span>}
-            {portalData.branch_location && <span className="flex items-center gap-2"><MapPin className="h-4 w-4" />{portalData.branch_location}</span>}
+            {portalData.branch_location && <span className="flex items-center gap-2"><MapPin className="h-4 w-4" />{formatBranchName(portalData.branch_location)}</span>}
           </div>
         </section>
 

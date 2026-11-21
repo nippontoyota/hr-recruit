@@ -9,6 +9,7 @@ import { Search, ChevronLeft, Building2, MapPin, Calendar, ExternalLink } from '
 import { getStageBadgeVariant, stageLabel } from '../../../lib/stages';
 import { ALL_PIPELINE_STAGES } from '../../../types';
 import { formatDate as formatRecruitmentDate } from '../../../lib/dateTime';
+import { formatBranchName } from '../../../lib/branding';
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '—';
@@ -181,7 +182,7 @@ export default function AdminCandidatesList() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
-                        <MapPin size={14} className="text-gray-400" /> {candidate.branch_location || 'Head Office'}
+                        <MapPin size={14} className="text-gray-400" /> {formatBranchName(candidate.branch_location) || 'Head Office'}
                       </div>
                       <div className="text-xs font-medium text-gray-500 flex items-center gap-1.5 mt-1">
                         <Building2 size={12} className="text-gray-400" /> {candidate.department || 'Unspecified'}

@@ -4,7 +4,7 @@ import { Button, Input, Select, Modal } from '../ui';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { createCandidate } from '../../api/candidates';
 import { CANDIDATE_DEPARTMENTS } from '../../types';
-import { getBrandBranches } from '../../lib/branding';
+import { getBrandBranches, formatBranchName } from '../../lib/branding';
 import { useAuth } from '../../auth';
 import { validateBasicCandidateForm } from '../../lib/validatePreForm';
 import { SHOW_DEV_DUMMY, nextDummyCandidate } from '../../lib/devDummyData';
@@ -301,7 +301,7 @@ export function AddCandidateForm({ isOpen, onClose, onSuccess }: AddCandidateFor
               >
                 <option value="">Select branch</option>
                 {getBrandBranches(user?.brand).map(branch => (
-                  <option key={branch} value={branch}>{branch}</option>
+                  <option key={branch} value={branch}>{formatBranchName(branch)}</option>
                 ))}
               </Select>
             </div>

@@ -16,6 +16,7 @@ import {
   type BgVerificationData,
 } from '../../lib/bgVerification';
 import { SHOW_DEV_DUMMY, dummyBgVerification } from '../../lib/devDummyData';
+import { formatBranchName } from '../../lib/branding';
 
 
 interface BackgroundVerificationWidgetProps {
@@ -248,7 +249,7 @@ export function BackgroundVerificationWidget({
         </div>
         <div>
           <span className="text-xs font-bold text-text-secondary uppercase">Branch</span>
-          <p className="font-medium">{candidate.branch_location || '—'}</p>
+          <p className="font-medium">{formatBranchName(candidate.branch_location) || '—'}</p>
         </div>
         <div className="md:col-span-2">
           <span className="text-xs font-bold text-text-secondary uppercase">Total Work Experience</span>

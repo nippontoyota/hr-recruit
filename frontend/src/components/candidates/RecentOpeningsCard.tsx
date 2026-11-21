@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 import { Button, Input, Modal, Select } from '../ui';
 import { useAuth } from '../../auth';
 import { CANDIDATE_DEPARTMENTS } from '../../types';
-import { getBrandBranches } from '../../lib/branding';
+import { getBrandBranches, formatBranchName } from '../../lib/branding';
 import { extractError, isAbortError } from '../../lib/utils';
 import {
   createOpening,
@@ -463,7 +463,7 @@ export function RecentOpeningsCard() {
                       </span>
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-white/90 text-slate-700 border border-slate-200 shadow-2xs">
                         <MapPin className={`h-2.5 w-2.5 shrink-0 ${theme.iconColor}`} />
-                        {row.location}
+                        {formatBranchName(row.location)}
                       </span>
                     </div>
                   </div>
@@ -575,7 +575,7 @@ export function RecentOpeningsCard() {
                 </option>
                 {getBrandBranches(user?.brand).map((branch) => (
                   <option key={branch} value={branch}>
-                    {branch}
+                    {formatBranchName(branch)}
                   </option>
                 ))}
               </Select>
@@ -646,7 +646,7 @@ export function RecentOpeningsCard() {
               <div className="text-[11px] text-slate-500 mt-1 flex flex-wrap items-center gap-1.5">
                 <span className="font-medium text-slate-700">{toDelete.department}</span>
                 <span>•</span>
-                <span className="font-medium text-slate-700">{toDelete.location}</span>
+                <span className="font-medium text-slate-700">{formatBranchName(toDelete.location)}</span>
                 <span>•</span>
                 <span className="font-bold text-blue-700">{toDelete.headcount} {toDelete.headcount === 1 ? 'Slot' : 'Slots'}</span>
               </div>

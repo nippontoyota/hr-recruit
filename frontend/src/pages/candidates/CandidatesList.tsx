@@ -21,7 +21,7 @@ import { useCandidatesList } from '../../hooks/api/useCandidates';
 import { toast } from 'sonner';
 import { CandidateTableFilter } from '../../components/candidates/CandidateTableFilter';
 import { cycleSort, type CandidateSortField } from '../../lib/candidateListQuery';
-import { getBrandConfig } from '../../lib/branding';
+import { getBrandConfig, formatBranchName } from '../../lib/branding';
 import { prefetchRoute } from '../../lib/routePrefetch';
 
 function CandidatesTableSkeleton() {
@@ -385,7 +385,7 @@ export default function CandidatesList() {
                     <th><HeaderSort label="Position" field="position_applied_for" query={advancedQuery} onSort={() => handleSort('position_applied_for')} /><CandidateTableFilter label="Position" values={[]} onChange={() => undefined} textValue={advancedQuery.position} onTextChange={(value) => setAdvanced({ position: value })} /></th>
                     <th><HeaderSort label="Stage" field="current_stage" query={advancedQuery} onSort={() => handleSort('current_stage')} /><CandidateTableFilter label="Stage" values={advancedQuery.stages} onChange={(values) => { setStageFilter(''); setAdvanced({ stages: values as typeof advancedQuery.stages }); }} options={PIPELINE_STAGES.map((value) => ({ value, label: stageLabel(value) }))} /></th>
                     <th><HeaderSort label="Offer response" field="offer_status" query={advancedQuery} onSort={() => handleSort('offer_status')} /><CandidateTableFilter label="Offer response" values={advancedQuery.offerStatuses} onChange={(values) => setAdvanced({ offerStatuses: values })} options={[{ value: 'SENT', label: 'Pending' }, { value: 'ACCEPTED', label: 'Accepted' }, { value: 'DECLINED', label: 'Rejected' }]} /></th>
-                    <th><HeaderSort label="Branch" field="branch_location" query={advancedQuery} onSort={() => handleSort('branch_location')} /><CandidateTableFilter label="Branch" values={advancedQuery.branches} onChange={(values) => setAdvanced({ branches: values })} options={['River', 'Trivandrum', 'Kollam', 'Pathanamthitta', 'Kayamkulam', 'Kottayam', 'Muvattupuzha', 'Kalamassery', 'Cochin', 'Thrissur'].map((value) => ({ value, label: value }))} /></th>
+                    <th><HeaderSort label="Branch" field="branch_location" query={advancedQuery} onSort={() => handleSort('branch_location')} /><CandidateTableFilter label="Branch" values={advancedQuery.branches} onChange={(values) => setAdvanced({ branches: values })} options={['River', 'Trivandrum', 'Kollam', 'Pathanamthitta', 'Kayamkulam', 'Kottayam', 'Muvattupuzha', 'Kalamassery', 'Cochin', 'Thrissur'].map((value) => ({ value, label: formatBranchName(value) }))} /></th>
                     <th><HeaderSort label="Next action" field="next_action" query={advancedQuery} onSort={() => handleSort('next_action')} /><CandidateTableFilter label="Next action" values={advancedQuery.nextActions} onChange={(values) => setAdvanced({ nextActions: values })} options={['Call letter to be sent', 'Call letter issued, waiting for candidate response', 'Review application & schedule interview', 'Review hold', 'Offer sent. Awaiting candidate response', 'Offer accepted. Complete onboarding', 'Offer declined. No further action', 'Continue to offer letter', 'Prepare offer', 'Send to Head Office', 'Complete Head Office interview', 'Complete interviews', 'Complete technical test', 'Complete background verification', 'Advance candidate'].map((value) => ({ value, label: value }))} /></th>
                     <th><HeaderSort label="Source" field="source" query={advancedQuery} onSort={() => handleSort('source')} /><CandidateTableFilter label="Source" values={advancedQuery.sources} onChange={(values) => setAdvanced({ sources: values })} options={['WALK_IN', 'INDEED', 'NAUKRI', 'REFERRAL', 'CAMPUS', 'REJOINING', 'LINKEDIN', 'OTHER'].map((value) => ({ value, label: formatSource(value) }))} /></th>
                     <th><HeaderSort label="Date added" field="created_at" query={advancedQuery} onSort={() => handleSort('created_at')} /><CandidateTableFilter label="Date added" values={[]} onChange={() => undefined} dateValue={advancedQuery.createdDate} onDateChange={(value) => setAdvanced({ createdDate: value })} /><CandidateTableFilter label="Application form sent" values={[]} onChange={() => undefined} dateValue={advancedQuery.sentDate} onDateChange={(value) => setAdvanced({ sentDate: value })} /></th>
@@ -505,7 +505,7 @@ export default function CandidatesList() {
                           )}
                         </td>
                         <td className="px-4 py-2 text-text-secondary font-medium">
-                          {candidate.branch_location || '-'}
+                          {formatBranchName(candidate.branch_location) || '-'}
                         </td>
                         <td className="hidden max-w-64 px-4 py-2 md:table-cell">
                           <div className="flex max-w-64 flex-col gap-1 whitespace-normal">

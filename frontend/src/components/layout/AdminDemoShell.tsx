@@ -7,7 +7,7 @@ import { ResumeViewerProvider } from '../candidates/ResumeViewer';
 import { NAV_ITEMS } from '../../lib/navigation';
 import type { UserRole } from '../../types';
 import { cn } from '../../lib/utils';
-import { brandThemeStyle, getBrandConfig } from '../../lib/branding';
+import { brandThemeStyle, getBrandConfig, formatBranchName } from '../../lib/branding';
 import { BrandMark } from './BrandMark';
 
 export const AdminDemoShell = () => {
@@ -82,7 +82,7 @@ export const AdminDemoShell = () => {
             <div className="flex items-center justify-end gap-3 w-1/4">
               {role === 'LOCAL_HR' && user?.branch_location ? (
                 <span className={`px-3 py-1.5 border rounded shadow-md text-[11px] font-accent font-black uppercase tracking-widest hidden sm:inline-block ${getBranchColor(user.branch_location)}`}>
-                  {user.branch_location}
+                  {formatBranchName(user.branch_location)}
                 </span>
               ) : role && (
                 <span className="px-3 py-1.5 bg-indigo-500 text-white border border-indigo-600 shadow-md rounded text-[11px] font-accent font-black uppercase tracking-widest hidden sm:inline-block">

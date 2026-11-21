@@ -67,6 +67,22 @@ export function getBrandBranches(value?: string | null): string[] {
   return getBrandConfig(value).branches;
 }
 
+export function formatBranchName(branch?: string | null): string {
+  if (!branch) return '';
+  const trimmed = branch.trim();
+  if (trimmed.toLowerCase() === 'thrissur') {
+    return 'Irinjalakuda';
+  }
+  return branch;
+}
+
+export function getBranchSelectOptions(branches: string[]): { value: string; label: string }[] {
+  return branches.map((branch) => ({
+    value: branch,
+    label: formatBranchName(branch),
+  }));
+}
+
 export function brandThemeStyle(value?: string | null): CSSProperties {
   const brand = getBrandConfig(value);
   return {

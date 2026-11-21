@@ -8,6 +8,7 @@ import { uploadCandidatePhoto, updateCandidateIdentity } from '../../api/candida
 import { extractError, cn } from '../../lib/utils';
 import { toast } from 'sonner';
 import { Button, Modal, Input } from '../ui';
+import { formatBranchName } from '../../lib/branding';
 
 interface CandidateHeaderProps {
   candidate: Candidate;
@@ -188,7 +189,7 @@ export function CandidateHeader({
               {candidate.branch_location && (
                 <span className="inline-flex items-center gap-1">
                   <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span>{candidate.branch_location}</span>
+                  <span>{formatBranchName(candidate.branch_location)}</span>
                 </span>
               )}
             </div>

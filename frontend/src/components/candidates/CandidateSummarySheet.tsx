@@ -3,7 +3,7 @@ import type { Candidate, Evaluation } from '../../types';
 import { previousJobsFromForm, type CandidateFormData, type PreviousJob } from '../../pages/candidates/wizard/wizardTypes';
 import { formatSource } from '../../lib/stages';
 import { formatDate } from '../../lib/dateTime';
-import { getBrandConfig } from '../../lib/branding';
+import { getBrandConfig, formatBranchName } from '../../lib/branding';
 import { updateCandidateRawData } from '../../api/candidates';
 import { toast } from 'sonner';
 import { Edit2 } from 'lucide-react';
@@ -428,7 +428,7 @@ export function CandidateSummarySheet({ candidate, evaluations }: CandidateSumma
             <Cell colSpan={3} className="text-right leading-tight">Application Submitted on:</Cell>
             <Cell className="text-center font-bold">{shortDate(appliedOn) || appliedOn}</Cell>
             <Cell label>Location</Cell>
-            <Cell colSpan={2}>{rawGet(raw, 'branchLocation') || candidate.branch_location || ''}</Cell>
+            <Cell colSpan={2}>{formatBranchName(rawGet(raw, 'branchLocation') || candidate.branch_location) || ''}</Cell>
           </tr>
           <tr>
             <Cell label>Post Applied</Cell>

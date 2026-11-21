@@ -5,7 +5,7 @@ import type { User } from '../types';
 import { toast } from 'sonner';
 import { Button, Modal, Input, LoadingSpinner, Select } from '../components/ui';
 import { isAbortError } from '../lib/utils';
-import { getBrandBranches } from '../lib/branding';
+import { getBrandBranches, formatBranchName } from '../lib/branding';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<User[]>([]);
@@ -309,7 +309,7 @@ export default function AdminUsers() {
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <span className="rounded border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-text-secondary">
-                          {u.branch_location || 'No branch'}
+                          {formatBranchName(u.branch_location) || 'No branch'}
                         </span>
                       </div>
                       <div className="flex items-center gap-1 border-l border-border pl-3">
